@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
@@ -137,29 +138,50 @@ public static class PlayerTransport
             throw NotRunning(endpoint);
         }
 
-        var pipe = new NamedPipeClientStream(".", endpoint.Address, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-        try
+        // NamedPipeClientStream.ConnectAsync(timeout) blocks a thread-pool thread for the whole wait while the pipe is busy
+        // (every instance taken, the player about to put the next one up). With several clients waiting at once that can
+        // starve the pool, including the player's own accept loop when it runs in the same process. So wait in short
+        // slices and yield in between.
+        var clock = Stopwatch.StartNew();
+        while (true)
         {
-            await pipe.ConnectAsync(timeout, cancellationToken).ConfigureAwait(false);
-            return pipe;
-        }
-        catch (TimeoutException)
-        {
-            await pipe.DisposeAsync().ConfigureAwait(false);
-            throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, $"Timed out connecting to the player at {endpoint.Display}.");
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            await pipe.DisposeAsync().ConfigureAwait(false);
-            throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable,
-                $"Access denied connecting to the player at {endpoint.Display} (it belongs to another user?).", ex);
-        }
-        catch
-        {
-            await pipe.DisposeAsync().ConfigureAwait(false);
-            throw;
+            var pipe = new NamedPipeClientStream(".", endpoint.Address, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            try
+            {
+                await pipe.ConnectAsync(PipeConnectSlice, cancellationToken).ConfigureAwait(false);
+                return pipe;
+            }
+            catch (TimeoutException)
+            {
+                await pipe.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                await pipe.DisposeAsync().ConfigureAwait(false);
+                throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable,
+                    $"Access denied connecting to the player at {endpoint.Display} (it belongs to another user?).", ex);
+            }
+            catch
+            {
+                await pipe.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+
+            if (!PipeExists(endpoint.Address))
+            {
+                throw NotRunning(endpoint); // the player went away while we waited
+            }
+
+            if (clock.Elapsed >= timeout)
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, $"Timed out connecting to the player at {endpoint.Display}.");
+            }
+
+            await Task.Delay(10, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    private static readonly TimeSpan PipeConnectSlice = TimeSpan.FromMilliseconds(100);
 
     private static MusicSpinException NotRunning(PlayerEndpoint endpoint)
         => new(MusicSpinErrorCode.PlayerNotRunning, $"No background player is running for '{endpoint.DataDirectory}'.");
