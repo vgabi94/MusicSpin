@@ -1,0 +1,108 @@
+using System.Diagnostics.CodeAnalysis;
+
+namespace MusicSpin.Tests.Shared;
+
+/// <summary>Unique temp folders under the system temp dir, cleaned up best-effort at process exit.</summary>
+internal static class TempDir
+{
+    private static readonly string Root = Path.Combine(Path.GetTempPath(), "musicspin-tests", Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    static TempDir()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => TryDelete(Root);
+    }
+
+    public static string Create(string prefix = "t")
+    {
+        var path = Path.Combine(Root, $"{prefix}-{Guid.NewGuid():N}"[..(prefix.Length + 13)]);
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    public static void TryDelete(string path)
+    {
+        try
+        {
+            if (!Directory.Exists(path))
+            {
+                return;
+            }
+
+            // Restore permissions changed by tests so cleanup can proceed.
+            foreach (var entry in new DirectoryInfo(path).EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }))
+            {
+                if (!OperatingSystem.IsWindows() && entry.LinkTarget is null)
+                {
+                    entry.UnixFileMode |= UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+                }
+            }
+
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // best effort
+        }
+    }
+}
+
+/// <summary>Builds real, tagged audio files from the tiny committed fixtures (TagLib# retagging).</summary>
+internal static class LibraryTestData
+{
+    public static string FixturesDirectory => Path.Combine(AppContext.BaseDirectory, "Fixtures");
+
+    public static string Tiny16 => Path.Combine(FixturesDirectory, "tiny-16bit-44k.flac");
+
+    public static string Tiny24 => Path.Combine(FixturesDirectory, "tiny-24bit-96k.flac");
+
+    public static string TinyMp3 => Path.Combine(FixturesDirectory, "tiny-44k.mp3");
+
+    /// <summary>Copies <paramref name="source"/> to <paramref name="path"/> and writes the given tags.</summary>
+    [SuppressMessage("Design", "CA1054", Justification = "test helper")]
+    public static string Write(string path, string source, string? title = null, string? artist = null, string? album = null,
+        string? albumArtist = null, uint track = 0, uint disc = 0, uint year = 0, string? genre = null, bool compilation = false)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.Copy(source, path, overwrite: true);
+        using var file = TagLib.File.Create(path);
+        var tag = file.Tag;
+        tag.Title = title;
+        tag.Performers = artist is null ? [] : [artist];
+        tag.AlbumArtists = albumArtist is null ? [] : [albumArtist];
+        tag.Album = album;
+        tag.Track = track;
+        tag.Disc = disc;
+        tag.Year = year;
+        tag.Genres = genre is null ? [] : [genre];
+        if (compilation && file.GetTag(TagLib.TagTypes.Xiph, true) is TagLib.Ogg.XiphComment xiph)
+        {
+            xiph.SetField("COMPILATION", "1");
+        }
+
+        file.Save();
+        return path;
+    }
+
+    /// <summary>Writes a file with no tags at all (stripped copy of a fixture).</summary>
+    public static string WriteUntagged(string path, string source)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.Copy(source, path, overwrite: true);
+        using var file = TagLib.File.Create(path);
+        file.RemoveTags(TagLib.TagTypes.AllTags);
+        file.Save();
+        return path;
+    }
+
+    /// <summary>A small, varied library: 2 artists, 3 albums (one compilation), hi-res and CD-quality, an MP3.</summary>
+    public static string CreateSmallLibrary(string root)
+    {
+        Write(Path.Combine(root, "Miles", "Kind of Blue", "01 So What.flac"), Tiny24, "So What", "Miles Davis", "Kind of Blue", "Miles Davis", 1, 1, 1959, "Jazz");
+        Write(Path.Combine(root, "Miles", "Kind of Blue", "02 Freddie Freeloader.flac"), Tiny24, "Freddie Freeloader", "Miles Davis", "Kind of Blue", "Miles Davis", 2, 1, 1959, "Jazz");
+        Write(Path.Combine(root, "Miles", "Bitches Brew", "01 Pharaoh's Dance.flac"), Tiny16, "Pharaoh's Dance", "miles davis", "Bitches Brew", null, 1, 1, 1970, "Jazz");
+        Write(Path.Combine(root, "Comp", "01.flac"), Tiny16, "Song A", "Artist A", "Jazz Hits", null, 1, 1, 2001, "Jazz");
+        Write(Path.Combine(root, "Comp", "02.flac"), Tiny16, "Song B", "Artist B", "Jazz Hits", null, 2, 1, 2001, "Jazz");
+        Write(Path.Combine(root, "Lossy", "track.mp3"), TinyMp3, "Lossy Song", "Artist A", "Singles", null, 1, 0, 2010, "Pop");
+        return root;
+    }
+}

@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="FFmpeg.AutoGen" />
     <PackageReference Include="SoundFlow" />
+    <PackageReference Include="LiteDB" />
+    <PackageReference Include="TagLibSharp" />
   </ItemGroup>
 
   <ItemGroup>

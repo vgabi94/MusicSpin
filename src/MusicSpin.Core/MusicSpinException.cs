@@ -10,6 +10,21 @@ public enum MusicSpinErrorCode
     DecoderUnavailable,
     AudioDeviceError,
     InvalidState,
+
+    /// <summary>The data folder (next to the executable, or the override) cannot be created or written.</summary>
+    DataDirectoryNotWritable,
+
+    /// <summary>The library database file is corrupt or not a MusicSpin/LiteDB database.</summary>
+    LibraryCorrupt,
+
+    /// <summary>The library database is in use by another MusicSpin process.</summary>
+    LibraryLocked,
+
+    /// <summary>A requested library item (folder, album, artist) does not exist.</summary>
+    NotFound,
+
+    /// <summary>The request is invalid or ambiguous (maps to the CLI usage exit code).</summary>
+    InvalidArgument,
 }
 
 /// <summary>Exception carrying a <see cref="MusicSpinErrorCode"/> so callers can react without parsing messages.</summary>
