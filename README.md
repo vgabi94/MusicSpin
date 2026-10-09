@@ -6,7 +6,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 - **Aims for bit-perfect output**: no resampling, a device sample format that matches the source bit depth, and exclusive mode (WASAPI exclusive, ALSA hw, CoreAudio) through [SoundFlow](https://github.com/LSXPrime/SoundFlow)/[miniaudio](https://miniaud.io).
 - **Music library**: LiteDB database, TagLib# tags with FFmpeg fallback, parallel incremental scanning, album grouping including compilations / Various Artists.
 - **Portable**: one self-contained executable per platform; all data lives in `.usrdata/` next to it.
-- **Agent-friendly CLI** (`musicspin`): `--json` on every command, stable exit codes, and a long-running JSON-lines `serve` mode.
+- **Agent-friendly CLI** (`music-spin`): `--json` on every command, stable exit codes, and a long-running JSON-lines `serve` mode.
 
 > **Status: v0.1, pre-UI.** Core playback, the library, the CLI, portable publishing and the tests work. The desktop UI is an empty Avalonia window until the design is decided.
 
@@ -24,8 +24,8 @@ MusicSpin.slnx
 │   │   ├── Hosting/     AppPaths: the portable .usrdata data folder
 │   │   ├── Settings/    AppSettings + SettingsStore (settings.json)
 │   │   └── Library/     MusicLibrary facade, LiteDB store, scanner, tag reader, queries, watcher
-│   ├── MusicSpin.App    Avalonia 12 desktop app (empty shell; executable name MusicSpin.App)
-│   └── MusicSpin.Cli    `musicspin` command line (System.CommandLine)
+│   ├── MusicSpin.App    Avalonia 12 desktop app (empty shell; executable `MusicSpin`)
+│   └── MusicSpin.Cli    `music-spin` command line (System.CommandLine)
 └── tests/
     ├── MusicSpin.Tests      Core unit + FFmpeg integration tests (xUnit v3)
     ├── MusicSpin.Tests.Ui   Avalonia headless smoke test
@@ -57,7 +57,7 @@ During development the data folder is `.usrdata` inside the build output folder 
 
 ## FFmpeg runtime (LGPL, loaded dynamically)
 
-MusicSpin never links FFmpeg statically and does not bundle a GPL build. It loads FFmpeg's **shared libraries at runtime** through [FFmpeg.AutoGen](https://github.com/Ruslan-B/FFmpeg.AutoGen), so MusicSpin stays MIT and users can swap in their own FFmpeg. Releases should ship an **LGPL** build next to the executable in an `ffmpeg/` folder. `musicspin doctor` shows the loaded version and license.
+MusicSpin never links FFmpeg statically and does not bundle a GPL build. It loads FFmpeg's **shared libraries at runtime** through [FFmpeg.AutoGen](https://github.com/Ruslan-B/FFmpeg.AutoGen), so MusicSpin stays MIT and users can swap in their own FFmpeg. Releases should ship an **LGPL** build next to the executable in an `ffmpeg/` folder. `music-spin doctor` shows the loaded version and license.
 
 FFmpeg.AutoGen binds to a single FFmpeg ABI. MusicSpin uses **FFmpeg.AutoGen 9.0.x, so it needs FFmpeg 9.0**: `avcodec-63`, `avformat-63`, `avutil-61` and `swresample-7`.
 
@@ -77,8 +77,8 @@ MusicSpin is portable. It writes nothing to the registry, `%APPDATA%`, `~/.confi
 
 ```
 MusicSpin/                      (any folder: USB stick, ~/Apps, D:\Tools, ...)
-├── musicspin(.exe)             CLI, single file
-├── MusicSpin.App(.exe)         desktop app, single file
+├── music-spin(.exe)            CLI, single file
+├── MusicSpin(.exe)             desktop app, single file
 ├── TagLibSharp.dll             LGPL, deliberately kept outside the single file (replaceable)
 ├── ffmpeg/                     LGPL FFmpeg 9.0 shared libraries
 ├── LICENSE, THIRD-PARTY-NOTICES.md
@@ -95,7 +95,7 @@ MusicSpin/                      (any folder: USB stick, ~/Apps, D:\Tools, ...)
 3. `<executable folder>/.usrdata`. The executable folder comes from `AppContext.BaseDirectory`, which is correct for single-file builds and independent of the current working directory.
    - **macOS `.app` bundles:** when the executable is inside `X.app/Contents/MacOS`, the data folder is `<folder containing X.app>/.usrdata`. MusicSpin never writes inside the bundle, because that would break the code signature.
 
-The App and the CLI share one data folder when they sit side by side. `musicspin doctor --json` shows the resolved folder and where it came from (`"source":"portable" | "environment" | "override"`).
+The App and the CLI share one data folder when they sit side by side. `music-spin doctor --json` shows the resolved folder and where it came from (`"source":"portable" | "environment" | "override"`).
 
 **First use and failure modes:**
 
@@ -124,7 +124,7 @@ The App and the CLI share one data folder when they sit side by side. `musicspin
 
 **CI:** `.github/workflows/release.yml` (manual dispatch or a `v*` tag) publishes all six RIDs on native runners (Windows, Ubuntu, macOS). It runs a smoke test on the RIDs that match the runner (`doctor`, `library add/scan/stats`, and checks that `.usrdata/` appears next to the exe) and uploads one archive per RID as a **build artifact**. It does not create a GitHub release.
 
-Sizes (linux-x64, Release, compressed single file): `musicspin` ≈ 40.5 MB, `MusicSpin.App` ≈ 49.4 MB, `TagLibSharp.dll` 0.5 MB, `ffmpeg/` ≈ 122 MB (BtbN's full LGPL build; `libavcodec` alone is 92 MB). The zip is ≈ 124 MB.
+Sizes (linux-x64, Release, compressed single file): `music-spin` ≈ 40.5 MB, `MusicSpin` ≈ 49.4 MB, `TagLibSharp.dll` 0.5 MB, `ffmpeg/` ≈ 122 MB (BtbN's full LGPL build; `libavcodec` alone is 92 MB). The zip is ≈ 124 MB.
 
 ### FFmpeg and TagLib# (LGPL) in a release
 
@@ -165,12 +165,12 @@ The database for 3,000 tracks is about 4.9 MB.
 ## CLI (for humans and AI agents)
 
 ```
-musicspin info <file>          codec, sample rate, bit depth, channels, duration, tags
-musicspin formats [--all]      which formats this machine can decode (+ every FFmpeg audio decoder)
-musicspin devices              output devices and their native formats
-musicspin play <file>          blocking playback: --device, --exclusive, --volume, --start, --duration, --backend null
-musicspin serve                long-running player controlled over stdin/stdout (JSON lines)
-musicspin doctor               environment check (FFmpeg, audio backend, data folder)
+music-spin info <file>          codec, sample rate, bit depth, channels, duration, tags
+music-spin formats [--all]      which formats this machine can decode (+ every FFmpeg audio decoder)
+music-spin devices              output devices and their native formats
+music-spin play <file>          blocking playback: --device, --exclusive, --volume, --start, --duration, --backend null
+music-spin serve                long-running player controlled over stdin/stdout (JSON lines)
+music-spin doctor               environment check (FFmpeg, audio backend, data folder)
 ```
 
 Global options: `--json`, `--data-dir <folder>` (on any command, before or after the subcommand).
@@ -204,17 +204,17 @@ Global options: `--json`, `--data-dir <folder>` (on any command, before or after
 ### Examples
 
 ```console
-$ musicspin info track.flac --json
+$ music-spin info track.flac --json
 {"ok":true,"command":"info","data":{"path":"/music/track.flac","container":"flac","codec":"flac","codecLongName":"FLAC (Free Lossless Audio Codec)","sampleRate":96000,"bitsPerSample":24,"channels":2,"channelLayout":"stereo","sampleFormat":"s32","bitRate":878796,"durationSeconds":2,"lossless":true,"hiRes":true,"title":"Test Tone","artist":"MusicSpin","tags":{"title":"Test Tone","artist":"MusicSpin"}}}
 
-$ musicspin info missing.flac --json; echo $?
+$ music-spin info missing.flac --json; echo $?
 {"ok":false,"command":"info","error":{"code":"file_not_found","exitCode":3,"message":"File not found: missing.flac"}}
 3
 
-$ musicspin play track.flac --backend null --duration 0.5 --json
+$ music-spin play track.flac --backend null --duration 0.5 --json
 {"ok":true,"command":"play","data":{"track":{...},"startSeconds":0,"playedSeconds":0.51,"stopReason":"duration"}}
 
-$ musicspin formats --json
+$ music-spin formats --json
 {"ok":true,"command":"formats","data":{"decoder":{"name":"ffmpeg","available":true,"version":"n9.0.2","license":"LGPL version 3 or later","lgpl":true},"formats":[{"id":"flac","name":"FLAC","extensions":["flac"],"lossless":true,"hiResCapable":true,"supported":true,"decoders":["flac"]}, ...]}}
 ```
 
@@ -248,62 +248,62 @@ One request per line on stdin, and one response per line on stdout with the same
 ### Library commands
 
 ```
-musicspin library add <folder>     add a folder (status: added | exists | covered); absorbs folders inside it
-musicspin library remove <folder>  remove a folder and its tracks (exit 12 if it isn't a library folder)
-musicspin library folders          list folders with track counts and last scan time
-musicspin library scan             incremental scan: --full, --parallel N, --quiet; Ctrl+C cancels (exit 130, work kept)
-musicspin library stats            totals, by format, by resolution, hi-res counts
-musicspin library check            missing files/folders, likely duplicates, missing tags, unreadable files
-musicspin library watch            FileSystemWatcher + debounced rescans (--debounce-ms); JSON-lines events
-musicspin artists                  --sort name|tracks|albums
-musicspin albums                   --artist, --hires, --sort artist|title|year|tracks|duration
-musicspin tracks                   --album, --artist, --sort default|title|artist|album|year|duration|added|samplerate|bitdepth|size|path
-musicspin search <text>            artists, albums and (paged) tracks matching every word
-musicspin filter                   --hires --min-sample-rate --min-bit-depth --format flac,dsd --year-from --year-to --artist --album
-musicspin play --album <title|id> [--artist <name>] [--shuffle [--seed N]]
-musicspin play --artist <name> [--shuffle]
+music-spin library add <folder>     add a folder (status: added | exists | covered); absorbs folders inside it
+music-spin library remove <folder>  remove a folder and its tracks (exit 12 if it isn't a library folder)
+music-spin library folders          list folders with track counts and last scan time
+music-spin library scan             incremental scan: --full, --parallel N, --quiet; Ctrl+C cancels (exit 130, work kept)
+music-spin library stats            totals, by format, by resolution, hi-res counts
+music-spin library check            missing files/folders, likely duplicates, missing tags, unreadable files
+music-spin library watch            FileSystemWatcher + debounced rescans (--debounce-ms); JSON-lines events
+music-spin artists                  --sort name|tracks|albums
+music-spin albums                   --artist, --hires, --sort artist|title|year|tracks|duration
+music-spin tracks                   --album, --artist, --sort default|title|artist|album|year|duration|added|samplerate|bitdepth|size|path
+music-spin search <text>            artists, albums and (paged) tracks matching every word
+music-spin filter                   --hires --min-sample-rate --min-bit-depth --format flac,dsd --year-from --year-to --artist --album
+music-spin play --album <title|id> [--artist <name>] [--shuffle [--seed N]]
+music-spin play --artist <name> [--shuffle]
 ```
 
 All list commands accept `--limit` (1–10000, default 100), `--offset` and `--desc`, and return a page object: `{"total","offset","limit","count","items"}`. An album can be given by its title (case-insensitive) or its `id`. If several albums share a title, `play --album` exits 2 and lists the candidates; add `--artist` to pick one. A library queue skips missing or unplayable files and reports them, and `--duration` applies per track.
 
 ```console
-$ musicspin library add ~/Music --json
+$ music-spin library add ~/Music --json
 {"ok":true,"command":"library add","data":{"status":"added","path":"/home/me/Music","absorbed":[]}}
 
-$ musicspin library scan --json            # progress on stderr, result on stdout
+$ music-spin library scan --json            # progress on stderr, result on stdout
 {"event":"progress","phase":"walk","filesFound":1,"filesToRead":0,"filesRead":0,"failed":0}         (stderr)
 {"event":"progress","phase":"done","filesFound":3000,"filesToRead":3000,"filesRead":3000,"failed":0} (stderr)
 {"ok":true,"command":"library scan","data":{"folders":1,"foldersMissing":0,"filesFound":3000,"added":3000,"updated":0,"unchanged":0,"removed":0,"failed":0,"skippedUnreadable":0,"tracks":3000,"albums":300,"artists":30,"full":false,"cancelled":false,"elapsedSeconds":1.43,"issueCount":0,"issues":[]}}
 
-$ musicspin library stats --json
+$ music-spin library stats --json
 {"ok":true,"command":"library stats","data":{"folders":1,"tracks":2999,"albums":300,"artists":30,"totalSizeBytes":27696739,"totalDurationSeconds":324.5,"hiResTracks":900,"hiResAlbums":90,"losslessTracks":2699,"byFormat":[{"format":"flac","tracks":2699,"sizeBytes":26927509,"durationSeconds":269.9},{"format":"mp3","tracks":300,"sizeBytes":769230,"durationSeconds":54.6}],"byResolution":[{"resolution":"16/44.1","tracks":1799},{"resolution":"24/96","tracks":900}],"lastScan":"2026-10-08T15:23:58.5499807+00:00"}}
 
-$ musicspin library check --json
+$ music-spin library check --json
 {"ok":true,"command":"library check","data":{"healthy":false,"missingFileCount":0,"missingFolderCount":0,"duplicateGroupCount":1,"missingTagsCount":0,"unreadableCount":0,"missingFiles":[],"missingFolders":[],"duplicates":[{"artist":"Artist 000","title":"Track 1","durationSeconds":0,"paths":["...","..."]}],...}}
 
-$ musicspin artists --limit 2 --json
+$ music-spin artists --limit 2 --json
 {"ok":true,"command":"artists","data":{"total":30,"offset":0,"limit":2,"count":2,"items":[{"id":"b203b06046ae32547b7f864b63c3261e","name":"Artist 000","trackCount":100,"albumCount":10,"durationSeconds":10.82},{"id":"d77f7393d8df1abf08351ad8b8d39fbe","name":"Artist 001","trackCount":100,"albumCount":10,"durationSeconds":10.82}]}}
 
-$ musicspin albums --artist "artist 007" --limit 1 --json
+$ music-spin albums --artist "artist 007" --limit 1 --json
 {"ok":true,"command":"albums","data":{"total":10,"offset":0,"limit":1,"count":1,"items":[{"id":"577d4e0eaf811d80f05c8aa9f12f3879","title":"Album 007-00","albumArtist":"Artist 007","year":1960,"trackCount":10,"discCount":1,"durationSeconds":1,"sizeBytes":94910,"formats":["flac"],"compilation":false,"hiRes":false,"maxSampleRate":44100,"maxBitsPerSample":16,"hasEmbeddedCover":false}]}}
 
-$ musicspin filter --hires --min-sample-rate 96000 --limit 1 --json
+$ music-spin filter --hires --min-sample-rate 96000 --limit 1 --json
 {"ok":true,"command":"filter","data":{"total":900,"offset":0,"limit":1,"count":1,"items":[{"id":"c7adfb8139b6b21924156ada03f92176","path":"/music/Artist 000/Album 06/01 Track 1.flac","title":"Track 1","artist":"Artist 000","albumArtist":"Artist 000","album":"Album 000-06","albumId":"b435c9ad688e362801ace9091395b115","trackNumber":1,"year":1990,"genre":"Test","durationSeconds":0.1,"format":"flac","codec":"Flac Audio","sampleRate":96000,"bitsPerSample":24,"bitrateKbps":212,"channels":1,"lossless":true,"hiRes":true,"hasEmbeddedCover":false,"sizeBytes":10948,"modified":"2026-10-08T15:23:48.7069989+00:00","tagSource":"taglib"}]}}
 
-$ musicspin search "track 7" --limit 1 --json
+$ music-spin search "track 7" --limit 1 --json
 {"ok":true,"command":"search","data":{"query":"track 7","artists":[],"albums":[],"tracks":{"total":300,"offset":0,"limit":1,"count":1,"items":[{...}]}}}
 
-$ musicspin play --artist "Unknown Artist" --shuffle --seed 1 --backend null --duration 0.1 --json
+$ music-spin play --artist "Unknown Artist" --shuffle --seed 1 --backend null --duration 0.1 --json
 {"ok":true,"command":"play","data":{"mode":"queue","artist":"Unknown Artist","shuffle":true,"seed":1,"queueLength":4,"played":[{"track":{...},"playedSeconds":0.1,"stopReason":"duration"}, ...],"skipped":[],"stopReason":"ended"}}
 
-$ musicspin play --album "Greatest Hits" --json; echo $?
+$ music-spin play --album "Greatest Hits" --json; echo $?
 {"ok":false,"command":"play","error":{"code":"usage","exitCode":2,"message":"'Greatest Hits' matches 2 albums: Queen - Greatest Hits (id 5c2e...); Weezer - Greatest Hits (id 9a41...). Add --artist or pass the album id."}}
 2
 ```
 
 ## Roadmap / TODO
 
-- [ ] **MCP server**: expose the `serve` operations (load/play/pause/seek/status/info) as MCP tools, e.g. `musicspin mcp`, so AI tools can connect directly.
+- [ ] **MCP server**: expose the `serve` operations (load/play/pause/seek/status/info) as MCP tools, e.g. `music-spin mcp`, so AI tools can connect directly.
 - [ ] Desktop UI design (window layout, library, now playing, theming). The app is an empty shell for now.
 - [ ] Decode on a separate thread into a ring buffer. Today the decoder runs inside the audio callback, which is fine for local files but not for network sources.
 - [ ] Gapless playback and a queue/playlist in Core.

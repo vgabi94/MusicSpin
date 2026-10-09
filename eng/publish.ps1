@@ -6,7 +6,7 @@
   ./eng/publish.ps1 -Rid win-x64,win-arm64 -DownloadFFmpeg -Zip
   ./eng/publish.ps1 -All -CliOnly
 .NOTES
-  Layout of <Out>/<rid>/: musicspin(.exe), MusicSpin.App(.exe), TagLibSharp.dll (LGPL, kept replaceable),
+  Layout of <Out>/<rid>/: music-spin(.exe), MusicSpin(.exe), TagLibSharp.dll (LGPL, kept replaceable),
   ffmpeg/ (LGPL FFmpeg shared libraries, optional), LICENSE, THIRD-PARTY-NOTICES.md. Data goes to .usrdata/ on first run.
   macOS .app bundles are produced by publish.sh on macOS (needs codesign).
 #>

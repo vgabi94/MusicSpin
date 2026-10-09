@@ -6,7 +6,7 @@ using MusicSpin.Core.Library;
 
 namespace MusicSpin.Cli.Commands;
 
-/// <summary><c>musicspin library ...</c>: folders, scanning, stats, health check, watch.</summary>
+/// <summary><c>music-spin library ...</c>: folders, scanning, stats, health check, watch.</summary>
 internal static class LibraryCommand
 {
     public static Command Create(CommandRunner runner)
@@ -37,7 +37,7 @@ internal static class LibraryCommand
                     "exists" => $"Already in the library: {result.Path}",
                     "covered" => $"Already covered by library folder {result.CoveredBy}: {result.Path}",
                     _ => $"Added {result.Path}" + (result.Absorbed.Count > 0 ? $" (replaces {string.Join(", ", result.Absorbed)})" : string.Empty)
-                         + ". Run 'musicspin library scan'.",
+                         + ". Run 'music-spin library scan'.",
                 });
             }
 
@@ -81,7 +81,7 @@ internal static class LibraryCommand
             }
             else if (folders.Count == 0)
             {
-                runner.Env.Out.WriteLine("No library folders. Add one with 'musicspin library add <folder>'.");
+                runner.Env.Out.WriteLine("No library folders. Add one with 'music-spin library add <folder>'.");
             }
             else
             {
@@ -153,7 +153,7 @@ internal static class LibraryCommand
 
         if (r.IssueCount > 20)
         {
-            output.WriteLine($"  ... {r.IssueCount - 20} more issue(s); see 'musicspin library check'.");
+            output.WriteLine($"  ... {r.IssueCount - 20} more issue(s); see 'music-spin library check'.");
         }
     }
 
@@ -278,7 +278,7 @@ internal static class LibraryCommand
 
             if (folders.Count == 0)
             {
-                return runner.Fail(json, "library watch", ExitCodes.NotFound, "No existing library folders to watch. Add one with 'musicspin library add <folder>'.");
+                return runner.Fail(json, "library watch", ExitCodes.NotFound, "No existing library folders to watch. Add one with 'music-spin library add <folder>'.");
             }
 
             using var gate = new SemaphoreSlim(1, 1);
@@ -300,7 +300,7 @@ internal static class LibraryCommand
                 catch (MusicSpinException ex)
                 {
                     Emit(env.Out, json, "error", new { code = ExitCodes.Name(ExitCodes.From(ex.Code)), message = ex.Message },
-                        () => env.Error.WriteLine($"musicspin library watch: {ex.Message}"));
+                        () => env.Error.WriteLine($"music-spin library watch: {ex.Message}"));
                 }
                 finally
                 {

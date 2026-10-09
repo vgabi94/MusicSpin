@@ -80,7 +80,7 @@ internal static class DoctorCommand
                 return Task.FromResult(exitCode);
             }
 
-            env.Out.WriteLine($"musicspin {report.Version} on {report.Runtime}, {report.Os}");
+            env.Out.WriteLine($"music-spin {report.Version} on {report.Runtime}, {report.Os}");
             env.Out.WriteLine(decoder.Available
                 ? $"  [ok]   FFmpeg {decoder.Version}, license: {decoder.License}{(decoder.Path is { } p ? $" ({p})" : "")}{(decoder.Lgpl == true ? "" : " (not LGPL: fine locally, don't redistribute)")}"
                 : $"  [fail] FFmpeg: {decoder.Error}");

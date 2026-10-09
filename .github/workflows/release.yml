@@ -54,7 +54,9 @@ jobs:
           set -euo pipefail
           tmp="$(mktemp -d)"
           cp -R "artifacts/publish/${{ matrix.rid }}/." "$tmp/"
-          exe="$tmp/musicspin"; [[ -f "$exe.exe" ]] && exe="$exe.exe"
+          exe="$tmp/music-spin"; [[ -f "$exe.exe" ]] && exe="$exe.exe"
+          # Desktop app next to the CLI: MusicSpin / MusicSpin.exe, or the MusicSpin.app bundle on macOS.
+          test -f "$tmp/MusicSpin" || test -f "$tmp/MusicSpin.exe" || test -f "$tmp/MusicSpin.app/Contents/MacOS/MusicSpin"
           mkdir "$tmp/music" && cp tests/MusicSpin.Tests/Fixtures/* "$tmp/music/"
           "$exe" doctor --backend null --json || [[ $? -eq 6 ]]   # 6 = no FFmpeg for this RID (macOS without Homebrew)
           "$exe" library add "$tmp/music" --json

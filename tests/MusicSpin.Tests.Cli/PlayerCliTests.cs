@@ -208,7 +208,7 @@ public sealed class PlayerCliTests : IAsyncDisposable
     {
         await Ok("play", Long[0], "--backend", "null");
         var again = await Ok("play", Long[1], "--backend", "auto", "--exclusive");
-        Assert.Contains("musicspin quit", again.GetProperty("warnings")[0].GetString(), StringComparison.Ordinal);
+        Assert.Contains("music-spin quit", again.GetProperty("warnings")[0].GetString(), StringComparison.Ordinal);
         Assert.Equal("playing", State(again));
     }
 

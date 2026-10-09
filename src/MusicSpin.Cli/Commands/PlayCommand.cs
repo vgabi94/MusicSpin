@@ -83,7 +83,7 @@ internal static class PlayCommand
                     {
                         warnings.Add($"The running player uses output '{info.Output.Backend}' ({info.Output.Device ?? "default device"}, " +
                             $"{(info.Output.Exclusive ? "exclusive" : "shared")}); --backend/--device/--exclusive apply when it starts. " +
-                            "Run 'musicspin quit' first to change them.");
+                            "Run 'music-spin quit' first to change them.");
                     }
                 }
 
@@ -172,7 +172,7 @@ internal static class PlayCommand
                     skipped.Add(new QueueSkipDto(entry.Path, ExitCodes.Name(ExitCodes.From(ex.Code)), ex.Message));
                     if (!json)
                     {
-                        env.Error.WriteLine($"musicspin play: skipping {entry.Path}: {ex.Message}");
+                        env.Error.WriteLine($"music-spin play: skipping {entry.Path}: {ex.Message}");
                     }
 
                     continue;
@@ -209,7 +209,7 @@ internal static class PlayCommand
         if (played.Count == 0)
         {
             return runner.Fail(json, "play", ExitCodes.FileNotFound,
-                $"None of the {queue.Count} queued file(s) could be played (moved or deleted? run 'musicspin library scan').", result);
+                $"None of the {queue.Count} queued file(s) could be played (moved or deleted? run 'music-spin library scan').", result);
         }
 
         if (json)

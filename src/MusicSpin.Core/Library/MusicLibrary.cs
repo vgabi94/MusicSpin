@@ -109,7 +109,7 @@ public sealed class MusicLibrary : IDisposable
         {
             var folder = _db.Folders.FindAll().FirstOrDefault(f => f.Path.Equals(full, LibraryKeys.PathComparison))
                          ?? throw new MusicSpinException(MusicSpinErrorCode.NotFound,
-                             $"'{full}' is not a library folder. See 'musicspin library folders'.");
+                             $"'{full}' is not a library folder. See 'music-spin library folders'.");
             var removed = _db.Tracks.DeleteMany(t => t.FolderId == folder.Id);
             _db.Folders.Delete(folder.Id);
             var issues = _db.Issues.FindAll().Where(i => LibraryKeys.IsUnder(i.Path, folder.Path)).Select(i => i.Id).ToList();
@@ -349,7 +349,7 @@ public sealed class MusicLibrary : IDisposable
         if (candidates.Count == 0)
         {
             throw new MusicSpinException(MusicSpinErrorCode.NotFound,
-                $"No album matching '{album}'{(artist is null ? string.Empty : $" by '{artist}'")}. See 'musicspin albums'.");
+                $"No album matching '{album}'{(artist is null ? string.Empty : $" by '{artist}'")}. See 'music-spin albums'.");
         }
 
         if (candidates.Count > 1)
@@ -369,7 +369,7 @@ public sealed class MusicLibrary : IDisposable
         var tracks = _db.Tracks.Find(t => t.ArtistKey == key || t.AlbumArtistKey == key).ToList();
         if (tracks.Count == 0)
         {
-            throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No tracks by '{artist}'. See 'musicspin artists'.");
+            throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No tracks by '{artist}'. See 'music-spin artists'.");
         }
 
         var years = _db.Albums.FindAll().ToDictionary(a => a.Id, a => a.Year ?? int.MaxValue, StringComparer.Ordinal);

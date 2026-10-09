@@ -55,7 +55,7 @@ public sealed class PlayerCliUnhappyTests : IAsyncDisposable
     public async Task Control_commands_without_a_player_are_exit_13(params string[] args)
     {
         var json = await Error(ExitCodes.PlayerNotRunning, args);
-        Assert.Contains("musicspin play", json.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Contains("music-spin play", json.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Empty(_cli.Hosts); // never auto-started by a control command
     }
 

@@ -11,7 +11,7 @@ public sealed class TrackSkippedEventArgs(SkippedItem item) : EventArgs
 /// <summary>
 /// Queue + transport on top of an <see cref="IPlayer"/>: play/pause/resume/toggle/stop, next/prev, seek (absolute or
 /// relative), volume, auto-advance, and skipping of unplayable entries (deleted/moved files). Thread-safe; used by the
-/// background player, <c>musicspin serve</c> and (later) the desktop app.
+/// background player, <c>music-spin serve</c> and (later) the desktop app.
 /// <para>Semantics (documented for agents): <c>next</c>/<c>prev</c> always start playback; <c>next</c> on the last entry and
 /// <c>prev</c> on the first are <see cref="MusicSpinErrorCode.InvalidState"/>; after the last entry ends the queue is
 /// <see cref="PlayerStatus.Ended"/> and play/resume continue with entries added since, or restart from the first.</para>
@@ -316,7 +316,7 @@ public sealed class QueuePlayer : IDisposable
             if (_index + 1 >= _items.Count)
             {
                 throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
-                    $"Already at the last track ({_index + 1} of {_items.Count}). Add more with 'musicspin queue add'.");
+                    $"Already at the last track ({_index + 1} of {_items.Count}). Add more with 'music-spin queue add'.");
             }
 
             return MoveAndPlay(_index + 1, +1);
@@ -332,7 +332,7 @@ public sealed class QueuePlayer : IDisposable
             if (_index <= 0)
             {
                 throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
-                    "Already at the first track. Use 'musicspin seek 0' to restart it.");
+                    "Already at the first track. Use 'music-spin seek 0' to restart it.");
             }
 
             return MoveAndPlay(_index - 1, -1);
@@ -461,7 +461,7 @@ public sealed class QueuePlayer : IDisposable
         _stoppedByUser = true;
         _player.Stop();
         throw new MusicSpinException(MusicSpinErrorCode.FileNotFound,
-            $"No playable track {(direction > 0 ? "after" : "before")} entry {index + 1 - direction}: the remaining file(s) were skipped (see 'skipped' in 'musicspin status').");
+            $"No playable track {(direction > 0 ? "after" : "before")} entry {index + 1 - direction}: the remaining file(s) were skipped (see 'skipped' in 'music-spin status').");
     }
 
     private bool TryLoad(QueueItem item, int index, List<SkippedItem>? into)
@@ -572,7 +572,7 @@ public sealed class QueuePlayer : IDisposable
         if (_items.Count == 0 || _index < 0)
         {
             throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
-                "The queue is empty. Start something with 'musicspin play <file> | --album <title> | --artist <name>'.");
+                "The queue is empty. Start something with 'music-spin play <file> | --album <title> | --artist <name>'.");
         }
     }
 

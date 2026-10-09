@@ -52,7 +52,7 @@ internal sealed class CommandRunner(CliEnvironment env, Option<bool> json, Optio
 
         if (store.LoadWarning is { } warning)
         {
-            Env.Error.WriteLine($"musicspin: warning: {warning}");
+            Env.Error.WriteLine($"music-spin: warning: {warning}");
         }
 
         return (settings, store.LoadWarning, created);
@@ -95,7 +95,7 @@ internal sealed class CommandRunner(CliEnvironment env, Option<bool> json, Optio
         }
         else
         {
-            Env.Error.WriteLine($"musicspin {command}: {message}");
+            Env.Error.WriteLine($"music-spin {command}: {message}");
         }
 
         return exitCode;

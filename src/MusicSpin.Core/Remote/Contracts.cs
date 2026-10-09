@@ -75,7 +75,7 @@ public sealed record QueueListing(int Total, int Offset, int Limit, int? Current
 
 public sealed record QueueEntry(int Index, bool Current, QueueItem Item);
 
-/// <summary>Information about the background player process (<c>hello</c> / <c>musicspin player status</c>).</summary>
+/// <summary>Information about the background player process (<c>hello</c> / <c>music-spin player status</c>).</summary>
 public sealed record PlayerProcessInfo(
     int Protocol,
     string Version,

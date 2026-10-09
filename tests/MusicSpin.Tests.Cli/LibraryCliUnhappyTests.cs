@@ -286,7 +286,7 @@ public sealed class LibraryCliUnhappyTests : IAsyncDisposable
 
         Assert.Equal(ExitCodes.DataDirNotWritable, result.ExitCode);
         Assert.Empty(result.Out);
-        Assert.StartsWith("musicspin library add:", result.Err, StringComparison.Ordinal);
+        Assert.StartsWith("music-spin library add:", result.Err, StringComparison.Ordinal);
     }
 
     [Fact]

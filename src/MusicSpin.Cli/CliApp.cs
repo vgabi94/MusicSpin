@@ -4,7 +4,7 @@ using MusicSpin.Cli.Output;
 
 namespace MusicSpin.Cli;
 
-/// <summary>Builds and runs the `musicspin` command tree. Fully in-process testable via <see cref="CliEnvironment"/>.</summary>
+/// <summary>Builds and runs the `music-spin` command tree. Fully in-process testable via <see cref="CliEnvironment"/>.</summary>
 public static class CliApp
 {
     public const string Description =
@@ -55,7 +55,7 @@ public static class CliApp
             names.Insert(0, c.Command.Name);
         }
 
-        return names.Count == 0 ? "musicspin" : string.Join(' ', names);
+        return names.Count == 0 ? "music-spin" : string.Join(' ', names);
     }
 
     public static async Task<int> RunAsync(string[] args, CliEnvironment env, CancellationToken cancellationToken = default)
@@ -74,11 +74,11 @@ public static class CliApp
             // Safety net: a validator choked on an unconvertible value. Still a usage error, never a crash.
             if (args.Contains("--json", StringComparer.Ordinal))
             {
-                JsonOutput.WriteError(env.Out, "musicspin", ExitCodes.Usage, ex.Message);
+                JsonOutput.WriteError(env.Out, "music-spin", ExitCodes.Usage, ex.Message);
             }
             else
             {
-                await env.Error.WriteLineAsync($"musicspin: {ex.Message}").ConfigureAwait(false);
+                await env.Error.WriteLineAsync($"music-spin: {ex.Message}").ConfigureAwait(false);
             }
 
             return ExitCodes.Usage;
@@ -95,8 +95,8 @@ public static class CliApp
             }
             else
             {
-                await env.Error.WriteLineAsync($"musicspin: {message}").ConfigureAwait(false);
-                await env.Error.WriteLineAsync("Run 'musicspin --help' for usage.").ConfigureAwait(false);
+                await env.Error.WriteLineAsync($"music-spin: {message}").ConfigureAwait(false);
+                await env.Error.WriteLineAsync("Run 'music-spin --help' for usage.").ConfigureAwait(false);
             }
 
             return ExitCodes.Usage;

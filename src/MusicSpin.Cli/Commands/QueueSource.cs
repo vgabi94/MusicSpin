@@ -26,7 +26,7 @@ internal sealed class QueueSource
 
     public Option<string?> Search { get; } = new("--search")
     {
-        Description = "Library tracks matching this text (same matching as 'musicspin search'), up to 10000.",
+        Description = "Library tracks matching this text (same matching as 'music-spin search'), up to 10000.",
     };
 
     public Option<bool> Shuffle { get; } = new("--shuffle") { Description = "Shuffle the queue." };
@@ -91,7 +91,7 @@ internal sealed class QueueSource
             var tracks = library.Search(search, new Paging(0, Paging.MaxLimit)).Tracks.Items;
             return tracks.Count > 0
                 ? tracks
-                : throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No library tracks match '{search}'. See 'musicspin search'.");
+                : throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No library tracks match '{search}'. See 'music-spin search'.");
         }
 
         return album is not null ? library.AlbumQueue(album, artist) : library.ArtistQueue(artist!);

@@ -1,6 +1,6 @@
 namespace MusicSpin.Core.Settings;
 
-/// <summary>User settings persisted as JSON in the data folder (<c>musicspin.settings.json</c>).</summary>
+/// <summary>User settings persisted as JSON in the data folder (<c>settings.json</c>).</summary>
 public sealed record AppSettings
 {
     public const int CurrentSchemaVersion = 1;

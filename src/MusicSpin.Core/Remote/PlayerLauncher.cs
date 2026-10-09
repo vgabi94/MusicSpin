@@ -69,7 +69,7 @@ public static class PlayerConnector
     }
 }
 
-/// <summary>Spawns <c>musicspin player run</c> as a detached background process.</summary>
+/// <summary>Spawns <c>music-spin player run</c> as a detached background process.</summary>
 public static class PlayerProcessLauncher
 {
     /// <summary>Log files beyond this size are rotated to <c>player.log.1</c> when a new player starts.</summary>
@@ -79,7 +79,7 @@ public static class PlayerProcessLauncher
     public const string LogEnvironmentVariable = "MUSICSPIN_PLAYER_LOG";
 
     /// <summary>
-    /// Starts the current executable (single-file exe, apphost, or <c>dotnet musicspin.dll</c>) with
+    /// Starts the current executable (single-file exe, apphost, or <c>dotnet music-spin.dll</c>) with
     /// <paramref name="arguments"/>, detached from this process: stdin from /dev/null (NUL), stdout/stderr appended to the
     /// player log, own session (the child calls setsid), so it survives the calling shell/agent exiting.
     /// </summary>
@@ -112,7 +112,7 @@ public static class PlayerProcessLauncher
             info = new ProcessStartInfo("/bin/sh") { UseShellExecute = false };
             info.ArgumentList.Add("-c");
             info.ArgumentList.Add($"exec \"$@\" </dev/null >>\"${LogEnvironmentVariable}\" 2>&1");
-            info.ArgumentList.Add("musicspin-player");
+            info.ArgumentList.Add("music-spin-player");
             info.ArgumentList.Add(exe);
             foreach (var a in prefix.Concat(arguments))
             {
@@ -142,7 +142,7 @@ public static class PlayerProcessLauncher
         var name = Path.GetFileNameWithoutExtension(exe);
         if (name.Equals("dotnet", StringComparison.OrdinalIgnoreCase))
         {
-            // `dotnet musicspin.dll ...`: re-run the same assembly.
+            // `dotnet music-spin.dll ...`: re-run the same assembly.
             var dll = entryAssembly ?? System.Reflection.Assembly.GetEntryAssembly()?.Location;
             if (string.IsNullOrEmpty(dll))
             {

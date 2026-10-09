@@ -44,7 +44,7 @@ public sealed record PlayerHostOptions
 /// The background player: owns a <see cref="QueuePlayer"/> and serves the JSON-lines <see cref="PlayerProtocol"/> on a
 /// local endpoint (Unix socket / named pipe). One per data folder, enforced by an exclusive lock on <c>player.lock</c>
 /// that the OS releases if the process dies, so stale endpoints from a crash are detected and replaced.
-/// Usable in-process (tests, a future desktop app hosting the player itself) or via <c>musicspin player run</c>.
+/// Usable in-process (tests, a future desktop app hosting the player itself) or via <c>music-spin player run</c>.
 /// </summary>
 public sealed class PlayerHost : IAsyncDisposable
 {

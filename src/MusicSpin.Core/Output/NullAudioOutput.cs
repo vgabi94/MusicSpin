@@ -5,7 +5,7 @@ namespace MusicSpin.Core.Output;
 
 /// <summary>
 /// Output that consumes samples without a sound card. Useful for CI, headless servers and agents
-/// that want to verify a file decodes end-to-end (<c>musicspin play --output null</c>).
+/// that want to verify a file decodes end-to-end (<c>music-spin play --output null</c>).
 /// </summary>
 public sealed class NullAudioOutputProvider(bool realtime = true) : IAudioOutputProvider
 {

@@ -25,4 +25,4 @@ LGPL code in its single-file executables:
 - `TagLibSharp.dll` is a loose file next to the executable; replace it with a compatible build.
 
 Only redistribute LGPL FFmpeg builds (`--enable-gpl`/`--enable-nonfree` builds must not be shipped with MusicSpin).
-`musicspin doctor` shows the license of the FFmpeg build it loaded.
+`music-spin doctor` shows the license of the FFmpeg build it loaded.

@@ -36,7 +36,7 @@ public sealed class CliEnvironment
 
     /// <summary>
     /// Starts a background player for a data folder. Default: spawn this executable as a detached
-    /// <c>musicspin player run</c> process. Tests inject an in-process <see cref="PlayerHost"/>.
+    /// <c>music-spin player run</c> process. Tests inject an in-process <see cref="PlayerHost"/>.
     /// </summary>
     public Func<PlayerLaunchRequest, CancellationToken, Task<IPlayerProcess?>>? PlayerLauncher { get; init; }
 

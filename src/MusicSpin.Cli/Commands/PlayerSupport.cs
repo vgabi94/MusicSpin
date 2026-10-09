@@ -36,7 +36,7 @@ internal static class PlayerSupport
             ? $" (a previous player, pid {info.Pid}, did not shut down cleanly; its leftovers are replaced on the next start)"
             : string.Empty;
         return new MusicSpinException(MusicSpinErrorCode.PlayerNotRunning,
-            $"No background player is running for '{endpoint.DataDirectory}'{stale}. Start one with 'musicspin play <file> | --album <title> | --artist <name>'.");
+            $"No background player is running for '{endpoint.DataDirectory}'{stale}. Start one with 'music-spin play <file> | --album <title> | --artist <name>'.");
     }
 
     /// <summary>Connects to the running player, or starts one with the requested output.</summary>
@@ -105,7 +105,7 @@ internal static class PlayerSupport
         {
             foreach (var warning in warnings)
             {
-                env.Error.WriteLine($"musicspin {command}: warning: {warning}");
+                env.Error.WriteLine($"music-spin {command}: warning: {warning}");
             }
         }
 

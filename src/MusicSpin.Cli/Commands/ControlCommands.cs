@@ -249,7 +249,7 @@ internal static class ControlCommands
             Description = "Seconds to stay alive while stopped with no client attached (default: playerIdleTimeoutSeconds in settings.json; 0 = forever).",
         };
         Options.Validated(idle, v => v is < 0 || (v is { } d && !double.IsFinite(d)) ? "--idle-timeout must be 0 or greater." : null);
-        var command = new Command("run", "Run the background player in this process (internal; 'musicspin play' starts it detached).")
+        var command = new Command("run", "Run the background player in this process (internal; 'music-spin play' starts it detached).")
         {
             backend, device, exclusive, idle,
         };

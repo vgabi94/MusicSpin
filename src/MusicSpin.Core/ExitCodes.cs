@@ -2,7 +2,7 @@ namespace MusicSpin.Core;
 
 /// <summary>
 /// Process exit codes and their snake_case names (<c>error.code</c> in JSON). Stable contract for scripts and AI agents;
-/// shared by the CLI and the background player protocol. Documented in README and `musicspin --help`.
+/// shared by the CLI and the background player protocol. Documented in README and `music-spin --help`.
 /// </summary>
 public static class ExitCodes
 {

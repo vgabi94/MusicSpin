@@ -158,7 +158,7 @@ internal sealed class LibraryDatabase : IDisposable
     public static MusicSpinException Corrupt(string file, Exception ex)
         => new(MusicSpinErrorCode.LibraryCorrupt,
             $"Library database '{file}' is corrupt or not a MusicSpin database ({ex.Message}). " +
-            "Move it away (your music files are untouched), then re-add folders with 'musicspin library add' and run 'musicspin library scan'.",
+            "Move it away (your music files are untouched), then re-add folders with 'music-spin library add' and run 'music-spin library scan'.",
             ex);
 
     private static LiteDatabase Open(string file, bool readOnly)

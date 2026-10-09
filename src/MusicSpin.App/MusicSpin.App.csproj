@@ -5,8 +5,8 @@
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <!-- Not "MusicSpin": would collide with the musicspin CLI on case-insensitive file systems (Windows, macOS). -->
-    <AssemblyName>MusicSpin.App</AssemblyName>
+    <!-- Desktop executable: MusicSpin(.exe) / MusicSpin.app. The CLI is music-spin(.exe), so no case-insensitive clash. -->
+    <AssemblyName>MusicSpin</AssemblyName>
     <RootNamespace>MusicSpin.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>

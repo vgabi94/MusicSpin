@@ -42,6 +42,17 @@ public sealed class CliTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Errors_name_the_music_spin_command()
+    {
+        var json = (await _cli.RunAsync("bogus", "--json")).Json();
+        Assert.Equal("music-spin", json.GetProperty("command").GetString());
+
+        var text = await _cli.RunAsync("bogus");
+        Assert.StartsWith("music-spin: ", text.Err, StringComparison.Ordinal);
+        Assert.Contains("Run 'music-spin --help'", text.Err, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Usage_error_with_json_writes_json_error_to_stdout()
     {
         var result = await _cli.RunAsync("info", "--json"); // missing <file>

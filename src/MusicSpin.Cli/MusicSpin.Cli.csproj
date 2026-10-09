@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- `musicspin` command line: scriptable by humans and AI agents (JSON output on every command, stable exit codes). -->
+  <!-- `music-spin` command line: scriptable by humans and AI agents (JSON output on every command, stable exit codes). -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>musicspin</AssemblyName>
+    <AssemblyName>music-spin</AssemblyName>
     <RootNamespace>MusicSpin.Cli</RootNamespace>
     <!-- Allow `dotnet tool install` later. -->
     <PackAsTool>true</PackAsTool>
-    <ToolCommandName>musicspin</ToolCommandName>
+    <ToolCommandName>music-spin</ToolCommandName>
     <PackageId>MusicSpin.Cli</PackageId>
     <NoWarn>$(NoWarn);CA1031;CA1303</NoWarn>
   </PropertyGroup>

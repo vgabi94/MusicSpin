@@ -221,7 +221,7 @@ internal static class BrowseCommands
 
         if (page.Total == 0)
         {
-            o.WriteLine("Nothing found. (Empty library? Run 'musicspin library add <folder>' and 'musicspin library scan'.)");
+            o.WriteLine("Nothing found. (Empty library? Run 'music-spin library add <folder>' and 'music-spin library scan'.)");
             return ExitCodes.Success;
         }
 
