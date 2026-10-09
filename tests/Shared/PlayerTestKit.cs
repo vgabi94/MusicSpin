@@ -30,7 +30,7 @@ internal static class PlayerTestKit
         var paths = new string[count];
         for (var i = 0; i < count; i++)
         {
-            paths[i] = $"{folder}/{i + 1:00}.flac";
+            paths[i] = Path.GetFullPath($"{folder}/{i + 1:00}.flac"); // rooted per OS, as the CLI normalizes paths
             decoders.With(TestAudio.Track(paths[i], sampleRate: 8000, seconds: seconds));
         }
 

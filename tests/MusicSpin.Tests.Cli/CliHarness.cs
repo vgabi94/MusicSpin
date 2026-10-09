@@ -15,7 +15,8 @@ internal sealed class CliHarness : IAsyncDisposable
 {
     private readonly List<PlayerHost> _hosts = [];
 
-    public const string Song = "/music/song.flac";
+    /// <summary>A fake (decoder-only) song, rooted the way the CLI normalizes paths on this OS (D:\music\... on Windows).</summary>
+    public static readonly string Song = Path.GetFullPath("/music/song.flac");
 
     public FakeDecoderFactory Decoders { get; init; } = new FakeDecoderFactory().With(TestAudio.Track(Song, sampleRate: 96_000, seconds: 0.2));
 

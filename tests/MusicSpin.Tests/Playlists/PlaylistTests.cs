@@ -231,7 +231,8 @@ public sealed class PlaylistTests : LibraryTestBase
                 Assert.Equal(3, export.Entries);
                 Assert.Equal(ext, export.Format);
                 var text = File.ReadAllText(file);
-                Assert.Equal(relative, text.Contains("../music/", StringComparison.Ordinal));
+                // Relative entries use the native separator (..\music\ on Windows); import accepts either.
+                Assert.Equal(relative, text.Contains(Path.Combine("..", "music") + Path.DirectorySeparatorChar, StringComparison.Ordinal));
                 var imported = library.ImportPlaylist(file, $"rt {ext} {relative}");
                 Assert.Equal(3, imported.InLibrary);
                 Assert.Equal([KindOfBlue1, Pharaoh, Lossy], Paths(library.Playlist($"rt {ext} {relative}")));

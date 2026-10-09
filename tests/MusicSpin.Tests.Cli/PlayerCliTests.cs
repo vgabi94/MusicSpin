@@ -8,7 +8,8 @@ namespace MusicSpin.Tests.Cli;
 /// <summary>Background player through the CLI (in-process players, null output, fake decoders).</summary>
 public sealed class PlayerCliTests : IAsyncDisposable
 {
-    internal static readonly string[] Long = ["/music/bg/01.flac", "/music/bg/02.flac", "/music/bg/03.flac"];
+    // Rooted per OS, as the CLI normalizes arguments with Path.GetFullPath.
+    internal static readonly string[] Long = [.. new[] { "/music/bg/01.flac", "/music/bg/02.flac", "/music/bg/03.flac" }.Select(Path.GetFullPath)];
 
     private readonly CliHarness _cli = NewHarness();
 
@@ -259,7 +260,7 @@ public sealed class PlayerCliTests : IAsyncDisposable
         {
             Decoders = _cli.Decoders,
             Input = string.Join('\n',
-                $$"""{"id":1,"cmd":"queue.set","items":["{{Long[0]}}","{{Long[1]}}"],"play":false}""",
+                $$"""{"id":1,"cmd":"queue.set","items":[{{JsonSerializer.Serialize(Long[0])}},{{JsonSerializer.Serialize(Long[1])}}],"play":false}""",
                 """{"id":2,"cmd":"next"}""",
                 """{"id":3,"cmd":"volume","delta":-0.5}""",
                 """{"id":4,"cmd":"quit"}"""),

@@ -34,7 +34,7 @@ public class ServeTests
     public async Task Load_play_pause_seek_status_round_trip()
     {
         var lines = await RunAsync(
-            $$"""{"id":1,"cmd":"load","path":"{{CliHarness.Song}}"}""",
+            $$"""{"id":1,"cmd":"load","path":{{JsonSerializer.Serialize(CliHarness.Song)}}}""",
             """{"id":2,"cmd":"play"}""",
             """{"id":3,"cmd":"pause"}""",
             """{"id":4,"cmd":"seek","seconds":0.5}""",

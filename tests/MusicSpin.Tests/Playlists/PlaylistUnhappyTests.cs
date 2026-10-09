@@ -386,11 +386,12 @@ public sealed class PlaylistUnhappyTests : LibraryTestBase
     public void Missing_entries_are_exported_with_their_stored_path_and_counted()
     {
         using var library = Open();
-        library.ImportPlaylist(WriteList("m.m3u8", $"{Track1}\n/gone/away.flac\n"));
+        var gone = Path.Combine(Root, "gone", "away.flac"); // absolute on every OS, never created
+        library.ImportPlaylist(WriteList("m.m3u8", $"{Track1}\n{gone}\n"));
         var file = Path.Combine(Root, "m-out.m3u8");
         var result = library.ExportPlaylist("m", file);
         Assert.Equal(1, result.MissingCount);
         Assert.Contains(result.Warnings, w => w.Contains("missing", StringComparison.Ordinal));
-        Assert.Contains("/gone/away.flac", File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.Contains(gone, File.ReadAllText(file), StringComparison.Ordinal);
     }
 }

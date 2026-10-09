@@ -181,13 +181,16 @@ public sealed class ScanUnhappyTests : LibraryTestBase
     [Fact]
     public void Very_long_paths_and_unicode_names_are_indexed_and_searchable()
     {
+        // Just over 1000 characters, but within PATH_MAX where it is small (1024 bytes including the NUL on macOS).
+        var target = OperatingSystem.IsMacOS() ? 1016 : 1100;
         var deep = Music;
-        while (deep.Length < 900)
+        while (target - deep.Length > 200)
         {
-            deep = Path.Combine(deep, new string('d', 120));
+            deep = Path.Combine(deep, new string('d', Math.Min(120, target - deep.Length - 150)));
         }
 
-        var longName = Path.Combine(deep, new string('n', 200) + ".flac");
+        var longName = Path.Combine(deep, new string('n', target - deep.Length - 1 - ".flac".Length) + ".flac");
+        Assert.Equal(target, longName.Length);
         var unicode = Path.Combine(Music, "Ünïcødé – Café", "日本語 🎵 Ñandú.flac");
         LibraryTestData.Write(longName, LibraryTestData.Tiny16, "Long", "A", "B");
         LibraryTestData.Write(unicode, LibraryTestData.Tiny16, "Für Élise 日本語", "Ludwig van Beethoven 🎹", "Bagatellen");
