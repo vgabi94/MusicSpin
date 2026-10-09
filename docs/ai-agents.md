@@ -23,7 +23,7 @@
 | Tracks of an album | `tracks --album "<exact title or id>" --json` |
 | Hi-res / format / year | `filter --hires --format flac --year-from 1990 --json` |
 
-Tip: when the user gives a partial name, call `search` first (or play directly with `play --search 'artist:"name" album:words'`), then use the exact `name`/`title` or the album `id` it returns with `--artist`/`--album`. Album ids are stable for a given album artist and title.
+Tip: when the user gives a partial name, call `search` first (or play directly with `play --search 'artist:"name" album:words'`), then use the exact `name`/`title` or the album `id` it returns with `--artist`/`--album`. Ids are lowercase GUIDs. Album ids are stable for a given album artist and title; track ids stay the same when files are renamed or moved. Old 32-hex ids (before library schema 3) are rejected with exit 2.
 
 ## Library maintenance
 
@@ -38,7 +38,7 @@ Each command returns in about 0.2 s (the first `play` in about 0.9 s, including 
 
 ```console
 $ music-spin albums --json
-{"ok":true,"command":"albums","data":{"total":2,"offset":0,"limit":100,"count":2,"items":[{...},{"id":"e2d8a2d1158ba9e8d717d254157ee9c5","title":"Spaces","albumArtist":"Nils Frahm","year":2013,"trackCount":3,"discCount":1,"durationSeconds":720,"sizeBytes":75816468,"formats":["flac"],"compilation":false,"hiRes":true,"maxSampleRate":96000,"maxBitsPerSample":24,"hasEmbeddedCover":false}]}}
+{"ok":true,"command":"albums","data":{"total":2,"offset":0,"limit":100,"count":2,"items":[{...},{"id":"9f1c0d6e-3b52-8a47-b1d0-6c2e9a7f4b13","title":"Spaces","albumArtist":"Nils Frahm","year":2013,"trackCount":3,"discCount":1,"durationSeconds":720,"sizeBytes":75816468,"formats":["flac"],"compilation":false,"hiRes":true,"maxSampleRate":96000,"maxBitsPerSample":24,"hasEmbeddedCover":false}]}}
 
 $ music-spin play --album spaces --backend null --json   # null = no sound card on this machine; omit on a desktop
 {"ok":true,"command":"play","data":{"state":"playing","positionSeconds":0.01,"durationSeconds":240,"volume":1,"track":{"path":"/home/me/Music/Nils Frahm/Spaces/01 An Aborted Beginning.flac","container":"flac","codec":"flac","codecLongName":"FLAC (Free Lossless Audio Codec)","sampleRate":96000,"bitsPerSample":24,"channels":2,"channelLayout":"stereo","sampleFormat":"s32","bitRate":831291,"durationSeconds":240,"lossless":true,"hiRes":true,"title":"An Aborted Beginning","artist":"Nils Frahm","album":"Spaces","tags":{"title":"An Aborted Beginning","artist":"Nils Frahm","album":"Spaces","date":"2013","track":"1","encoder":"Lavf61.7.103"}},"queueIndex":0,"queueLength":3,"item":{"path":"/home/me/Music/Nils Frahm/Spaces/01 An Aborted Beginning.flac","title":"An Aborted Beginning","artist":"Nils Frahm","album":"Spaces","albumArtist":"Nils Frahm","trackNumber":1,"durationSeconds":240,"trackId":"065c9c16ff8507a7d16167462247dc52"},"output":{"backend":"null (realtime)","exclusive":false},"ended":false,"mode":"background","playerStarted":true}}

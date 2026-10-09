@@ -79,6 +79,9 @@ On a desktop you would see your real outputs (speakers, HDMI, USB DAC), with one
 | `.usrdata/player.json` | pid, endpoint, version, start time and output of the running player (0600) |
 | `.usrdata/player.lock` | held open by the running player. The OS releases it when the process dies. The file itself may stay behind; it is harmless |
 | `.usrdata/player.sock` | Unix socket of the running player (0600). A stale socket nobody listens on means "not running" and is replaced by the next `play` |
+| `.usrdata/library.db.bak-<n>` | Copy of the library database made before the one-time [upgrade](library.md#upgrading-an-older-library) from schema `<n>`. Restore it (rename to `library.db`) only to go back to an older MusicSpin version |
+| `.usrdata/queue.json.bak-1` | The saved queue as the older version wrote it, kept when the upgrade rewrote `queue.json` with the new track ids |
+| `.usrdata/queue.json.bad` | A saved queue that could not be read (by the player or the upgrade) and was set aside |
 
 Excerpt of `player.log` after a `play` whose audio device could not be opened, followed by `music-spin quit`:
 

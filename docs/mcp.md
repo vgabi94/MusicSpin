@@ -126,7 +126,7 @@ $ printf '%s\n' \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pause","arguments":{}}}' \
   | music-spin mcp --backend null
 {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"logging":{},"tools":{"listChanged":true}},"serverInfo":{"name":"music-spin","title":"MusicSpin","version":"0.1.0+73f41b9..."},"instructions":"MusicSpin controls a local hi-res music player. ..."}}
-{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"{\"query\":\"says\",\"artists\":[],\"albums\":[],\"tracks\":{\"total\":1,\"offset\":0,\"limit\":1,\"count\":1,\"items\":[{\"id\":\"6ca7cf831ce80d7c5f66bcf44b1760fe\",\"path\":\"/home/me/Music/Nils Frahm/Spaces/02 Says.flac\",\"title\":\"Says\",...}]}}"}]}}
+{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"{\"query\":\"says\",\"artists\":[],\"albums\":[],\"tracks\":{\"total\":1,\"offset\":0,\"limit\":1,\"count\":1,\"items\":[{\"id\":\"0199c4a2-5e7f-7b31-a9d4-2c8e1f6b3a70\",\"path\":\"/home/me/Music/Nils Frahm/Spaces/02 Says.flac\",\"title\":\"Says\",...}]}}"}]}}
 {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"player_not_running: No background player is running for '/home/me/MusicSpin/.usrdata'. Start one with 'music-spin play <file> | --album <title> | --artist <name>'."}],"isError":true}}
 ```
 
@@ -169,7 +169,7 @@ $ printf '%s\n' \
 | `playlist_import` | `file` (required), `name`, `replace` (false) | | Import an M3U/M3U8/PLS file readable by the server. Returns the import report (unresolved entries, skipped streams, encoding, warnings) |
 | `playlist_export` | `name`, `file` (required), `format` (`m3u8`/`m3u`/`pls`), `relative` (false), `overwrite` (false) | | Export to a file writable by the server (atomic; `invalid_state` if it exists without `overwrite`). Marked destructive |
 
-`album` accepts an exact title (case-insensitive) or an album id from `albums`/`search`. `artist` is an exact name (case-insensitive; diacritics are ignored when nothing matches exactly). Unknown album/artist: `not_found`. `title`/`albumContains`/`artistContains`/`name` match when every word appears in that field. `files` must be paths the server process can read; absolute paths are recommended. The parameters match the CLI options described in the [CLI reference](cli-reference.md#play).
+`album` accepts an exact title (case-insensitive) or an album id from `albums`/`search`. Ids (tracks, albums, artists, playlists) are GUIDs in lowercase "D" format, e.g. `0199c4a2-5e7f-7b31-a9d4-2c8e1f6b3a70`; track ids stay the same when files are renamed or moved ([Ids](library.md#ids)). Old 32-hex ids from before library schema 3 are `usage` errors, unknown GUIDs `not_found`. `artist` is an exact name (case-insensitive; diacritics are ignored when nothing matches exactly). Unknown album/artist: `not_found`. `title`/`albumContains`/`artistContains`/`name` match when every word appears in that field. `files` must be paths the server process can read; absolute paths are recommended. The parameters match the CLI options described in the [CLI reference](cli-reference.md#play).
 
 Playlist rules (names, entry status, import/export details) are in [Music library → Playlists](library.md#playlists). There is no tool for library scanning (it can take minutes on large libraries). Scan with `music-spin library scan`, which also recognises renamed and moved files (see [Music library](library.md#renames-and-moves)).
 

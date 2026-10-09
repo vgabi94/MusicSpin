@@ -103,6 +103,8 @@ The background player saves its queue to **`.usrdata/queue.json`**: the entries 
 - **`play` with a new source** replaces the restored queue, as usual. `queue clear` saves an empty queue.
 - The saved repeat/shuffle modes win over the defaults in `settings.json`.
 - **Corrupt or inconsistent file:** it is moved to `queue.json.bad`, the player starts with an empty queue, logs `warning: Saved queue ignored ...` to `player.log` and shows the message as `lastError` in `status` until the next queue change. `resume` then exits 8 with that message.
+- **Moved files:** entries keep the library track id next to the path. On restore, the player looks every entry with an id up in the library and uses the track's current path, so files that were renamed or moved (scan with move detection, `library relocate`) since the queue was saved still play. The same lookup happens while the player runs when an entry's file is gone. Entries without a library track (plain files) are only checked by path. If the library is busy (a scan holds the lock for more than 0.5 s) or unreadable, the entries are used as saved and `player.log` says so.
+- **Format:** `queue.json` has `"version": 2` (track ids are GUIDs). Version 1 files (older MusicSpin) are read too: their 32-hex ids are matched by path, and the next save writes version 2. The [library upgrade](library.md#upgrading-an-older-library) also rewrites version 1 files.
 - `serve` (the in-process JSON-lines player) does not read or write `queue.json`.
 
 ## Shuffle and repeat

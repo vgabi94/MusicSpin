@@ -34,7 +34,7 @@ Library: 5 track(s), 2 album(s), 2 artist(s).
 
 ### Change detection
 
-Each track is keyed by its path. The track id is the first 32 hex characters of SHA-256 over the normalized absolute path (upper-cased first on Windows and macOS, whose file systems are case-insensitive by default).
+Scans look tracks up by **path key**: the first 32 hex characters of SHA-256 over the normalized absolute path (upper-cased first on Windows and macOS, whose file systems are case-insensitive by default). The path key has a unique index, so one path is never two tracks. The track **id** does not depend on the path; see [Ids](#ids).
 
 A file counts as **unchanged**, and is not re-read, when **both** are equal to the stored values:
 
@@ -47,9 +47,9 @@ Everything else follows from that rule:
 |---|---|
 | New file | Read and added (`added`) |
 | Size or mtime differs | Re-read (`updated`). The track keeps its id and its "date added" |
-| File deleted | Removed from the library (`removed`), but only after a complete, non-cancelled walk of its folder |
-| File renamed or moved inside the library (also between library folders) | Recognised by its [fingerprint](#renames-and-moves) (`moved`): the track gets the new path and id, keeps its "date added", and playlist entries follow it |
-| File renamed **and** edited (tags rewritten, re-encoded) | The fingerprint differs: one removal plus one addition (new "date added"; playlist entries pointing at it become `missing`) |
+| File deleted | Removed from the library (`removed`), but only after a complete, non-cancelled walk of its folder. If it comes back later it is a new track with a **new id** |
+| File renamed or moved inside the library (also between library folders) | Recognised by its [fingerprint](#renames-and-moves) (`moved`): the track gets the new path and keeps its id and "date added"; playlist entries and the saved queue follow it |
+| File renamed **and** edited (tags rewritten, re-encoded) | The fingerprint differs: one removal plus one addition (new id, new "date added"; playlist entries pointing at it become `missing`) |
 | File edited with **the same size and the same mtime** (for example a tag editor that preserves timestamps and pads tags in place) | **Not detected.** Run `library scan --full` |
 | Root folder missing (unplugged drive, unmounted share) | `folder_missing` issue. Its tracks are **kept** until it comes back or you run `library remove` |
 | Root folder moved or renamed | The old root shows up as missing (tracks kept). Run [`library relocate <old> <new>`](#relocating-a-folder): the root and its tracks are rewritten in place, no rescan. (A scan cannot see this as a move: the old root is missing, so its tracks are never removed) |
@@ -69,7 +69,7 @@ Every file that a scan reads gets a **fingerprint**: its size plus a SHA-256 (tr
 
 After the walk, the scan compares **vanished** tracks (gone from a complete walk) with **new** files:
 
-- one vanished track and one new file with the same fingerprint: a **move**. The track is re-keyed to the new path (the id is derived from the path, so it changes), keeps its "date added", and playlist entries that pointed at it now point at the new path. It is counted in `moved`, not in `added`/`removed`, and listed in `moves` (`{from, to, fromId, toId}`, first 200);
+- one vanished track and one new file with the same fingerprint: a **move**. The track gets the new path and **keeps its id** and "date added"; playlist entries that pointed at it now show the new path. It is counted in `moved`, not in `added`/`removed`, and listed in `moves` (`{from, to, id}`, first 200, sorted by `to`);
 - several vanished tracks and/or new files with the same fingerprint (identical copies): a pair is matched only when its **file name** is unique on both sides (for example a folder of identical files renamed as a whole). Everything else in such a group is handled as **removed + added** and counted in `ambiguousMoves`. MusicSpin never guesses which copy is which;
 - an identical copy that stays where it was is not involved: only vanished tracks are candidates, so a rename of one copy is a move of that copy.
 
@@ -79,7 +79,7 @@ Limits (by design):
 - A file moved *and* retagged is a new track. Tag editors rewrite the header, which changes the fingerprint.
 - Moves out of a library folder that is **missing** at scan time (unplugged drive) are not seen: the missing folder keeps its tracks, and the file is added as new where it appeared.
 - Moves are matched within one scan. If a scan runs between the delete and the re-create (for example `library watch` during a slow copy), the track is removed and later added as new.
-- The saved player queue (`queue.json`) is not rewritten; a queued file that moved is skipped as missing when the queue is restored.
+- The saved player queue (`queue.json`) is not rewritten by the scan. Its entries carry the track id, so when the player restores the queue, or reaches an entry whose file is gone, it looks the id up in the library and plays the track from its new path (see [Persistent queue](playback.md#persistent-queue)).
 
 Libraries scanned before fingerprints existed are fingerprinted once by the next scan (`fingerprinted` in the result; files are not re-read for tags). `library scan --no-move-detection` turns fingerprints and move matching off; renames are then removed + added.
 
@@ -88,7 +88,7 @@ Libraries scanned before fingerprints existed are fingerprinted once by the next
 `library relocate <old> <new>` (alias `library move`) is for when **you** moved or renamed a folder, or a drive is mounted at a new path. It rewrites the stored paths of every track under `<old>` to the same relative path under `<new>` **without reading any file**, so it is instant even for large libraries, and the next scan sees the files as unchanged.
 
 - `<old>` can be a library folder (the folder entry moves too) or any folder inside one. `<new>` must exist.
-- Tracks keep their "date added" and all stored data. Playlist entries follow, including `file`/`missing` entries whose path is under `<old>`.
+- Tracks keep their id, their "date added" and all stored data. Playlist entries follow, including `file`/`missing` entries whose path is under `<old>`.
 - `--dry-run` reports what would change and writes nothing. The result lists the counts, the relocated library folders, the playlist entries updated and a sample of the first 10 path changes, plus warnings (some files missing at `<new>`, or files still present at `<old>`).
 - Everything is written in one transaction: on any error, nothing changes.
 
@@ -104,34 +104,61 @@ Libraries scanned before fingerprints existed are fingerprinted once by the next
 
 The MCP server has the same operation as the `library_relocate` tool.
 
+### Ids
+
+Ids in JSON output (CLI and MCP) are GUIDs in the **"D" format, lower case**: `0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e`. Inputs (`--track-id`, `--album <id>`, MCP `trackIds`/`album`, playlist ids) accept upper case too.
+
+| Id | Kind | Lifetime |
+|---|---|---|
+| Track | Random, time-ordered **UUIDv7** (RFC 9562), assigned when the track is first added | Kept through tag edits, renames and moves (scan), `library relocate`, `--full` rescans and database upgrades. A file that is removed from the library (deleted, or its folder removed) and later added again is a **new** track with a **new** id, and a new "date added" |
+| Album | Name-based **UUIDv8**: SHA-256 of the album artist key and title key (folded, case/diacritic-insensitive) | The same on every machine and after a rebuild. Changes when the album artist or title tag changes |
+| Artist | Name-based UUIDv8 of the artist key | As for albums |
+| Playlist | UUIDv7, assigned at creation | Kept through renames |
+
+Why UUIDv7 for tracks: ids are generated locally without coordination, never collide in practice (74 random bits per millisecond), contain no MAC address (unlike v1), sort by creation time (new tracks append at the end of the index) and are built into .NET (`Guid.CreateVersion7`). Albums and artists are *defined* by their names (retagging an album makes it a different album), so their ids are derived from the names: a random id would have exactly the same lifetime, without being reproducible.
+
+Ids from MusicSpin versions before library schema 3 were 32 hex digits (a hash of the path). They are rejected with exit **2 `usage`** and a message that explains the new format. Get current ids from `tracks`, `albums` or `search --json`. A well-formed GUID that is not in the library is exit **12 `not_found`**.
+
+### Upgrading an older library
+
+The library database has a schema version. When a command or the player opens a database written by an older MusicSpin version (schema 2, path-based ids), it upgrades it once:
+
+1. **Backup:** the database is copied to `.usrdata/library.db.bak-<old version>` (for example `library.db.bak-2`). An existing backup with that name is kept, not overwritten. If the copy fails (disk full, permissions), nothing is changed and the command fails with exit **9**.
+2. **One transaction:** every track gets a UUIDv7 (its timestamp is the track's "date added"); album and artist ids are recomputed; playlist ids and every playlist entry's track id are remapped; the search keys are rebuilt; then the new schema version is recorded. Two records with the same normalized path (MusicSpin does not write those, but a damaged or hand-edited database can contain them) are merged into one track; playlist entries of both follow the kept track.
+3. **Queue:** a `queue.json` from the older version is rewritten with the new ids (by old id, else by path; entries that match nothing keep their path and lose the id). The original is kept as `queue.json.bak-1`. A `queue.json` that cannot be read is moved to `queue.json.bad` with a warning.
+
+The CLI prints one notice on stderr (`{"event":"library_upgraded","fromVersion":2,"toVersion":3,"backup":...,"tracks":...,"elapsedSeconds":...}` with `--json`); the player logs it to `player.log`. Any error during the transaction (a damaged record, an I/O error) rolls everything back and fails with exit **10 `library_corrupt`**: the database is exactly as it was, and the next run tries again. A library on read-only media cannot be upgraded: exit **9** ("needs a one-time upgrade"); open it once from a writable location. Downgrading is not supported: restore the backup to go back to an older MusicSpin. Upgrading 3,000 tracks takes about 1.5 s ([timings](#timings)).
+
 ### Watching
 
 `library watch [--debounce-ms 2000]` uses a FileSystemWatcher on every library folder (file and folder names, last write, size; subfolders included). After a quiet period it runs the same incremental scan. A watcher buffer overflow also triggers a rescan. Each event is printed as one line (`watching`, `scan`, `error`). It runs until Ctrl+C. The desktop app does not watch yet (`watchLibrary` in settings.json is reserved).
 
 ### Timings
 
-Synthetic library of 2,999 tagged files (FLAC 16/44.1 and 24/96 plus MP3, about 12 KB each), Release build, 8 cores, Linux, warm file cache. Two runs each:
+Synthetic library of 2,999 tagged files (FLAC 16/44.1 and 24/96 plus MP3, about 12 KB each), Release build, 8 cores, Linux, warm file cache. Two to four runs each:
 
 | Operation | Scan time | Wall time (including process start) |
 |---|---:|---:|
-| Initial scan | 1.48-1.89 s | 1.82-2.30 s |
-| Initial scan, `--no-move-detection` | 1.69-1.74 s | 2.04-2.11 s |
-| Rescan, nothing changed | 0.24-0.26 s | 0.58-0.60 s |
-| Rescan, 50 files touched | 0.64-0.69 s | 1.01-1.05 s |
-| Rescan, 50 files touched, `--no-move-detection` | 0.57-0.58 s | 0.91-0.93 s |
-| Rescan, 1 file deleted | 0.55-0.63 s | 0.87-1.00 s |
-| Rescan after renaming a folder of 100 files (100 moves) | 0.71-0.75 s | 1.03-1.11 s |
-| One-time fingerprint backfill (library from an older version) | 0.61-0.62 s | 0.95-1.02 s |
-| Full rescan (`--full`) | 2.02-2.03 s | 2.38 s |
-| `library relocate` of a folder with 100 tracks | | 0.88 s |
+| Initial scan | 1.59-1.89 s | 2.04-2.24 s |
+| Initial scan, `--no-move-detection` | 1.45-1.64 s | 1.80-2.00 s |
+| Rescan, nothing changed | 0.21-0.26 s | 0.55-0.63 s |
+| Rescan, 50 files touched | 0.63-0.64 s | 0.97-0.98 s |
+| Rescan, 50 files touched, `--no-move-detection` | 0.63-0.64 s | 0.97-1.00 s |
+| Rescan, 1 file deleted | 0.56-0.61 s | 0.91-0.97 s |
+| Rescan after renaming a folder of 100 files (100 moves) | 0.70-0.76 s | 1.06-1.10 s |
+| One-time fingerprint backfill (library from an older version) | 0.64-0.70 s | 1.01-1.06 s |
+| Full rescan (`--full`) | 1.87-2.10 s | 2.40-2.54 s |
+| `library relocate` of a folder with 100 tracks | | 0.86-0.87 s |
+| One-time [upgrade](#upgrading-an-older-library) of a schema-2 library (2,999 tracks, a playlist with 2,999 entries) | 1.48 s | 1.91-1.93 s |
 | `tracks`, `albums`, `search`, `filter`, `stats`, `check` | | 0.32-0.48 s each |
 
-Fingerprinting made no measurable difference to full scans here (the differences between runs are larger). It adds about 0.05-0.1 s per 50 re-read files. Rescans with changes also rebuild the folded search keys, which costs about 0.1 s for 3,000 tracks. On real files it adds one read of the last 64 KB per new or changed file; on a cold spinning disk that is an extra seek per file (not measured). The database for 3,000 tracks is about 4.9 MB.
+Fingerprinting made no measurable difference to full scans here (the differences between runs are larger). It adds about 0.05-0.1 s per 50 re-read files. Rescans with changes also rebuild the folded search keys, which costs about 0.1 s for 3,000 tracks. On real files it adds one read of the last 64 KB per new or changed file; on a cold spinning disk that is an extra seek per file (not measured). GUID track ids with a separate unique path key did not change scan times measurably either (same runs, interleaved with the previous version: initial 1.55-1.71 s, rescan 0.22-0.26 s, `--full` 1.86-2.29 s). The database for 3,000 tracks is about 6.4 MB (5.5 MB before GUID ids: the extra path-key index and 36-character ids). An upgraded database is larger (about 12.7 MB here) because LiteDB keeps the pages freed by the upgrade and reuses them for later writes instead of shrinking the file.
 
 ## What is stored per track
 
 | Group | Fields |
 |---|---|
+| Identity | id (UUIDv7, see [Ids](#ids)), path key (unique) |
 | File | path, directory, file name, size, modification time (UTC ticks), date added, fingerprint (size + hash of the first/last 64 KB) |
 | Tags | title, artist, album artist, album, track number/total, disc number/total, year, genre, compilation flag, ReplayGain track/album gain and peak, embedded cover present |
 | Audio | duration, format id (`flac`, `alac`, `pcm`, `dsd`, `wavpack`, `ape`, `tta`, `mp3`, `aac`, `vorbis`, `opus`, `wma`, ...), codec, sample rate, bits per sample, bitrate, channels, lossless, hi-res |
@@ -284,7 +311,7 @@ Saved playlists live in `library.db` (collection `playlists`), next to the track
 | `file` | Not in the library, but the file exists. It is played like any file |
 | `missing` | Neither. Kept (so it can come back after a rescan or remount) and **left out with a warning** when the playlist is played or queued |
 
-An entry is resolved by track id first, then by path, then by checking the file on disk. Writing a playlist (add/remove/move/...) refreshes stored ids and paths. A playlist holds at most 50,000 entries (exit 2 beyond that). Playing an empty playlist, or one where every entry is missing, is exit **12 `not_found`**.
+An entry is resolved by track id first, then by path, then by checking the file on disk. So an entry follows its track through renames, moves and `library relocate` (same id), and finds a file that was removed and added again (new id) by its path; the next write to the playlist stores the new id. Writing a playlist (add/remove/move/...) refreshes stored ids and paths. A playlist holds at most 50,000 entries (exit 2 beyond that). Playing an empty playlist, or one where every entry is missing, is exit **12 `not_found`**.
 
 ### Import (M3U, M3U8, PLS)
 

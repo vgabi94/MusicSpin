@@ -180,9 +180,9 @@ Control commands (`pause` … `quit`, `repeat`, `shuffle`, `queue save`) **never
 |---|---|
 | `library add <folder>` | Add a folder. `status`: `added`, `exists`, or `covered` (already inside a library folder). Library folders inside the new one are absorbed (listed in `absorbed`). Then run `library scan` |
 | `library remove <folder>` | Remove a folder and its tracks from the library (music files are not touched). Exit 12 if it is not a library folder |
-| `library relocate <old> <new> [--dry-run] [--force]` (alias `library move`) | After you moved/renamed a folder: rewrite the paths of all tracks under `<old>` to `<new>` without rescanning; library folders under `<old>` move along, playlist entries follow. JSON: `{from, to, dryRun, tracks, foldersRelocated, playlistEntries, missingAtNewLocation, sample, warnings}`. Exit 3 if `<new>` does not exist; 2 for same/nested paths or a file; 12 if nothing in the library is under `<old>`; 8 if `<new>` is outside the library folders, a new path is already a track, or no file exists at `<new>` (without `--force`). [Details](library.md#relocating-a-folder) |
+| `library relocate <old> <new> [--dry-run] [--force]` (alias `library move`) | After you moved/renamed a folder: rewrite the paths of all tracks under `<old>` to `<new>` without rescanning; library folders under `<old>` move along, playlist entries follow. Tracks keep their ids. JSON: `{from, to, dryRun, tracks, foldersRelocated, playlistEntries, missingAtNewLocation, sample: [{from, to, id}], warnings}`. Exit 3 if `<new>` does not exist; 2 for same/nested paths or a file; 12 if nothing in the library is under `<old>`; 8 if `<new>` is outside the library folders, a new path is already a track, or no file exists at `<new>` (without `--force`). [Details](library.md#relocating-a-folder) |
 | `library folders` | List folders: path, exists, track count, added, last scan |
-| `library scan [--full] [--parallel N] [--quiet] [--no-move-detection]` | Incremental scan: add new files, re-read changed ones, drop deleted ones, recognise renamed/moved files by fingerprint (`moved`, `moves`, `ambiguousMoves`, `fingerprinted`, `playlistEntriesUpdated` in the result; [details](library.md#renames-and-moves)). `--no-move-detection` turns fingerprints and move matching off. `--full` re-reads every file. `--parallel` = reader threads (default: CPU count, clamped to 2-16). Progress goes to stderr (JSON lines with `--json`); `--quiet` hides it. Ctrl+C: exit 130, work done so far is kept |
+| `library scan [--full] [--parallel N] [--quiet] [--no-move-detection]` | Incremental scan: add new files, re-read changed ones, drop deleted ones, recognise renamed/moved files by fingerprint; they keep their track id (`moved`, `moves: [{from, to, id}]`, `ambiguousMoves`, `fingerprinted`, `playlistEntriesUpdated` in the result; [details](library.md#renames-and-moves)). `--no-move-detection` turns fingerprints and move matching off. `--full` re-reads every file. `--parallel` = reader threads (default: CPU count, clamped to 2-16). Progress goes to stderr (JSON lines with `--json`); `--quiet` hides it. Ctrl+C: exit 130, work done so far is kept |
 | `library stats` | Totals: tracks, albums, artists, size, duration, by format, by resolution, hi-res and lossless counts, last scan |
 | `library check` | Health report: missing files/folders, likely duplicates, missing tags, unreadable files. **Exit 0 even when issues are found**; see `healthy` |
 | `library watch [--debounce-ms N]` | Watch the library folders and run an incremental scan after changes (quiet period: default 2000 ms). One line per event (`watching`, `scan`, `error`). Runs until Ctrl+C (exit 0) |
@@ -205,7 +205,7 @@ Details: [Music library](library.md).
 
 `music-spin tracks [--album <title|id>] [--artist <name>] [--search <query>] [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--sort ...] [--desc] [--limit N] [--offset N]`
 
-- `--album`: album id, or exact album title (case-insensitive). Unknown: **exit 12** (as for `play`). `--artist`: track artist or album artist, exact name. Unknown: exit 12.
+- `--album`: album id, or exact album title (case-insensitive). Unknown: **exit 12** (as for `play`); an old-format 32-hex album id: exit 2. `--artist`: track artist or album artist, exact name. Unknown: exit 12.
 - `--search`: [search syntax](library.md#search-syntax). `--title`, `--album-contains`, `--artist-contains`: every word must appear in that field. All filters combine (AND); no match is an empty page (exit 0).
 - `--sort`: `default` (album artist, album, disc, track), `relevance` (with `--search`/filters: best match first), `title`, `artist`, `album`, `year`, `duration`, `added`, `samplerate`, `bitdepth`, `size`, `path`.
 
@@ -254,7 +254,7 @@ Saved playlists in the library database. Names are case-insensitive and unique; 
 | `playlist create <name>` | Create an empty playlist. Name taken: exit 8. Invalid name (empty, >200 chars, control characters): exit 2 |
 | `playlist rename <name> <new-name>` | Rename. Changing only the case is allowed. Taken: exit 8 |
 | `playlist delete <name>` | Delete the playlist (music files are not touched) |
-| `playlist add <name> [<files>...] \| --album <a> [--artist <x>] \| --artist <x> \| --search/--title/--album-contains/--artist-contains ... \| --track-id <id>[,<id>...] [--position N]` | Add one source kind (exit 2 for none or several). Files must exist (exit 3 lists the ones that don't; nothing is added). Unknown album/artist/track id or no search match: exit 12. `--position` inserts before that 1-based position (default: append) |
+| `playlist add <name> [<files>...] \| --album <a> [--artist <x>] \| --artist <x> \| --search/--title/--album-contains/--artist-contains ... \| --track-id <id>[,<id>...] [--position N]` | Add one source kind (exit 2 for none or several). Files must exist (exit 3 lists the ones that don't; nothing is added). Unknown album/artist/track id or no search match: exit 12. `--track-id` takes GUIDs; malformed or old-format (32 hex digits) ids: exit 2. `--position` inserts before that 1-based position (default: append) |
 | `playlist remove <name> <positions>` | Remove `3`, `2-5` or `1,3,5-7`. Out of range, `0`, reversed or malformed: exit 2 |
 | `playlist move <name> <from> <to>` | Move one entry |
 | `playlist clear <name>` | Remove all entries, keep the playlist |
@@ -299,21 +299,27 @@ With `--json`, stdout carries **exactly one compact JSON object per line**, also
 - List commands (`artists`, `albums`, `tracks`, `filter`, `search` tracks, `queue`) return a page object: `{"total","offset","limit","count","items"}`. `--limit` is 1-10000 (default 100).
 - `doctor` still includes its report as `data` when it fails.
 
+## Ids
+
+Track, album, artist and playlist ids in JSON output are GUIDs in the "D" format, lower case (`0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e`); inputs accept any case. Track and playlist ids are UUIDv7 assigned once and kept through renames, moves, `library relocate` and rescans; album and artist ids are derived from the names. Ids from versions before library schema 3 (32 hex digits) are rejected with exit 2. Details: [Ids](library.md#ids).
+
+The first command that opens a library written by an older version upgrades it once and prints a notice on stderr (`{"event":"library_upgraded",...}` with `--json`). See [Upgrading an older library](library.md#upgrading-an-older-library).
+
 ## Exit codes
 
 | Code | `error.code` | Meaning |
 |---:|---|---|
 | 0 | `ok` | Success |
 | 1 | `error` | Unexpected error (also: `TagLibSharp.dll` missing during a scan) |
-| 2 | `usage` | Invalid arguments, unknown command, ambiguous album, absolute seek/volume out of range, unusable search text (empty, no letters/digits, prefix without value, too long) |
+| 2 | `usage` | Invalid arguments, unknown command, malformed or old-format (32 hex digits) track/album id, ambiguous album, absolute seek/volume out of range, unusable search text (empty, no letters/digits, prefix without value, too long) |
 | 3 | `file_not_found` | Input file does not exist, or no file of a new `play` queue could be played |
 | 4 | `unsupported_format` | Not an audio file / no decoder |
 | 5 | `decode_failed` | Decoder error while reading |
 | 6 | `decoder_unavailable` | FFmpeg shared libraries missing or of the wrong version |
 | 7 | `audio_device_error` | No usable audio device / the device cannot be opened |
 | 8 | `invalid_state` | e.g. `next` at the end of the queue, `prev` on the first entry, `play` before `load` in `serve`, playlist name taken, export target exists, `queue save` of an empty queue |
-| 9 | `data_dir_not_writable` | Data folder can't be created or written (or `.usrdata` is a file) |
-| 10 | `library_corrupt` | `library.db` is corrupt or not a MusicSpin database |
+| 9 | `data_dir_not_writable` | Data folder can't be created or written (or `.usrdata` is a file); an older library on read-only media or whose backup can't be written cannot be [upgraded](library.md#upgrading-an-older-library) |
+| 10 | `library_corrupt` | `library.db` is corrupt or not a MusicSpin database, or the one-time [upgrade](library.md#upgrading-an-older-library) of an older library failed (rolled back: the database is unchanged) |
 | 11 | `library_locked` | Another MusicSpin process is writing the library |
 | 12 | `not_found` | Library item not found (folder, album, artist, playlist, track id, search with no tracks, playlist with nothing playable) |
 | 13 | `player_not_running` | No background player for this data folder (control commands never start one; `resume` does when a saved queue exists) |
