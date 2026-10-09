@@ -11,6 +11,8 @@ MusicSpin itself is MIT licensed (see `LICENSE`). Release builds contain or load
 | [miniaudio](https://miniaud.io) (via SoundFlow) | Public domain / MIT-0 | Native library inside the executable, extracted on first run |
 | [LiteDB](https://github.com/litedb-org/LiteDB) 5.0.21 | MIT | Inside the executable |
 | [System.CommandLine](https://github.com/dotnet/command-line-api) | MIT | Inside the CLI executable |
+| [ModelContextProtocol.Core](https://github.com/modelcontextprotocol/csharp-sdk) 2.2.0 (official MCP C# SDK) | Apache-2.0 | Inside the CLI executable (`music-spin mcp`) |
+| Microsoft.Extensions.AI.Abstractions, Microsoft.Extensions.Logging.Abstractions (MCP SDK dependencies) | MIT | Inside the CLI executable |
 | [Avalonia](https://avaloniaui.net) 12, SkiaSharp, HarfBuzzSharp | MIT | Inside the desktop app executable |
 | .NET runtime | MIT | Inside the executables (self-contained) |
 
