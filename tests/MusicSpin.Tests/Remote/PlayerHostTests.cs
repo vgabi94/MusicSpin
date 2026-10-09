@@ -1,0 +1,182 @@
+using System.Text.Json;
+using MusicSpin.Core;
+using MusicSpin.Core.Playback;
+using MusicSpin.Core.Remote;
+using MusicSpin.Tests.Shared;
+
+namespace MusicSpin.Tests.Remote;
+
+public sealed class PlayerHostTests : PlayerHostTestBase
+{
+    [Fact]
+    public async Task Client_controls_the_player_over_the_local_socket()
+    {
+        StartHost();
+        var client = await ConnectAsync();
+        var ct = TestContext.Current.CancellationToken;
+
+        var status = ProtocolJson.Deserialize<PlayerStatus>(await client.SendAsync("queue.set", QueueSet(Paths), ct))!;
+        Assert.Equal(PlayerState.Playing, status.State);
+        Assert.Equal(3, status.QueueLength);
+        Assert.Equal(PlayerState.Paused, ProtocolJson.Deserialize<PlayerStatus>(await client.SendAsync("pause", null, ct))!.State);
+        Assert.Equal(1, ProtocolJson.Deserialize<PlayerStatus>(await client.SendAsync("next", null, ct))!.QueueIndex);
+        Assert.Equal(10, (await client.StatusAsync(ct)).QueueIndex is 1 ? ProtocolJson.Deserialize<PlayerStatus>(await client.SendAsync("seek", new { seconds = 10 }, ct))!.PositionSeconds : -1, 0);
+        Assert.Equal(0.4f, ProtocolJson.Deserialize<PlayerStatus>(await client.SendAsync("volume", new { value = 0.4 }, ct))!.Volume, 3);
+        var listing = ProtocolJson.Deserialize<QueueListing>(await client.SendAsync("queue", null, ct))!;
+        Assert.Equal(3, listing.Total);
+        Assert.Equal(1, listing.CurrentIndex);
+    }
+
+    [Fact]
+    public async Task Separate_connections_see_the_same_player()
+    {
+        StartHost();
+        var a = await ConnectAsync();
+        var b = await ConnectAsync();
+        await a.SendAsync("queue.set", QueueSet(Paths), TestContext.Current.CancellationToken);
+        Assert.Equal(PlayerState.Playing, (await b.StatusAsync(TestContext.Current.CancellationToken)).State);
+    }
+
+    [Fact]
+    public async Task Hello_reports_process_and_endpoint()
+    {
+        var host = StartHost(Options(idle: TimeSpan.FromMinutes(5)));
+        var client = await ConnectAsync();
+        var info = await client.HelloAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(PlayerProtocol.Version, info.Protocol);
+        Assert.Equal(Environment.ProcessId, info.Pid);
+        Assert.Equal(Endpoint.Display, info.Endpoint);
+        Assert.Equal(300, info.IdleTimeoutSeconds);
+        Assert.Equal(host.Info.StartedAt, info.StartedAt);
+    }
+
+    [Fact]
+    public async Task Writes_and_removes_its_endpoint_files()
+    {
+        var host = StartHost();
+        Assert.True(File.Exists(Endpoint.Address));
+        Assert.True(File.Exists(Endpoint.InfoFile));
+        Assert.Equal(Environment.ProcessId, PlayerHost.ReadInfo(Endpoint)!.Pid);
+        Assert.True(PlayerHost.IsLockHeld(Endpoint));
+
+        Assert.Equal("quit", await host.StopAsync("quit"));
+        Assert.False(File.Exists(Endpoint.Address));
+        Assert.False(File.Exists(Endpoint.InfoFile));
+        Assert.False(PlayerHost.IsLockHeld(Endpoint));
+    }
+
+    [Fact]
+    public async Task Subscribers_receive_events()
+    {
+        StartHost();
+        var control = await ConnectAsync();
+        var listener = await ConnectAsync();
+        var ct = TestContext.Current.CancellationToken;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(5000);
+        var events = new List<string>();
+        var reader = Task.Run(async () =>
+        {
+            await foreach (var e in listener.SubscribeAsync(cts.Token))
+            {
+                events.Add(e.Name);
+                if (e.Name == "stateChanged" && e.Data.GetProperty("state").GetString() == "paused")
+                {
+                    return;
+                }
+            }
+        }, ct);
+
+        await PlayerTestKit.WaitUntilAsync(() => Log.ToString().Length > 0, "host log");
+        await Task.Delay(100, ct); // let the subscribe request land first
+        await control.SendAsync("queue.set", QueueSet(Paths), ct);
+        await control.SendAsync("pause", null, ct);
+        await reader;
+        Assert.Contains("trackLoaded", events);
+        Assert.Contains("queueChanged", events);
+        Assert.Contains("stateChanged", events);
+    }
+
+    [Fact]
+    public async Task Quit_while_playing_answers_then_shuts_down_cleanly()
+    {
+        var host = StartHost();
+        var client = await ConnectAsync();
+        var ct = TestContext.Current.CancellationToken;
+        await client.SendAsync("queue.set", QueueSet(Paths), ct);
+        Assert.Equal(PlayerState.Playing, host.Player.State);
+
+        await client.QuitAsync(cancellationToken: ct);
+        Assert.True(host.Completion.IsCompleted, "QuitAsync returns only after the player is gone");
+        Assert.Equal("quit", await host.Completion);
+        Assert.False(File.Exists(Endpoint.Address));
+        Assert.False(PlayerHost.IsLockHeld(Endpoint));
+        var ex = await Assert.ThrowsAsync<MusicSpinException>(() => PlayerClient.ConnectAsync(Endpoint, cancellationToken: ct));
+        Assert.Equal(MusicSpinErrorCode.PlayerNotRunning, ex.Code);
+
+        // The data folder is free for a new player.
+        StartHost();
+    }
+
+    [Fact]
+    public async Task Long_data_folder_paths_fall_back_to_a_private_temp_socket()
+    {
+        var deep = Path.Combine(Root, new string('d', 60), new string('e', 60), ".usrdata");
+        var dir = new MusicSpin.Core.Hosting.DataDirectory(deep, MusicSpin.Core.Hosting.DataDirectorySource.Override);
+        var endpoint = PlayerEndpoint.For(dir);
+        Assert.StartsWith(PlayerEndpoint.FallbackSocketDirectory(), endpoint.Address, StringComparison.Ordinal);
+        Assert.Equal(endpoint, PlayerEndpoint.For(deep)); // deterministic: clients find it without reading files
+
+        var host = Track(PlayerHost.TryStart(Options() with { DataDirectory = dir })!);
+        Assert.NotNull(host);
+        await using var client = await PlayerClient.ConnectAsync(endpoint, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(0, (await client.StatusAsync(TestContext.Current.CancellationToken)).QueueLength);
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                File.GetUnixFileMode(Path.GetDirectoryName(endpoint.Address)!));
+        }
+    }
+
+    [Fact]
+    public void Endpoint_names_are_stable_per_data_folder()
+    {
+        var a = PlayerEndpoint.For("/x/.usrdata");
+        Assert.Equal(PlayerEndpoint.For("/x/.usrdata/"), a with { });
+        Assert.Equal("/x/.usrdata/player.sock", a.Address);
+        var pipeA = PlayerEndpoint.For(@"C:\Apps\MusicSpin\.usrdata", useNamedPipe: true);
+        var pipeB = PlayerEndpoint.For(@"C:\Apps\MusicSpin\.usrdata", useNamedPipe: true);
+        Assert.Equal(pipeA.Address, pipeB.Address);
+        Assert.StartsWith("musicspin-", pipeA.Address, StringComparison.Ordinal);
+        Assert.NotEqual(pipeA.Address, PlayerEndpoint.For(@"C:\Other\.usrdata", useNamedPipe: true).Address);
+    }
+
+    [Fact]
+    public async Task Initial_volume_comes_from_options()
+    {
+        StartHost(Options() with { InitialVolume = 0.25f });
+        var client = await ConnectAsync();
+        Assert.Equal(0.25f, (await client.StatusAsync(TestContext.Current.CancellationToken)).Volume);
+    }
+
+    [Fact]
+    public async Task Line_channel_handles_crlf_and_split_writes()
+    {
+        using var pipe = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("{\"a\":1}\r\n{\"b\":\n"));
+        await using var channel = new LineChannel(pipe, 1024);
+        Assert.Equal("{\"a\":1}", await channel.ReadLineAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("{\"b\":", await channel.ReadLineAsync(TestContext.Current.CancellationToken));
+        Assert.Null(await channel.ReadLineAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void Protocol_reports_known_commands()
+    {
+        var (decoders, _) = PlayerTestKit.Tracks(1, 1);
+        using var player = new Player(decoders, Outputs.Fast());
+        using var queue = new QueuePlayer(player);
+        var reply = new PlayerProtocol(queue, decoders).Handle("""{"id":1,"cmd":"bogus"}""");
+        using var doc = JsonDocument.Parse(reply.Line);
+        Assert.Contains("queue.set", doc.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+}

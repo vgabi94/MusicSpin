@@ -1,6 +1,5 @@
-using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using MusicSpin.Core.Remote;
 
 namespace MusicSpin.Cli.Output;
 
@@ -13,13 +12,7 @@ public static class JsonOutput
 {
     public const int SchemaVersion = 1;
 
-    public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
+    public static JsonSerializerOptions Options => ProtocolJson.Options;
 
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
 

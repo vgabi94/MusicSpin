@@ -2,34 +2,9 @@ using System.Globalization;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Decoding.FFmpeg;
 using MusicSpin.Core.Metadata;
+using MusicSpin.Core.Remote;
 
 namespace MusicSpin.Cli.Output;
-
-/// <summary>Stable JSON shapes. Add fields freely; never rename/remove without bumping <see cref="JsonOutput.SchemaVersion"/>.</summary>
-public sealed record TrackDto(
-    string Path,
-    string Container,
-    string Codec,
-    string? CodecLongName,
-    int SampleRate,
-    int? BitsPerSample,
-    int Channels,
-    string? ChannelLayout,
-    string? SampleFormat,
-    long? BitRate,
-    double DurationSeconds,
-    bool Lossless,
-    bool HiRes,
-    string? Title,
-    string? Artist,
-    string? Album,
-    IReadOnlyDictionary<string, string> Tags)
-{
-    public static TrackDto From(TrackInfo t) => new(
-        t.Path, t.Container, t.Codec, t.CodecLongName, t.SampleRate, t.BitsPerSample, t.Channels, t.ChannelLayout,
-        t.SampleFormat, t.BitRate, Math.Round(t.Duration.TotalSeconds, 3), t.IsLossless, t.IsHiRes,
-        t.Title, t.Artist, t.Album, t.Tags);
-}
 
 public sealed record DecoderDto(string Name, bool Available, string? Version, string? License, bool? Lgpl, string? Error, string? Path = null)
 {

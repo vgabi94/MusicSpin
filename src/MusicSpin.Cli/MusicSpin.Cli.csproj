@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="MusicSpin.Core.Remote" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="MusicSpin.Tests.Cli" />
   </ItemGroup>
   <Import Project="..\..\eng\Publish.props" />

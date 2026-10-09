@@ -25,6 +25,12 @@ public enum MusicSpinErrorCode
 
     /// <summary>The request is invalid or ambiguous (maps to the CLI usage exit code).</summary>
     InvalidArgument,
+
+    /// <summary>No background player is running for this data folder.</summary>
+    PlayerNotRunning,
+
+    /// <summary>The background player could not be started or reached (timeout, protocol error, crashed).</summary>
+    PlayerUnavailable,
 }
 
 /// <summary>Exception carrying a <see cref="MusicSpinErrorCode"/> so callers can react without parsing messages.</summary>

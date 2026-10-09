@@ -18,4 +18,13 @@ public sealed record AppSettings
 
     /// <summary>Keep the library in sync with the file system while the app runs.</summary>
     public bool WatchLibrary { get; init; }
+
+    /// <summary>Default for <see cref="PlayerIdleTimeoutSeconds"/>: 15 minutes.</summary>
+    public const double DefaultPlayerIdleTimeoutSeconds = 900;
+
+    /// <summary>
+    /// The background player exits after being stopped (or having an empty queue) this long with no app attached.
+    /// 0 = never. Paused playback keeps it alive.
+    /// </summary>
+    public double PlayerIdleTimeoutSeconds { get; init; } = DefaultPlayerIdleTimeoutSeconds;
 }
