@@ -21,11 +21,56 @@ public static class LibraryKeys
         => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 
     /// <summary>
-    /// Stable id for a path. Hashed because LiteDB index keys must be &lt; 1023 bytes and real paths
-    /// (deep folders, unicode names) can exceed that.
+    /// Lookup key for a normalized path (tracks: unique index <see cref="TrackRecord.PathKey"/>; folder and scan issue ids).
+    /// Upper-cased first where file systems are case-insensitive by default. Hashed because LiteDB index keys must be
+    /// &lt; 1023 bytes and real paths (deep folders, unicode names) can exceed that.
     /// </summary>
-    public static string PathId(string normalizedPath)
+    public static string PathKey(string normalizedPath)
         => Hash(CaseInsensitivePaths ? normalizedPath.ToUpperInvariant() : normalizedPath);
+
+    /// <summary>
+    /// A new track/playlist id: a UUIDv7 (RFC 9562; 48-bit Unix-millisecond timestamp + 74 random bits) in the lowercase
+    /// "D" format (<c>0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e</c>). Time-ordered, so new ids append at the end of the
+    /// database index and sort by creation time.
+    /// </summary>
+    public static string NewId(DateTimeOffset timestamp) => Guid.CreateVersion7(timestamp).ToString("D");
+
+    /// <summary>
+    /// Deterministic id derived from a name (albums, artists): a name-based UUIDv8 (RFC 9562 section 5.8 / appendix B.2: the
+    /// first 128 bits of SHA-256, with the version and variant bits set) in the lowercase "D" format.
+    /// </summary>
+    public static string NameId(string name)
+    {
+        Span<byte> hash = stackalloc byte[32];
+        SHA256.HashData(Encoding.UTF8.GetBytes(name), hash);
+        hash[6] = (byte)((hash[6] & 0x0F) | 0x80);
+        hash[8] = (byte)((hash[8] & 0x3F) | 0x80);
+        return new Guid(hash[..16], bigEndian: true).ToString("D");
+    }
+
+    /// <summary>True for an id in the current format: a GUID in the "D" format (any case).</summary>
+    public static bool IsId(string? value) => value is { Length: 36 } && Guid.TryParseExact(value, "D", out _);
+
+    /// <summary>True for a 32-hex-digit id from MusicSpin before library schema 3 (path/name hashes).</summary>
+    public static bool IsLegacyId(string? value) => value is { Length: 32 } && value.All(char.IsAsciiHexDigit);
+
+    /// <summary>
+    /// Validates an id given by a user/agent and returns it in canonical (lowercase "D") form.
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidArgument: an old 32-hex id, or not a GUID.</exception>
+    public static string ParseId(string value, string what)
+    {
+        var trimmed = value?.Trim() ?? string.Empty;
+        if (IsId(trimmed))
+        {
+            return trimmed.ToLowerInvariant();
+        }
+
+        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, IsLegacyId(trimmed)
+            ? $"'{trimmed}' is an old-format {what} id (32 hex digits, before library schema 3). Ids are GUIDs now " +
+              "(e.g. 0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e); get the current id from 'music-spin tracks/albums/search --json'."
+            : $"'{trimmed}' is not a valid {what} id. Ids are GUIDs in the form 0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e.");
+    }
 
     /// <summary>True when <paramref name="path"/> equals or is inside <paramref name="folder"/>.</summary>
     public static bool IsUnder(string path, string folder)
@@ -73,9 +118,11 @@ public static class LibraryKeys
     public static string Hash(string value)
         => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..32];
 
-    public static string AlbumId(string albumArtistKey, string albumKey) => Hash("album\u001f" + albumArtistKey + "\u001f" + albumKey);
+    /// <summary>Album id: <see cref="NameId"/> of the album artist key and title key (stable while those tags don't change).</summary>
+    public static string AlbumId(string albumArtistKey, string albumKey) => NameId("album\u001f" + albumArtistKey + "\u001f" + albumKey);
 
-    public static string ArtistId(string artistKey) => Hash("artist\u001f" + artistKey);
+    /// <summary>Artist id: <see cref="NameId"/> of the artist key.</summary>
+    public static string ArtistId(string artistKey) => NameId("artist\u001f" + artistKey);
 
     /// <summary>Picks the most common spelling of a name (ties: first seen).</summary>
     public static string DisplayName(IEnumerable<string?> names, string fallback)

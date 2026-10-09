@@ -61,7 +61,7 @@ public sealed partial class MusicLibrary
 
             var now = _time.GetUtcNow().UtcTicks;
             var resolver = new PlaylistResolver(_db);
-            var record = existing ?? new PlaylistRecord { Id = Guid.NewGuid().ToString("N"), CreatedUtcTicks = now };
+            var record = existing ?? new PlaylistRecord { Id = LibraryKeys.NewId(_time.GetUtcNow()), CreatedUtcTicks = now };
             record.Name = clean;
             record.NameKey = key;
             record.ModifiedUtcTicks = now;
@@ -185,13 +185,13 @@ public sealed partial class MusicLibrary
                 $"Not found (neither a library track nor a file): {string.Join(", ", missing.Take(5))}{(missing.Count > 5 ? $" and {missing.Count - 5} more" : string.Empty)}. Nothing was added.");
     });
 
-    /// <exception cref="MusicSpinException">NotFound (lists unknown ids).</exception>
+    /// <exception cref="MusicSpinException">InvalidArgument (malformed or old-format id); NotFound (lists unknown ids).</exception>
     public IReadOnlyList<PlaylistInput> PlaylistInputsForTrackIds(IEnumerable<string> ids) => Guard(() =>
     {
         ArgumentNullException.ThrowIfNull(ids);
         var inputs = new List<PlaylistInput>();
         var unknown = new List<string>();
-        foreach (var id in ids.Select(i => i.Trim()).Where(i => i.Length > 0))
+        foreach (var id in ids.Where(i => !string.IsNullOrWhiteSpace(i)).Select(i => LibraryKeys.ParseId(i, "track")).ToList())
         {
             if (_db.Tracks.FindById(id) is { } track)
             {
@@ -317,7 +317,7 @@ public sealed partial class MusicLibrary
     {
         ArgumentNullException.ThrowIfNull(name);
         var key = LibraryKeys.NameKey(name);
-        return (key.Length == 0 ? null : _db.Playlists.FindOne(p => p.NameKey == key) ?? _db.Playlists.FindById(name.Trim()))
+        return (key.Length == 0 ? null : _db.Playlists.FindOne(p => p.NameKey == key) ?? (LibraryKeys.IsId(name.Trim()) ? _db.Playlists.FindById(name.Trim().ToLowerInvariant()) : null))
                ?? throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No playlist named '{name.Trim()}'. See 'music-spin playlist list'.");
     }
 
@@ -353,6 +353,7 @@ public sealed partial class MusicLibrary
     private sealed class PlaylistResolver(LibraryDatabase db)
     {
         private readonly Dictionary<string, TrackRecord?> _byId = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, TrackRecord?> _byPath = new(StringComparer.Ordinal);
         private Dictionary<string, List<TrackRecord>>? _byFileName;
 
         public TrackRecord? ById(string id)
@@ -373,8 +374,19 @@ public sealed partial class MusicLibrary
                 return null;
             }
 
-            var track = ById(LibraryKeys.PathId(path));
-            return track is not null && track.Path.Equals(path, LibraryKeys.PathComparison) ? track : null;
+            if (!System.IO.Path.IsPathFullyQualified(path))
+            {
+                return null;
+            }
+
+            var key = LibraryKeys.PathKey(LibraryKeys.NormalizePath(path));
+            if (!_byPath.TryGetValue(key, out var track))
+            {
+                track = db.Tracks.FindOne(t => t.PathKey == key);
+                _byPath[key] = track;
+            }
+
+            return track;
         }
 
         /// <summary>

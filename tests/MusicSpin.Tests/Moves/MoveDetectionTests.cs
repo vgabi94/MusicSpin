@@ -38,9 +38,10 @@ public sealed class MoveDetectionTests : LibraryTestBase
         Assert.Equal((0, 0, 1, 5), (result.Added, result.Removed, result.Moved, result.Unchanged));
         var move = Assert.Single(result.Moves);
         Assert.Equal((Path.GetFullPath(SoWhat), Path.GetFullPath(renamed)), (move.From, move.To));
-        Assert.Equal(before.Id, move.FromId);
+        Assert.Equal(before.Id, move.Id);
         var after = ByPath(AllTracks(), renamed);
-        Assert.Equal(move.ToId, after.Id);
+        Assert.Equal(before.Id, after.Id);
+        Assert.True(LibraryKeys.IsId(after.Id));
         Assert.Equal((before.AddedUtcTicks, before.Title, before.Fingerprint), (after.AddedUtcTicks, after.Title, after.Fingerprint));
         Assert.Equal(6, AllTracks().Count);
     }

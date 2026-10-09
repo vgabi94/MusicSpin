@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Hosting;
+using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
 
 namespace MusicSpin.Core.Remote;
@@ -55,6 +56,12 @@ public sealed record PlayerHostOptions
     public PlayerEndpoint? Endpoint { get; init; }
 
     public TimeProvider Time { get; init; } = TimeProvider.System;
+
+    /// <summary>
+    /// Look queue entries up in the library (<see cref="QueueTrackResolver"/>): when a saved queue is restored, and when a
+    /// queued file is missing (renamed/moved since it was queued). Default true.
+    /// </summary>
+    public bool ResolveFromLibrary { get; init; } = true;
 }
 
 /// <summary>
@@ -100,6 +107,11 @@ public sealed class PlayerHost : IAsyncDisposable
             Volume = Math.Clamp(options.InitialVolume, 0f, 1f),
         };
         _queue = new QueuePlayer(_player, output);
+        if (options.ResolveFromLibrary)
+        {
+            _queue.ResolveMissing = ResolveMoved;
+        }
+
         _queue.SetRepeat(options.InitialRepeat);
         if (options.InitialShuffle)
         {
@@ -496,9 +508,30 @@ public sealed class PlayerHost : IAsyncDisposable
                 snapshot = JsonSerializer.Deserialize<QueueSnapshot>(stream, ProtocolJson.Options);
             }
 
-            if (snapshot is null || snapshot.Version != QueueSnapshot.CurrentVersion)
+            if (snapshot is null || snapshot.Version is < 1 or > QueueSnapshot.CurrentVersion)
             {
                 throw new InvalidDataException(snapshot is null ? "empty document" : $"unsupported version {snapshot.Version}");
+            }
+
+            if (snapshot.Items is { Count: > 0 } items)
+            {
+                string? problem = null;
+                var resolved = _options.ResolveFromLibrary
+                    ? QueueTrackResolver.Resolve(_options.DataDirectory, items, null, out problem)
+                    : items.Select(i => i.TrackId is null || LibraryKeys.IsId(i.TrackId) ? i : i with { TrackId = null }).ToList();
+                if (_options.ResolveFromLibrary && problem is not null)
+                {
+                    Log($"queue entries not checked against the library: {problem}");
+                }
+
+                var moved = resolved.Where((item, k) => !string.Equals(item.Path, items[k].Path, StringComparison.Ordinal)).Count();
+                if (moved > 0 || snapshot.Version < QueueSnapshot.CurrentVersion)
+                {
+                    Log($"queue: {moved} entr{(moved == 1 ? "y" : "ies")} found at a new path{(snapshot.Version < QueueSnapshot.CurrentVersion ? $"; upgraded from version {snapshot.Version}" : string.Empty)}");
+                    Interlocked.Exchange(ref _queueDirty, 1);
+                }
+
+                snapshot = snapshot with { Items = resolved, Version = QueueSnapshot.CurrentVersion };
             }
 
             var status = _queue.Restore(snapshot);
@@ -524,6 +557,23 @@ public sealed class PlayerHost : IAsyncDisposable
             Log($"warning: {message}");
             _queue.SetNotice(message);
         }
+    }
+
+    /// <summary>A queued library track whose file is missing: its current location, if the library knows it moved.</summary>
+    private QueueItem? ResolveMoved(QueueItem item)
+    {
+        if (item.TrackId is null)
+        {
+            return null;
+        }
+
+        var resolved = QueueTrackResolver.Resolve(_options.DataDirectory, [item], null, out var problem);
+        if (problem is not null)
+        {
+            Log($"could not look up moved track {item.TrackId}: {problem}");
+        }
+
+        return resolved.Count == 1 && !string.Equals(resolved[0].Path, item.Path, StringComparison.Ordinal) ? resolved[0] : null;
     }
 
     /// <summary>Writes <c>queue.json</c> atomically when the queue, index, state or modes changed, or the position moved enough.</summary>

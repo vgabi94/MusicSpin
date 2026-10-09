@@ -37,7 +37,8 @@ public sealed class RelocateTests : LibraryTestBase
         Assert.Equal(Path.Combine(target, "Kind of Blue", "01 So What.flac"), after.Path);
         Assert.Equal((Path.Combine(target, "Kind of Blue"), "01 So What.flac"), (after.Directory, after.FileName));
         Assert.Equal((before.AddedUtcTicks, before.Fingerprint, before.AlbumId), (after.AddedUtcTicks, after.Fingerprint, after.AlbumId));
-        Assert.Equal(LibraryKeys.PathId(after.Path), after.Id);
+        Assert.Equal(before.Id, after.Id);
+        Assert.True(LibraryKeys.IsId(after.Id));
 
         var rescan = Rescan();
         Assert.Equal((0, 0, 0, 0, 6), (rescan.Added, rescan.Removed, rescan.Updated, rescan.Moved, rescan.Unchanged));

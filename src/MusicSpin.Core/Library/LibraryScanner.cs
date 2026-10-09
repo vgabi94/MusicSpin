@@ -26,8 +26,8 @@ public sealed record ScanOptions
     public bool DetectMoves { get; init; } = true;
 }
 
-/// <summary>A track recognised at a new path (same fingerprint): <paramref name="FromId"/> was replaced by <paramref name="ToId"/>.</summary>
-public sealed record TrackMove(string From, string To, string FromId, string ToId);
+/// <summary>A track found at a new path (same fingerprint, or <c>library relocate</c>). The track keeps its <paramref name="Id"/>.</summary>
+public sealed record TrackMove(string From, string To, string Id);
 
 /// <param name="Phase">walk | read | index | done.</param>
 public sealed record ScanProgress(string Phase, int FilesFound, int FilesToRead, int FilesRead, int Failed, string? CurrentPath);
@@ -116,7 +116,7 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                 FileWalker.Walk(folder.Path,
                     file =>
                     {
-                        found.TryAdd(LibraryKeys.PathId(LibraryKeys.NormalizePath(file.Path)), (file, folder.Id));
+                        found.TryAdd(LibraryKeys.PathKey(LibraryKeys.NormalizePath(file.Path)), (file, folder.Id));
                         progress.Report(new ScanProgress("walk", found.Count, 0, 0, 0, null));
                     },
                     issue =>
@@ -132,16 +132,16 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             cancelled = true;
         }
 
-        // 2. Decide what to read.
-        var existing = db.Tracks.FindAll().ToDictionary(t => t.Id, StringComparer.Ordinal);
+        // 2. Decide what to read. Files are matched to tracks by path key; track ids are GUIDs that never change.
+        var existing = db.Tracks.FindAll().ToDictionary(t => t.PathKey, StringComparer.Ordinal);
         var previousIssues = db.Issues.Find(i => i.IsFile).ToDictionary(i => i.Id, StringComparer.Ordinal);
-        var toRead = new List<(string Id, FoundFile File, string FolderId)>();
+        var toRead = new List<(string Key, FoundFile File, string FolderId)>();
         int unchanged = 0, skippedUnreadable = 0;
         var keptIssues = new List<ScanIssueRecord>();
         var folderMoves = new List<TrackRecord>();
-        foreach (var (id, (file, folderId)) in found)
+        foreach (var (key, (file, folderId)) in found)
         {
-            if (!options.Full && existing.TryGetValue(id, out var track)
+            if (!options.Full && existing.TryGetValue(key, out var track)
                 && track.SizeBytes == file.SizeBytes && track.ModifiedUtcTicks == file.ModifiedUtcTicks)
             {
                 unchanged++;
@@ -154,7 +154,7 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                 continue;
             }
 
-            if (!options.Full && previousIssues.TryGetValue(id, out var issue)
+            if (!options.Full && previousIssues.TryGetValue(key, out var issue)
                 && issue.SizeBytes == file.SizeBytes && issue.ModifiedUtcTicks == file.ModifiedUtcTicks)
             {
                 skippedUnreadable++;
@@ -162,7 +162,7 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                 continue;
             }
 
-            toRead.Add((id, file, folderId));
+            toRead.Add((key, file, folderId));
         }
 
         if (folderMoves.Count > 0)
@@ -174,9 +174,9 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
         var fingerprinted = 0;
         if (options.DetectMoves && !cancelled)
         {
-            var reading = toRead.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
-            var missingPrints = found.Keys.Where(id => !reading.Contains(id) && existing.TryGetValue(id, out var t) && t.Fingerprint.Length == 0)
-                .Select(id => existing[id]).ToList();
+            var reading = toRead.Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+            var missingPrints = found.Keys.Where(key => !reading.Contains(key) && existing.TryGetValue(key, out var t) && t.Fingerprint.Length == 0)
+                .Select(key => existing[key]).ToList();
             if (missingPrints.Count > 0)
             {
                 try
@@ -232,23 +232,26 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             }, CancellationToken.None);
 
             var batch = new List<TrackRecord>(options.BatchSize);
-            var folderOf = toRead.ToDictionary(t => t.Id, t => t.FolderId, StringComparer.Ordinal);
+            var folderOf = toRead.ToDictionary(t => t.Key, t => t.FolderId, StringComparer.Ordinal);
+            var now = time.GetUtcNow();
             foreach (var outcome in queue.GetConsumingEnumerable(CancellationToken.None))
             {
                 read++;
                 var normalized = LibraryKeys.NormalizePath(outcome.File.Path);
-                var id = LibraryKeys.PathId(normalized);
+                var key = LibraryKeys.PathKey(normalized);
+                existing.TryGetValue(key, out var old);
                 if (outcome.Track is { } track)
                 {
-                    track.Id = id;
+                    track.Id = old?.Id ?? LibraryKeys.NewId(now);
                     track.Path = normalized;
-                    track.FolderId = folderOf[id];
+                    track.PathKey = key;
+                    track.FolderId = folderOf[key];
                     track.Directory = System.IO.Path.GetDirectoryName(normalized) ?? string.Empty;
                     track.FileName = System.IO.Path.GetFileName(normalized);
                     track.SizeBytes = outcome.File.SizeBytes;
                     track.ModifiedUtcTicks = outcome.File.ModifiedUtcTicks;
                     track.Fingerprint = outcome.Fingerprint ?? string.Empty;
-                    if (existing.TryGetValue(id, out var old))
+                    if (old is not null)
                     {
                         track.AddedUtcTicks = old.AddedUtcTicks;
                         // Keep derived fields; the indexer recomputes them and skips untouched rows.
@@ -273,9 +276,9 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                     if (error.Kind == "missing")
                     {
                         // Deleted between walk and read: treat as removed.
-                        if (existing.ContainsKey(id))
+                        if (old is not null)
                         {
-                            removedIds.Add(id);
+                            removedIds.Add(old.Id);
                         }
                     }
                     else
@@ -284,13 +287,13 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                         issues.Enqueue(new ScanIssue(normalized, error.Kind, error.Message));
                         newIssueRecords.Add(new ScanIssueRecord
                         {
-                            Id = id, Path = normalized, Kind = error.Kind, Message = error.Message, IsFile = true,
+                            Id = key, Path = normalized, Kind = error.Kind, Message = error.Message, IsFile = true,
                             SizeBytes = outcome.File.SizeBytes, ModifiedUtcTicks = outcome.File.ModifiedUtcTicks, AtUtcTicks = nowTicks,
                         });
                         // A previously good file that became unreadable is no longer playable.
-                        if (existing.ContainsKey(id))
+                        if (old is not null)
                         {
-                            removedIds.Add(id);
+                            removedIds.Add(old.Id);
                         }
                     }
                 }
@@ -328,7 +331,7 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
         {
             foreach (var track in existing.Values)
             {
-                if (!found.ContainsKey(track.Id) && availableIds.Contains(track.FolderId)
+                if (!found.ContainsKey(track.PathKey) && availableIds.Contains(track.FolderId)
                     && !problemDirs.Any(d => LibraryKeys.IsUnder(track.Path, d)))
                 {
                     removedIds.Add(track.Id);
@@ -337,18 +340,24 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             }
         }
 
-        // 4b. Moves: a vanished track and a new file with the same fingerprint are the same track.
+        // 4b. Moves: a vanished track and a new file with the same fingerprint are the same track. The new file was stored
+        // under a fresh id; the vanished track takes over its path and data and keeps its own id and date added.
         var (moves, ambiguous) = options.DetectMoves && !cancelled ? MatchMoves(vanished, addedTracks) : ([], 0);
         var playlistEntries = 0;
+        var moveList = new List<TrackMove>(moves.Count);
         if (moves.Count > 0)
         {
-            foreach (var (old, now) in moves)
+            foreach (var (old, moved) in moves)
             {
-                now.AddedUtcTicks = old.AddedUtcTicks;
+                db.Tracks.Delete(moved.Id);
+                moveList.Add(new TrackMove(old.Path, moved.Path, old.Id));
+                moved.Id = old.Id;
+                moved.AddedUtcTicks = old.AddedUtcTicks;
+                removedIds.Remove(old.Id);
             }
 
             db.Tracks.Update(moves.Select(m => m.New));
-            playlistEntries = PlaylistMaintenance.Retarget(db, moves.ToDictionary(m => m.Old.Id, m => m.New, StringComparer.Ordinal), null);
+            playlistEntries = PlaylistMaintenance.Retarget(db, [.. moves.Select(m => (m.Old.Path, m.New))], null);
         }
 
         foreach (var id in removedIds)
@@ -402,13 +411,13 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             Added = added - moves.Count,
             Updated = updated,
             Unchanged = unchanged,
-            Removed = removedIds.Count - moves.Count,
+            Removed = removedIds.Count,
             Failed = failed,
             Moved = moves.Count,
             AmbiguousMoves = ambiguous,
             Fingerprinted = fingerprinted,
             PlaylistEntriesUpdated = playlistEntries,
-            Moves = [.. moves.OrderBy(m => m.New.Path, StringComparer.Ordinal).Take(MaxMovesListed).Select(m => new TrackMove(m.Old.Path, m.New.Path, m.Old.Id, m.New.Id))],
+            Moves = [.. moveList.OrderBy(m => m.To, StringComparer.Ordinal).Take(MaxMovesListed)],
             SkippedUnreadable = skippedUnreadable,
             Albums = albums,
             Artists = artists,

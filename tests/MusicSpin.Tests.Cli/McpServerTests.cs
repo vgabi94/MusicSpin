@@ -239,6 +239,10 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.StartsWith("usage:", await CallError("playlist_add", new() { ["name"] = "one" }), StringComparison.Ordinal);
         Assert.StartsWith("usage:", await CallError("playlist_add", new() { ["name"] = "one", ["files"] = new[] { Long[0] }, ["search"] = "x" }), StringComparison.Ordinal);
         Assert.StartsWith("file_not_found:", await CallError("playlist_add", new() { ["name"] = "one", ["files"] = new[] { "/nope.flac" } }), StringComparison.Ordinal);
+        Assert.Contains("old-format track id", await CallError("playlist_add", new() { ["name"] = "one", ["trackIds"] = new[] { "df9d30f537ed77fff65d4304a0248449" } }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("playlist_add", new() { ["name"] = "one", ["trackIds"] = new[] { "not-an-id" } }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found:", await CallError("playlist_add", new() { ["name"] = "one", ["trackIds"] = new[] { "0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e" } }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("tracks", new() { ["album"] = "df9d30f537ed77fff65d4304a0248449" }), StringComparison.Ordinal);
         Assert.StartsWith("usage:", await CallError("playlist_remove", new() { ["name"] = "one", ["positions"] = "1" }), StringComparison.Ordinal);
         Assert.StartsWith("usage:", await CallError("playlist_export", new() { ["name"] = "one", ["file"] = "/tmp/x.wpl", ["format"] = "wpl" }), StringComparison.Ordinal);
         Assert.StartsWith("file_not_found:", await CallError("playlist_import", new() { ["file"] = "/nope/x.m3u" }), StringComparison.Ordinal);

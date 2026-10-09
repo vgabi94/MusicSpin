@@ -75,7 +75,9 @@ public sealed class PlaylistCliUnhappyTests : IAsyncDisposable
         await Error(ExitCodes.Usage, "playlist", "remove", "mine", "0");
         await Error(ExitCodes.Usage, "playlist", "move", "mine", "1", "3");
         await Error(ExitCodes.FileNotFound, "playlist", "add", "mine", Path.Combine(_music, "nope.flac"));
-        await Error(ExitCodes.NotFound, "playlist", "add", "mine", "--track-id", "nope");
+        await Error(ExitCodes.NotFound, "playlist", "add", "mine", "--track-id", "0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e");
+        Assert.Contains("not a valid track id", await Error(ExitCodes.Usage, "playlist", "add", "mine", "--track-id", "nope"), StringComparison.Ordinal);
+        Assert.Contains("old-format track id", await Error(ExitCodes.Usage, "playlist", "add", "mine", "--track-id", "df9d30f537ed77fff65d4304a0248449"), StringComparison.Ordinal);
         await Error(ExitCodes.NotFound, "playlist", "add", "mine", "--album", "No Such Album");
         Assert.Empty(_cli.Hosts);
     }

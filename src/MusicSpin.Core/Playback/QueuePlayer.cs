@@ -62,6 +62,12 @@ public sealed class QueuePlayer : IDisposable
 
     public OutputInfo? Output { get; }
 
+    /// <summary>
+    /// Called (under the queue lock) when a queued file is not found: returns the entry at its new location (e.g. a library
+    /// track that was renamed or moved), or null. The entry is updated in the queue when the new file loads.
+    /// </summary>
+    public Func<QueueItem, QueueItem?>? ResolveMissing { get; set; }
+
     /// <summary>Raised on any thread. Handlers must not block or call back into the player.</summary>
     public event EventHandler<PlayerStateChangedEventArgs>? StateChanged;
 
@@ -183,7 +189,7 @@ public sealed class QueuePlayer : IDisposable
             var loaded = -1;
             for (var i = first; i < slots.Count && loaded < 0; i++)
             {
-                if (TryLoad(slots[i].Item, i, skipped))
+                if (TryLoad(slots[i].Item, i, skipped, slots))
                 {
                     loaded = i;
                 }
@@ -720,11 +726,15 @@ public sealed class QueuePlayer : IDisposable
             $"No playable track {(direction > 0 ? "after" : "before")} entry {index + 1 - direction}: the remaining file(s) were skipped (see 'skipped' in 'music-spin status').");
     }
 
-    private bool TryLoad(QueueItem item, int index, List<SkippedItem>? into)
+    private bool TryLoad(QueueItem item, int index, List<SkippedItem>? into, List<Slot>? slots = null)
     {
         try
         {
             _player.Load(item.Path);
+            return true;
+        }
+        catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.FileNotFound && TryLoadMoved(item, index, slots ?? _items))
+        {
             return true;
         }
         catch (MusicSpinException ex) when (ex.Code is MusicSpinErrorCode.FileNotFound or MusicSpinErrorCode.UnsupportedFormat or MusicSpinErrorCode.DecodeFailed)
@@ -741,6 +751,38 @@ public sealed class QueuePlayer : IDisposable
 
             return false;
         }
+    }
+
+    /// <summary>
+    /// The file is gone: ask the library where the entry's track is now (by its id) and load that instead, updating
+    /// the entry in <paramref name="slots"/> (the live queue, or one being staged by SetQueue).
+    /// </summary>
+    private bool TryLoadMoved(QueueItem item, int index, List<Slot> slots)
+    {
+        if (ResolveMissing?.Invoke(item) is not { } moved || string.Equals(moved.Path, item.Path, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            _player.Load(moved.Path);
+        }
+        catch (MusicSpinException)
+        {
+            return false;
+        }
+
+        if (index >= 0 && index < slots.Count && ReferenceEquals(slots[index].Item, item))
+        {
+            slots[index].Item = moved;
+            if (ReferenceEquals(slots, _items))
+            {
+                QueueChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

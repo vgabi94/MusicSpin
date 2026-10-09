@@ -185,7 +185,7 @@ internal static class PlaylistCommands
         var artistContains = new Option<string?>("--artist-contains") { Description = "Library tracks whose artist contains these words." };
         var trackIds = new Option<string[]>("--track-id")
         {
-            Description = "Library track id(s) (from 'tracks --json' / 'search --json'). Repeat or comma-separate.",
+            Description = "Library track id(s): GUIDs from 'tracks --json' / 'search --json'. Repeat or comma-separate. Unknown: exit 12; malformed/old 32-hex: exit 2.",
             AllowMultipleArgumentsPerToken = true,
         };
         var position = new Option<int?>("--position") { Description = "Insert before this 1-based position (default: append)." };

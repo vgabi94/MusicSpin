@@ -14,7 +14,7 @@ internal sealed class LibraryDatabase : IDisposable
 
     private readonly FileStream? _lock;
 
-    private LibraryDatabase(LiteDatabase db, FileStream? lockFile, bool readOnly)
+    private LibraryDatabase(LiteDatabase db, FileStream? lockFile, bool readOnly, string? file = null, string? dataDirectory = null)
     {
         Db = db;
         _lock = lockFile;
@@ -25,39 +25,54 @@ internal sealed class LibraryDatabase : IDisposable
         Artists = db.GetCollection<ArtistRecord>("artists");
         Issues = db.GetCollection<ScanIssueRecord>("scan_issues");
         Playlists = db.GetCollection<PlaylistRecord>("playlists");
-        if (!readOnly)
+        var version = LibraryMigration.StoredVersion(db);
+        var hasData = version < SchemaVersion && (Tracks.Count() > 0 || Playlists.Count() > 0);
+        if (readOnly)
         {
-            Tracks.EnsureIndex(t => t.FolderId);
-            Tracks.EnsureIndex(t => t.AlbumId);
-            Tracks.EnsureIndex(t => t.ArtistKey);
-            Tracks.EnsureIndex(t => t.AlbumArtistKey);
-            Tracks.EnsureIndex(t => t.SortKey);
-            Albums.EnsureIndex(a => a.AlbumArtistKey);
-            Artists.EnsureIndex(a => a.Key);
-            Playlists.EnsureIndex(p => p.NameKey, unique: true);
-            if (db.UserVersion < SchemaVersion)
+            if (hasData)
             {
-                // Keys derived by the indexer changed (v2: folded search keys): recompute them once, on the first writable open.
-                if (Tracks.Count() > 0)
-                {
-                    LibraryIndexer.Rebuild(this);
-                }
-
-                db.UserVersion = SchemaVersion;
+                throw new MusicSpinException(MusicSpinErrorCode.DataDirectoryNotWritable,
+                    $"The library database{(file is null ? string.Empty : $" '{file}'")} is from an older MusicSpin version (schema {version}) and needs a one-time " +
+                    $"upgrade to schema {SchemaVersion}, which needs write access. Open it once from a writable data folder.");
             }
+
+            return;
         }
 
-        StaleKeys = db.UserVersion < SchemaVersion;
+        if (hasData)
+        {
+            Migration = LibraryMigration.Run(this, version, file, dataDirectory, DateTimeOffset.UtcNow);
+        }
+        else if (version < SchemaVersion)
+        {
+            LibraryMigration.WriteMarker(db, SchemaVersion);
+        }
+
+        if (db.UserVersion < SchemaVersion)
+        {
+            db.UserVersion = SchemaVersion;
+        }
+
+        Tracks.EnsureIndex(t => t.PathKey, unique: true);
+        Tracks.EnsureIndex(t => t.FolderId);
+        Tracks.EnsureIndex(t => t.AlbumId);
+        Tracks.EnsureIndex(t => t.ArtistKey);
+        Tracks.EnsureIndex(t => t.AlbumArtistKey);
+        Tracks.EnsureIndex(t => t.SortKey);
+        Albums.EnsureIndex(a => a.AlbumArtistKey);
+        Artists.EnsureIndex(a => a.Key);
+        Playlists.EnsureIndex(p => p.NameKey, unique: true);
     }
 
     /// <summary>
-    /// Version of the derived data (stored as LiteDB's user version). 1: initial; 2: folded search keys
-    /// (TrackRecord.Search*, AlbumRecord.Search*, ArtistRecord.SearchName).
+    /// Schema version (LiteDB's user version, plus a marker document written inside the migration transaction).
+    /// 1: initial; 2: folded search keys (TrackRecord.Search*, AlbumRecord.Search*, ArtistRecord.SearchName);
+    /// 3: GUID track ids + TrackRecord.PathKey, "D"-format playlist ids, name-based UUID album/artist ids (see <see cref="LibraryMigration"/>).
     /// </summary>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
-    /// <summary>True for an older database opened read-only: derived search keys are missing and must be computed on the fly.</summary>
-    public bool StaleKeys { get; }
+    /// <summary>Set when this open upgraded an older database.</summary>
+    public LibraryMigrationReport? Migration { get; }
 
     public LiteDatabase Db { get; }
     public bool ReadOnly { get; }
@@ -78,7 +93,7 @@ internal sealed class LibraryDatabase : IDisposable
         try
         {
             ValidateExistingFile(dir.LibraryDatabaseFile);
-            return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: false), lockFile, readOnly: false);
+            return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: false), lockFile, readOnly: false, dir.Path);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -116,7 +131,7 @@ internal sealed class LibraryDatabase : IDisposable
         if (!AppPaths.IsWritable(dir, out _))
         {
             ValidateExistingFile(dir.LibraryDatabaseFile);
-            return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: true), null, readOnly: true);
+            return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: true), null, readOnly: true, dir.Path);
         }
 
         var lockFile = AcquireLock(dir, lockTimeout);
@@ -125,12 +140,12 @@ internal sealed class LibraryDatabase : IDisposable
             ValidateExistingFile(dir.LibraryDatabaseFile);
             try
             {
-                return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: false), lockFile, readOnly: false);
+                return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: false), lockFile, readOnly: false, dir.Path);
             }
             catch (UnauthorizedAccessException)
             {
                 // library.db itself is read-only: still answer queries.
-                return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: true), lockFile, readOnly: true);
+                return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: true), lockFile, readOnly: true, dir.Path);
             }
         }
         catch
@@ -141,16 +156,21 @@ internal sealed class LibraryDatabase : IDisposable
     }
 
     /// <summary>Constructs (touching collections/indexes) and maps LiteDB failures to LibraryCorrupt.</summary>
-    private static LibraryDatabase Create(string file, LiteDatabase db, FileStream? lockFile, bool readOnly)
+    private static LibraryDatabase Create(string file, LiteDatabase db, FileStream? lockFile, bool readOnly, string dataDirectory)
     {
         try
         {
-            return new LibraryDatabase(db, lockFile, readOnly);
+            return new LibraryDatabase(db, lockFile, readOnly, file, dataDirectory);
         }
         catch (Exception ex) when (IsCorruption(ex))
         {
             db.Dispose();
             throw Corrupt(file, ex);
+        }
+        catch
+        {
+            db.Dispose();
+            throw;
         }
     }
 

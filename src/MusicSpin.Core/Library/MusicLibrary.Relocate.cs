@@ -70,7 +70,7 @@ public sealed partial class MusicLibrary
 
             // Folders after the move: the relocated ones at their new path, the others unchanged.
             var newFolders = folders.Select(f => movedFolders.Contains(f)
-                ? new LibraryFolderRecord { Id = LibraryKeys.PathId(Map(f.Path)), Path = Map(f.Path), AddedUtcTicks = f.AddedUtcTicks, LastScanUtcTicks = f.LastScanUtcTicks }
+                ? new LibraryFolderRecord { Id = LibraryKeys.PathKey(Map(f.Path)), Path = Map(f.Path), AddedUtcTicks = f.AddedUtcTicks, LastScanUtcTicks = f.LastScanUtcTicks }
                 : f).ToList();
             foreach (var folder in movedFolders)
             {
@@ -84,7 +84,7 @@ public sealed partial class MusicLibrary
             }
 
             var moving = tracks.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
-            var moved = new Dictionary<string, TrackRecord>(StringComparer.Ordinal);
+            var moved = new List<(string OldPath, TrackRecord Track)>();
             var sample = new List<TrackMove>();
             var conflicts = new List<string>();
             var outside = 0;
@@ -100,8 +100,8 @@ public sealed partial class MusicLibrary
                     continue;
                 }
 
-                var id = LibraryKeys.PathId(path);
-                if (!moving.Contains(id) && _db.Tracks.FindById(id) is not null)
+                var key = LibraryKeys.PathKey(path);
+                if (_db.Tracks.FindOne(x => x.PathKey == key) is { } other && !moving.Contains(other.Id))
                 {
                     conflicts.Add(path);
                 }
@@ -109,13 +109,13 @@ public sealed partial class MusicLibrary
                 missing += File.Exists(path) ? 0 : 1;
                 stillAtOld += File.Exists(t.Path) ? 1 : 0;
                 var copy = Clone(t);
-                (copy.Id, copy.Path, copy.FolderId) = (id, path, folder.Id);
+                (copy.Path, copy.PathKey, copy.FolderId) = (path, key, folder.Id);
                 copy.Directory = System.IO.Path.GetDirectoryName(path) ?? string.Empty;
                 copy.FileName = System.IO.Path.GetFileName(path);
-                moved[t.Id] = copy;
+                moved.Add((t.Path, copy));
                 if (sample.Count < RelocateSampleSize)
                 {
-                    sample.Add(new TrackMove(t.Path, path, t.Id, id));
+                    sample.Add(new TrackMove(t.Path, path, t.Id));
                 }
             }
 
@@ -155,12 +155,13 @@ public sealed partial class MusicLibrary
                 _db.Db.BeginTrans();
                 try
                 {
-                    foreach (var id in moving)
+                    // Ids stay; only paths change. Clear the old path keys first so swapped keys can't collide in the unique index.
+                    foreach (var (_, track) in moved)
                     {
-                        _db.Tracks.Delete(id);
+                        _db.Tracks.Delete(track.Id);
                     }
 
-                    _db.Tracks.InsertBulk(moved.Values);
+                    _db.Tracks.InsertBulk(moved.Select(m => m.Track));
                     foreach (var folder in movedFolders)
                     {
                         _db.Folders.Delete(folder.Id);
@@ -190,8 +191,9 @@ public sealed partial class MusicLibrary
             }
             else
             {
+                var ids = moving;
                 playlistEntries = _db.Playlists.FindAll().Sum(p => p.Entries.Count(e =>
-                    e.TrackId is { } id ? moved.ContainsKey(id) : MapIfUnder(e.Path) is not null));
+                    e.TrackId is { } id ? ids.Contains(id) : MapIfUnder(e.Path) is not null));
             }
 
             return new RelocateResult(source, target, dryRun, tracks.Count, [.. movedFolders.Select(f => f.Path)], playlistEntries, missing, sample, warnings);

@@ -1,3 +1,4 @@
+using MusicSpin.Core;
 using MusicSpin.Core.Library;
 
 namespace MusicSpin.Tests.Library;
@@ -31,13 +32,36 @@ public sealed class LibraryKeysTests
     }
 
     [Fact]
-    public void Ids_are_short_and_stable_even_for_huge_paths()
+    public void Path_keys_are_short_and_stable_even_for_huge_paths()
     {
         var huge = "/" + new string('x', 5000);
-        var id = LibraryKeys.PathId(huge);
-        Assert.Equal(32, id.Length);
-        Assert.Equal(id, LibraryKeys.PathId(huge));
-        Assert.NotEqual(id, LibraryKeys.PathId(huge + "y"));
+        var key = LibraryKeys.PathKey(huge);
+        Assert.Equal(32, key.Length);
+        Assert.Equal(key, LibraryKeys.PathKey(huge));
+        Assert.NotEqual(key, LibraryKeys.PathKey(huge + "y"));
+    }
+
+    [Fact]
+    public void New_ids_are_uuid_v7_in_lowercase_d_format()
+    {
+        var t = new DateTimeOffset(2026, 10, 8, 12, 0, 0, TimeSpan.Zero);
+        var id = LibraryKeys.NewId(t);
+        Assert.Matches("^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", id);
+        Assert.True(LibraryKeys.IsId(id));
+        Assert.Equal(id, LibraryKeys.ParseId(id.ToUpperInvariant(), "track"));
+        Assert.True(LibraryKeys.IsLegacyId("df9d30f537ed77fff65d4304a0248449"));
+        Assert.Contains("old-format", Assert.Throws<MusicSpinException>(() => LibraryKeys.ParseId("df9d30f537ed77fff65d4304a0248449", "track")).Message);
+        Assert.Contains("not a valid", Assert.Throws<MusicSpinException>(() => LibraryKeys.ParseId("not-an-id", "album")).Message);
+    }
+
+    [Fact]
+    public void Album_and_artist_ids_are_deterministic_name_based_uuids()
+    {
+        var a = LibraryKeys.AlbumId("miles davis", "kind of blue");
+        Assert.Equal(a, LibraryKeys.AlbumId("miles davis", "kind of blue"));
+        Assert.NotEqual(a, LibraryKeys.AlbumId("miles davis", "bitches brew"));
+        Assert.Matches("^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", a);
+        Assert.Matches("^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", LibraryKeys.ArtistId("miles davis"));
     }
 
     [Fact]

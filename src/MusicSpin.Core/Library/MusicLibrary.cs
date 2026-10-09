@@ -31,6 +31,9 @@ public sealed partial class MusicLibrary : IDisposable
     /// <summary>True when the data folder is read-only; modifying calls throw.</summary>
     public bool IsReadOnly => _db.ReadOnly;
 
+    /// <summary>Set when opening this library upgraded an older database (show it to the user once).</summary>
+    public LibraryMigrationReport? Migration => _db.Migration;
+
     /// <summary>Opens for reading and writing (creates the data folder and database on first use).</summary>
     /// <exception cref="MusicSpinException">DataDirectoryNotWritable, LibraryLocked, LibraryCorrupt.</exception>
     public static MusicLibrary OpenWritable(DataDirectory dir, IAudioDecoderFactory? ffmpeg = null, TimeSpan? lockTimeout = null, TimeProvider? time = null, ITrackReader? reader = null)
@@ -79,7 +82,7 @@ public sealed partial class MusicLibrary : IDisposable
                 return new FolderAddResult("covered", full, parent.Path, []);
             }
 
-            var record = new LibraryFolderRecord { Id = LibraryKeys.PathId(full), Path = full, AddedUtcTicks = _time.GetUtcNow().UtcTicks };
+            var record = new LibraryFolderRecord { Id = LibraryKeys.PathKey(full), Path = full, AddedUtcTicks = _time.GetUtcNow().UtcTicks };
             var children = folders.Where(f => LibraryKeys.IsUnder(f.Path, full)).ToList();
             foreach (var child in children)
             {
@@ -158,7 +161,7 @@ public sealed partial class MusicLibrary : IDisposable
                     q = q.Where(BsonExpression.Create("$.AlbumId IN @0", new BsonArray(albumIds.Select(i => new BsonValue(i)))));
                 }
 
-                if (search is not null && !_db.StaleKeys)
+                if (search is not null)
                 {
                     // Narrow inside the database (every term must occur somewhere); the exact field rules are applied below.
                     foreach (var term in search.Terms)
@@ -223,11 +226,6 @@ public sealed partial class MusicLibrary : IDisposable
             var matches = new List<(TrackRecord Track, int Score)>();
             foreach (var t in Filtered().ToEnumerable())
             {
-                if (_db.StaleKeys)
-                {
-                    LibraryIndexer.SetSearchKeys(t, t.EffectiveAlbumArtist);
-                }
-
                 if (LibrarySearch.Score(search, t) is { } score)
                 {
                     matches.Add((t, score));
@@ -265,7 +263,7 @@ public sealed partial class MusicLibrary : IDisposable
 
             if (search is not null)
             {
-                albums = albums.Where(a => LibrarySearch.Score(search, WithKeys(a)) is not null);
+                albums = albums.Where(a => LibrarySearch.Score(search, a) is not null);
             }
 
             var sorted = (query.Sort switch
@@ -291,7 +289,7 @@ public sealed partial class MusicLibrary : IDisposable
             IEnumerable<ArtistRecord> artists = _db.Artists.FindAll();
             if (search is not null)
             {
-                artists = artists.Where(a => LibrarySearch.Score(search, WithKeys(a)) is not null);
+                artists = artists.Where(a => LibrarySearch.Score(search, a) is not null);
             }
 
             var sorted = (query.Sort switch
@@ -316,12 +314,12 @@ public sealed partial class MusicLibrary : IDisposable
         var (artists, albums) = Guard(() =>
         {
             var artists = _db.Artists.FindAll()
-                .Select(a => (Item: a, Score: LibrarySearch.Score(query, WithKeys(a))))
+                .Select(a => (Item: a, Score: LibrarySearch.Score(query, a)))
                 .Where(m => m.Score is not null)
                 .OrderByDescending(m => m.Score).ThenBy(m => m.Item.Key, StringComparer.Ordinal)
                 .Take(50).Select(m => m.Item).ToList();
             var albums = _db.Albums.FindAll()
-                .Select(a => (Item: a, Score: LibrarySearch.Score(query, WithKeys(a))))
+                .Select(a => (Item: a, Score: LibrarySearch.Score(query, a)))
                 .Where(m => m.Score is not null)
                 .OrderByDescending(m => m.Score).ThenBy(m => m.Item.AlbumArtistKey, StringComparer.Ordinal).ThenBy(m => m.Item.TitleKey, StringComparer.Ordinal)
                 .Take(50).Select(m => m.Item).ToList();
@@ -452,7 +450,7 @@ public sealed partial class MusicLibrary : IDisposable
     /// <summary>Albums with this id, or this title: exact (case/whitespace-insensitive) first, else ignoring diacritics/punctuation.</summary>
     private List<AlbumRecord> MatchAlbums(string album)
     {
-        if (_db.Albums.FindById(album) is { } byId)
+        if (LibraryKeys.IsId(album.Trim()) && _db.Albums.FindById(album.Trim().ToLowerInvariant()) is { } byId)
         {
             return [byId];
         }
@@ -465,7 +463,13 @@ public sealed partial class MusicLibrary : IDisposable
         }
 
         var folded = LibrarySearch.Fold(album);
-        return folded.Length == 0 ? [] : _db.Albums.FindAll().Where(a => WithKeys(a).SearchTitle == folded).ToList();
+        var matches = folded.Length == 0 ? [] : _db.Albums.FindAll().Where(a => a.SearchTitle == folded).ToList();
+        if (matches.Count == 0 && LibraryKeys.IsLegacyId(album.Trim()))
+        {
+            LibraryKeys.ParseId(album, "album"); // throws: explains the id format change
+        }
+
+        return matches;
     }
 
     /// <summary>Album ids for an exact <c>--album</c>. Unknown: NotFound (the same for listings and for play).</summary>
@@ -489,31 +493,9 @@ public sealed partial class MusicLibrary : IDisposable
         }
 
         var folded = LibrarySearch.Fold(artist);
-        var keys = folded.Length == 0 ? [] : _db.Artists.FindAll().Where(a => WithKeys(a).SearchName == folded).Select(a => a.Key).ToHashSet(StringComparer.Ordinal);
+        var keys = folded.Length == 0 ? [] : _db.Artists.FindAll().Where(a => a.SearchName == folded).Select(a => a.Key).ToHashSet(StringComparer.Ordinal);
         return keys.Count > 0 ? keys
             : throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No artist named '{artist}'. See 'music-spin artists' or 'music-spin search'.");
-    }
-
-    /// <summary>Fills search keys missing in an older database opened read-only (see <see cref="LibraryDatabase.StaleKeys"/>).</summary>
-    private AlbumRecord WithKeys(AlbumRecord album)
-    {
-        if (_db.StaleKeys && album.SearchTitle.Length == 0)
-        {
-            album.SearchTitle = LibrarySearch.Key(album.Title);
-            album.SearchArtist = LibrarySearch.Key([album.AlbumArtist, .. album.ArtistKeys]);
-        }
-
-        return album;
-    }
-
-    private ArtistRecord WithKeys(ArtistRecord artist)
-    {
-        if (_db.StaleKeys && artist.SearchName.Length == 0)
-        {
-            LibraryIndexer.SetSearchKeys(artist);
-        }
-
-        return artist;
     }
 
     private static int? Max(int? a, int? b) => a is null ? b : b is null ? a : Math.Max(a.Value, b.Value);

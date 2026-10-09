@@ -39,7 +39,7 @@ internal sealed class QueueSource
 
     public Option<string?> Album { get; } = new("--album")
     {
-        Description = "An album from the library (title, case-insensitive, or album id). Combine with --artist to disambiguate.",
+        Description = "An album from the library (title, case-insensitive, or album id GUID). Combine with --artist to disambiguate.",
     };
 
     public Option<string?> Artist { get; } = new("--artist")

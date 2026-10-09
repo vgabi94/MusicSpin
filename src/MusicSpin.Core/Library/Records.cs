@@ -16,8 +16,17 @@ public sealed class LibraryFolderRecord
 /// <summary>One audio file.</summary>
 public sealed class TrackRecord
 {
+    /// <summary>
+    /// GUID ("D" format, UUIDv7) assigned when the file is first added. It does not depend on the path: renames/moves found
+    /// by a scan and <c>library relocate</c> keep it. A file that is removed from the library and added again gets a new one.
+    /// </summary>
     public string Id { get; set; } = string.Empty;
+
+    /// <summary>Normalized absolute path.</summary>
     public string Path { get; set; } = string.Empty;
+
+    /// <summary><see cref="LibraryKeys.PathKey"/> of <see cref="Path"/> (unique index; used to find a file's track during scans).</summary>
+    public string PathKey { get; set; } = string.Empty;
     public string FolderId { get; set; } = string.Empty;
     public string Directory { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;

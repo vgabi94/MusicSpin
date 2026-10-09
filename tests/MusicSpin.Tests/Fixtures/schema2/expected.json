@@ -1,0 +1,100 @@
+{
+ "generatedBy": "music-spin af78c2d (schema 2), see README.md",
+ "musicRoot": "/tmp/msfixture/Music",
+ "tracks": [
+  {
+   "id": "7349486b437187211d1a3e1f1156d6b1",
+   "path": "/tmp/msfixture/Music/Hania Rani/Esja/01 Eden.flac",
+   "title": "Eden",
+   "albumId": "857ab3589bbfbc36852283c9a2c33962"
+  },
+  {
+   "id": "55954428193adbcc4ab83c87ba271618",
+   "path": "/tmp/msfixture/Music/Hania Rani/Esja/02 Glass.flac",
+   "title": "Glass",
+   "albumId": "857ab3589bbfbc36852283c9a2c33962"
+  },
+  {
+   "id": "0163facbcc3bb491a8cd804e672ebecf",
+   "path": "/tmp/msfixture/Music/Nils Frahm/Spaces/01 An Aborted Beginning.flac",
+   "title": "An Aborted Beginning",
+   "albumId": "e2d8a2d1158ba9e8d717d254157ee9c5"
+  },
+  {
+   "id": "67d5b7791faa4f98daa92e8de87056e0",
+   "path": "/tmp/msfixture/Music/Nils Frahm/Spaces/02 Says.flac",
+   "title": "Says",
+   "albumId": "e2d8a2d1158ba9e8d717d254157ee9c5"
+  },
+  {
+   "id": "0e2f568204b5ffe55bec99fff1a082a9",
+   "path": "/tmp/msfixture/Music/Nils Frahm/Spaces/03 Hammers.flac",
+   "title": "Hammers",
+   "albumId": "e2d8a2d1158ba9e8d717d254157ee9c5"
+  },
+  {
+   "id": "10208aa35d7b754f8f37083dbe0bec56",
+   "path": "/tmp/msfixture/Music/Other/tiny.mp3",
+   "title": null,
+   "albumId": "15e4f12f0eb1157a080f68b4cb67196e"
+  }
+ ],
+ "playlists": [
+  {
+   "id": "83cf49c323124eff9568315200a54f53",
+   "name": "Fixture Mix",
+   "entries": [
+    {
+     "status": "library",
+     "path": "/tmp/msfixture/Music/Nils Frahm/Spaces/01 An Aborted Beginning.flac",
+     "trackId": "0163facbcc3bb491a8cd804e672ebecf"
+    },
+    {
+     "status": "library",
+     "path": "/tmp/msfixture/Music/Nils Frahm/Spaces/02 Says.flac",
+     "trackId": "67d5b7791faa4f98daa92e8de87056e0"
+    },
+    {
+     "status": "library",
+     "path": "/tmp/msfixture/Music/Nils Frahm/Spaces/03 Hammers.flac",
+     "trackId": "0e2f568204b5ffe55bec99fff1a082a9"
+    },
+    {
+     "status": "library",
+     "path": "/tmp/msfixture/Music/Hania Rani/Esja/02 Glass.flac",
+     "trackId": "55954428193adbcc4ab83c87ba271618"
+    }
+   ]
+  },
+  {
+   "id": "5da13b4e5f784e64af8c77e0be60070e",
+   "name": "With Missing",
+   "entries": [
+    {
+     "status": "missing",
+     "path": "/tmp/msfixture/Music/Gone/missing.flac",
+     "trackId": null
+    },
+    {
+     "status": "library",
+     "path": "/tmp/msfixture/Music/Other/tiny.mp3",
+     "trackId": "10208aa35d7b754f8f37083dbe0bec56"
+    }
+   ]
+  }
+ ],
+ "albums": [
+  {
+   "id": "857ab3589bbfbc36852283c9a2c33962",
+   "title": "Esja"
+  },
+  {
+   "id": "e2d8a2d1158ba9e8d717d254157ee9c5",
+   "title": "Spaces"
+  },
+  {
+   "id": "15e4f12f0eb1157a080f68b4cb67196e",
+   "title": "Unknown Album"
+  }
+ ]
+}

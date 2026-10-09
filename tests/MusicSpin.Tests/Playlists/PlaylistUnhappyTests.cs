@@ -144,7 +144,9 @@ public sealed class PlaylistUnhappyTests : LibraryTestBase
         Assert.Equal(MusicSpinErrorCode.FileNotFound, ex.Code);
         Assert.Contains("nope.flac", ex.Message, StringComparison.Ordinal);
         Assert.Equal(MusicSpinErrorCode.FileNotFound, Code(() => library.PlaylistInputsForFiles([Path.Combine(Music, "Miles")])));
-        Assert.Equal(MusicSpinErrorCode.NotFound, Code(() => library.PlaylistInputsForTrackIds(["deadbeef"])));
+        Assert.Equal(MusicSpinErrorCode.NotFound, Code(() => library.PlaylistInputsForTrackIds(["0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e"])));
+        Assert.Equal(MusicSpinErrorCode.InvalidArgument, Code(() => library.PlaylistInputsForTrackIds(["deadbeef"])));
+        Assert.Equal(MusicSpinErrorCode.InvalidArgument, Code(() => library.PlaylistInputsForTrackIds(["df9d30f537ed77fff65d4304a0248449"])));
         Assert.Equal(0, library.Playlist("p").Playlist.EntryCount);
     }
 

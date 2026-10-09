@@ -188,37 +188,44 @@ public sealed class LibrarySearchTests : LibraryTestBase
     }
 
     [Fact]
-    public void Opening_an_older_database_rebuilds_the_search_keys_once()
+    public void Opening_an_older_database_upgrades_once_and_rebuilds_search_keys()
     {
         CreateLibrary();
-        DowngradeToVersion1();
-        using (var library = OpenRead())
+        var before = AllTracks().ToDictionary(t => t.Path, t => t.Id, StringComparer.Ordinal);
+        DowngradeToSchema2();
+        using (var library = Open())
         {
-            // OpenForRead on a writable folder upgrades too (it holds the write lock).
+            Assert.NotNull(library.Migration);
             Assert.Equal(["Jóga"], Titles(library.Search("joga").Tracks));
+            Assert.Equal(before.Count, library.Migration!.Tracks);
         }
 
         using var db = new LiteDatabase(new ConnectionString { Filename = Data.LibraryDatabaseFile, Connection = ConnectionType.Direct, ReadOnly = true });
-        Assert.Equal(LibraryDatabase.SchemaVersion, db.UserVersion);
-        Assert.All(db.GetCollection("tracks").FindAll(), d => Assert.NotEqual(string.Empty, d["SearchText"].AsString));
+        Assert.Equal(LibraryDatabase.SchemaVersion, LibraryMigration.StoredVersion(db));
+        Assert.All(db.GetCollection("tracks").FindAll(), d =>
+        {
+            Assert.NotEqual(string.Empty, d["SearchText"].AsString);
+            Assert.True(LibraryKeys.IsId(d["_id"].AsString));
+            Assert.Equal(32, d["PathKey"].AsString.Length);
+        });
+        Assert.True(File.Exists(Data.LibraryDatabaseFile + ".bak-2"));
+        // Ids are new GUIDs (schema 2 used path hashes); playlists would be remapped the same way.
+        Assert.All(AllTracks(), t => Assert.NotEqual(before[t.Path], t.Id));
     }
 
     [Fact]
     [Trait("Category", "Unhappy")]
-    public void An_older_database_on_read_only_media_is_searched_with_keys_computed_on_the_fly()
+    public void An_older_database_on_read_only_media_needs_a_writable_upgrade()
     {
         RequirePosixNonRoot();
         CreateLibrary();
-        DowngradeToVersion1();
+        DowngradeToSchema2();
         Chmod(Data.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         try
         {
-            using var library = OpenRead();
-            Assert.True(library.IsReadOnly);
-            Assert.Equal(["Jóga"], Titles(library.Search("joga").Tracks));
-            Assert.Equal("Björk", Assert.Single(library.Search("bjork").Artists).Name);
-            Assert.Equal("Homogenic", Assert.Single(library.Albums(new AlbumQuery { Title = "homogenic" }).Items).Title);
-            Assert.Equal(2, library.Tracks(new TrackQuery { Artist = "bjork" }).Total);
+            var ex = Assert.Throws<MusicSpinException>(() => OpenRead());
+            Assert.Equal(MusicSpinErrorCode.DataDirectoryNotWritable, ex.Code);
+            Assert.Contains("upgrade", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -235,31 +242,7 @@ public sealed class LibrarySearchTests : LibraryTestBase
         AddAndScan();
     }
 
-    /// <summary>Simulates a database written by a version without folded keys (user version 1, keys empty).</summary>
-    private void DowngradeToVersion1()
-    {
-        using var db = new LiteDatabase(new ConnectionString { Filename = Data.LibraryDatabaseFile, Connection = ConnectionType.Direct });
-        foreach (var (name, fields) in new[]
-                 {
-                     ("tracks", new[] { "SearchText", "SearchTitle", "SearchArtist", "SearchAlbum", "SearchGenre", "SearchFile" }),
-                     ("albums", new[] { "SearchTitle", "SearchArtist", "SearchGenre" }),
-                     ("artists", new[] { "SearchName" }),
-                 })
-        {
-            var collection = db.GetCollection(name);
-            foreach (var doc in collection.FindAll().ToList())
-            {
-                foreach (var field in fields)
-                {
-                    doc.Remove(field);
-                }
-
-                collection.Update(doc);
-            }
-        }
-
-        db.UserVersion = 1;
-    }
+    private void DowngradeToSchema2() => LegacyLibrary.DowngradeToSchema2(Data);
 
     private static string?[] Titles(Page<TrackRecord> page) => [.. page.Items.Select(t => t.Title)];
 }
