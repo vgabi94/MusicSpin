@@ -34,5 +34,5 @@ These pages describe what the code does **today**. Anything not implemented yet 
 | Platform | Status |
 |---|---|
 | Linux x64 | Built, tested and smoke-tested (published single-file build, background player, MCP) |
-| Windows x64/arm64 | The CI and release workflows build and test it, but they have not run yet because the repository has no remote. The background player (named pipe, detached spawn) is **not verified yet** |
-| macOS x64/arm64 | Same as Windows: the workflows are set up but have not run yet. The background player (socket permissions, `setsid`) and the `.app` bundle are **not verified yet** |
+| Windows x64/arm64 | CI builds it and runs the full test suite on `windows-latest` (x64), including the end-to-end background player tests (named pipe, detached spawn, MCP). Real audio output, arm64 and the published build are **not verified yet** |
+| macOS x64/arm64 | CI builds it and runs the full test suite on `macos-latest` (arm64), including the end-to-end background player tests (socket permissions, `setsid`). Real audio output, x64 and the `.app` bundle are **not verified yet** |

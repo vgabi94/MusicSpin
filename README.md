@@ -20,7 +20,8 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 | Platform | Status |
 |---|---|
 | Linux x64 | Verified: build, full test suite, published single-file build, background player, MCP over stdio |
-| Windows, macOS | Builds are set up (CI and release workflows) but **not verified yet**, in particular the background player (named pipes / Unix socket permissions, detached spawn) |
+| Windows x64 | CI (`windows-latest`): build and the full test suite, including the end-to-end background player tests (named pipe, detached spawn, MCP over stdio). Real audio output and the published build are **not verified yet** |
+| macOS | CI (`macos-latest`, arm64): build and the full test suite, including the end-to-end background player tests. Real audio output and the `.app` bundle are **not verified yet** |
 
 Not available yet: gapless playback, native DSD/DoP output. See the [Roadmap](#roadmap).
 
@@ -111,7 +112,8 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 ## Roadmap
 
 - [x] Playback core, library, portable single-file publishing, background player, CLI with `--json`, MCP server
-- [ ] Verify the background player on Windows and macOS, and enable the end-to-end tests there
+- [x] Verify the background player on Windows and macOS, and enable the end-to-end tests there (CI)
+- [ ] Verify real audio output and the published builds on Windows and macOS
 - [ ] Desktop UI design. The app will attach to the background player (`PlayerClient` + `subscribe`) or host it in-process
 - [x] Repeat one/all and a shuffle toggle
 - [x] Saved playlists, M3U/M3U8/PLS import/export, persistent queue

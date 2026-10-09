@@ -42,7 +42,7 @@ dotnet test --solution MusicSpin.slnx -- --timeout 300s       # abort a hung run
 
 - Error-path tests carry `[Trait("Category", "Unhappy")]`.
 - FFmpeg-backed tests skip themselves when FFmpeg 9.0 isn't installed.
-- End-to-end player process tests are skipped on Windows (not verified there yet).
+- End-to-end player process tests run on every OS. On Windows the clean-shutdown test uses `music-spin player stop` (there is no `SIGTERM`); tests about Unix socket files and POSIX permissions skip themselves there.
 
 ## Publishing (self-contained single file)
 
