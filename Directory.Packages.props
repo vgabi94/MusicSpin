@@ -1,0 +1,34 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+    <AvaloniaVersion>12.1.3</AvaloniaVersion>
+    <XunitV3Version>4.0.1</XunitV3Version>
+  </PropertyGroup>
+
+  <ItemGroup Label="Audio">
+    <!--
+      FFmpeg.AutoGen binds to exactly ONE FFmpeg ABI: 9.0.x => FFmpeg 9.0
+      (avcodec-63, avformat-63, avutil-61, swresample-7). 8.x => FFmpeg 8 (avcodec-62), 7.1.1 => FFmpeg 7.1 (avcodec-61).
+      Bump together with the FFmpeg runtime you ship/require (see README "FFmpeg runtime").
+    -->
+    <PackageVersion Include="FFmpeg.AutoGen" Version="9.0.1.1" />
+    <PackageVersion Include="SoundFlow" Version="1.4.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="UI">
+    <PackageVersion Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Label="CLI">
+    <PackageVersion Include="System.CommandLine" Version="2.0.12" />
+  </ItemGroup>
+
+  <ItemGroup Label="Tests">
+    <PackageVersion Include="xunit.v3" Version="$(XunitV3Version)" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.10.0" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Headless Avalonia smoke test. Kept minimal until the UI design is decided. -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <!--
+      Avalonia.Headless.XUnit 12.1.x is compiled against xunit.v3 3.2.x extensibility APIs that changed in
+      xunit.v3 4.0 (MissingMethodException during discovery). Pin this project to 3.2.2 until Avalonia ships
+      a 4.x-compatible build; Core/CLI tests use the latest xunit.v3.
+    -->
+    <PackageReference Update="xunit.v3" VersionOverride="3.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MusicSpin.App\MusicSpin.App.csproj" />
+  </ItemGroup>
+</Project>

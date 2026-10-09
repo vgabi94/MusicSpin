@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- CLI tests: commands are parsed and invoked in-process with injected fakes; stdout/stderr captured. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MusicSpin.Cli\MusicSpin.Cli.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

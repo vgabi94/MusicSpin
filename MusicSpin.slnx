@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MusicSpin.Core/MusicSpin.Core.csproj" />
+    <Project Path="src/MusicSpin.App/MusicSpin.App.csproj" />
+    <Project Path="src/MusicSpin.Cli/MusicSpin.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MusicSpin.Tests/MusicSpin.Tests.csproj" />
+    <Project Path="tests/MusicSpin.Tests.Ui/MusicSpin.Tests.Ui.csproj" />
+    <Project Path="tests/MusicSpin.Tests.Cli/MusicSpin.Tests.Cli.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+    <File Path=".editorconfig" />
+  </Folder>
+</Solution>

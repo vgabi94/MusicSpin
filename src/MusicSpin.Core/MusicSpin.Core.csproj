@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Playback engine, decoding (FFmpeg) and output (SoundFlow/miniaudio). No UI dependencies. -->
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>MusicSpin.Core</RootNamespace>
+    <!-- CA1031: catching general exceptions is intentional at native-interop boundaries. -->
+    <NoWarn>$(NoWarn);CA1031</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FFmpeg.AutoGen" />
+    <PackageReference Include="SoundFlow" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MusicSpin.Tests" />
+  </ItemGroup>
+</Project>

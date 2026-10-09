@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Bare Avalonia 12 shell. The UI design is intentionally not decided yet:
+    no controls, view models or styling beyond the default Fluent theme Avalonia needs to render.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>MusicSpin</AssemblyName>
+    <RootNamespace>MusicSpin.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MusicSpin.Core\MusicSpin.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MusicSpin.Tests.Ui" />
+  </ItemGroup>
+</Project>
