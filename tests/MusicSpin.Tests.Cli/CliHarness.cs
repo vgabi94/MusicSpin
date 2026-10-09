@@ -40,6 +40,8 @@ internal sealed class CliHarness : IAsyncDisposable
 
     public TimeSpan PlayerStartTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
+    public Func<(Stream Input, Stream Output)>? McpStreams { get; set; }
+
     public int Launches => Volatile.Read(ref _launches);
 
     private int _launches;
@@ -102,6 +104,7 @@ internal sealed class CliHarness : IAsyncDisposable
             LibraryLockTimeout = LockTimeout,
             PlayerLauncher = Launcher ?? LaunchInProcess,
             PlayerStartTimeout = PlayerStartTimeout,
+            McpStreams = McpStreams,
         };
 
         var exitCode = await CliApp.RunAsync(args, env, cancellationToken);

@@ -71,10 +71,10 @@ internal sealed class QueueSource
 
     /// <summary>Library tracks for --album/--artist/--search (null for files). Releases the library before returning.</summary>
     public IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult)
+        => LibraryTracks(runner, parseResult, parseResult.GetValue(Album), parseResult.GetValue(Artist), parseResult.GetValue(Search));
+
+    public static IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult, string? album, string? artist, string? search)
     {
-        var album = parseResult.GetValue(Album);
-        var artist = parseResult.GetValue(Artist);
-        var search = parseResult.GetValue(Search);
         if (album is null && artist is null && search is null)
         {
             return null;
@@ -99,27 +99,46 @@ internal sealed class QueueSource
 
     /// <summary>Applies --shuffle/--seed; returns the seed used (null when not shuffled).</summary>
     public int? ApplyShuffle<T>(ParseResult parseResult, ref IReadOnlyList<T> items)
+        => ApplyShuffle(parseResult.GetValue(Shuffle), parseResult.GetValue(Seed), ref items);
+
+    public static int? ApplyShuffle<T>(bool shuffle, int? seed, ref IReadOnlyList<T> items)
     {
-        if (!parseResult.GetValue(Shuffle))
+        if (!shuffle)
         {
             return null;
         }
 
 #pragma warning disable CA5394 // not security sensitive
-        var seed = parseResult.GetValue(Seed) ?? Random.Shared.Next();
+        var used = seed ?? Random.Shared.Next();
 #pragma warning restore CA5394
-        items = MusicLibrary.Shuffle(items, seed);
-        return seed;
+        items = MusicLibrary.Shuffle(items, used);
+        return used;
     }
 
     /// <summary>Queue items for the background player (files resolved to absolute paths: the player has another working directory).</summary>
     public (List<QueueItem> Items, int? Seed) Resolve(CommandRunner runner, ParseResult parseResult)
+        => Resolve(runner, parseResult, parseResult.GetValue(Files), parseResult.GetValue(Album), parseResult.GetValue(Artist),
+            parseResult.GetValue(Search), parseResult.GetValue(Shuffle), parseResult.GetValue(Seed));
+
+    public static (List<QueueItem> Items, int? Seed) Resolve(CommandRunner runner, ParseResult parseResult,
+        IReadOnlyList<string>? files, string? album, string? artist, string? search, bool shuffle, int? seed)
     {
-        IReadOnlyList<QueueItem> items = LibraryTracks(runner, parseResult) is { } tracks
+        IReadOnlyList<QueueItem> items = LibraryTracks(runner, parseResult, album, artist, search) is { } tracks
             ? [.. tracks.Select(ToItem)]
-            : [.. (parseResult.GetValue(Files) ?? []).Where(f => !string.IsNullOrWhiteSpace(f)).Select(f => new QueueItem(Path.GetFullPath(f)))];
-        var seed = ApplyShuffle(parseResult, ref items);
-        return ([.. items], seed);
+            : [.. (files ?? []).Where(f => !string.IsNullOrWhiteSpace(f)).Select(f => new QueueItem(Path.GetFullPath(f)))];
+        var used = ApplyShuffle(shuffle, seed, ref items);
+        return ([.. items], used);
+    }
+
+    /// <summary>The same rules as <see cref="Validate"/> for callers without a command line (MCP tools). Null when valid.</summary>
+    public static string? ValidateValues(IReadOnlyList<string>? files, string? album, string? artist, string? search, bool shuffle, int? seed)
+    {
+        var hasFiles = files is { Count: > 0 } && files.Any(f => !string.IsNullOrWhiteSpace(f));
+        var kinds = (hasFiles ? 1 : 0) + (album is not null || artist is not null ? 1 : 0) + (search is not null ? 1 : 0);
+        return kinds > 1 ? "Give either files, album/artist, or search, not several."
+            : kinds == 0 ? "Nothing to play: give files, an album, an artist or a search text."
+            : seed is not null && !shuffle ? "seed only applies together with shuffle."
+            : null;
     }
 
     public static QueueItem ToItem(TrackRecord t) => new(

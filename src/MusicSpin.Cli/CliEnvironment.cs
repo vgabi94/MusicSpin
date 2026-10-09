@@ -46,6 +46,9 @@ public sealed class CliEnvironment
     /// <summary>How long a control command waits for the player's answer.</summary>
     public TimeSpan PlayerRequestTimeout { get; init; } = PlayerClient.DefaultRequestTimeout;
 
+    /// <summary>Byte streams for `mcp` (MCP over stdio). Default: the process's stdin/stdout. Tests inject pipes.</summary>
+    public Func<(Stream Input, Stream Output)>? McpStreams { get; init; }
+
     /// <summary>Process-level signals for `player run` (SIGTERM/SIGINT/SIGHUP); off in tests.</summary>
     public bool HandleSignals { get; init; }
 
