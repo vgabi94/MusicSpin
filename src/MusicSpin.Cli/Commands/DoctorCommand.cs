@@ -82,7 +82,7 @@ internal static class DoctorCommand
 
             env.Out.WriteLine($"musicspin {report.Version} on {report.Runtime}, {report.Os}");
             env.Out.WriteLine(decoder.Available
-                ? $"  [ok]   FFmpeg {decoder.Version}, license: {decoder.License}{(decoder.Lgpl == true ? "" : " (not LGPL: fine locally, don't redistribute)")}"
+                ? $"  [ok]   FFmpeg {decoder.Version}, license: {decoder.License}{(decoder.Path is { } p ? $" ({p})" : "")}{(decoder.Lgpl == true ? "" : " (not LGPL: fine locally, don't redistribute)")}"
                 : $"  [fail] FFmpeg: {decoder.Error}");
             env.Out.WriteLine(audioError is null
                 ? $"  [ok]   Audio: {audioBackend}, {deviceCount} playback device(s)"

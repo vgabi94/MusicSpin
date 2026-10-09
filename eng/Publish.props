@@ -1,0 +1,35 @@
+<Project>
+  <!--
+    Portable release layout, shared by MusicSpin.App and MusicSpin.Cli. Active whenever a runtime identifier is given
+    (dotnet publish -r <rid>, see eng/publish.sh / eng/publish.ps1):
+
+    - one self-contained, compressed single-file executable per app (no .NET install needed);
+    - native libraries (SoundFlow's miniaudio, Avalonia's Skia/HarfBuzz) are bundled and self-extracted on first run
+      to DOTNET_BUNDLE_EXTRACT_BASE_DIR (default: ~/.net on Linux/macOS, %TEMP%\.net on Windows);
+    - LGPL components stay outside the bundle so users can replace them (LGPL-2.1 section 6):
+        TagLibSharp.dll next to the executable, FFmpeg shared libraries in ffmpeg/ (copied by the publish script).
+    - trimming is OFF: LiteDB's BsonMapper, TagLib#'s file-type registry, System.Text.Json reflection serialization and
+      FFmpeg.AutoGen's dynamic bindings all rely on reflection; see README "Trimming".
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed Condition="'$(PublishTrimmed)' == ''">false</PublishTrimmed>
+    <DebugType>embedded</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- Keep LGPL managed libraries replaceable: publish them as loose files next to the executable. -->
+  <Target Name="MusicSpinKeepLgplOutsideBundle" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Condition="'%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'TagLibSharp.dll'">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <!-- Symbols of referenced projects (MusicSpin.Core.pdb) would otherwise sit loose next to the exe. -->
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
+</Project>

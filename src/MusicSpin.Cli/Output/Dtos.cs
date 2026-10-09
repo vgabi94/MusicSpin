@@ -31,11 +31,12 @@ public sealed record TrackDto(
         t.Title, t.Artist, t.Album, t.Tags);
 }
 
-public sealed record DecoderDto(string Name, bool Available, string? Version, string? License, bool? Lgpl, string? Error)
+public sealed record DecoderDto(string Name, bool Available, string? Version, string? License, bool? Lgpl, string? Error, string? Path = null)
 {
     public static DecoderDto From(FFmpegStatus? s) => s is null
         ? new DecoderDto("ffmpeg", false, null, null, null, "unknown")
-        : new DecoderDto("ffmpeg", s.Available, s.Version, s.License, s.License is null ? null : s.IsLgpl, s.Error);
+        : new DecoderDto("ffmpeg", s.Available, s.Version, s.License, s.License is null ? null : s.IsLgpl, s.Error,
+            string.IsNullOrEmpty(s.LibraryPath) ? null : s.LibraryPath);
 }
 
 public sealed record FormatsDto(DecoderDto Decoder, IReadOnlyList<AudioFormatSupport> Formats, IReadOnlyList<CodecDto>? AllDecoders);

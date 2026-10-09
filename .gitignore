@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 .ffmpeg/
 *.trx
 TestResults/
+
+# MusicSpin portable data folder (settings, library.db)
+.usrdata/

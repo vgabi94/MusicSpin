@@ -22,4 +22,5 @@
   <ItemGroup>
     <InternalsVisibleTo Include="MusicSpin.Tests.Cli" />
   </ItemGroup>
+  <Import Project="..\..\eng\Publish.props" />
 </Project>

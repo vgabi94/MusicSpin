@@ -5,7 +5,8 @@
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <AssemblyName>MusicSpin</AssemblyName>
+    <!-- Not "MusicSpin": would collide with the musicspin CLI on case-insensitive file systems (Windows, macOS). -->
+    <AssemblyName>MusicSpin.App</AssemblyName>
     <RootNamespace>MusicSpin.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
@@ -24,4 +25,5 @@
   <ItemGroup>
     <InternalsVisibleTo Include="MusicSpin.Tests.Ui" />
   </ItemGroup>
+  <Import Project="..\..\eng\Publish.props" />
 </Project>
