@@ -21,7 +21,7 @@ MusicSpin itself is MIT licensed (see `LICENSE`). Release builds contain or load
 The LGPL requires that users can replace the LGPL library with a modified version. MusicSpin therefore never embeds
 LGPL code in its single-file executables:
 
-- FFmpeg is loaded at runtime from `ffmpeg/` next to the executable, then `MUSICSPIN_FFMPEG_PATH`, the per-user
+- FFmpeg is loaded at runtime from `MUSICSPIN_FFMPEG_PATH`, then `ffmpeg/` next to the executable, the per-user
   install (`eng/get-ffmpeg.*`), Homebrew (macOS) and the system library path. Drop in another FFmpeg 9.0 shared build
   to replace it.
 - `TagLibSharp.dll` is a loose file next to the executable; replace it with a compatible build.

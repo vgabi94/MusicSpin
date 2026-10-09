@@ -482,9 +482,30 @@ $RECYCLE.BIN/
 *.swp
 
 # MusicSpin
+# Publish output (eng/publish.*: artifacts/publish/<rid>/, *.zip, *.tar.gz) is covered by artifacts/ above.
+# FFmpeg downloaded into the repository (eng/get-ffmpeg.* defaults to the per-user folder, but a destination can be given)
 .ffmpeg/
+/ffmpeg/
+
+# Portable data folder: settings.json, library.db, library.lock, player.sock/json/lock/log
+.usrdata/
+# Background player files outside .usrdata (custom --data-dir, socket fallback) and rotated logs
+*.sock
+player.json
+player.lock
+*.log.[0-9]
+
+# Test results and coverage
 *.trx
 TestResults/
+coverage/
+coverage-report/
+*.cobertura.xml
+*.opencover.xml
 
-# MusicSpin portable data folder (settings, library.db)
-.usrdata/
+# Editors / OS extras not covered above
+.fleet/
+*.code-workspace
+*.swo
+.directory
+.Trash-*/
