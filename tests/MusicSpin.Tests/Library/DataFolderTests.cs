@@ -108,7 +108,20 @@ public sealed class DataFolderTests : LibraryTestBase
         Assert.Equal(0.5, loaded.Volume);
         Assert.Equal("dac", loaded.OutputDevice);
         Assert.True(loaded.ExclusiveMode);
-        Assert.False(File.Exists(Data.SettingsFile + ".tmp"));
+        Assert.Empty(Directory.GetFiles(Data.Path, "*.tmp"));
+    }
+
+    [Fact]
+    public void Concurrent_first_starts_create_the_settings_file_once_and_never_fail()
+    {
+        // Racing `play` commands and players on a fresh data folder all try to write the default settings.
+        var results = new bool[8];
+        Parallel.For(0, results.Length, i => results[i] = new SettingsStore(Data).TryCreate(new AppSettings { Volume = 0.5 }));
+        Assert.Single(results, created => created);
+        Assert.Equal(0.5, new SettingsStore(Data).Load().Volume);
+        Assert.Empty(Directory.GetFiles(Data.Path, "*.tmp"));
+        Assert.False(new SettingsStore(Data).TryCreate(new AppSettings { Volume = 0.1 }));
+        Assert.Equal(0.5, new SettingsStore(Data).Load().Volume);
     }
 }
 

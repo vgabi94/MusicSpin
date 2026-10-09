@@ -45,7 +45,7 @@ public sealed class SettingsStore(DataDirectory directory)
     public void Save(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        var temp = FilePath + ".tmp";
+        var temp = TempPath();
         try
         {
             Directory.CreateDirectory(directory.Path);
@@ -64,6 +64,49 @@ public sealed class SettingsStore(DataDirectory directory)
             }
 
             throw AppPaths.NotWritable(directory, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="settings"/> only when no settings file exists yet; false when another process created one
+    /// first (several processes may start on a fresh data folder at once, e.g. racing <c>play</c> commands and players).
+    /// </summary>
+    /// <exception cref="MusicSpinException">DataDirectoryNotWritable.</exception>
+    public bool TryCreate(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var temp = TempPath();
+        try
+        {
+            Directory.CreateDirectory(directory.Path);
+            File.WriteAllText(temp, JsonSerializer.Serialize(settings, JsonOptions));
+            File.Move(temp, FilePath, overwrite: false);
+            return true;
+        }
+        catch (IOException) when (File.Exists(FilePath))
+        {
+            TryDelete(temp);
+            return false; // someone else was first; theirs are the same defaults
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            TryDelete(temp);
+            throw AppPaths.NotWritable(directory, ex.Message);
+        }
+    }
+
+    // Per process and call, so concurrent writers never share (or fight over) one temp file.
+    private string TempPath() => $"{FilePath}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // best effort
         }
     }
 }

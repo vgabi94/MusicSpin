@@ -46,8 +46,7 @@ internal sealed class CommandRunner(CliEnvironment env, Option<bool> json, Optio
         var created = false;
         if (!File.Exists(store.FilePath))
         {
-            store.Save(settings);
-            created = true;
+            created = store.TryCreate(settings);
         }
 
         if (store.LoadWarning is { } warning)
