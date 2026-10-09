@@ -33,7 +33,14 @@ public sealed class TrackReader(IAudioDecoderFactory? ffmpeg) : ITrackReader
         {
             needProbe = !ReadWithTagLib(path, extension, record);
         }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        catch (Exception ex) when (IsBrokenTagLibInstall(ex))
+        {
+            // Not a problem with this file: TagLibSharp.dll (shipped next to the executable so it stays replaceable
+            // under the LGPL) is missing or incompatible. Fail the scan loudly instead of skipping every file.
+            throw new MusicSpinException(MusicSpinErrorCode.Unknown,
+                $"TagLibSharp.dll is missing or incompatible (it must sit next to the MusicSpin executable): {ex.Message}", ex);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException && !System.IO.File.Exists(path))
         {
             throw new TrackReadException("missing", $"File disappeared during the scan: {path}", ex);
         }
@@ -230,6 +237,15 @@ public sealed class TrackReader(IAudioDecoderFactory? ffmpeg) : ITrackReader
         var cleaned = value.Replace("dB", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
         return double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && double.IsFinite(d) ? d : null;
     }
+
+    private static bool IsBrokenTagLibInstall(Exception ex) => ex switch
+    {
+        FileNotFoundException f => f.FileName?.StartsWith("TagLibSharp", StringComparison.OrdinalIgnoreCase) == true,
+        FileLoadException f => f.FileName?.StartsWith("TagLibSharp", StringComparison.OrdinalIgnoreCase) == true,
+        BadImageFormatException b => b.FileName?.StartsWith("TagLibSharp", StringComparison.OrdinalIgnoreCase) == true,
+        TypeLoadException or MissingMemberException => ex.Message.Contains("TagLib", StringComparison.Ordinal),
+        _ => false,
+    };
 
     private static string Message(Exception ex) => $"{ex.GetType().Name}: {ex.Message}";
 }

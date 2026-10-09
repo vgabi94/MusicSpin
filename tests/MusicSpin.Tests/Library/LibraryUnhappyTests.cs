@@ -317,6 +317,18 @@ public sealed class ScanUnhappyTests : LibraryTestBase
     }
 
     [Fact]
+    public void Fatal_reader_failure_fails_the_scan_instead_of_skipping_files()
+    {
+        LibraryTestData.CreateSmallLibrary(Music);
+        using var library = Open(new HookReader(_ => throw new MusicSpinException(MusicSpinErrorCode.Unknown, "TagLibSharp.dll is missing")));
+        library.AddFolder(Music);
+
+        var ex = Assert.Throws<MusicSpinException>(() => library.Scan(new ScanOptions { MaxParallelism = 4 }, Ct));
+
+        Assert.Contains("TagLibSharp", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Cancellation_before_reading_removes_nothing()
     {
         LibraryTestData.CreateSmallLibrary(Music);

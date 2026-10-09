@@ -257,6 +257,14 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             {
                 cancelled = true;
             }
+            catch (AggregateException ex) when (ex.Flatten().InnerExceptions.All(e => e is OperationCanceledException))
+            {
+                cancelled = true;
+            }
+            catch (AggregateException ex) when (ex.Flatten().InnerExceptions.OfType<MusicSpinException>().FirstOrDefault() is { } fatal)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(fatal).Throw();
+            }
         }
 
         // 4. Removals: only for complete walks, only under available roots, never under folders we could not list.
@@ -299,8 +307,10 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
 
         // 6. Rebuild albums/artists and folder stats (also after cancellation, so the library stays consistent).
         progress.Report(new ScanProgress("index", found.Count, toRead.Count, read, failed, null), force: true);
-        var (albums, artists) = LibraryIndexer.Rebuild(db);
-        var counts = db.Tracks.FindAll().GroupBy(t => t.FolderId).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        // Nothing changed: the albums/artists index is still valid (saves a full pass on large libraries).
+        var changed = added + updated + removedIds.Count > 0 || cancelled || (existing.Count > 0 && db.Albums.Count() == 0);
+        var (albums, artists) = changed ? LibraryIndexer.Rebuild(db) : (db.Albums.Count(), db.Artists.Count());
+        var counts = folders.ToDictionary(f => f.Id, f => db.Tracks.Count(t => t.FolderId == f.Id), StringComparer.Ordinal);
         foreach (var folder in folders)
         {
             folder.TrackCount = counts.GetValueOrDefault(folder.Id);
