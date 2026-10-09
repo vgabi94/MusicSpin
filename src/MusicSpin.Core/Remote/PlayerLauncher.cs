@@ -97,13 +97,19 @@ public static class PlayerProcessLauncher
     /// <summary>Log files beyond this size are rotated to <c>player.log.1</c> when a new player starts.</summary>
     public const long MaxLogBytes = 1024 * 1024;
 
-    /// <summary>Set for the spawned player on Linux/macOS: its stdout/stderr already append to this log file.</summary>
+    /// <summary>Set for the spawned player: its stdout/stderr already append to this log file.</summary>
     public const string LogEnvironmentVariable = "MUSICSPIN_PLAYER_LOG";
+
+    /// <summary>
+    /// Windows only: first argument of the short-lived helper that starts the player (see <see cref="RunWindowsSpawnHelper"/>).
+    /// The CLI's entry point hands it over before normal command parsing.
+    /// </summary>
+    public const string WindowsSpawnVerb = "__spawn-player";
 
     /// <summary>
     /// Starts the current executable (single-file exe, apphost, or <c>dotnet music-spin.dll</c>) with
     /// <paramref name="arguments"/>, detached from this process: stdin from /dev/null (NUL), stdout/stderr appended to the
-    /// player log, own session (the child calls setsid), so it survives the calling shell/agent exiting.
+    /// player log, nothing else of ours inherited, not our child, so it survives the calling shell/agent exiting.
     /// </summary>
     public static IPlayerProcess Start(PlayerEndpoint endpoint, IReadOnlyList<string> arguments, string? executable = null, string? entryAssembly = null)
     {
@@ -111,63 +117,105 @@ public static class PlayerProcessLauncher
         ArgumentNullException.ThrowIfNull(arguments);
         var (exe, prefix) = ResolveCommand(executable, entryAssembly);
         PrepareLog(endpoint.LogFile);
+        return OperatingSystem.IsWindows() ? StartWindows(endpoint, exe, prefix, arguments) : StartUnix(endpoint, exe, prefix, arguments);
+    }
 
-        ProcessStartInfo info;
-        if (OperatingSystem.IsWindows())
+    private static DetachedProcess StartUnix(PlayerEndpoint endpoint, string exe, string[] prefix, IReadOnlyList<string> arguments)
+    {
+        // /bin/sh does the fd plumbing so nothing of ours (e.g. an agent's stdout pipe) is inherited by the player,
+        // and backgrounds it: the shell exits at once, so the player is re-parented (init or a subreaper) instead of
+        // staying our child. Tools that kill a whole process tree (e.g. an MCP client stopping `music-spin mcp`)
+        // then leave the player alone. The player calls setsid itself (no controlling terminal, own process group).
+        var info = new ProcessStartInfo("/bin/sh") { UseShellExecute = false, RedirectStandardOutput = true };
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add($"\"$@\" </dev/null >>\"${LogEnvironmentVariable}\" 2>&1 & echo $!");
+        info.ArgumentList.Add("music-spin-player");
+        info.ArgumentList.Add(exe);
+        foreach (var a in prefix.Concat(arguments))
         {
-            info = new ProcessStartInfo(exe)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            foreach (var a in prefix.Concat(arguments))
-            {
-                info.ArgumentList.Add(a);
-            }
-        }
-        else
-        {
-            // /bin/sh does the fd plumbing so nothing of ours (e.g. an agent's stdout pipe) is inherited by the player,
-            // and backgrounds it: the shell exits at once, so the player is re-parented (init or a subreaper) instead of
-            // staying our child. Tools that kill a whole process tree (e.g. an MCP client stopping `music-spin mcp`)
-            // then leave the player alone. The player calls setsid itself (no controlling terminal, own process group).
-            info = new ProcessStartInfo("/bin/sh") { UseShellExecute = false, RedirectStandardOutput = true };
-            info.ArgumentList.Add("-c");
-            info.ArgumentList.Add($"\"$@\" </dev/null >>\"${LogEnvironmentVariable}\" 2>&1 & echo $!");
-            info.ArgumentList.Add("music-spin-player");
-            info.ArgumentList.Add(exe);
-            foreach (var a in prefix.Concat(arguments))
-            {
-                info.ArgumentList.Add(a);
-            }
-
-            info.Environment[LogEnvironmentVariable] = endpoint.LogFile;
+            info.ArgumentList.Add(a);
         }
 
-        var process = Process.Start(info)
+        info.Environment[LogEnvironmentVariable] = endpoint.LogFile;
+        using var process = Process.Start(info)
             ?? throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, $"Could not start '{exe}'.");
-        if (OperatingSystem.IsWindows())
+        var line = process.StandardOutput.ReadLine();
+        process.WaitForExit(5000);
+        if (!int.TryParse(line, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid))
         {
-            // Close our ends: the player logs to its own file and must not keep our handles alive.
-            process.StandardInput.Close();
-            process.StandardOutput.Close();
-            process.StandardError.Close();
-            return new SpawnedProcess(process);
+            throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, $"Could not start '{exe}' via /bin/sh.");
         }
 
-        using (process)
+        return new DetachedProcess(pid);
+    }
+
+    /// <summary>
+    /// Windows counterpart of the <c>/bin/sh ... &amp;</c> trick: a short-lived helper (this executable with
+    /// <see cref="WindowsSpawnVerb"/>) starts the player and exits, so the player's parent is gone and a process-tree kill
+    /// of the caller (e.g. an MCP client stopping <c>music-spin mcp</c>) does not reach it. Both are started with
+    /// <c>CreateProcessW</c>, inheriting only the handles they are given, without a window, in their own process group, and
+    /// outside the caller's job object when the job allows it.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static DetachedProcess StartWindows(PlayerEndpoint endpoint, string exe, string[] prefix, IReadOnlyList<string> arguments)
+    {
+        using var pipe = new System.IO.Pipes.AnonymousPipeServerStream(System.IO.Pipes.PipeDirection.In, HandleInheritability.Inheritable);
+        string? line;
+        try
         {
-            var line = process.StandardOutput.ReadLine();
-            process.WaitForExit(5000);
-            if (!int.TryParse(line, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid))
+            using (var nul = WindowsDetachedProcess.OpenNullInput())
             {
-                throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, $"Could not start '{exe}' via /bin/sh.");
+                WindowsDetachedProcess.Start(exe, [.. prefix, WindowsSpawnVerb, endpoint.LogFile, exe, .. prefix, .. arguments], endpoint.DataDirectory,
+                    nul, pipe.ClientSafePipeHandle, pipe.ClientSafePipeHandle,
+                    WindowsDetachedProcess.CreateNoWindow | WindowsDetachedProcess.CreateNewProcessGroup);
             }
 
-            return new DetachedProcess(pid);
+            pipe.DisposeLocalCopyOfClientHandle(); // EOF once the helper exits
+            using var reader = new StreamReader(pipe);
+            line = reader.ReadLine();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, $"Could not start '{exe}': {ex.Message}", ex);
+        }
+
+        if (!int.TryParse(line, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid))
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, $"Could not start '{exe}': {line ?? "the start helper exited"}.");
+        }
+
+        return new DetachedProcess(pid);
+    }
+
+    /// <summary>
+    /// Windows only: the helper process. Arguments: log file, executable, then the player's arguments. Starts the player
+    /// with stdin from NUL and stdout/stderr appended to the log, prints its pid (or an error) and returns at once.
+    /// </summary>
+    public static int RunWindowsSpawnHelper(IReadOnlyList<string> args, TextWriter output)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(output);
+        if (!OperatingSystem.IsWindows() || args.Count < 2)
+        {
+            output.WriteLine($"usage: {WindowsSpawnVerb} <log file> <executable> [arguments...] (Windows only)");
+            return 2;
+        }
+
+        var logFile = args[0];
+        try
+        {
+            Environment.SetEnvironmentVariable(LogEnvironmentVariable, logFile); // inherited by the player
+            using var nul = WindowsDetachedProcess.OpenNullInput();
+            using var log = WindowsDetachedProcess.OpenAppend(logFile);
+            var pid = WindowsDetachedProcess.Start(args[1], args.Skip(2), Path.GetDirectoryName(logFile), nul, log, log,
+                WindowsDetachedProcess.CreateNoWindow | WindowsDetachedProcess.CreateNewProcessGroup);
+            output.WriteLine(pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return 0;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            output.WriteLine(ex.Message);
+            return 1;
         }
     }
 
@@ -255,27 +303,5 @@ public static class PlayerProcessLauncher
         }
 
         public int? ExitCode => null;
-    }
-
-    private sealed class SpawnedProcess(Process process) : IPlayerProcess
-    {
-        public int? Id { get; } = process.Id;
-
-        public bool HasExited
-        {
-            get
-            {
-                try
-                {
-                    return process.HasExited;
-                }
-                catch (InvalidOperationException)
-                {
-                    return true;
-                }
-            }
-        }
-
-        public int? ExitCode => HasExited ? process.ExitCode : null;
     }
 }
