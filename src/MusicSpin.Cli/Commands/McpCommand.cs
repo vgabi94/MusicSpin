@@ -132,8 +132,8 @@ internal static class McpCommand
                 await client.QuitAsync(cancellationToken: ct).ConfigureAwait(false);
                 return JsonSerializer.SerializeToElement(new { stopped = true, pid = info.Pid });
             }));
-            yield return Tool("search", "Search the music library: artists, albums and tracks matching every word.",
-                ([Description("Words to find in titles, artists, albums, genres and file names.")] string text, int limit = 20) => Guard(() =>
+            yield return Tool("search", "Search the music library: artists, albums and tracks containing the text (case-insensitive substring; the whole text must appear as typed, not word by word).",
+                ([Description("Text to find in titles, artists, albums, genres and file names. Use a single name or phrase.")] string text, int limit = 20) => Guard(() =>
                 {
                     if (string.IsNullOrWhiteSpace(text))
                     {
