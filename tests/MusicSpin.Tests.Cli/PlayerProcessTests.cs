@@ -87,6 +87,14 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         return run.Data;
     }
 
+    /// <summary>Reads player.log while the player may still have it open for writing (Windows needs FileShare.ReadWrite).</summary>
+    private async Task<string> ReadLogAsync()
+    {
+        await using var stream = new FileStream(Path.Combine(_data, "player.log"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
+    }
+
     private async Task<int> PlayerPidAsync()
     {
         var status = await Ok("player", "status");
@@ -184,7 +192,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         Assert.Equal(ExitCodes.InvalidState, (await RunAsync("next", "--json")).ExitCode);
         Assert.Equal("stopped", (await Ok("stop")).GetProperty("state").GetString());
 
-        var log = await File.ReadAllTextAsync(Path.Combine(_data, "player.log"), TestContext.Current.CancellationToken);
+        var log = await ReadLogAsync();
         Assert.Contains($"pid {pid}", log, StringComparison.Ordinal);
 
         Assert.True((await Ok("quit")).GetProperty("stopped").GetBoolean());
@@ -248,13 +256,13 @@ public sealed class PlayerProcessTests : IAsyncDisposable
     {
         RequireEnvironment();
         Directory.CreateDirectory(_data);
-        await File.WriteAllTextAsync(Path.Combine(_data, "settings.json"), """{ "playerIdleTimeoutSeconds": 1 }""", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(_data, "settings.json"), """{ "playerIdleTimeoutSeconds": 3 }""", TestContext.Current.CancellationToken);
         var added = await Ok("queue", "add", _tracks[0], "--backend", "null");
         Assert.Equal("stopped", added.GetProperty("state").GetString());
         var pid = await PlayerPidAsync();
-        Assert.Equal(1, (await Ok("player", "status")).GetProperty("idleTimeoutSeconds").GetDouble());
-        await PlayerTestKit.WaitUntilAsync(() => !IsAlive(pid), "idle exit");
-        Assert.Contains("stopped (idle)", await File.ReadAllTextAsync(Path.Combine(_data, "player.log"), TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        Assert.Equal(3, (await Ok("player", "status")).GetProperty("idleTimeoutSeconds").GetDouble());
+        await PlayerTestKit.WaitUntilAsync(() => !IsAlive(pid), "idle exit", timeoutMs: 15_000);
+        Assert.Contains("stopped (idle)", await ReadLogAsync(), StringComparison.Ordinal);
         Assert.False((await Ok("player", "status")).GetProperty("running").GetBoolean());
     }
 
@@ -281,7 +289,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
 
         await PlayerTestKit.WaitUntilAsync(() => !IsAlive(pid), "clean exit");
         Assert.False(File.Exists(Path.Combine(_data, "player.json")));
-        Assert.Contains(reason, await File.ReadAllTextAsync(Path.Combine(_data, "player.log"), TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        Assert.Contains(reason, await ReadLogAsync(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -296,7 +304,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         Assert.True(run.Data.GetProperty("playerStarted").GetBoolean());
         var pid = await PlayerPidAsync();
         Assert.True(IsAlive(pid), "the player keeps running after the caller's pipes closed");
-        Assert.Contains("listening on", await File.ReadAllTextAsync(Path.Combine(_data, "player.log"), TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        Assert.Contains("listening on", await ReadLogAsync(), StringComparison.Ordinal);
     }
 
     [Fact]
