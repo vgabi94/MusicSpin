@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MusicSpin.Cli.Output;
 using MusicSpin.Core;
+using MusicSpin.Core.Playback;
 using MusicSpin.Core.Library;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -74,7 +75,7 @@ internal static class McpCommand
                  [Description("Album title or id from 'albums'.")] string? album = null,
                  [Description("Artist name (all their tracks), or the album artist when album is given.")] string? artist = null,
                  [Description("Play every library track matching this text.")] string? search = null,
-                 [Description("Shuffle the queue.")] bool shuffle = false,
+                 [Description("Turn the player's shuffle mode on for this queue.")] bool shuffle = false,
                  [Description("Shuffle seed for a reproducible order.")] int? seed = null,
                  CancellationToken ct = default) => Guard(() => SetQueueAsync(files, album, artist, search, shuffle, seed, ct)));
             yield return Simple("pause", "Pause playback.");
@@ -125,6 +126,37 @@ internal static class McpCommand
                 (string[]? files = null, string? album = null, string? artist = null, string? search = null, bool shuffle = false, int? seed = null,
                  CancellationToken ct = default) => Guard(() => AddAsync(files, album, artist, search, shuffle, seed, ct)));
             yield return Simple("queue_clear", "Stop playback and empty the queue.", "queue.clear");
+            yield return Tool("repeat", "Show or set the repeat mode. off: play the queue once; one: a track that ends starts again (next/previous still move); " +
+                "all: loop the queue (next/previous wrap around). Saved as the default for new players.",
+                ([Description("off | one | all. Omit to just read the current mode.")] string? mode = null, CancellationToken ct = default) => Guard(async () =>
+                {
+                    if (mode is not null && !PlaybackModes.TryParseRepeat(mode, out _))
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, $"Unknown repeat mode '{mode}'. Use {PlaybackModes.RepeatValues}.");
+                    }
+
+                    var status = await SendAsync("repeat", mode is null ? null : new { mode = mode.Trim().ToLowerInvariant() }, ct).ConfigureAwait(false);
+                    return mode is null ? status : WithWarning(status, PlayerSupport.SaveModes(runner, parseResult, status));
+                }));
+            yield return Tool("shuffle", "Show or change shuffle on the running queue. on: shuffle the entries after the current track (it keeps playing; " +
+                "reshuffles when already on); off: restore the original order at the current track; toggle. New queues follow the mode.",
+                ([Description("on | off | toggle. Omit to just read the current mode.")] string? mode = null,
+                 [Description("Seed for a reproducible shuffle (only when turning shuffle on).")] int? seed = null,
+                 CancellationToken ct = default) => Guard(async () =>
+                {
+                    if (mode is not null && !PlaybackModes.TryParseShuffle(mode, false, out _))
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, $"Unknown shuffle mode '{mode}'. Use on|off|toggle.");
+                    }
+
+                    if (mode is null && seed is not null)
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, "seed needs mode 'on'.");
+                    }
+
+                    var status = await SendAsync("shuffle", mode is null ? null : new { mode = mode.Trim().ToLowerInvariant(), seed }, ct).ConfigureAwait(false);
+                    return mode is null ? status : WithWarning(status, PlayerSupport.SaveModes(runner, parseResult, status));
+                }));
             yield return Tool("quit_player", "Shut the background player down.", (CancellationToken ct = default) => Guard(async () =>
             {
                 await using var client = await PlayerSupport.ConnectAsync(runner, parseResult, ct).ConfigureAwait(false);
@@ -192,11 +224,13 @@ internal static class McpCommand
 
         private async Task<JsonElement> SetQueueAsync(string[]? files, string? album, string? artist, string? search, bool shuffle, int? seed, CancellationToken ct)
         {
-            var (items, used) = Resolve(files, album, artist, search, shuffle, seed);
+            var (items, _) = Resolve(files, album, artist, search, shuffle: false, seed: shuffle ? null : seed);
+            var used = QueueSource.PickSeed(shuffle, seed);
             var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, ct).ConfigureAwait(false);
             await using (client.ConfigureAwait(false))
             {
-                var status = await client.SendAsync("queue.set", new { items, start = 0, play = true }, ct).ConfigureAwait(false);
+                var status = await client.SendAsync("queue.set", new { items, play = true, shuffle = used is not null ? true : (bool?)null, seed = used }, ct)
+                    .ConfigureAwait(false);
                 return With(status, started, used, null);
             }
         }
@@ -220,6 +254,18 @@ internal static class McpCommand
             }
 
             return QueueSource.Resolve(runner, parseResult, files, album, artist, search, shuffle, seed);
+        }
+
+        private static JsonElement WithWarning(JsonElement status, string? warning)
+        {
+            if (warning is null)
+            {
+                return status;
+            }
+
+            var node = JsonNode.Parse(status.GetRawText())!.AsObject();
+            node["warnings"] = new JsonArray(warning);
+            return JsonSerializer.SerializeToElement(node);
         }
 
         private static JsonElement With(JsonElement status, bool started, int? seed, int? added)

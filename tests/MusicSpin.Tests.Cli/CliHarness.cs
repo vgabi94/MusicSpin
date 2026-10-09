@@ -3,7 +3,9 @@ using MusicSpin.Cli;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Decoding.FFmpeg;
 using MusicSpin.Core.Output;
+using MusicSpin.Core.Playback;
 using MusicSpin.Core.Remote;
+using MusicSpin.Core.Settings;
 using MusicSpin.Tests.Shared;
 
 namespace MusicSpin.Tests.Cli;
@@ -54,6 +56,7 @@ internal sealed class CliHarness : IAsyncDisposable
     public Task<IPlayerProcess?> LaunchInProcess(PlayerLaunchRequest request, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref _launches);
+        var settings = new SettingsStore(request.DataDirectory).Load(); // like `player run`: modes default from settings.json
         var host = PlayerHost.TryStart(new PlayerHostOptions
         {
             DataDirectory = request.DataDirectory,
@@ -61,6 +64,8 @@ internal sealed class CliHarness : IAsyncDisposable
             Outputs = Outputs(request.Backend),
             Output = new AudioOutputOptions(request.Device, request.Exclusive),
             IdleTimeout = PlayerIdleTimeout,
+            InitialRepeat = PlaybackModes.TryParseRepeat(settings.Repeat, out var repeat) ? repeat : RepeatMode.Off,
+            InitialShuffle = settings.Shuffle,
         });
         if (host is not null)
         {

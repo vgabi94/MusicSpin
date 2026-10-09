@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using MusicSpin.Cli.Output;
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
+using MusicSpin.Core.Playback;
 using MusicSpin.Core.Settings;
 
 namespace MusicSpin.Cli.Commands;
@@ -20,6 +21,8 @@ internal static class ControlCommands
         yield return Simple(runner, "prev", "prev", "Play the previous queue entry. Exit 8 on the first entry (use 'seek 0' to restart).");
         yield return Seek(runner);
         yield return Volume(runner);
+        yield return Repeat(runner);
+        yield return Shuffle(runner);
         yield return Simple(runner, "status", "status",
             "Player status: state, track (codec, sample rate, bit depth, tags), position, duration, volume, queue index/length, output device, exclusive mode.");
         yield return Queue(runner);
@@ -85,6 +88,85 @@ internal static class ControlCommands
             }
 
             return relative ? new { delta = value } : (object)new { value };
+        });
+        return command;
+    }
+
+    private static Command Repeat(CommandRunner runner)
+    {
+        var mode = new Argument<string?>("mode")
+        {
+            Description = "off | one | all. Without a mode: show the current one.",
+            Arity = ArgumentArity.ZeroOrOne,
+        };
+        var command = new Command("repeat",
+            "Show or set the repeat mode: off (play the queue once), one (a track that ends starts again; next/prev still move), " +
+            "all (loop the queue; next/prev wrap around). The new mode is also saved as the default in settings.json.")
+        {
+            mode,
+        };
+        command.Validators.Add(r =>
+        {
+            if (Options.Get(r, mode) is { } text && !PlaybackModes.TryParseRepeat(text, out _))
+            {
+                r.AddError($"Unknown repeat mode '{text}'. Use {PlaybackModes.RepeatValues}.");
+            }
+        });
+        runner.SetAction(command, async (parseResult, json, cancellationToken) =>
+        {
+            var text = parseResult.GetValue(mode);
+            await using var client = await PlayerSupport.ConnectAsync(runner, parseResult, cancellationToken).ConfigureAwait(false);
+            var data = await client.SendAsync("repeat", text is null ? null : new { mode = text.Trim().ToLowerInvariant() }, cancellationToken)
+                .ConfigureAwait(false);
+            var warning = text is null ? null : PlayerSupport.SaveModes(runner, parseResult, data);
+            PlayerSupport.WriteStatus(runner, json, "repeat", data, new Dictionary<string, object?>
+            {
+                ["warnings"] = warning is null ? null : new[] { warning },
+            });
+            return ExitCodes.Success;
+        });
+        return command;
+    }
+
+    private static Command Shuffle(CommandRunner runner)
+    {
+        var mode = new Argument<string?>("mode")
+        {
+            Description = "on | off | toggle. Without a mode: show the current one.",
+            Arity = ArgumentArity.ZeroOrOne,
+        };
+        var seed = new Option<int?>("--seed") { Description = "Seed for a reproducible shuffle (with 'on' or 'toggle' turning it on)." };
+        var command = new Command("shuffle",
+            "Show or change shuffle on the running queue. 'on' shuffles the entries after the current track (it keeps playing; " +
+            "again when already on), 'off' restores the original order at the current track. New queues follow the mode. " +
+            "Saved as the default in settings.json.")
+        {
+            mode, seed,
+        };
+        command.Validators.Add(r =>
+        {
+            var text = Options.Get(r, mode);
+            if (text is not null && !PlaybackModes.TryParseShuffle(text, false, out _))
+            {
+                r.AddError($"Unknown shuffle mode '{text}'. Use on|off|toggle.");
+            }
+            else if (Options.Get(r, seed) is not null && text?.Trim().ToLowerInvariant() is not ("on" or "true" or "1" or "yes" or "toggle"))
+            {
+                r.AddError("--seed only applies when turning shuffle on ('shuffle on --seed N').");
+            }
+        });
+        runner.SetAction(command, async (parseResult, json, cancellationToken) =>
+        {
+            var text = parseResult.GetValue(mode);
+            await using var client = await PlayerSupport.ConnectAsync(runner, parseResult, cancellationToken).ConfigureAwait(false);
+            var data = await client.SendAsync("shuffle", text is null ? null : new { mode = text.Trim().ToLowerInvariant(), seed = parseResult.GetValue(seed) },
+                cancellationToken).ConfigureAwait(false);
+            var warning = text is null ? null : PlayerSupport.SaveModes(runner, parseResult, data);
+            PlayerSupport.WriteStatus(runner, json, "shuffle", data, new Dictionary<string, object?>
+            {
+                ["warnings"] = warning is null ? null : new[] { warning },
+            });
+            return ExitCodes.Success;
         });
         return command;
     }
@@ -291,6 +373,8 @@ internal static class ControlCommands
                 Output = new AudioOutputOptions(parseResult.GetValue(device), parseResult.GetValue(exclusive)),
                 IdleTimeout = idleSeconds > 0 ? TimeSpan.FromSeconds(idleSeconds) : null,
                 InitialVolume = (float)Math.Clamp(double.IsFinite(settings.Volume) ? settings.Volume : 1, 0, 1),
+                InitialRepeat = PlaybackModes.TryParseRepeat(settings.Repeat, out var repeatMode) ? repeatMode : RepeatMode.Off,
+                InitialShuffle = settings.Shuffle,
                 Log = log,
                 Time = env.Time,
             });

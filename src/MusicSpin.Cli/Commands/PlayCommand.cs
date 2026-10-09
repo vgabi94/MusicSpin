@@ -69,7 +69,10 @@ internal static class PlayCommand
             }
 
             // Build the queue (and release the library) before talking to the player.
-            var (items, seed) = source.Resolve(runner, parseResult);
+            // --shuffle is the player's shuffle mode (so 'shuffle off' restores the album order); same order as before for a seed.
+            var (items, _) = QueueSource.Resolve(runner, parseResult, parseResult.GetValue(source.Files), parseResult.GetValue(source.Album),
+                parseResult.GetValue(source.Artist), parseResult.GetValue(source.Search), shuffle: false, seed: null);
+            var seed = QueueSource.PickSeed(parseResult.GetValue(source.Shuffle), parseResult.GetValue(source.Seed));
             var requestedBackend = parseResult.GetValue(backend)!;
             var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, requestedBackend,
                 parseResult.GetValue(device), parseResult.GetValue(exclusive), cancellationToken).ConfigureAwait(false);
@@ -91,9 +94,10 @@ internal static class PlayCommand
                 var data = await client.SendAsync("queue.set", new
                 {
                     items,
-                    start = 0,
                     play = true,
                     startSeconds = startSeconds > 0 ? startSeconds : (double?)null,
+                    shuffle = seed is not null ? true : (bool?)null,
+                    seed,
                 }, cancellationToken).ConfigureAwait(false);
                 if (parseResult.GetValue(volume) is { } v)
                 {

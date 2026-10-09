@@ -83,8 +83,8 @@ How it works internally: [Architecture → Background player and IPC](architectu
 | `play ...` | Replaces the queue and starts at the first entry (or `--start` seconds into it) |
 | `queue add ...` | Appends; playback state is unchanged. On an empty queue, the first playable new entry is loaded (stopped). Start it with `resume` |
 | `queue clear` | Stops and empties the queue |
-| `next` / `prev` | Move and start playing. Unplayable entries are skipped (listed under `skipped`). Exit 8 at the end / on the first entry |
-| End of the last track | The player stops, `ended: true`, and a `queueEnded` event is sent |
+| `next` / `prev` | Move and start playing. Unplayable entries are skipped (listed under `skipped`). Exit 8 at the end / on the first entry, unless `repeat all` wraps around (see [Shuffle and repeat](#shuffle-and-repeat)) |
+| End of the last track | The player stops, `ended: true`, and a `queueEnded` event is sent. With `repeat all` it starts over; with `repeat one` the track itself starts again |
 | `resume` after the end | Continues with entries added since, otherwise restarts from the first entry |
 | Queue size | At most 100,000 entries (exit 2 `usage` beyond that) |
 | Missing or undecodable file | Skipped, listed in `skipped` with its error code, playback continues |
@@ -93,14 +93,25 @@ Library queues (`--album`, `--artist`, `--search`) carry the tags from the libra
 
 ## Shuffle and repeat
 
-| Feature | Status |
-|---|---|
-| **Shuffle when building a queue** | **Available.** `play --shuffle` and `queue add --shuffle`, MCP `play`/`queue_add` with `shuffle: true`. Fisher-Yates shuffle of the tracks being added; `--seed N` / `seed` gives a reproducible order (the seed is returned in the result). With `queue add`, only the added tracks are shuffled, not the existing queue |
-| Shuffle toggle on a running queue | **Not available.** There is no command to shuffle or unshuffle the current queue. Workaround: `play ... --shuffle` again |
-| Repeat one track | **Not available.** Workaround: `seek 0` |
-| Repeat all (loop the queue) | **Not available.** At the end the player stops. Workaround: `resume` restarts from the first entry |
+The player has a **repeat mode** (`off`, `one`, `all`) and a **shuffle mode** (on/off). Both are shown by `status` (`repeat`, `shuffle`, `shuffleSeed` in JSON; a `Repeat: … · Shuffle: …` line in text) and are changed with `music-spin repeat` / `music-spin shuffle`, the MCP `repeat` / `shuffle` tools, or the protocol commands of the same name.
 
-**Planned:** repeat one/all and a shuffle toggle in the player, the CLI and MCP.
+| Mode | Behaviour |
+|---|---|
+| `repeat off` (default) | The queue plays once. `next` on the last entry and `prev` on the first: exit 8 |
+| `repeat one` | A track that **ends naturally** starts again. `next` / `prev` still move to the neighbouring entry and keep the limits of `off` (exit 8 at the ends) |
+| `repeat all` | After the last track the queue starts again from the first playable entry. `next` on the last entry wraps to the first, `prev` on the first wraps to the last. With a single entry, `next`/`prev` restart it. A shuffled order is kept when wrapping |
+| `shuffle on` | The entries **after** the current track are shuffled (Fisher-Yates); the current track keeps playing and the entries already played stay where they are. Running `shuffle on` again reshuffles the upcoming entries. With an empty queue it only sets the mode |
+| `shuffle off` | The original order is restored and the current track keeps its place in it (it keeps playing) |
+| `shuffle toggle` | Switches between the two |
+
+Details:
+
+- **Seeds.** `shuffle on --seed N` gives a reproducible order. Without `--seed` a random seed is chosen. The seed in use is reported as `shuffleSeed` while shuffle is on. A seed with a mode that turns shuffle off is exit 2.
+- **New queues follow the mode.** With shuffle on, `play` shuffles the whole new queue. `play --shuffle [--seed N]` turns the player's shuffle mode on for the new queue; the order for a given seed is the same as before this feature (Fisher-Yates over the whole list). `queue add` while shuffled mixes the new entries randomly into the upcoming part of the queue; the entries already there keep their relative order. `queue add --shuffle` shuffles only the batch being added (it does not change the mode).
+- **Defaults.** Changing a mode with the CLI or MCP also saves it as the default in `settings.json` (`repeat`, `shuffle`); a newly started background player starts with these modes. `repeat` / `shuffle` without a mode only show the status and save nothing. If `settings.json` cannot be read or written, the mode still changes and a warning is added (stderr; `warnings` in JSON). `serve` ignores these defaults and starts with repeat off and shuffle off.
+- **Safety net.** If tracks end immediately over and over (for example every file is a few milliseconds long or keeps failing), repeat stops after 100 consecutive loops within 50 ms each: playback ends with `lastError` "Repeat stopped: ...". The mode itself is kept.
+- **Unplayable entries** are skipped as usual. Under `repeat all`, `next` tries every other entry once and comes back around to the current one; if nothing is playable it fails (exit 3) instead of looping.
+- `play --foreground --shuffle` (no background player) shuffles the list once; there is no repeat in foreground mode.
 
 ## Testing without a sound card
 

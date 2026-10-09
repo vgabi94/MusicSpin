@@ -18,7 +18,7 @@ Every command accepts these, before or after the subcommand:
 | Area | Commands |
 |---|---|
 | Files and environment | [`info`](#info) · [`formats`](#formats) · [`devices`](#devices) · [`doctor`](#doctor) |
-| Playback | [`play`](#play) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
+| Playback | [`play`](#play) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
 | Library | [`library add/remove/folders/scan/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) |
 | Integration | [`serve`](#serve) · [`mcp`](#mcp) |
 
@@ -86,8 +86,8 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--album <album>` | A library album: title (case-insensitive exact match after normalization) or album id. If several albums share the title: exit 2 with the candidates; add `--artist` to pick one. Unknown: exit 12 |
 | `--artist <artist>` | All library tracks by this artist (track artist or album artist, case-insensitive exact match), albums ordered by year, then disc/track. With `--album`: narrows the album |
 | `--search <text>` | Library tracks whose search text contains `<text>` (same matching as [`search`](#search)), up to 10,000. No match: exit 12 |
-| `--shuffle` | Shuffle the queue once, when it is built (Fisher-Yates) |
-| `--seed <n>` | Shuffle seed for a reproducible order. Default: random. The seed is reported in the JSON result |
+| `--shuffle` | Turn the player's shuffle mode on and shuffle the new queue (Fisher-Yates over the whole list). Without `--shuffle` the queue is shuffled anyway when shuffle mode is already on (see [`shuffle`](#shuffle)) |
+| `--seed <n>` | Shuffle seed for a reproducible order. Default: random. The seed is reported in the JSON result. Needs `--shuffle` |
 | `--start <s>` | Start position in seconds (first track only) |
 | `--volume <v>` | 0.0-1.0. 1.0 (the default, or `volume` from settings.json) leaves the samples untouched |
 | `--backend auto\|null` | `auto` = SoundFlow/miniaudio (WASAPI, CoreAudio, PulseAudio/ALSA). `null` = no sound card (decodes in real time and discards). Default `auto` |
@@ -109,7 +109,7 @@ Use **exactly one source kind**: files, `--album` (optionally with `--artist`), 
 
 ## next / prev
 
-`next` plays the next entry (skipping unplayable files). Exit 8 `invalid_state` at the end of the queue. `prev` plays the previous entry. Exit 8 on the first entry (use `seek 0` to restart). Both always start playback.
+`next` plays the next entry (skipping unplayable files). Exit 8 `invalid_state` at the end of the queue. `prev` plays the previous entry. Exit 8 on the first entry (use `seek 0` to restart). Both always start playback. With `repeat all` both wrap around instead of failing; `repeat one` does not change them.
 
 ## seek
 
@@ -119,16 +119,39 @@ Use **exactly one source kind**: files, `--album` (optionally with `--artist`), 
 
 `music-spin volume <level>`: `0.5`, `50%`, or relative `+0.1`, `-10%`. Absolute values outside 0..1: exit 2. Relative values are clamped. 1.0 is the bit-perfect path.
 
+## repeat
+
+`music-spin repeat [off|one|all]`
+
+| Mode | Meaning |
+|---|---|
+| `off` | Play the queue once (default) |
+| `one` | A track that ends starts again. `next`/`prev` still move (exit 8 at the ends, as with `off`) |
+| `all` | Loop the queue. `next` on the last entry wraps to the first, `prev` on the first wraps to the last |
+
+Without a mode: show the status (nothing changes). Aliases: `none`/`no` = off, `track`/`single` = one, `queue` = all; case-insensitive. An unknown mode is exit 2 (checked before contacting the player). Needs a running player (exit 13 otherwise). The new mode is saved as the default in `settings.json` (`repeat`); a failure to save is a warning, not an error. Returns the player status.
+
+## shuffle
+
+`music-spin shuffle [on|off|toggle] [--seed <n>]`
+
+- `on`: shuffle the entries after the current track; it keeps playing. Again when already on: reshuffle the upcoming entries.
+- `off`: restore the original order; the current track keeps playing at its place in that order.
+- `toggle`: switch.
+- `--seed <n>`: reproducible order. Only with `on` (or a `toggle` that turns it on); otherwise exit 2. The seed in use is reported as `shuffleSeed`.
+
+Without a mode: show the status. Aliases: `true`/`yes`/`1`, `false`/`no`/`0`. Unknown mode: exit 2. Needs a running player (exit 13). With an empty queue it only sets the mode; new queues and added entries follow it (see [Playback](playback.md#shuffle-and-repeat)). Saved as the default in `settings.json` (`shuffle`).
+
 ## status
 
-State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, duration, volume, queue index/length, the queue item, output backend/device, exclusive mode, skipped files.
+State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, duration, volume, repeat mode, shuffle (and its seed), queue index/length, the queue item, output backend/device, exclusive mode, skipped files.
 
 ## queue
 
 | Command | Meaning |
 |---|---|
 | `queue [--limit N] [--offset N]` | List the queue (index, current flag, path, tags) |
-| `queue add [<files>...] \| --album ... \| --artist ... \| --search ... [--shuffle] [--seed]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive` |
+| `queue add [<files>...] \| --album ... \| --artist ... \| --search ... [--shuffle] [--seed]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue |
 | `queue clear` | Stop playback and empty the queue |
 
 ## quit / player
@@ -140,7 +163,7 @@ State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, d
 | `player quit`, `player stop` | Same as `quit` |
 | `player run` | Hidden. The background player process itself (started by `play`/`queue add`; not meant to be called by hand) |
 
-Control commands (`pause` … `quit`) **never start** a player. Without one they exit **13 `player_not_running`**.
+Control commands (`pause` … `quit`, `repeat`, `shuffle`) **never start** a player. Without one they exit **13 `player_not_running`**.
 
 ---
 

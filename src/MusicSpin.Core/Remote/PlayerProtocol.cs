@@ -46,8 +46,10 @@ public static class ProtocolMessages
 /// <c>{"id":1,"ok":false,"error":{"code":"invalid_state","exitCode":8,"message":"..."}}</c>.
 /// Events (no id): <c>{"event":"stateChanged","data":{...}}</c>.
 /// <para>Commands: hello, status, load(path), play(index?), pause, resume, toggle, stop, next, prev,
-/// seek(seconds | delta), volume(value | delta), info(path), queue(offset?, limit?), queue.set(items, start?, play?, startSeconds?),
-/// queue.add(items), queue.clear, subscribe, quit. <c>items</c> are paths or <see cref="QueueItem"/> objects.</para>
+/// seek(seconds | delta), volume(value | delta), info(path), queue(offset?, limit?),
+/// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.add(items), queue.clear,
+/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), subscribe, quit.
+/// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle without a mode just return the status.</para>
 /// </summary>
 public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory decoders, Func<object>? hello = null)
 {
@@ -56,7 +58,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
     public static IReadOnlyList<string> Commands { get; } =
     [
         "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "info",
-        "queue", "queue.set", "queue.add", "queue.clear", "subscribe", "quit",
+        "queue", "queue.set", "queue.add", "queue.clear", "repeat", "shuffle", "subscribe", "quit",
     ];
 
     public QueuePlayer Player { get; } = player ?? throw new ArgumentNullException(nameof(player));
@@ -150,12 +152,21 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
             case "queue":
                 return (Player.List(OptionalInt(root, "offset") ?? 0, OptionalInt(root, "limit") ?? 100), ProtocolAction.None);
             case "queue.set":
-                return (Player.SetQueue(Items(root), OptionalInt(root, "start") ?? 0, OptionalBool(root, "play") ?? true,
-                    OptionalNumber(root, "startSeconds") is { } s ? TimeSpan.FromSeconds(s) : null), ProtocolAction.None);
+                return (Player.SetQueue(Items(root), OptionalInt(root, "start"), OptionalBool(root, "play") ?? true,
+                    OptionalNumber(root, "startSeconds") is { } s ? TimeSpan.FromSeconds(s) : null,
+                    OptionalBool(root, "shuffle"), OptionalInt(root, "seed")), ProtocolAction.None);
             case "queue.add":
                 return (Player.Add(Items(root)), ProtocolAction.None);
             case "queue.clear":
                 return (Player.Clear(), ProtocolAction.None);
+            case "repeat":
+                return (OptionalString(root, "mode") is { } repeat
+                    ? Player.SetRepeat(PlaybackModes.TryParseRepeat(repeat, out var mode)
+                        ? mode
+                        : throw new FormatException($"Unknown repeat mode '{repeat}'. Use {PlaybackModes.RepeatValues}."))
+                    : Player.Status(), ProtocolAction.None);
+            case "shuffle":
+                return (Shuffle(root), ProtocolAction.None);
             case "subscribe":
                 return (Player.Status(), ProtocolAction.Subscribe);
             case "quit":
@@ -165,6 +176,39 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                     ? "Missing \"cmd\"."
                     : $"Unknown cmd '{cmd}'. Expected one of: {string.Join('|', Commands)}.");
         }
+    }
+
+    private PlayerStatus Shuffle(JsonElement root)
+    {
+        var seed = OptionalInt(root, "seed");
+        bool enabled;
+        if (OptionalBool(root, "enabled") is { } flag)
+        {
+            enabled = flag;
+        }
+        else if (OptionalString(root, "mode") is { } text)
+        {
+            if (!PlaybackModes.TryParseShuffle(text, Player.Shuffle, out enabled))
+            {
+                throw new FormatException($"Unknown shuffle mode '{text}'. Use on|off|toggle.");
+            }
+        }
+        else
+        {
+            return seed is null ? Player.Status() : throw new FormatException("\"seed\" needs \"mode\": \"on\".");
+        }
+
+        return Player.SetShuffle(enabled, seed);
+    }
+
+    private static string? OptionalString(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var v) || v.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        return v.ValueKind == JsonValueKind.String ? v.GetString() : throw new FormatException($"\"{name}\" must be a string.");
     }
 
     private static List<QueueItem> Items(JsonElement root)

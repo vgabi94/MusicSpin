@@ -76,6 +76,41 @@ internal static class PlayerSupport
         }, name);
     }
 
+    /// <summary>
+    /// Remembers the player's repeat/shuffle modes as the defaults in settings.json (used when a player starts).
+    /// Returns a warning instead of failing: the player already changed.
+    /// </summary>
+    public static string? SaveModes(CommandRunner runner, ParseResult parseResult, JsonElement status)
+    {
+        try
+        {
+            var parsed = ProtocolJson.Deserialize<PlayerStatus>(status);
+            if (parsed is null)
+            {
+                return null;
+            }
+
+            var store = new MusicSpin.Core.Settings.SettingsStore(runner.DataDirectory(parseResult));
+            var settings = store.Load();
+            if (store.LoadWarning is not null)
+            {
+                return $"Not saved as the default: {store.LoadWarning}";
+            }
+
+            var repeat = PlaybackModes.Name(parsed.Repeat);
+            if (settings.Repeat != repeat || settings.Shuffle != parsed.Shuffle)
+            {
+                store.Save(settings with { Repeat = repeat, Shuffle = parsed.Shuffle });
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is MusicSpinException or IOException or UnauthorizedAccessException or JsonException)
+        {
+            return $"Not saved as the default in settings.json: {ex.Message}";
+        }
+    }
+
     public static void WriteStatus(CommandRunner runner, bool json, string command, JsonElement data, IReadOnlyDictionary<string, object?>? extra = null)
     {
         var env = runner.Env;
@@ -124,6 +159,9 @@ internal static class PlayerSupport
         }
     }
 
+    private static string Modes(PlayerStatus s)
+        => $"  Repeat: {PlaybackModes.Name(s.Repeat)} · Shuffle: {(s.Shuffle ? s.ShuffleSeed is { } seed ? $"on (seed {seed})" : "on" : "off")}";
+
     public static IEnumerable<string> Describe(PlayerStatus s)
     {
         var state = s.Ended ? "Ended" : s.State switch
@@ -135,6 +173,7 @@ internal static class PlayerSupport
         if (s.QueueIndex is not { } index)
         {
             yield return $"{state} (queue empty)";
+            yield return Modes(s);
             yield break;
         }
 
@@ -147,6 +186,8 @@ internal static class PlayerSupport
             : "?";
         yield return string.Create(CultureInfo.InvariantCulture,
             $"  {format}    {Human.Time(TimeSpan.FromSeconds(s.PositionSeconds))} / {Human.Time(TimeSpan.FromSeconds(s.DurationSeconds))}    volume {s.Volume * 100:0}%");
+        yield return Modes(s);
+
         if (s.Output is { } o)
         {
             yield return $"  Output: {o.Backend} · {o.Device ?? "default device"} · {(o.Exclusive ? "exclusive" : "shared")}";

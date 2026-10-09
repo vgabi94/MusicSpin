@@ -77,7 +77,7 @@ Notes:
 - `status` includes the hi-res facts: `track.sampleRate`, `track.bitsPerSample`, `track.codec`, `track.lossless`, `track.hiRes` and `output.exclusive`.
 - After a crash (e.g. `kill -9`), commands exit 13 and mention the stale pid. The next `play` cleans up the leftovers.
 - `player status` is the cheap "is anything running?" check. It exits 0 either way.
-- There is no repeat mode, no shuffle toggle on a running queue, and there are no playlists (see [Playback](playback.md#shuffle-and-repeat)). Use `play ... --shuffle [--seed N]` to build a shuffled queue.
+- `repeat off|one|all` and `shuffle on|off|toggle [--seed N]` change the running queue; `status` reports `repeat`, `shuffle` and `shuffleSeed`. Changes are saved as defaults for the next player (see [Playback](playback.md#shuffle-and-repeat)). There are no playlists.
 
 ## `serve`: JSON-lines protocol (v1)
 
@@ -106,6 +106,9 @@ One request per line on stdin; one response per line on stdout with the same `id
 {"id":16,"cmd":"seek","delta":-10}             // relative seeks are clamped; absolute ones must be inside the track
 {"id":17,"cmd":"volume","delta":0.1}
 {"id":18,"cmd":"queue","offset":0,"limit":50}  {"id":19,"cmd":"queue.clear"}  {"id":20,"cmd":"hello"}
+{"id":21,"cmd":"repeat","mode":"all"}          // off|one|all; without "mode": just the status
+{"id":22,"cmd":"shuffle","mode":"on","seed":7} // on|off|toggle (or "enabled":true/false); without "mode": just the status
+{"id":23,"cmd":"queue.set","items":["/music/a.flac","/music/b.flac"],"shuffle":true,"seed":7}  // turn shuffle on for the new queue
 
 // events
 {"event":"trackLoaded","data":{<track>}}

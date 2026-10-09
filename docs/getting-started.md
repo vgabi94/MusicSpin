@@ -68,6 +68,8 @@ Created with defaults by `doctor` (or by the first command that writes):
 |---|---|---|
 | `schemaVersion` | `1` | settings format version |
 | `volume` | `1.0` | initial volume of the background player and of `play --foreground` (unless `--volume` is given) |
+| `repeat` | `"off"` | repeat mode (`off`, `one`, `all`) of a newly started background player. Written by `music-spin repeat <mode>` and the MCP `repeat` tool. An unknown value means `off` |
+| `shuffle` | `false` | shuffle mode of a newly started background player. Written by `music-spin shuffle <mode>` and the MCP `shuffle` tool |
 | `playerIdleTimeoutSeconds` | `900` | the background player exits after this long when it is stopped (or the queue has ended) and no client is subscribed. `0` means never. A paused player does not time out |
 | `outputDevice` | `null` | **reserved for the App**. The CLI uses `--device` |
 | `exclusiveMode` | `false` | **reserved for the App**. The CLI uses `--exclusive` |

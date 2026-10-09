@@ -29,7 +29,10 @@ internal sealed class QueueSource
         Description = "Library tracks matching this text (same matching as 'music-spin search'), up to 10000.",
     };
 
-    public Option<bool> Shuffle { get; } = new("--shuffle") { Description = "Shuffle the queue." };
+    public Option<bool> Shuffle { get; } = new("--shuffle")
+    {
+        Description = "Shuffle. With play: turns the player's shuffle mode on (turn it off later to get the original order). With queue add: shuffles the added tracks.",
+    };
 
     public Option<int?> Seed { get; } = new("--seed")
     {
@@ -103,16 +106,21 @@ internal sealed class QueueSource
 
     public static int? ApplyShuffle<T>(bool shuffle, int? seed, ref IReadOnlyList<T> items)
     {
-        if (!shuffle)
+        if (PickSeed(shuffle, seed) is not { } used)
         {
             return null;
         }
 
-#pragma warning disable CA5394 // not security sensitive
-        var used = seed ?? Random.Shared.Next();
-#pragma warning restore CA5394
         items = MusicLibrary.Shuffle(items, used);
         return used;
+    }
+
+    /// <summary>The seed to use for --shuffle (given or random); null without --shuffle.</summary>
+    public static int? PickSeed(bool shuffle, int? seed)
+    {
+#pragma warning disable CA5394 // not security sensitive
+        return shuffle ? seed ?? Random.Shared.Next() : null;
+#pragma warning restore CA5394
     }
 
     /// <summary>Queue items for the background player (files resolved to absolute paths: the player has another working directory).</summary>

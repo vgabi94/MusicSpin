@@ -25,6 +25,12 @@ public sealed record PlayerHostOptions
 
     public float InitialVolume { get; init; } = 1f;
 
+    /// <summary>Repeat mode at start (settings.json "repeat").</summary>
+    public RepeatMode InitialRepeat { get; init; }
+
+    /// <summary>Shuffle mode at start (settings.json "shuffle").</summary>
+    public bool InitialShuffle { get; init; }
+
     /// <summary>Requests/messages longer than this are rejected and the connection closed.</summary>
     public int MaxMessageBytes { get; init; } = 4 * 1024 * 1024;
 
@@ -78,6 +84,11 @@ public sealed class PlayerHost : IAsyncDisposable
             Volume = Math.Clamp(options.InitialVolume, 0f, 1f),
         };
         _queue = new QueuePlayer(_player, output);
+        _queue.SetRepeat(options.InitialRepeat);
+        if (options.InitialShuffle)
+        {
+            _queue.SetShuffle(true);
+        }
         Info = new PlayerProcessInfo(PlayerProtocol.Version, Version, Environment.ProcessId, _startedAt, endpoint.Display, endpoint.DataDirectory,
             options.Log is null ? null : endpoint.LogFile, options.IdleTimeout is { } t && t > TimeSpan.Zero ? t.TotalSeconds : null, output);
         _protocol = new PlayerProtocol(_queue, options.Decoders, () => Info);

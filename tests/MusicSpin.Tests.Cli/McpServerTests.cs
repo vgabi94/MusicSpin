@@ -69,7 +69,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var tools = await client.ListToolsAsync(cancellationToken: _cts.Token);
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
-                     "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats" })
+                     "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle" })
         {
             Assert.Contains(name, names);
         }
@@ -155,5 +155,38 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.StartsWith("usage:", await CallError("volume", new() { ["level"] = "2" }), StringComparison.Ordinal);
         Assert.StartsWith("invalid_state:", await CallError("next"), StringComparison.Ordinal);
         Assert.Equal("playing", (await Call("status")).GetProperty("state").GetString()); // the server survived every error
+    }
+
+    [Fact]
+    public async Task Repeat_and_shuffle_tools_change_the_running_queue()
+    {
+        await StartAsync();
+        await Call("play", new() { ["files"] = Long });
+        Assert.Equal("off", (await Call("repeat")).GetProperty("repeat").GetString());
+        Assert.Equal("all", (await Call("repeat", new() { ["mode"] = "all" })).GetProperty("repeat").GetString());
+        Assert.Equal(0, (await Call("next")).GetProperty("queueIndex").GetInt32() - 1);
+        var shuffled = await Call("shuffle", new() { ["mode"] = "on", ["seed"] = 8 });
+        Assert.True(shuffled.GetProperty("shuffle").GetBoolean());
+        Assert.Equal(8, shuffled.GetProperty("shuffleSeed").GetInt32());
+        Assert.Equal(Long[1], shuffled.GetProperty("track").GetProperty("path").GetString());
+        Assert.False((await Call("shuffle", new() { ["mode"] = "off" })).GetProperty("shuffle").GetBoolean());
+        Assert.True((await Call("status")).TryGetProperty("repeat", out _));
+        var settings = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(_cli.DataDir, "settings.json"), _cts.Token)).RootElement;
+        Assert.Equal("all", settings.GetProperty("repeat").GetString());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Repeat_and_shuffle_tools_reject_bad_input()
+    {
+        await StartAsync();
+        Assert.StartsWith("player_not_running:", await CallError("repeat", new() { ["mode"] = "all" }), StringComparison.Ordinal);
+        Assert.StartsWith("player_not_running:", await CallError("shuffle"), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("repeat", new() { ["mode"] = "twice" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("shuffle", new() { ["mode"] = "maybe" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("shuffle", new() { ["seed"] = 3 }), StringComparison.Ordinal);
+        await Call("play", new() { ["files"] = new[] { Long[0] } });
+        Assert.StartsWith("usage:", await CallError("shuffle", new() { ["mode"] = "off", ["seed"] = 3 }), StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(_cli.DataDir, "settings.json"))); // nothing was saved by the failures
     }
 }

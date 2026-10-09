@@ -8,19 +8,20 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 - **Aims for bit-perfect output:** no resampling, a device format matching the source bit depth, untouched samples at volume 1.0, and optional exclusive mode (WASAPI exclusive, ALSA hw, CoreAudio) through [SoundFlow](https://github.com/LSXPrime/SoundFlow)/[miniaudio](https://miniaud.io).
 - **Music library:** LiteDB database, TagLib# tags with FFmpeg fallback, fast parallel incremental scanning, album grouping including compilations/Various Artists, search, quality filters (hi-res, sample rate, bit depth, format, year), health check, folder watching.
 - **Background player:** `music-spin play` returns at once. Quick commands (`pause`, `next`, `seek`, `volume`, `status`, `queue`, ...) control it. Playback survives the terminal or agent that started it.
+- **Repeat and shuffle:** repeat off/one/all and a shuffle toggle on the running queue (the current track keeps playing; `off` restores the original order; reproducible with `--seed`), saved as defaults.
 - **Agent-friendly:** `--json` on every command (one JSON object per line, errors included), stable exit codes, an **MCP server** (`music-spin mcp`), and a JSON-lines `serve` mode.
 - **Portable:** one self-contained executable per platform. All data lives in `.usrdata/` next to it.
 
 ## Status
 
-**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (412) work. The desktop app is an empty Avalonia window until the UI design is decided.
+**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (470) work. The desktop app is an empty Avalonia window until the UI design is decided.
 
 | Platform | Status |
 |---|---|
 | Linux x64 | Verified: build, full test suite, published single-file build, background player, MCP over stdio |
 | Windows, macOS | Builds are set up (CI and release workflows) but **not verified yet**, in particular the background player (named pipes / Unix socket permissions, detached spawn) |
 
-Not available yet: repeat modes, a shuffle toggle on a running queue, playlists (M3U/PLS), gapless playback, native DSD/DoP output. See the [Roadmap](#roadmap).
+Not available yet: playlists (M3U/PLS), gapless playback, native DSD/DoP output. See the [Roadmap](#roadmap).
 
 ## Quick start
 
@@ -53,12 +54,13 @@ $ music-spin filter --hires --min-sample-rate 96000 --format flac,dsd
 $ music-spin play --artist "Nils Frahm" --shuffle --seed 7
 $ music-spin queue add --search "glass"
 $ music-spin seek 1:30 && music-spin volume 80%
+$ music-spin repeat all && music-spin shuffle on
 
 $ music-spin status --json
 {"ok":true,"command":"status","data":{"state":"playing","positionSeconds":1.78,"durationSeconds":240,"volume":1,"track":{"codec":"flac","sampleRate":96000,"bitsPerSample":24,"lossless":true,"hiRes":true,"title":"An Aborted Beginning",...},"queueIndex":0,"queueLength":3,...}}
 
 $ music-spin next --json; echo $?
-{"ok":false,"command":"next","error":{"code":"invalid_state","exitCode":8,"message":"Already at the last track (3 of 3). Add more with 'music-spin queue add'."}}
+{"ok":false,"command":"next","error":{"code":"invalid_state","exitCode":8,"message":"Already at the last track (3 of 3). Add more with 'music-spin queue add', or use 'music-spin repeat all'."}}
 8
 ```
 
@@ -97,7 +99,7 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 | [Getting started](docs/getting-started.md) | portable layout, `.usrdata`, FFmpeg, first commands |
 | [CLI reference](docs/cli-reference.md) | every command and option, `--json`, exit codes |
 | [Music library](docs/library.md) | scanning, change detection, stored metadata, search/filter semantics |
-| [Playback](docs/playback.md) | formats, bit-perfect/exclusive mode, DSD, background player, queue, shuffle/repeat |
+| [Playback](docs/playback.md) | formats, bit-perfect/exclusive mode, DSD, background player, queue, repeat and shuffle |
 | [AI agents](docs/ai-agents.md) | JSON conventions, background-player workflow, `serve` protocol |
 | [MCP server](docs/mcp.md) | transport, client configuration, tools, errors |
 | [Diagnostics](docs/diagnostics.md) | `doctor`, `devices`, logs, common problems |
@@ -110,7 +112,8 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 - [x] Playback core, library, portable single-file publishing, background player, CLI with `--json`, MCP server
 - [ ] Verify the background player on Windows and macOS, and enable the end-to-end tests there
 - [ ] Desktop UI design. The app will attach to the background player (`PlayerClient` + `subscribe`) or host it in-process
-- [ ] Repeat one/all, a shuffle toggle, saved playlists and M3U/M3U8/PLS import/export
+- [x] Repeat one/all and a shuffle toggle
+- [ ] Saved playlists and M3U/M3U8/PLS import/export
 - [ ] Gapless playback; decoding on a separate thread into a ring buffer
 - [ ] Native DSD/DoP output; bit-perfect verification on real hardware (WASAPI exclusive, ALSA `hw:`, CoreAudio)
 - [ ] Audio-only LGPL FFmpeg build (~120 MB → a few MB), LGPL FFmpeg for macOS, signing/notarization, GitHub releases

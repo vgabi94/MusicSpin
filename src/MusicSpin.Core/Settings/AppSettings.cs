@@ -27,4 +27,10 @@ public sealed record AppSettings
     /// 0 = never. Paused playback keeps it alive.
     /// </summary>
     public double PlayerIdleTimeoutSeconds { get; init; } = DefaultPlayerIdleTimeoutSeconds;
+
+    /// <summary>Repeat mode a new background player starts with: "off" | "one" | "all". Updated by 'music-spin repeat'.</summary>
+    public string Repeat { get; init; } = "off";
+
+    /// <summary>Whether a new background player starts with shuffle on. Updated by 'music-spin shuffle'.</summary>
+    public bool Shuffle { get; init; }
 }

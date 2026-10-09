@@ -15,21 +15,40 @@ public sealed class TrackSkippedEventArgs(SkippedItem item) : EventArgs
 /// <para>Semantics (documented for agents): <c>next</c>/<c>prev</c> always start playback; <c>next</c> on the last entry and
 /// <c>prev</c> on the first are <see cref="MusicSpinErrorCode.InvalidState"/>; after the last entry ends the queue is
 /// <see cref="PlayerStatus.Ended"/> and play/resume continue with entries added since, or restart from the first.</para>
+/// <para>Repeat: <see cref="RepeatMode.One"/> replays a track that ends naturally (next/prev still move, with the same
+/// limits as off); <see cref="RepeatMode.All"/> loops the queue and makes next/prev wrap around.</para>
+/// <para>Shuffle: the queue keeps its original order next to the play order. Turning shuffle on shuffles the entries after
+/// the current one (the current track keeps playing, entries already played stay before it); turning it off restores the
+/// original order, positioned at the current track. A new queue set while shuffle is on is shuffled; entries added while
+/// shuffle is on are inserted at random positions after the current one. Every full shuffle uses a fresh seed (given or
+/// random) that is reported as <see cref="PlayerStatus.ShuffleSeed"/>, so it can be reproduced.</para>
 /// </summary>
 public sealed class QueuePlayer : IDisposable
 {
     public const int MaxQueueLength = 100_000;
     private const int MaxSkippedKept = 50;
 
+    // A repeat loop (repeat-one replay or repeat-all wrap) that comes back within this time counts as "rapid"; after
+    // MaxRapidLoops rapid loops in a row (tracks that end immediately, e.g. empty or broken files) repeat gives up.
+    private const long RapidLoopMilliseconds = 50;
+    private const int MaxRapidLoops = 100;
+
     private readonly IPlayer _player;
     private readonly Lock _gate = new();
-    private readonly List<QueueItem> _items = [];
+    private readonly List<Slot> _items = [];
     private readonly List<SkippedItem> _skipped = [];
     private int _index = -1;
     private bool _ended;
     private bool _stoppedByUser;
     private string? _lastError;
     private bool _disposed;
+    private RepeatMode _repeat;
+    private bool _shuffle;
+    private int? _seed;
+    private Random _random = new();
+    private long _nextOrder;
+    private long _lastLoopTicks;
+    private int _rapidLoops;
 
     public QueuePlayer(IPlayer player, OutputInfo? output = null)
     {
@@ -62,6 +81,16 @@ public sealed class QueuePlayer : IDisposable
 
     public PlayerState State => _player.State;
 
+    public RepeatMode Repeat
+    {
+        get { lock (_gate) { return _repeat; } }
+    }
+
+    public bool Shuffle
+    {
+        get { lock (_gate) { return _shuffle; } }
+    }
+
     public int Count
     {
         get { lock (_gate) { return _items.Count; } }
@@ -90,7 +119,7 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             EnrichCurrent();
-            var items = _items.Skip(offset).Take(limit).Select((item, i) => new QueueEntry(offset + i, offset + i == _index, item)).ToList();
+            var items = _items.Skip(offset).Take(limit).Select((slot, i) => new QueueEntry(offset + i, offset + i == _index, slot.Item)).ToList();
             return new QueueListing(_items.Count, offset, limit, _index >= 0 ? _index : null, items);
         }
     }
@@ -99,7 +128,11 @@ public sealed class QueuePlayer : IDisposable
     /// Replaces the queue and loads the first playable entry from <paramref name="startIndex"/>. When no entry can be
     /// opened the current queue and playback are left untouched and FileNotFound is thrown.
     /// </summary>
-    public PlayerStatus SetQueue(IReadOnlyList<QueueItem> items, int startIndex = 0, bool play = true, TimeSpan? start = null)
+    /// <param name="startIndex">Entry to start with (in the given order). Null: the first entry, or with shuffle a random one.</param>
+    /// <param name="shuffle">Turns shuffle on/off for this and later queues; null keeps the current mode.</param>
+    /// <param name="seed">Seed for the shuffle (reproducible order); only valid when shuffle ends up on.</param>
+    public PlayerStatus SetQueue(IReadOnlyList<QueueItem> items, int? startIndex = null, bool play = true, TimeSpan? start = null,
+        bool? shuffle = null, int? seed = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         ValidateItems(items);
@@ -108,19 +141,49 @@ public sealed class QueuePlayer : IDisposable
             throw Invalid("The queue must contain at least one entry.");
         }
 
-        if (startIndex < 0 || startIndex >= items.Count)
+        if (startIndex is { } requested && (requested < 0 || requested >= items.Count))
         {
-            throw Invalid($"start index {startIndex} is outside the queue (0-{items.Count - 1}).");
+            throw Invalid($"start index {requested} is outside the queue (0-{items.Count - 1}).");
         }
 
         lock (_gate)
         {
             ThrowIfDisposed();
+            var shuffled = shuffle ?? _shuffle;
+            if (seed is not null && !shuffled)
+            {
+                throw Invalid("A shuffle seed only applies when shuffle is on.");
+            }
+
+            long order = 0;
+            var slots = items.Select(item => new Slot(item, order++)).ToList();
+            var first = startIndex ?? 0;
+            int? usedSeed = null;
+            Random? random = null;
+            if (shuffled)
+            {
+                usedSeed = seed ?? NewSeed();
+                random = new Random(usedSeed.Value);
+                if (startIndex is { } keep)
+                {
+                    var chosen = slots[keep];
+                    slots.RemoveAt(keep);
+                    slots.Insert(0, chosen);
+                    ShuffleRange(slots, 1, random);
+                }
+                else
+                {
+                    ShuffleRange(slots, 0, random);
+                }
+
+                first = 0;
+            }
+
             var skipped = new List<SkippedItem>();
             var loaded = -1;
-            for (var i = startIndex; i < items.Count && loaded < 0; i++)
+            for (var i = first; i < slots.Count && loaded < 0; i++)
             {
-                if (TryLoad(items[i], i, skipped))
+                if (TryLoad(slots[i].Item, i, skipped))
                 {
                     loaded = i;
                 }
@@ -129,15 +192,24 @@ public sealed class QueuePlayer : IDisposable
             if (loaded < 0)
             {
                 throw new MusicSpinException(MusicSpinErrorCode.FileNotFound,
-                    $"None of the {items.Count - startIndex} queued file(s) could be played: {Describe(skipped)}");
+                    $"None of the {slots.Count - first} queued file(s) could be played: {Describe(skipped)}");
             }
 
             _items.Clear();
-            _items.AddRange(items);
+            _items.AddRange(slots);
+            _nextOrder = order;
+            _shuffle = shuffled;
+            _seed = usedSeed;
+            if (random is not null)
+            {
+                _random = random;
+            }
+
             _skipped.Clear();
             _index = loaded;
             _ended = false;
             _lastError = null;
+            _rapidLoops = 0;
             foreach (var s in skipped)
             {
                 AddSkipped(s);
@@ -167,7 +239,8 @@ public sealed class QueuePlayer : IDisposable
             ThrowIfDisposed();
             _player.Load(path); // throws before touching the queue when the file is bad
             _items.Clear();
-            _items.Add(new QueueItem(path));
+            _items.Add(new Slot(new QueueItem(path), 0));
+            _nextOrder = 1;
             _skipped.Clear();
             _index = 0;
             _ended = false;
@@ -190,13 +263,30 @@ public sealed class QueuePlayer : IDisposable
                 throw Invalid($"The queue is limited to {MaxQueueLength} entries.");
             }
 
+            var added = items.Select(item => new Slot(item, _nextOrder++)).ToList();
             var first = _items.Count;
-            _items.AddRange(items);
+            if (_shuffle && _index >= 0)
+            {
+                MixIntoUpcoming(added);
+            }
+            else
+            {
+                _items.AddRange(added);
+                if (_shuffle)
+                {
+                    // Nothing loaded yet: this is a fresh shuffle of everything queued.
+                    _seed = NewSeed();
+                    _random = new Random(_seed.Value);
+                    ShuffleRange(_items, 0, _random);
+                    first = 0;
+                }
+            }
+
             if (_index < 0)
             {
                 for (var i = first; i < _items.Count; i++)
                 {
-                    if (TryLoad(_items[i], i, null))
+                    if (TryLoad(_items[i].Item, i, null))
                     {
                         _index = i;
                         break;
@@ -218,6 +308,7 @@ public sealed class QueuePlayer : IDisposable
             _stoppedByUser = true;
             _player.Stop();
             _items.Clear();
+            _nextOrder = 0;
             _skipped.Clear();
             _index = -1;
             _ended = false;
@@ -244,7 +335,7 @@ public sealed class QueuePlayer : IDisposable
                 throw Invalid($"index {index} is outside the queue (0-{_items.Count - 1}).");
             }
 
-            return MoveAndPlay(index.Value, +1);
+            return MoveAndPlay(index.Value, +1, wrap: _repeat == RepeatMode.All);
         }
     }
 
@@ -256,7 +347,7 @@ public sealed class QueuePlayer : IDisposable
             RequireQueue();
             if (_ended)
             {
-                return MoveAndPlay(_index + 1 < _items.Count ? _index + 1 : 0, +1);
+                return MoveAndPlay(_index + 1 < _items.Count ? _index + 1 : 0, +1, wrap: _repeat == RepeatMode.All);
             }
 
             if (_player.State != PlayerState.Playing)
@@ -313,13 +404,19 @@ public sealed class QueuePlayer : IDisposable
         {
             ThrowIfDisposed();
             RequireQueue();
+            var wrap = _repeat == RepeatMode.All;
             if (_index + 1 >= _items.Count)
             {
+                if (wrap)
+                {
+                    return MoveAndPlay(0, +1, wrap);
+                }
+
                 throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
-                    $"Already at the last track ({_index + 1} of {_items.Count}). Add more with 'music-spin queue add'.");
+                    $"Already at the last track ({_index + 1} of {_items.Count}). Add more with 'music-spin queue add', or use 'music-spin repeat all'.");
             }
 
-            return MoveAndPlay(_index + 1, +1);
+            return MoveAndPlay(_index + 1, +1, wrap);
         }
     }
 
@@ -329,13 +426,19 @@ public sealed class QueuePlayer : IDisposable
         {
             ThrowIfDisposed();
             RequireQueue();
+            var wrap = _repeat == RepeatMode.All;
             if (_index <= 0)
             {
+                if (wrap)
+                {
+                    return MoveAndPlay(_items.Count - 1, -1, wrap);
+                }
+
                 throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
                     "Already at the first track. Use 'music-spin seek 0' to restart it.");
             }
 
-            return MoveAndPlay(_index - 1, -1);
+            return MoveAndPlay(_index - 1, -1, wrap);
         }
     }
 
@@ -418,6 +521,66 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
+    /// <summary>Sets the repeat mode (off | one | all). Allowed on an empty queue (applies to the next one).</summary>
+    public PlayerStatus SetRepeat(RepeatMode mode)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            throw Invalid($"Unknown repeat mode '{mode}'. Use {PlaybackModes.RepeatValues}.");
+        }
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            _repeat = mode;
+            _rapidLoops = 0;
+            return StatusCore();
+        }
+    }
+
+    /// <summary>
+    /// Turns shuffle on (shuffling the entries after the current one; again when already on) or off (restoring the original
+    /// order at the current track). Allowed on an empty queue: the mode applies to the next queue.
+    /// </summary>
+    /// <param name="seed">Reproducible shuffle; only valid when turning shuffle on.</param>
+    public PlayerStatus SetShuffle(bool enabled, int? seed = null)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (!enabled)
+            {
+                if (seed is not null)
+                {
+                    throw Invalid("A shuffle seed only applies when turning shuffle on.");
+                }
+
+                if (_shuffle)
+                {
+                    var current = _index >= 0 && _index < _items.Count ? _items[_index] : null;
+                    _items.Sort(static (a, b) => a.Order.CompareTo(b.Order));
+                    if (current is not null)
+                    {
+                        _index = _items.IndexOf(current);
+                    }
+
+                    _shuffle = false;
+                    _seed = null;
+                    QueueChanged?.Invoke(this, EventArgs.Empty);
+                }
+
+                return StatusCore();
+            }
+
+            _seed = seed ?? NewSeed();
+            _random = new Random(_seed.Value);
+            _shuffle = true;
+            ShuffleRange(_items, _index >= 0 ? _index + 1 : 0, _random);
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+            return StatusCore();
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)
@@ -445,11 +608,23 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
-    private PlayerStatus MoveAndPlay(int index, int direction)
+    /// <summary>Plays the first playable entry from <paramref name="index"/> in <paramref name="direction"/>; with <paramref name="wrap"/> it continues past the ends (each entry tried once).</summary>
+    private PlayerStatus MoveAndPlay(int index, int direction, bool wrap = false)
     {
-        for (var i = index; i >= 0 && i < _items.Count; i += direction)
+        var count = _items.Count;
+        for (var step = 0; step < count; step++)
         {
-            if (TryLoad(_items[i], i, null))
+            var i = index + (step * direction);
+            if (wrap)
+            {
+                i = ((i % count) + count) % count;
+            }
+            else if (i < 0 || i >= count)
+            {
+                break;
+            }
+
+            if (TryLoad(_items[i].Item, i, null))
             {
                 _index = i;
                 _ended = false;
@@ -498,13 +673,14 @@ public sealed class QueuePlayer : IDisposable
             return;
         }
 
-        var item = _items[_index];
+        var slot = _items[_index];
+        var item = slot.Item;
         if (item.Title is not null || track.Title is null || !string.Equals(item.Path, track.Path, StringComparison.Ordinal))
         {
             return;
         }
 
-        _items[_index] = item with
+        slot.Item = item with
         {
             Title = track.Title,
             Artist = item.Artist ?? track.Artist,
@@ -560,11 +736,14 @@ public sealed class QueuePlayer : IDisposable
             track is null ? null : TrackDto.From(track),
             has ? _index : null,
             _items.Count,
-            has ? _items[_index] : null,
+            has ? _items[_index].Item : null,
             Output,
             _ended,
             _lastError,
-            _skipped.Count > 0 ? [.. _skipped] : null);
+            _skipped.Count > 0 ? [.. _skipped] : null,
+            _repeat,
+            _shuffle,
+            _shuffle ? _seed : null);
     }
 
     private void RequireQueue()
@@ -599,6 +778,55 @@ public sealed class QueuePlayer : IDisposable
 
     private static MusicSpinException Invalid(string message) => new(MusicSpinErrorCode.InvalidArgument, message);
 
+#pragma warning disable CA5394 // shuffling music is not security sensitive
+    private static int NewSeed() => Random.Shared.Next();
+
+    /// <summary>Fisher-Yates over [<paramref name="from"/>, end). With from = 0 this is the same order as <c>MusicLibrary.Shuffle</c> for the same seed.</summary>
+    private static void ShuffleRange(List<Slot> list, int from, Random random)
+    {
+        for (var i = list.Count - 1; i > from; i--)
+        {
+            var j = from + random.Next(i - from + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    /// <summary>
+    /// Inserts <paramref name="added"/> (shuffled) at random positions after the current entry, keeping the relative order
+    /// of the upcoming entries: a random interleave, O(n).
+    /// </summary>
+    private void MixIntoUpcoming(List<Slot> added)
+    {
+        ShuffleRange(added, 0, _random);
+        var upcoming = _items.GetRange(_index + 1, _items.Count - _index - 1);
+        _items.RemoveRange(_index + 1, upcoming.Count);
+        int a = 0, b = 0;
+        while (a < upcoming.Count || b < added.Count)
+        {
+            var remainingA = upcoming.Count - a;
+            var remainingB = added.Count - b;
+            var takeAdded = remainingA == 0 || (remainingB > 0 && _random.Next(remainingA + remainingB) < remainingB);
+            _items.Add(takeAdded ? added[b++] : upcoming[a++]);
+        }
+    }
+#pragma warning restore CA5394
+
+    /// <summary>True when repeat has looped too fast too often (tracks that end immediately); the caller then stops.</summary>
+    private bool RapidLoop()
+    {
+        var now = Environment.TickCount64;
+        _rapidLoops = now - _lastLoopTicks < RapidLoopMilliseconds ? _rapidLoops + 1 : 0;
+        _lastLoopTicks = now;
+        if (_rapidLoops < MaxRapidLoops)
+        {
+            return false;
+        }
+
+        _rapidLoops = 0;
+        _lastError = $"Repeat stopped: the queued track(s) ended immediately {MaxRapidLoops} times in a row (empty or broken files?).";
+        return true;
+    }
+
     // Raised on a thread-pool thread after the inner player stopped at end of stream.
     private void OnPlaybackEnded(object? sender, EventArgs e)
     {
@@ -610,21 +838,36 @@ public sealed class QueuePlayer : IDisposable
             }
 
             TrackEnded?.Invoke(this, EventArgs.Empty);
-            for (var i = _index + 1; i < _items.Count; i++)
+            if (_repeat == RepeatMode.One)
             {
-                if (TryLoad(_items[i], i, null))
+                if (!RapidLoop() && TryPlayFromEvent())
                 {
-                    _index = i;
-                    try
-                    {
-                        PlayCurrent();
-                    }
-                    catch (MusicSpinException)
-                    {
-                        // recorded in LastError and raised as Error; nobody to throw to on this thread
-                    }
-
                     return;
+                }
+            }
+            else
+            {
+                for (var i = _index + 1; i < _items.Count; i++)
+                {
+                    if (TryLoad(_items[i].Item, i, null))
+                    {
+                        _index = i;
+                        TryPlayFromEvent();
+                        return;
+                    }
+                }
+
+                if (_repeat == RepeatMode.All && !RapidLoop())
+                {
+                    for (var i = 0; i <= _index && i < _items.Count; i++)
+                    {
+                        if (TryLoad(_items[i].Item, i, null))
+                        {
+                            _index = i;
+                            TryPlayFromEvent();
+                            return;
+                        }
+                    }
                 }
             }
 
@@ -633,9 +876,31 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
+    private bool TryPlayFromEvent()
+    {
+        try
+        {
+            PlayCurrent();
+            return true;
+        }
+        catch (MusicSpinException)
+        {
+            // recorded in LastError and raised as Error; nobody to throw to on this thread
+            return false;
+        }
+    }
+
     private void OnStateChanged(object? sender, PlayerStateChangedEventArgs e) => StateChanged?.Invoke(this, e);
 
     private void OnTrackLoaded(object? sender, TrackLoadedEventArgs e) => TrackLoaded?.Invoke(this, e);
 
     private void OnPlayerError(object? sender, PlayerErrorEventArgs e) => Error?.Invoke(this, e);
+
+    /// <summary>A queue entry plus its position in the original (unshuffled) order.</summary>
+    private sealed class Slot(QueueItem item, long order)
+    {
+        public QueueItem Item { get; set; } = item;
+
+        public long Order { get; } = order;
+    }
 }
