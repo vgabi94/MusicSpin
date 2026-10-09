@@ -164,18 +164,10 @@ public sealed class PlayerHost : IAsyncDisposable
         AppPaths.EnsureWritable(options.DataDirectory);
         var endpoint = options.Endpoint ?? PlayerEndpoint.For(options.DataDirectory);
 
-        FileStream lockFile;
-        try
-        {
-            lockFile = new FileStream(endpoint.LockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.None);
-        }
-        catch (IOException)
+        var lockFile = TryLock(endpoint, options.DataDirectory);
+        if (lockFile is null)
         {
             return null; // held by a live player
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            throw AppPaths.NotWritable(options.DataDirectory, ex.Message);
         }
 
         IPlayerListener listener;
@@ -229,6 +221,37 @@ public sealed class PlayerHost : IAsyncDisposable
             return null;
         }
     }
+
+    /// <summary>
+    /// Opens the lock file exclusively. <see cref="IsLockHeld"/> probes (other clients checking whether a player runs)
+    /// also open it for a moment, which must not make a starting player give up: a sharing conflict is retried briefly,
+    /// and only a lock that stays taken means another player.
+    /// </summary>
+    private static FileStream? TryLock(PlayerEndpoint endpoint, DataDirectory directory)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return new FileStream(endpoint.LockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.None);
+            }
+            catch (IOException) when (attempt < LockAttempts - 1)
+            {
+                Thread.Sleep(LockRetryDelay);
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw AppPaths.NotWritable(directory, ex.Message);
+            }
+        }
+    }
+
+    private const int LockAttempts = 5;
+    private static readonly TimeSpan LockRetryDelay = TimeSpan.FromMilliseconds(30);
 
     /// <summary>True when a live player holds the data folder's lock (no connection attempt).</summary>
     public static bool IsLockHeld(PlayerEndpoint endpoint)
@@ -339,6 +362,9 @@ public sealed class PlayerHost : IAsyncDisposable
                 continue;
             }
 
+            // A connecting client is activity: restart the idle clock, so the player does not exit under a client that
+            // connected just before the timeout (e.g. `player status` right after `queue add`).
+            Interlocked.Exchange(ref _idleSinceTicks, -1);
             lock (_sessionsGate)
             {
                 if (_sessions.Count >= _options.MaxConnections)
