@@ -178,7 +178,7 @@ public sealed class QueuePersistenceTests : PlayerHostTestBase
     {
         Directory.CreateDirectory(Data.Path);
         await File.WriteAllTextAsync(Endpoint.QueueFile,
-            $$"""{"version":1,"items":[{"path":"{{Paths[0]}}"}],"order":[0],"index":0,"positionSeconds":9999,"repeat":"one","shuffle":false,"savedAt":"2026-01-01T00:00:00Z"}""", Ct);
+            $$"""{"version":1,"items":[{"path":{{JsonSerializer.Serialize(Paths[0])}}}],"order":[0],"index":0,"positionSeconds":9999,"repeat":"one","shuffle":false,"savedAt":"2026-01-01T00:00:00Z"}""", Ct);
         StartHost(Fast());
         var status = await (await ConnectAsync()).StatusAsync(Ct);
         Assert.Equal(PlayerState.Paused, status.State);

@@ -1,4 +1,3 @@
-using System.Net.Sockets;
 using System.Text;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Hosting;
@@ -70,25 +69,33 @@ public abstract class PlayerHostTestBase : IAsyncDisposable
 
     protected static object QueueSet(params string[] paths) => new { items = paths, play = true };
 
-    /// <summary>Raw socket for protocol abuse tests.</summary>
-    protected async Task<Socket> RawSocketAsync()
+    /// <summary>Raw connection (Unix socket or named pipe, as the player uses on this OS) for protocol abuse tests.</summary>
+    protected async Task<Stream> RawConnectionAsync()
+        => await PlayerTransport.ConnectAsync(Endpoint, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+    protected static async Task SendRawAsync(Stream stream, string text)
     {
-        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        await socket.ConnectAsync(new UnixDomainSocketEndPoint(Endpoint.Address), TestContext.Current.CancellationToken);
-        return socket;
+        await stream.WriteAsync(Encoding.UTF8.GetBytes(text), TestContext.Current.CancellationToken);
+        await stream.FlushAsync(TestContext.Current.CancellationToken);
     }
 
-    protected static async Task SendRawAsync(Socket socket, string text)
-        => await socket.SendAsync(Encoding.UTF8.GetBytes(text), SocketFlags.None, TestContext.Current.CancellationToken);
-
-    protected static async Task<string?> ReadLineAsync(Socket socket, int timeoutMs = 5000)
+    protected static async Task<string?> ReadLineAsync(Stream stream, int timeoutMs = 5000)
     {
         var buffer = new List<byte>();
         var one = new byte[1];
         using var cts = new CancellationTokenSource(timeoutMs);
         while (true)
         {
-            var n = await socket.ReceiveAsync(one, SocketFlags.None, cts.Token);
+            int n;
+            try
+            {
+                n = await stream.ReadAsync(one, cts.Token);
+            }
+            catch (IOException)
+            {
+                n = 0; // reset by the peer: closed
+            }
+
             if (n == 0)
             {
                 return buffer.Count == 0 ? null : Encoding.UTF8.GetString([.. buffer]);

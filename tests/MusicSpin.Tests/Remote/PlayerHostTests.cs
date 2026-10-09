@@ -54,13 +54,13 @@ public sealed class PlayerHostTests : PlayerHostTestBase
     public async Task Writes_and_removes_its_endpoint_files()
     {
         var host = StartHost();
-        Assert.True(File.Exists(Endpoint.Address));
+        Assert.True(PlayerTransport.Exists(Endpoint));
         Assert.True(File.Exists(Endpoint.InfoFile));
         Assert.Equal(Environment.ProcessId, PlayerHost.ReadInfo(Endpoint)!.Pid);
         Assert.True(PlayerHost.IsLockHeld(Endpoint));
 
         Assert.Equal("quit", await host.StopAsync("quit"));
-        Assert.False(File.Exists(Endpoint.Address));
+        Assert.False(PlayerTransport.Exists(Endpoint));
         Assert.False(File.Exists(Endpoint.InfoFile));
         Assert.False(PlayerHost.IsLockHeld(Endpoint));
     }
@@ -109,7 +109,7 @@ public sealed class PlayerHostTests : PlayerHostTestBase
         await client.QuitAsync(cancellationToken: ct);
         Assert.True(host.Completion.IsCompleted, "QuitAsync returns only after the player is gone");
         Assert.Equal("quit", await host.Completion);
-        Assert.False(File.Exists(Endpoint.Address));
+        Assert.False(PlayerTransport.Exists(Endpoint));
         Assert.False(PlayerHost.IsLockHeld(Endpoint));
         var ex = await Assert.ThrowsAsync<MusicSpinException>(() => PlayerClient.ConnectAsync(Endpoint, cancellationToken: ct));
         Assert.Equal(MusicSpinErrorCode.PlayerNotRunning, ex.Code);
@@ -123,8 +123,9 @@ public sealed class PlayerHostTests : PlayerHostTestBase
     {
         var deep = Path.Combine(Root, new string('d', 60), new string('e', 60), ".usrdata");
         var dir = new MusicSpin.Core.Hosting.DataDirectory(deep, MusicSpin.Core.Hosting.DataDirectorySource.Override);
-        var endpoint = PlayerEndpoint.For(dir);
-        Assert.StartsWith(PlayerEndpoint.FallbackSocketDirectory(), endpoint.Address, StringComparison.Ordinal);
+        var socketEndpoint = PlayerEndpoint.For(deep, useNamedPipe: false);
+        Assert.StartsWith(PlayerEndpoint.FallbackSocketDirectory(), socketEndpoint.Address, StringComparison.Ordinal);
+        var endpoint = PlayerEndpoint.For(dir); // a named pipe on Windows: no path length limit there
         Assert.Equal(endpoint, PlayerEndpoint.For(deep)); // deterministic: clients find it without reading files
 
         var host = Track(PlayerHost.TryStart(Options() with { DataDirectory = dir })!);
@@ -141,9 +142,10 @@ public sealed class PlayerHostTests : PlayerHostTestBase
     [Fact]
     public void Endpoint_names_are_stable_per_data_folder()
     {
-        var a = PlayerEndpoint.For("/x/.usrdata");
-        Assert.Equal(PlayerEndpoint.For("/x/.usrdata/"), a with { });
-        Assert.Equal("/x/.usrdata/player.sock", a.Address);
+        var a = PlayerEndpoint.For("/x/.usrdata", useNamedPipe: false);
+        Assert.Equal(PlayerEndpoint.For("/x/.usrdata/", useNamedPipe: false), a with { });
+        Assert.Equal(Path.Combine(Path.GetFullPath("/x/.usrdata"), "player.sock"), a.Address);
+        Assert.Equal(OperatingSystem.IsWindows(), PlayerEndpoint.For("/x/.usrdata").IsNamedPipe);
         var pipeA = PlayerEndpoint.For(@"C:\Apps\MusicSpin\.usrdata", useNamedPipe: true);
         var pipeB = PlayerEndpoint.For(@"C:\Apps\MusicSpin\.usrdata", useNamedPipe: true);
         Assert.Equal(pipeA.Address, pipeB.Address);

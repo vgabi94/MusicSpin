@@ -76,7 +76,10 @@ public sealed class PlayerCliUnhappyTests : IAsyncDisposable
         await File.WriteAllTextAsync(endpoint.InfoFile,
             """{"protocol":1,"version":"0","pid":424242,"startedAt":"2026-01-01T00:00:00Z","endpoint":"x","dataDir":"x","output":{"backend":"null","exclusive":false}}""",
             TestContext.Current.CancellationToken);
-        await File.WriteAllTextAsync(endpoint.Address, "stale", TestContext.Current.CancellationToken);
+        if (!endpoint.IsNamedPipe) // a crashed player's named pipe vanishes with it; only a Unix socket file stays behind
+        {
+            await File.WriteAllTextAsync(endpoint.Address, "stale", TestContext.Current.CancellationToken);
+        }
 
         var json = await Error(ExitCodes.PlayerNotRunning, "status");
         Assert.Contains("pid 424242", json.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
@@ -257,7 +260,7 @@ public sealed class PlayerCliUnhappyTests : IAsyncDisposable
         await Ok("play", Long[0], "--backend", "null");
         await Ok("quit");
         var endpoint = PlayerEndpoint.For(_cli.DataDir);
-        Assert.False(File.Exists(endpoint.Address));
+        Assert.False(PlayerTransport.Exists(endpoint));
         Assert.False(File.Exists(endpoint.InfoFile));
         Assert.False(PlayerHost.IsLockHeld(endpoint));
         await Error(ExitCodes.PlayerNotRunning, "quit");

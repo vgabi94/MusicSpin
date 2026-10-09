@@ -22,6 +22,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     [Fact]
     public async Task Stale_socket_and_info_after_a_crash_are_detected_and_replaced()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix socket files only: a named pipe disappears with the process that created it");
         // Simulate kill -9: a bound-but-dead socket file and a player.json naming a dead pid, lock not held.
         Directory.CreateDirectory(Data.Path);
         LeaveDeadSocketFile(Endpoint.Address);
@@ -43,6 +44,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     [Fact]
     public async Task A_regular_file_squatting_on_the_socket_path_is_not_running_and_replaced()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix socket files only: Windows uses a named pipe, not a path in the data folder");
         Directory.CreateDirectory(Data.Path);
         await File.WriteAllTextAsync(Endpoint.Address, "junk", Ct);
         var ex = await Assert.ThrowsAsync<MusicSpinException>(() => PlayerClient.ConnectAsync(Endpoint, cancellationToken: Ct));
@@ -193,7 +195,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     public async Task Malformed_requests_get_errors_and_the_connection_stays_usable()
     {
         StartHost();
-        using var socket = await RawSocketAsync();
+        using var socket = await RawConnectionAsync();
         string[] bad = ["not json", "[1,2]", "{\"cmd\":42}", "{\"id\":1}", "{\"id\":2,\"cmd\":\"seek\",\"seconds\":\"x\"}",
             "{\"id\":3,\"cmd\":\"volume\",\"value\":2}", "{\"id\":4,\"cmd\":\"queue.set\",\"items\":[1]}", "{\"id\":5,\"cmd\":\"queue.set\"}",
             "{\"id\":6,\"cmd\":\"play\",\"index\":1.5}", "{\"id\":7" + new string('[', 100) + "}"];
@@ -215,7 +217,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     public async Task Oversized_messages_are_rejected_and_only_that_connection_is_closed()
     {
         StartHost(Options(maxMessageBytes: 1024));
-        using var socket = await RawSocketAsync();
+        using var socket = await RawConnectionAsync();
         await SendRawAsync(socket, "{\"id\":1,\"cmd\":\"" + new string('x', 5000));
         using (var doc = JsonDocument.Parse((await ReadLineAsync(socket))!))
         {
@@ -233,20 +235,19 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     {
         var host = StartHost();
         // 1) partial request, then hang up
-        using (var s = await RawSocketAsync())
+        using (var s = await RawConnectionAsync())
         {
-            await SendRawAsync(s, "{\"id\":1,\"cmd\":\"queue.set\",\"items\":[\"" + Paths[0]);
+            await SendRawAsync(s, "{\"id\":1,\"cmd\":\"queue.set\",\"items\":[" + JsonSerializer.Serialize(Paths[0]));
         }
 
         // 2) full request, hang up before reading the answer
-        using (var s = await RawSocketAsync())
+        using (var s = await RawConnectionAsync())
         {
-            await SendRawAsync(s, $"{{\"id\":1,\"cmd\":\"queue.set\",\"items\":[\"{Paths[1]}\"]}}\n");
-            s.Shutdown(SocketShutdown.Both);
+            await SendRawAsync(s, $"{{\"id\":1,\"cmd\":\"queue.set\",\"items\":[{JsonSerializer.Serialize(Paths[1])}]}}\n");
         }
 
         // 3) subscriber vanishes
-        var sub = await RawSocketAsync();
+        var sub = await RawConnectionAsync();
         await SendRawAsync(sub, "{\"id\":1,\"cmd\":\"subscribe\"}\n");
         await ReadLineAsync(sub);
         sub.Dispose();
@@ -263,10 +264,10 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     public async Task Too_many_connections_are_closed_but_the_player_survives()
     {
         StartHost(Options() with { MaxConnections = 2 });
-        using var a = await RawSocketAsync();
-        using var b = await RawSocketAsync();
+        using var a = await RawConnectionAsync();
+        using var b = await RawConnectionAsync();
         await Task.Delay(100, Ct);
-        using var c = await RawSocketAsync();
+        using var c = await RawConnectionAsync();
         Assert.Null(await ReadLineAsync(c, 2000));
         a.Dispose();
         await Task.Delay(100, Ct);
@@ -279,7 +280,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     {
         var host = StartHost(Options(idle: TimeSpan.FromMilliseconds(300)));
         Assert.Equal("idle", await host.Completion.WaitAsync(TimeSpan.FromSeconds(5), Ct));
-        Assert.False(File.Exists(Endpoint.Address));
+        Assert.False(PlayerTransport.Exists(Endpoint));
         Assert.Contains("idle", Log.ToString(), StringComparison.Ordinal);
     }
 
@@ -339,9 +340,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     public async Task A_player_that_never_answers_times_out()
     {
         Directory.CreateDirectory(Data.Path);
-        using var silent = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        silent.Bind(new UnixDomainSocketEndPoint(Endpoint.Address));
-        silent.Listen(1);
+        await using var silent = ListenWithoutAnswering(Endpoint);
         await using var client = await PlayerClient.ConnectAsync(Endpoint, requestTimeout: TimeSpan.FromMilliseconds(300), cancellationToken: Ct);
         var ex = await Assert.ThrowsAsync<MusicSpinException>(() => client.SendAsync("status", null, Ct));
         Assert.Equal(MusicSpinErrorCode.PlayerUnavailable, ex.Code);
@@ -409,6 +408,32 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
         dead.Bind(new UnixDomainSocketEndPoint(temp));
         dead.Listen(1);
         File.Move(temp, path);
+    }
+
+    /// <summary>Something that accepts connections at the player's endpoint but never reads or answers.</summary>
+    private static IAsyncDisposable ListenWithoutAnswering(PlayerEndpoint endpoint)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var pipe = new System.IO.Pipes.NamedPipeServerStream(endpoint.Address, System.IO.Pipes.PipeDirection.InOut, 1,
+                System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+            _ = pipe.WaitForConnectionAsync(); // completes (or fails) when the pipe is disposed
+            return pipe;
+        }
+
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        socket.Bind(new UnixDomainSocketEndPoint(endpoint.Address));
+        socket.Listen(1);
+        return new SocketHolder(socket);
+    }
+
+    private sealed class SocketHolder(Socket socket) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync()
+        {
+            socket.Dispose();
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class RunningProcess(int id) : IPlayerProcess
