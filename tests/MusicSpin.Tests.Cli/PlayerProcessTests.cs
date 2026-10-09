@@ -18,6 +18,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
     private readonly string _root = Directory.CreateTempSubdirectory("ms-proc-").FullName;
     private readonly string _data;
     private readonly string[] _tracks;
+    private readonly HashSet<int> _players = [];
 
     public PlayerProcessTests()
     {
@@ -29,7 +30,6 @@ public sealed class PlayerProcessTests : IAsyncDisposable
 
     private static void RequireEnvironment()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Detached spawn and named pipes are not verified on Windows yet.");
         Assert.SkipUnless(File.Exists(Exe), $"apphost not found: {Exe}");
         Assert.SkipUnless(FFmpegRuntime.IsAvailable, $"FFmpeg {FFmpegRuntime.ExpectedFFmpegVersion} not available");
     }
@@ -91,7 +91,9 @@ public sealed class PlayerProcessTests : IAsyncDisposable
     {
         var status = await Ok("player", "status");
         Assert.True(status.GetProperty("running").GetBoolean(), status.ToString());
-        return status.GetProperty("pid").GetInt32();
+        var pid = status.GetProperty("pid").GetInt32();
+        _players.Add(pid);
+        return pid;
     }
 
     private static bool IsAlive(int pid)
@@ -166,6 +168,13 @@ public sealed class PlayerProcessTests : IAsyncDisposable
             Assert.DoesNotContain("music-spin", await File.ReadAllTextAsync($"/proc/{parent}/cmdline", TestContext.Current.CancellationToken), StringComparison.Ordinal);
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            // Started by a helper that has exited: no live parent, so a process-tree kill of the caller cannot reach it.
+            Assert.NotEqual(Environment.ProcessId, ParentProcessId(pid));
+            Assert.False(ParentProcessId(pid) is { } parent && IsAlive(parent) && ProcessName(parent) == "music-spin");
+        }
+
         Assert.Equal("paused", (await Ok("pause")).GetProperty("state").GetString());
         Assert.Equal("playing", (await Ok("toggle")).GetProperty("state").GetString());
         var next = await Ok("next");
@@ -198,7 +207,11 @@ public sealed class PlayerProcessTests : IAsyncDisposable
             await victim.WaitForExitAsync(TestContext.Current.CancellationToken);
         }
 
-        Assert.True(File.Exists(Path.Combine(_data, "player.sock")));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.True(File.Exists(Path.Combine(_data, "player.sock"))); // a named pipe disappears with its process
+        }
+
         var status = await RunAsync("status", "--json");
         Assert.Equal(ExitCodes.PlayerNotRunning, status.ExitCode);
         Assert.Contains($"pid {pid}", status.Error.GetProperty("message").GetString(), StringComparison.Ordinal);
@@ -247,15 +260,102 @@ public sealed class PlayerProcessTests : IAsyncDisposable
 
     [Fact]
     [Trait("Category", "Unhappy")]
-    public async Task Sigterm_shuts_the_player_down_cleanly_while_playing()
+    public async Task Sigterm_or_player_stop_shuts_the_player_down_cleanly_while_playing()
     {
         RequireEnvironment();
         await Ok("play", _tracks[0], "--backend", "null");
         var pid = await PlayerPidAsync();
-        Assert.Equal(0, NativeKill(pid, 15));
-        await PlayerTestKit.WaitUntilAsync(() => !IsAlive(pid), "exit after SIGTERM");
+        string reason;
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows has no SIGTERM, and console control events cannot be sent to a process on another (hidden) console.
+            // The documented way to stop the player from outside is `music-spin player stop` (or `quit`).
+            Assert.True((await Ok("player", "stop")).GetProperty("stopped").GetBoolean());
+            reason = "stopped (quit)";
+        }
+        else
+        {
+            Assert.Equal(0, NativeKill(pid, 15));
+            reason = "stopped (signal)";
+        }
+
+        await PlayerTestKit.WaitUntilAsync(() => !IsAlive(pid), "clean exit");
         Assert.False(File.Exists(Path.Combine(_data, "player.json")));
-        Assert.Contains("stopped (signal)", await File.ReadAllTextAsync(Path.Combine(_data, "player.log"), TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        Assert.Contains(reason, await File.ReadAllTextAsync(Path.Combine(_data, "player.log"), TestContext.Current.CancellationToken), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Play_with_captured_output_returns_promptly_and_the_callers_pipes_reach_eof()
+    {
+        // What an AI agent or CI step does: run `play` with stdin/stdout/stderr redirected and read both outputs to EOF.
+        // EOF only comes once no process holds the write ends, so the still-running player must not have inherited them.
+        RequireEnvironment();
+        var run = await RunAsync("play", _tracks[0], "--backend", "null", "--json");
+        Assert.True(run.ExitCode == 0, run.Out + run.Err);
+        Assert.True(run.Elapsed < TimeSpan.FromSeconds(10), $"play with captured output took {run.Elapsed}");
+        Assert.True(run.Data.GetProperty("playerStarted").GetBoolean());
+        var pid = await PlayerPidAsync();
+        Assert.True(IsAlive(pid), "the player keeps running after the caller's pipes closed");
+        Assert.Contains("listening on", await File.ReadAllTextAsync(Path.Combine(_data, "player.log"), TestContext.Current.CancellationToken), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Killing_the_mcp_server_process_tree_leaves_the_player_running()
+    {
+        // MCP clients stop a server by killing its whole process tree. The player it started must survive that.
+        RequireEnvironment();
+        var info = new ProcessStartInfo(Exe)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = _root,
+        };
+        foreach (var arg in new[] { "mcp", "--backend", "null", "--data-dir", _data })
+        {
+            info.ArgumentList.Add(arg);
+        }
+
+        info.Environment.Remove("MUSICSPIN_PLAYER_LOG");
+        using var server = Process.Start(info)!;
+        try
+        {
+            _ = server.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            cts.CancelAfter(CommandTimeout);
+            async Task<JsonElement> Request(int id, string method, object parameters)
+            {
+                await server.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { jsonrpc = "2.0", id, method, @params = parameters }).AsMemory(), cts.Token);
+                await server.StandardInput.FlushAsync(cts.Token);
+                while (await server.StandardOutput.ReadLineAsync(cts.Token) is { } line)
+                {
+                    var message = JsonDocument.Parse(line).RootElement;
+                    if (message.TryGetProperty("id", out var got) && got.ValueKind == JsonValueKind.Number && got.GetInt32() == id)
+                    {
+                        return message;
+                    }
+                }
+
+                throw new InvalidOperationException("the MCP server closed its output");
+            }
+
+            await Request(1, "initialize", new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "test", version = "1" } });
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""".AsMemory(), cts.Token);
+            var play = await Request(2, "tools/call", new { name = "play", arguments = new { files = _tracks } });
+            Assert.False(play.GetProperty("result").TryGetProperty("isError", out var isError) && isError.GetBoolean(), play.ToString());
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var pid = await PlayerPidAsync();
+        Assert.True(IsAlive(pid));
+        Assert.Equal("playing", (await Ok("status")).GetProperty("state").GetString());
+        await Ok("quit");
     }
 
     [Fact]
@@ -291,6 +391,31 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         await Ok("quit");
     }
 
+    private static string? ProcessName(int pid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById(pid);
+            return p.ProcessName;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Windows: the parent process id recorded at creation (it may have exited since).</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static int? ParentProcessId(int pid)
+    {
+        using var p = Process.GetProcessById(pid);
+        var info = new nint[6]; // PROCESS_BASIC_INFORMATION; InheritedFromUniqueProcessId is the last field
+        return NtQueryInformationProcess(p.Handle, 0, info, info.Length * IntPtr.Size, out _) == 0 ? (int)info[5] : null;
+    }
+
+    [System.Runtime.InteropServices.DllImport("ntdll.dll")]
+    private static extern int NtQueryInformationProcess(nint process, int infoClass, [System.Runtime.InteropServices.Out] nint[] info, int length, out int returned);
+
     [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "kill", SetLastError = true)]
     private static extern int NativeKill(int pid, int signal);
 
@@ -307,7 +432,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
             }
         }
 
-        foreach (var pid in PlayerProcesses())
+        foreach (var pid in PlayerProcesses().Concat(_players.Where(IsAlive)).Distinct())
         {
             try
             {
