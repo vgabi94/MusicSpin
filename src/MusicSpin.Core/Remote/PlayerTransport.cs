@@ -38,6 +38,37 @@ public static class PlayerTransport
         return UnixSocketListener.Create(endpoint.Address);
     }
 
+    /// <summary>
+    /// True when something listens at (or squats on) the endpoint: the socket file exists, or a pipe instance with that
+    /// name exists. Never connects, so it does not disturb the player.
+    /// </summary>
+    public static bool Exists(PlayerEndpoint endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        return endpoint.IsNamedPipe ? PipeExists(endpoint.Address) : File.Exists(endpoint.Address);
+    }
+
+    /// <summary>
+    /// Lists the pipe namespace (<c>\\.\pipe\</c>) rather than calling <c>File.Exists</c> on the pipe path, which is not
+    /// a reliable way to detect a pipe and must not open the waiting server instance.
+    /// </summary>
+    private static bool PipeExists(string name)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        try
+        {
+            return Directory.EnumerateFiles(@"\\.\pipe\").Any(p => string.Equals(Path.GetFileName(p), name, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return true; // cannot tell: let the connect attempt decide
+        }
+    }
+
     /// <summary>Connects to a running player.</summary>
     /// <exception cref="MusicSpinException">PlayerNotRunning (no endpoint, or a stale one); PlayerUnavailable (refused for another reason, e.g. permissions).</exception>
     public static async Task<Stream> ConnectAsync(PlayerEndpoint endpoint, TimeSpan timeout, CancellationToken cancellationToken)
@@ -101,7 +132,7 @@ public static class PlayerTransport
             throw new PlatformNotSupportedException("Named pipe endpoints are only used on Windows.");
         }
 
-        if (!File.Exists(@"\\.\pipe\" + endpoint.Address))
+        if (!PipeExists(endpoint.Address))
         {
             throw NotRunning(endpoint);
         }
@@ -212,39 +243,76 @@ public static class PlayerTransport
         }
     }
 
+    /// <summary>
+    /// Named-pipe listener. A pipe name only exists while a server instance exists, so one instance is always waiting:
+    /// the first is created when listening starts (clients can connect as soon as the player has started), and the next
+    /// one before an accepted connection is handed out (no gap in which clients would see "not running").
+    /// </summary>
     [SupportedOSPlatform("windows")]
-    private sealed class NamedPipeListener(string name) : IPlayerListener
+    private sealed class NamedPipeListener : IPlayerListener
     {
-        private NamedPipeServerStream? _pending;
-        private bool _first = true;
+        private readonly string _name;
+        private NamedPipeServerStream? _waiting;
+
+        public NamedPipeListener(string name)
+        {
+            _name = name;
+            _waiting = Create(first: true);
+        }
+
+        // CurrentUserOnly: the pipe's ACL only admits the current user, and clients verify the server's owner.
+        // FirstPipeInstance: fail instead of joining a pipe of that name created by someone else.
+        private NamedPipeServerStream Create(bool first)
+            => new(_name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly | (first ? PipeOptions.FirstPipeInstance : PipeOptions.None));
 
         public async Task<Stream> AcceptAsync(CancellationToken cancellationToken)
         {
-            // CurrentUserOnly: the pipe's ACL only admits the current user, and clients verify the server's owner.
-            var options = PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly | (_first ? PipeOptions.FirstPipeInstance : PipeOptions.None);
-            _first = false;
-            var server = new NamedPipeServerStream(name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
-                PipeTransmissionMode.Byte, options);
-            _pending = server;
-            try
+            while (true)
             {
-                await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                _pending = null;
+                var server = Volatile.Read(ref _waiting);
+                ObjectDisposedException.ThrowIf(server is null, this);
+                try
+                {
+                    await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (IOException)
+                {
+                    // The client went away before the connection completed: replace this instance and wait again.
+                    var replaced = Replace(server);
+                    await server.DisposeAsync().ConfigureAwait(false);
+                    ObjectDisposedException.ThrowIf(!replaced, this);
+                    continue;
+                }
+
+                if (!Replace(server))
+                {
+                    await server.DisposeAsync().ConfigureAwait(false);
+                    ObjectDisposedException.ThrowIf(true, this);
+                }
+
                 return server;
             }
-            catch
+        }
+
+        /// <summary>Puts a fresh waiting instance in place of <paramref name="current"/>; false once disposed.</summary>
+        private bool Replace(NamedPipeServerStream current)
+        {
+            var next = Create(first: false);
+            if (Interlocked.CompareExchange(ref _waiting, next, current) == current)
             {
-                _pending = null;
-                await server.DisposeAsync().ConfigureAwait(false);
-                throw;
+                return true;
             }
+
+            next.Dispose();
+            return false;
         }
 
         public async ValueTask DisposeAsync()
         {
-            if (_pending is { } pending)
+            if (Interlocked.Exchange(ref _waiting, null) is { } waiting)
             {
-                await pending.DisposeAsync().ConfigureAwait(false);
+                await waiting.DisposeAsync().ConfigureAwait(false);
             }
         }
     }
