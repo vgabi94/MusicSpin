@@ -200,7 +200,7 @@ public sealed class ScanUnhappyTests : LibraryTestBase
         using (var library = OpenRead())
         {
             Assert.Equal(unicode, Assert.Single(library.Search("日本語").Tracks.Items).Path);
-            Assert.Single(library.Artists(new ArtistQuery { Text = "beethoven 🎹" }).Items);
+            Assert.Single(library.Artists(new ArtistQuery { Name = "beethoven 🎹" }).Items);
         }
 
         Assert.Equal(2, Rescan().Unchanged);
@@ -235,7 +235,7 @@ public sealed class ScanUnhappyTests : LibraryTestBase
 
         Assert.Equal((3, 3), (result.Removed, result.Tracks));
         using var library = OpenRead();
-        Assert.Equal(0, library.Artists(new ArtistQuery { Text = "miles" }).Total);
+        Assert.Equal(0, library.Artists(new ArtistQuery { Name = "miles" }).Total);
     }
 
     [Fact]

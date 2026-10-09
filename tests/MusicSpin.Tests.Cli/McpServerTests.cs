@@ -69,7 +69,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var tools = await client.ListToolsAsync(cancellationToken: _cts.Token);
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
-                     "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "playlists", "playlist_show", "playlist_create", "playlist_rename",
+                     "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
                      "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export" })
         {
             Assert.Contains(name, names);
@@ -246,5 +246,56 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.StartsWith("usage:", await CallError("play", new() { ["playlist"] = "one", ["album"] = "x" }), StringComparison.Ordinal);
         Assert.StartsWith("player_not_running:", await CallError("queue_save", new() { ["name"] = "q" }), StringComparison.Ordinal);
         Assert.StartsWith("player_not_running:", await CallError("resume"), StringComparison.Ordinal);
+    }
+
+    private async Task WithLibraryAsync()
+    {
+        var music = LibraryTestData.CreateSmallLibrary(TempDir.Create("mcp-lib"));
+        foreach (var file in Directory.GetFiles(music, "*", SearchOption.AllDirectories))
+        {
+            _cli.Decoders.With(TestAudio.Track(file, sampleRate: 44_100, seconds: 60));
+        }
+
+        Assert.Equal(0, (await _cli.RunAsync("library", "add", music)).ExitCode);
+        Assert.Equal(0, (await _cli.RunAsync("library", "scan", "--quiet")).ExitCode);
+    }
+
+    private static string?[] Titles(JsonElement page) => [.. page.GetProperty("items").EnumerateArray().Select(t => t.GetProperty("title").GetString())];
+
+    [Fact]
+    public async Task Search_tracks_albums_and_artists_tools_take_the_new_filters()
+    {
+        await WithLibraryAsync();
+        await StartAsync();
+        var search = await Call("search", new() { ["text"] = "miles \"kind of\"" });
+        Assert.Equal(["So What", "Freddie Freeloader"], Titles(search.GetProperty("tracks")));
+        Assert.Equal(["Pharaoh's Dance"], Titles(await Call("tracks", new() { ["artistContains"] = "davis", ["yearFrom"] = 1960 })));
+        Assert.Equal(["Freddie Freeloader", "So What"], Titles(await Call("tracks", new() { ["album"] = "kind of blue", ["sort"] = "title" })));
+        Assert.Equal(["So What"], Titles(await Call("tracks", new() { ["search"] = "title:what", ["formats"] = new[] { "flac" }, ["hiresOnly"] = true })));
+        Assert.Equal(["Kind of Blue"], (await Call("albums", new() { ["title"] = "BLUE" })).GetProperty("items").EnumerateArray().Select(a => a.GetProperty("title").GetString()));
+        Assert.Equal(["Artist A", "Artist B", "Various Artists"],
+            (await Call("artists", new() { ["name"] = "artist" })).GetProperty("items").EnumerateArray().Select(a => a.GetProperty("name").GetString()));
+        var play = await Call("play", new() { ["title"] = "freddie", ["artistContains"] = "miles" });
+        Assert.Equal(1, play.GetProperty("queueLength").GetInt32());
+        Assert.Equal(2, (await Call("queue_add", new() { ["albumContains"] = "jazz" })).GetProperty("added").GetInt32());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Search_tools_report_usage_and_not_found()
+    {
+        await WithLibraryAsync();
+        await StartAsync();
+        Assert.StartsWith("usage:", await CallError("search", new() { ["text"] = "!!!" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("search", new() { ["text"] = "album:" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("tracks", new() { ["sort"] = "best" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("tracks", new() { ["title"] = " " }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("tracks", new() { ["limit"] = 0 }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found:", await CallError("tracks", new() { ["album"] = "No Such Album" }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found:", await CallError("albums", new() { ["artist"] = "Nobody" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("artists", new() { ["name"] = "..." }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found:", await CallError("play", new() { ["title"] = "zzz" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("play", new() { ["title"] = "x", ["album"] = "y" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("playlist_add", new() { ["name"] = "p", ["title"] = "x", ["trackIds"] = new[] { "y" } }), StringComparison.Ordinal);
     }
 }

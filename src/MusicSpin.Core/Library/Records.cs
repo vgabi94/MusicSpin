@@ -63,7 +63,20 @@ public sealed class TrackRecord
     public string AlbumArtistKey { get; set; } = string.Empty;
     public string AlbumId { get; set; } = string.Empty;
     public string SortKey { get; set; } = string.Empty;
+
+    // Folded search keys (LibrarySearch.Fold), computed by the indexer. Several values in one key are separated by U+001F.
+
+    /// <summary>All search keys below, combined (used to narrow a search inside the database).</summary>
     public string SearchText { get; set; } = string.Empty;
+    public string SearchTitle { get; set; } = string.Empty;
+
+    /// <summary>Track artist, album artist and effective album artist (e.g. "various artists").</summary>
+    public string SearchArtist { get; set; } = string.Empty;
+    public string SearchAlbum { get; set; } = string.Empty;
+    public string SearchGenre { get; set; } = string.Empty;
+
+    /// <summary>File name without extension.</summary>
+    public string SearchFile { get; set; } = string.Empty;
 }
 
 /// <summary>Album = tracks grouped by (effective album artist, album title), case-insensitively.</summary>
@@ -86,6 +99,13 @@ public sealed class AlbumRecord
     public int MaxSampleRate { get; set; }
     public int? MaxBitsPerSample { get; set; }
     public bool HasEmbeddedCover { get; set; }
+
+    // Folded search keys (see TrackRecord).
+    public string SearchTitle { get; set; } = string.Empty;
+
+    /// <summary>Album artist and every track artist.</summary>
+    public string SearchArtist { get; set; } = string.Empty;
+    public string SearchGenre { get; set; } = string.Empty;
 }
 
 /// <summary>Artist = track artists and album artists, merged case-insensitively.</summary>
@@ -97,6 +117,9 @@ public sealed class ArtistRecord
     public int TrackCount { get; set; }
     public int AlbumCount { get; set; }
     public double DurationSeconds { get; set; }
+
+    /// <summary>Folded name (see TrackRecord).</summary>
+    public string SearchName { get; set; } = string.Empty;
 }
 
 /// <summary>A file or folder the scanner could not use. File issues are re-tried only when size/mtime change.</summary>

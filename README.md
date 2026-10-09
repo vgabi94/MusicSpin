@@ -6,7 +6,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 
 - **Plays almost any format**, decoded by [FFmpeg](https://ffmpeg.org) 9.0: FLAC, ALAC, WAV/W64/RF64, AIFF, DSD (DSF/DFF, played as PCM), WavPack, APE, TTA, MP3, AAC, Vorbis, Opus and more.
 - **Aims for bit-perfect output:** no resampling, a device format matching the source bit depth, untouched samples at volume 1.0, and optional exclusive mode (WASAPI exclusive, ALSA hw, CoreAudio) through [SoundFlow](https://github.com/LSXPrime/SoundFlow)/[miniaudio](https://miniaud.io).
-- **Music library:** LiteDB database, TagLib# tags with FFmpeg fallback, fast parallel incremental scanning, album grouping including compilations/Various Artists, search, quality filters (hi-res, sample rate, bit depth, format, year), health check, folder watching.
+- **Music library:** LiteDB database, TagLib# tags with FFmpeg fallback, fast parallel incremental scanning, album grouping including compilations/Various Artists, ranked case- and diacritic-insensitive search (per-word, phrases, `artist:`/`album:`/`title:`/`genre:`/`year:`), per-field filters, quality filters (hi-res, sample rate, bit depth, format, year), health check, folder watching.
 - **Background player:** `music-spin play` returns at once. Quick commands (`pause`, `next`, `seek`, `volume`, `status`, `queue`, ...) control it. Playback survives the terminal or agent that started it.
 - **Playlists:** saved in the library (case-insensitive unique names, entries keep track id + path, missing files kept and flagged), M3U/M3U8/PLS import (encodings, relative/Windows/`file://` paths) and export, `play --playlist`, `queue save`. The player's queue persists across restarts (restored paused).
 - **Repeat and shuffle:** repeat off/one/all and a shuffle toggle on the running queue (the current track keeps playing; `off` restores the original order; reproducible with `--seed`), saved as defaults.
@@ -15,7 +15,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 
 ## Status
 
-**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (572) work. The desktop app is an empty Avalonia window until the UI design is decided.
+**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (654) work. The desktop app is an empty Avalonia window until the UI design is decided.
 
 | Platform | Status |
 |---|---|
@@ -49,7 +49,7 @@ $ music-spin info "02 Says.flac"
   FLAC · 24-bit / 96 kHz · 2 ch (stereo) · 4:00 · hi-res
   ...
 
-$ music-spin search rani                         # artists, albums and tracks containing "rani"
+$ music-spin search rani                         # artists, albums and tracks matching "rani", best first
 $ music-spin tracks --artist "Hania Rani"        # exact artist name, case-insensitive
 $ music-spin filter --hires --min-sample-rate 96000 --format flac,dsd
 $ music-spin play --artist "Nils Frahm" --shuffle --seed 7

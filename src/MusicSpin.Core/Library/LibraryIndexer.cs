@@ -38,18 +38,15 @@ internal static class LibraryIndexer
                 (t.DiscNumber ?? 1).ToString("D3", CultureInfo.InvariantCulture),
                 (t.TrackNumber ?? 0).ToString("D4", CultureInfo.InvariantCulture),
                 t.FileName.ToLowerInvariant());
-            var search = string.Join(' ', new[] { t.Title, t.Artist, t.AlbumArtist, t.Album, t.Genre, t.FileName }
-                .Where(s => !string.IsNullOrWhiteSpace(s))).ToLowerInvariant();
-
-            if (t.EffectiveAlbumArtist != effective || t.ArtistKey != artistKey || t.AlbumArtistKey != albumArtistKey
-                || t.AlbumId != albumId || t.SortKey != sortKey || t.SearchText != search)
+            var keysChanged = SetSearchKeys(t, effective);
+            if (keysChanged || t.EffectiveAlbumArtist != effective || t.ArtistKey != artistKey || t.AlbumArtistKey != albumArtistKey
+                || t.AlbumId != albumId || t.SortKey != sortKey)
             {
                 t.EffectiveAlbumArtist = effective;
                 t.ArtistKey = artistKey;
                 t.AlbumArtistKey = albumArtistKey;
                 t.AlbumId = albumId;
                 t.SortKey = sortKey;
-                t.SearchText = search;
                 changed.Add(t);
             }
         }
@@ -83,6 +80,11 @@ internal static class LibraryIndexer
                 HasEmbeddedCover = g.Any(t => t.HasEmbeddedCover),
             };
         }).ToList();
+        var albumTracks = tracks.GroupBy(t => t.AlbumId).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        foreach (var album in albums)
+        {
+            SetSearchKeys(album, albumTracks[album.Id]);
+        }
 
         var albumsByArtist = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var tracksByArtist = new Dictionary<string, List<TrackRecord>>(StringComparer.Ordinal);
@@ -116,6 +118,10 @@ internal static class LibraryIndexer
             AlbumCount = albumsByArtist[kv.Key].Count,
             DurationSeconds = kv.Value.Sum(t => t.DurationSeconds),
         }).ToList();
+        foreach (var artist in artists)
+        {
+            SetSearchKeys(artist);
+        }
 
         db.Albums.DeleteAll();
         db.Albums.InsertBulk(albums);
@@ -123,6 +129,33 @@ internal static class LibraryIndexer
         db.Artists.InsertBulk(artists);
         return (albums.Count, artists.Count);
     }
+
+    /// <summary>Computes the folded search keys of a track; true when any changed.</summary>
+    internal static bool SetSearchKeys(TrackRecord t, string effectiveAlbumArtist)
+    {
+        var title = LibrarySearch.Key(t.Title);
+        var artist = LibrarySearch.Key(t.Artist, t.AlbumArtist, effectiveAlbumArtist);
+        var album = LibrarySearch.Key(t.Album);
+        var genre = LibrarySearch.Key(t.Genre);
+        var file = LibrarySearch.Key(Path.GetFileNameWithoutExtension(t.FileName));
+        var all = string.Join(LibrarySearch.FieldSeparator, new[] { title, artist, album, genre, file }.Where(k => k.Length > 0));
+        if (t.SearchText == all && t.SearchTitle == title && t.SearchArtist == artist && t.SearchAlbum == album && t.SearchGenre == genre && t.SearchFile == file)
+        {
+            return false;
+        }
+
+        (t.SearchText, t.SearchTitle, t.SearchArtist, t.SearchAlbum, t.SearchGenre, t.SearchFile) = (all, title, artist, album, genre, file);
+        return true;
+    }
+
+    internal static void SetSearchKeys(AlbumRecord album, IReadOnlyList<TrackRecord> tracks)
+    {
+        album.SearchTitle = LibrarySearch.Key(album.Title);
+        album.SearchArtist = LibrarySearch.Key([album.AlbumArtist, .. tracks.Select(t => t.Artist).Where(a => a is not null)]);
+        album.SearchGenre = LibrarySearch.Key([.. tracks.Select(t => t.Genre).Where(g => g is not null)]);
+    }
+
+    internal static void SetSearchKeys(ArtistRecord artist) => artist.SearchName = LibrarySearch.Key(artist.Name);
 
     private static void Add(Dictionary<string, HashSet<string>> map, string key, string value)
     {

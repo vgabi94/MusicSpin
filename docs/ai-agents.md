@@ -17,12 +17,13 @@
 | Goal | Command |
 |---|---|
 | What's in the library | `library stats --json`, `artists --json`, `albums --json` |
-| Free-text lookup (artist, album or track) | `search "<text>" --json`. Case-insensitive substring; the whole text must appear contiguously. Not per word, not diacritic-insensitive |
-| Albums by one artist | `albums --artist "<exact name>" --json` (case-insensitive exact match) |
+| Free-text lookup (artist, album or track) | `search "<text>" --json`. Best match first; case/diacritic-insensitive; every word must match; `"phrases"`, `artist:`, `album:`, `title:`, `genre:`, `year:1959` |
+| One field contains some words | `tracks --title "<words>"`, `tracks --album-contains ...`, `--artist-contains ...`, `albums --title ...`, `artists --name ...` |
+| Albums by one artist | `albums --artist "<exact name>" --json` (case-insensitive exact match; unknown: exit 12) |
 | Tracks of an album | `tracks --album "<exact title or id>" --json` |
 | Hi-res / format / year | `filter --hires --format flac --year-from 1990 --json` |
 
-Tip: when the user gives a partial or misspelled name, call `search` first, then use the exact `name`/`title` or the album `id` it returns with `--artist`/`--album`. Album ids are stable for a given album artist and title.
+Tip: when the user gives a partial name, call `search` first (or play directly with `play --search 'artist:"name" album:words'`), then use the exact `name`/`title` or the album `id` it returns with `--artist`/`--album`. Album ids are stable for a given album artist and title.
 
 ## Background player workflow
 

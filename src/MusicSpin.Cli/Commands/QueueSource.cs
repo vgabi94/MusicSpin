@@ -8,6 +8,26 @@ namespace MusicSpin.Cli.Commands;
 /// <summary>Queue items built from a source, the shuffle seed used (null when not shuffled) and warnings (e.g. missing playlist entries).</summary>
 internal sealed record ResolvedQueue(List<QueueItem> Items, int? Seed, List<string> Warnings);
 
+/// <summary>
+/// Library tracks to play or add: an exact album/artist (<see cref="IsExact"/>), or a query (<see cref="IsQuery"/>: search syntax
+/// and/or per-field "contains" filters, combined with AND, in library order).
+/// </summary>
+internal sealed record LibrarySelection(string? Album = null, string? Artist = null, string? Search = null, string? Title = null,
+    string? AlbumContains = null, string? ArtistContains = null)
+{
+    public bool IsExact => Album is not null || Artist is not null;
+
+    public bool IsQuery => Search is not null || Title is not null || AlbumContains is not null || ArtistContains is not null;
+
+    public int Kinds => (IsExact ? 1 : 0) + (IsQuery ? 1 : 0);
+
+    public string Describe() => string.Join(", ", new[]
+    {
+        Search is null ? null : $"'{Search}'", Title is null ? null : $"title '{Title}'",
+        AlbumContains is null ? null : $"album '{AlbumContains}'", ArtistContains is null ? null : $"artist '{ArtistContains}'",
+    }.Where(s => s is not null));
+}
+
 /// <summary>"What to play" options shared by `play` and `queue add`: files, --album, --artist, --search, --playlist, --shuffle, --seed.</summary>
 internal sealed class QueueSource
 {
@@ -32,6 +52,21 @@ internal sealed class QueueSource
         Description = "Library tracks matching this text (same matching as 'music-spin search'), up to 10000.",
     };
 
+    public Option<string?> Title { get; } = new("--title")
+    {
+        Description = "Library tracks whose title contains these words (case/diacritic-insensitive). Combines with --search/--album-contains/--artist-contains.",
+    };
+
+    public Option<string?> AlbumContains { get; } = new("--album-contains")
+    {
+        Description = "Library tracks whose album title contains these words.",
+    };
+
+    public Option<string?> ArtistContains { get; } = new("--artist-contains")
+    {
+        Description = "Library tracks whose artist or album artist contains these words.",
+    };
+
     public Option<string?> Playlist { get; } = new("--playlist")
     {
         Description = "A saved playlist (name, case-insensitive). Missing entries are left out with a warning.",
@@ -53,6 +88,9 @@ internal sealed class QueueSource
         command.Add(Album);
         command.Add(Artist);
         command.Add(Search);
+        command.Add(Title);
+        command.Add(AlbumContains);
+        command.Add(ArtistContains);
         command.Add(Playlist);
         command.Add(Shuffle);
         command.Add(Seed);
@@ -62,17 +100,17 @@ internal sealed class QueueSource
     public void Validate(CommandResult r, bool required = true)
     {
         var hasFiles = Options.Get(r, Files) is { Length: > 0 } files && files.Any(f => !string.IsNullOrWhiteSpace(f));
-        var hasLibrary = Options.Get(r, Album) is not null || Options.Get(r, Artist) is not null;
-        var hasSearch = Options.Get(r, Search) is not null;
+        var selection = new LibrarySelection(Options.Get(r, Album), Options.Get(r, Artist), Options.Get(r, Search), Options.Get(r, Title),
+            Options.Get(r, AlbumContains), Options.Get(r, ArtistContains));
         var hasPlaylist = Options.Get(r, Playlist) is not null;
-        var kinds = (hasFiles ? 1 : 0) + (hasLibrary ? 1 : 0) + (hasSearch ? 1 : 0) + (hasPlaylist ? 1 : 0);
+        var kinds = (hasFiles ? 1 : 0) + selection.Kinds + (hasPlaylist ? 1 : 0);
         if (kinds > 1)
         {
-            r.AddError("Give either file(s), --album/--artist, --search, or --playlist, not several.");
+            r.AddError(SourceConflict);
         }
         else if (kinds == 0 && required)
         {
-            r.AddError("Nothing to play: give a file, --album <title>, --artist <name>, --search <text> or --playlist <name>.");
+            r.AddError("Nothing to play: give a file, --album <title>, --artist <name>, --search <text>, --title/--album-contains/--artist-contains <words> or --playlist <name>.");
         }
         else if (Options.Get(r, Seed) is not null && !Options.Get(r, Shuffle))
         {
@@ -82,32 +120,40 @@ internal sealed class QueueSource
 
     public bool HasFiles(ParseResult parseResult) => parseResult.GetValue(Files) is { Length: > 0 };
 
-    /// <summary>Library tracks for --album/--artist/--search (null for files). Releases the library before returning.</summary>
-    public IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult)
-        => LibraryTracks(runner, parseResult, parseResult.GetValue(Album), parseResult.GetValue(Artist), parseResult.GetValue(Search));
+    public const string SourceConflict = "Give either file(s), --album/--artist, --search/--title/--album-contains/--artist-contains, or --playlist, not several.";
 
-    public static IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult, string? album, string? artist, string? search)
+    public LibrarySelection Selection(ParseResult parseResult) => new(parseResult.GetValue(Album), parseResult.GetValue(Artist), parseResult.GetValue(Search),
+        parseResult.GetValue(Title), parseResult.GetValue(AlbumContains), parseResult.GetValue(ArtistContains));
+
+    /// <summary>Library tracks for --album/--artist, or for --search and the contains filters (null for files). Releases the library before returning.</summary>
+    public IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult)
+        => LibraryTracks(runner, parseResult, Selection(parseResult));
+
+    /// <exception cref="MusicSpinException">NotFound (unknown album/artist, nothing matches); InvalidArgument (unusable search text, ambiguous album).</exception>
+    public static IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult, LibrarySelection selection)
     {
-        if (album is null && artist is null && search is null)
+        if (selection.Kinds == 0)
         {
             return null;
         }
 
         using var library = runner.OpenLibraryForRead(parseResult);
-        if (search is not null)
+        if (selection.IsQuery)
         {
-            if (string.IsNullOrWhiteSpace(search))
+            var tracks = library.Tracks(new TrackQuery
             {
-                throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, "--search needs some text.");
-            }
-
-            var tracks = library.Search(search, new Paging(0, Paging.MaxLimit)).Tracks.Items;
+                Text = selection.Search,
+                Title = selection.Title,
+                AlbumContains = selection.AlbumContains,
+                ArtistContains = selection.ArtistContains,
+                Paging = new Paging(0, Paging.MaxLimit),
+            }).Items;
             return tracks.Count > 0
                 ? tracks
-                : throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No library tracks match '{search}'. See 'music-spin search'.");
+                : throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No library tracks match {selection.Describe()}. See 'music-spin search'.");
         }
 
-        return album is not null ? library.AlbumQueue(album, artist) : library.ArtistQueue(artist!);
+        return selection.Album is not null ? library.AlbumQueue(selection.Album, selection.Artist) : library.ArtistQueue(selection.Artist!);
     }
 
     /// <summary>Applies --shuffle/--seed; returns the seed used (null when not shuffled).</summary>
@@ -135,16 +181,16 @@ internal sealed class QueueSource
 
     /// <summary>Queue items for the background player (files resolved to absolute paths: the player has another working directory).</summary>
     public ResolvedQueue Resolve(CommandRunner runner, ParseResult parseResult, bool? shuffle = null)
-        => Resolve(runner, parseResult, parseResult.GetValue(Files), parseResult.GetValue(Album), parseResult.GetValue(Artist),
-            parseResult.GetValue(Search), parseResult.GetValue(Playlist), shuffle ?? parseResult.GetValue(Shuffle), shuffle is false ? null : parseResult.GetValue(Seed));
+        => Resolve(runner, parseResult, parseResult.GetValue(Files), Selection(parseResult),
+            parseResult.GetValue(Playlist), shuffle ?? parseResult.GetValue(Shuffle), shuffle is false ? null : parseResult.GetValue(Seed));
 
     public static ResolvedQueue Resolve(CommandRunner runner, ParseResult parseResult,
-        IReadOnlyList<string>? files, string? album, string? artist, string? search, string? playlist, bool shuffle, int? seed)
+        IReadOnlyList<string>? files, LibrarySelection selection, string? playlist, bool shuffle, int? seed)
     {
         var warnings = new List<string>();
         IReadOnlyList<QueueItem> items = playlist is not null
             ? PlaylistItems(runner, parseResult, playlist, warnings)
-            : LibraryTracks(runner, parseResult, album, artist, search) is { } tracks
+            : LibraryTracks(runner, parseResult, selection) is { } tracks
                 ? [.. tracks.Select(ToItem)]
                 : [.. (files ?? []).Where(f => !string.IsNullOrWhiteSpace(f)).Select(f => new QueueItem(Path.GetFullPath(f)))];
         var used = ApplyShuffle(shuffle, seed, ref items);
@@ -173,12 +219,12 @@ internal sealed class QueueSource
     }
 
     /// <summary>The same rules as <see cref="Validate"/> for callers without a command line (MCP tools). Null when valid.</summary>
-    public static string? ValidateValues(IReadOnlyList<string>? files, string? album, string? artist, string? search, string? playlist, bool shuffle, int? seed)
+    public static string? ValidateValues(IReadOnlyList<string>? files, LibrarySelection selection, string? playlist, bool shuffle, int? seed)
     {
         var hasFiles = files is { Count: > 0 } && files.Any(f => !string.IsNullOrWhiteSpace(f));
-        var kinds = (hasFiles ? 1 : 0) + (album is not null || artist is not null ? 1 : 0) + (search is not null ? 1 : 0) + (playlist is not null ? 1 : 0);
-        return kinds > 1 ? "Give either files, album/artist, search, or playlist, not several."
-            : kinds == 0 ? "Nothing to play: give files, an album, an artist, a search text or a playlist."
+        var kinds = (hasFiles ? 1 : 0) + selection.Kinds + (playlist is not null ? 1 : 0);
+        return kinds > 1 ? "Give either files, album/artist, search/title/albumContains/artistContains, or playlist, not several."
+            : kinds == 0 ? "Nothing to play: give files, an album, an artist, a search text, title/albumContains/artistContains words or a playlist."
             : seed is not null && !shuffle ? "seed only applies together with shuffle."
             : null;
     }

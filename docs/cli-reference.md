@@ -73,7 +73,8 @@ Decoder: FFmpeg n9.0.2-23-g27b46f0fbc-20261008 (LGPL version 3 or later)
 ## play
 
 ```
-music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--search <text>] [--playlist <name>]
+music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--search <query>]
+                [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--playlist <name>]
                 [--shuffle] [--seed <n>] [--start <seconds>] [--volume <0..1>]
                 [--backend auto|null] [--device <id|name>] [--exclusive]
                 [--foreground|--wait] [--duration <seconds>]
@@ -86,7 +87,8 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `<files>` | Audio files. Relative paths are resolved against the caller's working directory |
 | `--album <album>` | A library album: title (case-insensitive exact match after normalization) or album id. If several albums share the title: exit 2 with the candidates; add `--artist` to pick one. Unknown: exit 12 |
 | `--artist <artist>` | All library tracks by this artist (track artist or album artist, case-insensitive exact match), albums ordered by year, then disc/track. With `--album`: narrows the album |
-| `--search <text>` | Library tracks whose search text contains `<text>` (same matching as [`search`](#search)), up to 10,000. No match: exit 12 |
+| `--search <query>` | Library tracks matching the [search syntax](library.md#search-syntax), in **library order** (not by relevance), up to 10,000. No match: exit 12 |
+| `--title`, `--album-contains`, `--artist-contains <words>` | Library tracks whose title / album title / artist contains every word. Combine with each other and with `--search` (AND). No match: exit 12 |
 | `--playlist <name>` | A saved [playlist](#playlist) (name or id, case-insensitive). `missing` entries are left out with a warning (`warnings` in the JSON). Unknown, empty or nothing playable: exit 12. Not with `--foreground` (exit 2) |
 | `--shuffle` | Turn the player's shuffle mode on and shuffle the new queue (Fisher-Yates over the whole list). Without `--shuffle` the queue is shuffled anyway when shuffle mode is already on (see [`shuffle`](#shuffle)) |
 | `--seed <n>` | Shuffle seed for a reproducible order. Default: random. The seed is reported in the JSON result. Needs `--shuffle` |
@@ -98,7 +100,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--foreground`, `--wait` | Play in this process and block until done (Ctrl+C: exit 130) |
 | `--duration <s>` | Stop after this many seconds. Implies `--foreground`. For a library queue it applies per track |
 
-Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, `--search`, or `--playlist`. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
+Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, a query (`--search` and/or `--title`/`--album-contains`/`--artist-contains`), or `--playlist`. Unknown album or artist: exit 12. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
 
 ## pause, resume, toggle, stop
 
@@ -153,7 +155,7 @@ State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, d
 | Command | Meaning |
 |---|---|
 | `queue [--limit N] [--offset N]` | List the queue (index, current flag, path, tags) |
-| `queue add [<files>...] \| --album ... \| --artist ... \| --search ... \| --playlist <name> [--shuffle] [--seed]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue |
+| `queue add [<files>...] \| --album ... \| --artist ... \| --search/--title/--album-contains/--artist-contains ... \| --playlist <name> [--shuffle] [--seed]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue |
 | `queue clear` | Stop playback and empty the queue |
 | `queue save <name> [--replace]` | Save the queue, in its current play order (shuffled order when shuffle is on), as a playlist. Name taken: exit 8 unless `--replace`. Empty queue: exit 8. No player: exit 13 |
 
@@ -188,33 +190,39 @@ Details: [Music library](library.md).
 
 ## artists
 
-`music-spin artists [--sort name|tracks|albums] [--desc] [--limit N] [--offset N]`: track artists and album artists. There is **no text filter**; use `search` to find an artist by name.
+`music-spin artists [--name <words>] [--sort name|tracks|albums] [--desc] [--limit N] [--offset N]`: track artists and album artists. `--name`: every word must appear in the name (case/diacritic-insensitive; see [field filters](library.md#field-filters-contains)).
 
 ## albums
 
-`music-spin albums [--artist <name>] [--hires] [--sort artist|title|year|tracks|duration] [--desc] [--limit N] [--offset N]`
+`music-spin albums [--artist <name>] [--title <words>] [--artist-contains <words>] [--hires] [--sort artist|title|year|tracks|duration] [--desc] [--limit N] [--offset N]`
 
-- `--artist`: albums whose album artist, or any track artist, equals the name (case-insensitive exact match after normalization).
+- `--artist`: albums whose album artist, or any track artist, has exactly this name (case-insensitive; diacritics ignored as a fallback). Unknown artist: exit 12.
+- `--title`: the album title contains these words. `--artist-contains`: the album artist or a track artist contains these words.
 - `--hires`: only albums with at least one hi-res track.
-- There is **no title filter**; use `search` (album titles are matched by substring there) or `tracks --album`.
 
 ## tracks
 
-`music-spin tracks [--album <title|id>] [--artist <name>] [--sort ...] [--desc] [--limit N] [--offset N]`
+`music-spin tracks [--album <title|id>] [--artist <name>] [--search <query>] [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--sort ...] [--desc] [--limit N] [--offset N]`
 
-- `--album`: album id, or exact album title (case-insensitive). An unknown album returns an **empty page (exit 0)**, unlike `play --album`, which exits 12.
-- `--artist`: track artist or album artist, case-insensitive exact match.
-- `--sort`: `default` (album artist, album, disc, track), `title`, `artist`, `album`, `year`, `duration`, `added`, `samplerate`, `bitdepth`, `size`, `path`.
+- `--album`: album id, or exact album title (case-insensitive). Unknown: **exit 12** (as for `play`). `--artist`: track artist or album artist, exact name. Unknown: exit 12.
+- `--search`: [search syntax](library.md#search-syntax). `--title`, `--album-contains`, `--artist-contains`: every word must appear in that field. All filters combine (AND); no match is an empty page (exit 0).
+- `--sort`: `default` (album artist, album, disc, track), `relevance` (with `--search`/filters: best match first), `title`, `artist`, `album`, `year`, `duration`, `added`, `samplerate`, `bitdepth`, `size`, `path`.
 
 ## search
 
-`music-spin search <text> [--limit N] [--offset N]`: returns artists, albums and tracks matching the text, case-insensitively.
+`music-spin search <query> [--limit N] [--offset N]`: artists (up to 50), albums (up to 50) and a page of tracks, **best matches first**.
 
-- **Artists**: the normalized name *contains* the normalized text (up to 50).
-- **Albums**: the normalized title *contains* the normalized text (up to 50).
-- **Tracks** (paged with `--limit`/`--offset`): the text is found **as one contiguous substring** in `title artist albumArtist album genre fileName` (joined with spaces, lowercased).
+- Case- and diacritic-insensitive (`bjork` finds `Björk`, `beyonce` finds `Beyoncé`); punctuation is ignored.
+- **Every word** must match somewhere (`frahm says` finds "Says" by Nils Frahm). `"quoted phrases"` must appear as a whole in one field.
+- Field prefixes: `artist:`, `album:`, `title:`, `genre:` (a word or a `"phrase"`), `year:1959` / `year:1950-1959`.
+- Ranking: exact field > prefix > word start > anywhere.
+- Exit 2: empty text, no letters/digits (`!!!`), a prefix without a value (`artist:`), a bad year, more than 1,000 characters or 32 terms.
 
-It is **not** a per-word search: `search "frahm says"` finds nothing, even though "Says" is by Nils Frahm. Matching is **not diacritic-insensitive** (`bjork` does not find `Björk`). Exact semantics: [Music library → Search and filter](library.md#search-and-filter).
+```console
+$ music-spin search 'artist:"nils frahm" year:2013 hammers'
+```
+
+Exact semantics: [Music library → Search and filter](library.md#search-and-filter).
 
 ## filter
 
@@ -227,8 +235,9 @@ It is **not** a per-word search: `search "frahm says"` finds nothing, even thoug
 | `--format <ids>` | Format ids: `flac`, `alac`, `pcm`, `dsd`, `wavpack`, `ape`, `tta`, `mp3`, `aac`, `vorbis`, `opus`, `wma`, ... Repeat the option or comma-separate the ids |
 | `--year-from <y>` / `--year-to <y>` | Inclusive year range (0-9999; from ≤ to). Tracks without a year are excluded when a range is given |
 | `--hires` | Hi-res only (lossless and > 16-bit or > 48 kHz, or DSD) |
-| `--artist <name>` | Track artist or album artist (case-insensitive exact match) |
-| `--album <title\|id>` | Album title (case-insensitive exact match) or id |
+| `--artist <name>` | Track artist or album artist (case-insensitive exact match). Unknown: exit 12 |
+| `--album <title\|id>` | Album title (case-insensitive exact match) or id. Unknown: exit 12 |
+| `--search <query>`, `--title`, `--album-contains`, `--artist-contains` | Text filters, as for `tracks` |
 | `--sort`, `--desc`, `--limit`, `--offset` | As for `tracks` |
 
 ---
@@ -244,7 +253,7 @@ Saved playlists in the library database. Names are case-insensitive and unique; 
 | `playlist create <name>` | Create an empty playlist. Name taken: exit 8. Invalid name (empty, >200 chars, control characters): exit 2 |
 | `playlist rename <name> <new-name>` | Rename. Changing only the case is allowed. Taken: exit 8 |
 | `playlist delete <name>` | Delete the playlist (music files are not touched) |
-| `playlist add <name> [<files>...] \| --album <a> [--artist <x>] \| --artist <x> \| --search <text> \| --track-id <id>[,<id>...] [--position N]` | Add one source kind (exit 2 for none or several). Files must exist (exit 3 lists the ones that don't; nothing is added). Unknown album/artist/track id or no search match: exit 12. `--position` inserts before that 1-based position (default: append) |
+| `playlist add <name> [<files>...] \| --album <a> [--artist <x>] \| --artist <x> \| --search/--title/--album-contains/--artist-contains ... \| --track-id <id>[,<id>...] [--position N]` | Add one source kind (exit 2 for none or several). Files must exist (exit 3 lists the ones that don't; nothing is added). Unknown album/artist/track id or no search match: exit 12. `--position` inserts before that 1-based position (default: append) |
 | `playlist remove <name> <positions>` | Remove `3`, `2-5` or `1,3,5-7`. Out of range, `0`, reversed or malformed: exit 2 |
 | `playlist move <name> <from> <to>` | Move one entry |
 | `playlist clear <name>` | Remove all entries, keep the playlist |
@@ -295,7 +304,7 @@ With `--json`, stdout carries **exactly one compact JSON object per line**, also
 |---:|---|---|
 | 0 | `ok` | Success |
 | 1 | `error` | Unexpected error (also: `TagLibSharp.dll` missing during a scan) |
-| 2 | `usage` | Invalid arguments, unknown command, ambiguous album, absolute seek/volume out of range |
+| 2 | `usage` | Invalid arguments, unknown command, ambiguous album, absolute seek/volume out of range, unusable search text (empty, no letters/digits, prefix without value, too long) |
 | 3 | `file_not_found` | Input file does not exist, or no file of a new `play` queue could be played |
 | 4 | `unsupported_format` | Not an audio file / no decoder |
 | 5 | `decode_failed` | Decoder error while reading |

@@ -35,8 +35,29 @@ internal sealed class LibraryDatabase : IDisposable
             Albums.EnsureIndex(a => a.AlbumArtistKey);
             Artists.EnsureIndex(a => a.Key);
             Playlists.EnsureIndex(p => p.NameKey, unique: true);
+            if (db.UserVersion < SchemaVersion)
+            {
+                // Keys derived by the indexer changed (v2: folded search keys): recompute them once, on the first writable open.
+                if (Tracks.Count() > 0)
+                {
+                    LibraryIndexer.Rebuild(this);
+                }
+
+                db.UserVersion = SchemaVersion;
+            }
         }
+
+        StaleKeys = db.UserVersion < SchemaVersion;
     }
+
+    /// <summary>
+    /// Version of the derived data (stored as LiteDB's user version). 1: initial; 2: folded search keys
+    /// (TrackRecord.Search*, AlbumRecord.Search*, ArtistRecord.SearchName).
+    /// </summary>
+    public const int SchemaVersion = 2;
+
+    /// <summary>True for an older database opened read-only: derived search keys are missing and must be computed on the fly.</summary>
+    public bool StaleKeys { get; }
 
     public LiteDatabase Db { get; }
     public bool ReadOnly { get; }

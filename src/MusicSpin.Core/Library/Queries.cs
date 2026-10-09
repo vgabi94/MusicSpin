@@ -14,6 +14,9 @@ public enum TrackSort
     BitDepth,
     Size,
     Path,
+
+    /// <summary>Best match first (exact field > prefix > word start > anywhere), then the default order. Only with a search text.</summary>
+    Relevance,
 }
 
 public enum AlbumSort
@@ -57,14 +60,23 @@ public sealed record Page<T>(int Total, int Offset, int Limit, IReadOnlyList<T> 
 /// <summary>Track filter; all set criteria must match.</summary>
 public sealed record TrackQuery
 {
-    /// <summary>Track artist or album artist (case-insensitive exact name).</summary>
+    /// <summary>Track artist or album artist: the exact name (case-insensitive; diacritics ignored when nothing matches exactly). Unknown: NotFound.</summary>
     public string? Artist { get; init; }
 
-    /// <summary>Album title (case-insensitive exact) or album id.</summary>
+    /// <summary>Album title (case-insensitive exact; diacritics ignored when nothing matches exactly) or album id. Unknown: NotFound.</summary>
     public string? Album { get; init; }
 
-    /// <summary>Substring over title/artist/album artist/album/genre/file name.</summary>
+    /// <summary>Search syntax (see <see cref="LibrarySearch.Parse"/>): words, "phrases", artist:/album:/title:/genre:/year:.</summary>
     public string? Text { get; init; }
+
+    /// <summary>Every word must appear in the track title (folded, see <see cref="LibrarySearch.Fold"/>).</summary>
+    public string? Title { get; init; }
+
+    /// <summary>Every word must appear in the album title.</summary>
+    public string? AlbumContains { get; init; }
+
+    /// <summary>Every word must appear in the track artist or album artist.</summary>
+    public string? ArtistContains { get; init; }
 
     public int? MinBitDepth { get; init; }
     public int? MinSampleRate { get; init; }
@@ -82,7 +94,15 @@ public sealed record TrackQuery
 
 public sealed record AlbumQuery
 {
+    /// <summary>Album artist or any track artist (exact name, as <see cref="TrackQuery.Artist"/>). Unknown: NotFound.</summary>
     public string? Artist { get; init; }
+
+    /// <summary>Every word must appear in the album title.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>Every word must appear in the album artist or a track artist.</summary>
+    public string? ArtistContains { get; init; }
+
     public bool? HiRes { get; init; }
     public AlbumSort Sort { get; init; }
     public bool Descending { get; init; }
@@ -91,7 +111,8 @@ public sealed record AlbumQuery
 
 public sealed record ArtistQuery
 {
-    public string? Text { get; init; }
+    /// <summary>Every word must appear in the name (folded).</summary>
+    public string? Name { get; init; }
     public ArtistSort Sort { get; init; }
     public bool Descending { get; init; }
     public Paging Paging { get; init; } = new();

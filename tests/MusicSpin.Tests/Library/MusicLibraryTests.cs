@@ -63,7 +63,7 @@ public sealed class MusicLibraryTests : LibraryTestBase
         Assert.Equal(2, comp.TrackCount);
 
         // "miles davis" (lower-case tag, no album artist) and "Miles Davis" are one artist.
-        var miles = library.Artists(new ArtistQuery { Text = "MILES" }).Items;
+        var miles = library.Artists(new ArtistQuery { Name = "MILES" }).Items;
         var artist = Assert.Single(miles);
         Assert.Equal("Miles Davis", artist.Name);
         Assert.Equal(3, artist.TrackCount);

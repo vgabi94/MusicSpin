@@ -8,7 +8,26 @@ namespace MusicSpin.Cli.Commands;
 /// <summary>Library queries: artists, albums, tracks, search, filter. All paged (--limit/--offset) with --sort/--desc.</summary>
 internal static class BrowseCommands
 {
-    private static readonly string[] TrackSorts = ["default", "title", "artist", "album", "year", "duration", "added", "samplerate", "bitdepth", "size", "path"];
+    private static readonly string[] TrackSorts = ["default", "relevance", "title", "artist", "album", "year", "duration", "added", "samplerate", "bitdepth", "size", "path"];
+
+    /// <summary>Per-field "contains" filters and --search for tracks/filter.</summary>
+    private sealed class TrackTextOptions
+    {
+        public Option<string?> Search { get; } = new("--search") { Description = "Search syntax as 'music-spin search': words (all must match), \"phrases\", artist:/album:/title:/genre:/year:." };
+        public Option<string?> Title { get; } = new("--title") { Description = "Title contains these words (case/diacritic-insensitive)." };
+        public Option<string?> AlbumContains { get; } = new("--album-contains") { Description = "Album title contains these words." };
+        public Option<string?> ArtistContains { get; } = new("--artist-contains") { Description = "Track artist or album artist contains these words." };
+
+        public IEnumerable<Option> All => [Search, Title, AlbumContains, ArtistContains];
+
+        public TrackQuery Apply(TrackQuery query, ParseResult parseResult) => query with
+        {
+            Text = parseResult.GetValue(Search),
+            Title = parseResult.GetValue(Title),
+            AlbumContains = parseResult.GetValue(AlbumContains),
+            ArtistContains = parseResult.GetValue(ArtistContains),
+        };
+    }
 
     public static IEnumerable<Command> Create(CommandRunner runner)
     {
@@ -23,12 +42,14 @@ internal static class BrowseCommands
     {
         var (limit, offset, desc) = (Options.Limit(), Options.Offset(), Options.Descending());
         var sort = Options.Sort("name", "name", "tracks", "albums");
-        var command = new Command("artists", "List artists (track artists and album artists).") { sort, desc, limit, offset };
+        var name = new Option<string?>("--name") { Description = "Only artists whose name contains these words (case/diacritic-insensitive, every word must match)." };
+        var command = new Command("artists", "List artists (track artists and album artists).") { name, sort, desc, limit, offset };
         runner.SetAction(command, (parseResult, json, _) =>
         {
             using var library = runner.OpenLibraryForRead(parseResult);
             var page = library.Artists(new ArtistQuery
             {
+                Name = parseResult.GetValue(name),
                 Sort = Enum.Parse<ArtistSort>(parseResult.GetValue(sort)!, ignoreCase: true),
                 Descending = parseResult.GetValue(desc),
                 Paging = new Paging(parseResult.GetValue(offset), parseResult.GetValue(limit)),
@@ -43,11 +64,13 @@ internal static class BrowseCommands
     {
         var (limit, offset, desc) = (Options.Limit(), Options.Offset(), Options.Descending());
         var sort = Options.Sort("artist", "artist", "title", "year", "tracks", "duration");
-        var artist = new Option<string?>("--artist") { Description = "Only albums by this artist (album artist or any track artist, case-insensitive)." };
+        var artist = new Option<string?>("--artist") { Description = "Only albums by this artist (exact name: album artist or any track artist, case-insensitive). Unknown artist: exit 12." };
+        var title = new Option<string?>("--title") { Description = "Only albums whose title contains these words (case/diacritic-insensitive)." };
+        var artistContains = new Option<string?>("--artist-contains") { Description = "Only albums whose album artist or a track artist contains these words." };
         var hires = new Option<bool>("--hires") { Description = "Only albums with hi-res tracks." };
         var command = new Command("albums", "List albums (grouped by album artist + title; compilations under 'Various Artists').")
         {
-            artist, hires, sort, desc, limit, offset,
+            artist, title, artistContains, hires, sort, desc, limit, offset,
         };
         runner.SetAction(command, (parseResult, json, _) =>
         {
@@ -55,6 +78,8 @@ internal static class BrowseCommands
             var page = library.Albums(new AlbumQuery
             {
                 Artist = parseResult.GetValue(artist),
+                Title = parseResult.GetValue(title),
+                ArtistContains = parseResult.GetValue(artistContains),
                 HiRes = parseResult.GetValue(hires) ? true : null,
                 Sort = Enum.Parse<AlbumSort>(parseResult.GetValue(sort)!, ignoreCase: true),
                 Descending = parseResult.GetValue(desc),
@@ -70,13 +95,19 @@ internal static class BrowseCommands
     {
         var (limit, offset, desc) = (Options.Limit(), Options.Offset(), Options.Descending());
         var sort = Options.Sort("default", TrackSorts);
-        var artist = new Option<string?>("--artist") { Description = "Track artist or album artist (case-insensitive)." };
-        var album = new Option<string?>("--album") { Description = "Album title (case-insensitive) or album id." };
+        var artist = new Option<string?>("--artist") { Description = "Track artist or album artist (exact name, case-insensitive). Unknown: exit 12." };
+        var album = new Option<string?>("--album") { Description = "Album title (exact, case-insensitive) or album id. Unknown: exit 12." };
+        var text = new TrackTextOptions();
         var command = new Command("tracks", "List tracks (default order: album artist, album, disc, track).") { album, artist, sort, desc, limit, offset };
+        foreach (var option in text.All)
+        {
+            command.Add(option);
+        }
+
         runner.SetAction(command, (parseResult, json, _) =>
         {
             using var library = runner.OpenLibraryForRead(parseResult);
-            var page = library.Tracks(new TrackQuery
+            var page = library.Tracks(text.Apply(new TrackQuery(), parseResult) with
             {
                 Artist = parseResult.GetValue(artist),
                 Album = parseResult.GetValue(album),
@@ -92,7 +123,11 @@ internal static class BrowseCommands
     private static Command Search(CommandRunner runner)
     {
         var (limit, offset) = (Options.Limit(), Options.Offset());
-        var text = new Argument<string>("text") { Description = "Text to find in titles, artists, albums, genres and file names (case-insensitive)." };
+        var text = new Argument<string>("text")
+        {
+            Description = "Words to find in titles, artists, albums, genres and file names (case/diacritic-insensitive; every word must match). " +
+                          "\"Quoted phrases\" match as a whole; artist:, album:, title:, genre: restrict a word or \"phrase\" to one field; year:1959 or year:1950-1959.",
+        };
         text.Validators.Add(r =>
         {
             if (string.IsNullOrWhiteSpace(r.GetValueOrDefault<string>()))
@@ -100,7 +135,7 @@ internal static class BrowseCommands
                 r.AddError("Search text must not be empty.");
             }
         });
-        var command = new Command("search", "Search artists, albums and tracks. Tracks are paged with --limit/--offset.") { text, limit, offset };
+        var command = new Command("search", "Search artists, albums and tracks, best matches first (exact > prefix > word start > anywhere). Tracks are paged with --limit/--offset.") { text, limit, offset };
         runner.SetAction(command, (parseResult, json, _) =>
         {
             using var library = runner.OpenLibraryForRead(parseResult);
@@ -156,12 +191,18 @@ internal static class BrowseCommands
         var yearTo = Options.Validated(new Option<int?>("--year-to") { Description = "Last year (inclusive)." },
             v => v is < 0 or > 9999 ? "--year-to must be a year between 0 and 9999." : null);
         var hires = new Option<bool>("--hires") { Description = "Only hi-res tracks (lossless > 16-bit or > 48 kHz, or DSD)." };
-        var artist = new Option<string?>("--artist") { Description = "Track artist or album artist." };
-        var album = new Option<string?>("--album") { Description = "Album title or id." };
-        var command = new Command("filter", "Filter tracks by audio quality, format and year (all criteria must match).")
+        var artist = new Option<string?>("--artist") { Description = "Track artist or album artist (exact name). Unknown: exit 12." };
+        var album = new Option<string?>("--album") { Description = "Album title (exact) or id. Unknown: exit 12." };
+        var text = new TrackTextOptions();
+        var command = new Command("filter", "Filter tracks by audio quality, format, year and text (all criteria must match).")
         {
             minBits, minRate, format, yearFrom, yearTo, hires, artist, album, sort, desc, limit, offset,
         };
+        foreach (var option in text.All)
+        {
+            command.Add(option);
+        }
+
         command.Validators.Add(r =>
         {
             if (Options.Get(r, yearFrom) is { } from && Options.Get(r, yearTo) is { } to && from > to)
@@ -175,7 +216,7 @@ internal static class BrowseCommands
             var formats = (parseResult.GetValue(format) ?? [])
                 .SelectMany(f => f.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .ToList();
-            var page = library.Tracks(new TrackQuery
+            var page = library.Tracks(text.Apply(new TrackQuery(), parseResult) with
             {
                 MinBitDepth = parseResult.GetValue(minBits),
                 MinSampleRate = parseResult.GetValue(minRate),

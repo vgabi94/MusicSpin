@@ -134,27 +134,38 @@ public sealed partial class MusicLibrary : IDisposable
     {
         ArgumentNullException.ThrowIfNull(query);
         query.Paging.EnsureValid();
+        var search = LibrarySearch.All(
+            query.Text is { } text ? LibrarySearch.Parse(text) : null,
+            query.Title is { } title ? LibrarySearch.Contains(SearchField.Title, title, "--title") : null,
+            query.AlbumContains is { } albumText ? LibrarySearch.Contains(SearchField.Album, albumText, "--album-contains") : null,
+            query.ArtistContains is { } artistText ? LibrarySearch.Contains(SearchField.Artist, artistText, "--artist-contains") : null);
         return Guard(() =>
         {
+            var artistKeys = query.Artist is { } artist ? ArtistKeys(artist) : null;
+            var albumIds = query.Album is { } album ? AlbumIds(album) : null;
+
             ILiteQueryable<TrackRecord> Filtered()
             {
                 var q = _db.Tracks.Query();
-                if (query.Artist is { } artist)
+                if (artistKeys is not null)
                 {
-                    var key = LibraryKeys.NameKey(artist);
-                    q = q.Where(t => t.ArtistKey == key || t.AlbumArtistKey == key);
+                    var keys = new BsonArray(artistKeys.Select(k => new BsonValue(k)));
+                    q = q.Where(BsonExpression.Create("($.ArtistKey IN @0 OR $.AlbumArtistKey IN @0)", keys));
                 }
 
-                if (query.Album is { } album)
+                if (albumIds is not null)
                 {
-                    var albumIds = ResolveAlbumIds(album);
                     q = q.Where(BsonExpression.Create("$.AlbumId IN @0", new BsonArray(albumIds.Select(i => new BsonValue(i)))));
                 }
 
-                if (query.Text is { Length: > 0 } text)
+                if (search is not null && !_db.StaleKeys)
                 {
-                    var lowered = text.Trim().ToLowerInvariant();
-                    q = q.Where(t => t.SearchText.Contains(lowered));
+                    // Narrow inside the database (every term must occur somewhere); the exact field rules are applied below.
+                    foreach (var term in search.Terms)
+                    {
+                        var needle = term.Text;
+                        q = q.Where(t => t.SearchText.Contains(needle));
+                    }
                 }
 
                 if (query.MinBitDepth is { } bits)
@@ -173,12 +184,12 @@ public sealed partial class MusicLibrary : IDisposable
                         new BsonArray(formats.Select(f => new BsonValue(f.Trim().ToLowerInvariant())))));
                 }
 
-                if (query.YearFrom is { } from)
+                if (Max(query.YearFrom, search?.YearFrom) is { } from)
                 {
                     q = q.Where(t => t.Year >= from);
                 }
 
-                if (query.YearTo is { } to)
+                if (Min(query.YearTo, search?.YearTo) is { } to)
                 {
                     q = q.Where(t => t.Year != null && t.Year <= to);
                 }
@@ -191,20 +202,43 @@ public sealed partial class MusicLibrary : IDisposable
                 return q;
             }
 
-            var total = Filtered().Count();
             var (offset, limit) = (query.Paging.Offset, query.Paging.Limit);
-            List<TrackRecord> items;
-            if (query.Sort == TrackSort.Default)
+            if (search is null)
             {
-                var ordered = Filtered().OrderBy(t => t.SortKey, query.Descending ? Query.Descending : Query.Ascending);
-                items = ordered.Skip(offset).Limit(limit).ToList();
-            }
-            else
-            {
-                items = SortTracks(Filtered().ToEnumerable(), query.Sort, query.Descending).Skip(offset).Take(limit).ToList();
+                var total = Filtered().Count();
+                List<TrackRecord> items;
+                if (query.Sort is TrackSort.Default or TrackSort.Relevance)
+                {
+                    var ordered = Filtered().OrderBy(t => t.SortKey, query.Descending ? Query.Descending : Query.Ascending);
+                    items = ordered.Skip(offset).Limit(limit).ToList();
+                }
+                else
+                {
+                    items = SortTracks(Filtered().ToEnumerable(), query.Sort, query.Descending).Skip(offset).Take(limit).ToList();
+                }
+
+                return new Page<TrackRecord>(total, offset, limit, items);
             }
 
-            return new Page<TrackRecord>(total, offset, limit, items);
+            var matches = new List<(TrackRecord Track, int Score)>();
+            foreach (var t in Filtered().ToEnumerable())
+            {
+                if (_db.StaleKeys)
+                {
+                    LibraryIndexer.SetSearchKeys(t, t.EffectiveAlbumArtist);
+                }
+
+                if (LibrarySearch.Score(search, t) is { } score)
+                {
+                    matches.Add((t, score));
+                }
+            }
+
+            IEnumerable<TrackRecord> sorted = query.Sort == TrackSort.Relevance
+                ? (query.Descending ? matches.OrderBy(m => m.Score) : matches.OrderByDescending(m => m.Score))
+                    .ThenBy(m => m.Track.SortKey, StringComparer.Ordinal).Select(m => m.Track)
+                : SortTracks(matches.Select(m => m.Track), query.Sort, query.Descending);
+            return new Page<TrackRecord>(matches.Count, offset, limit, sorted.Skip(offset).Take(limit).ToList());
         });
     }
 
@@ -212,18 +246,26 @@ public sealed partial class MusicLibrary : IDisposable
     {
         ArgumentNullException.ThrowIfNull(query);
         query.Paging.EnsureValid();
+        var search = LibrarySearch.All(
+            query.Title is { } title ? LibrarySearch.Contains(SearchField.Album, title, "--title") : null,
+            query.ArtistContains is { } artistText ? LibrarySearch.Contains(SearchField.Artist, artistText, "--artist-contains") : null);
         return Guard(() =>
         {
             IEnumerable<AlbumRecord> albums = _db.Albums.FindAll();
             if (query.Artist is { } artist)
             {
-                var key = LibraryKeys.NameKey(artist);
-                albums = albums.Where(a => a.AlbumArtistKey == key || a.ArtistKeys.Contains(key));
+                var keys = ArtistKeys(artist);
+                albums = albums.Where(a => keys.Contains(a.AlbumArtistKey) || a.ArtistKeys.Any(keys.Contains));
             }
 
             if (query.HiRes is { } hiRes)
             {
                 albums = albums.Where(a => a.IsHiRes == hiRes);
+            }
+
+            if (search is not null)
+            {
+                albums = albums.Where(a => LibrarySearch.Score(search, WithKeys(a)) is not null);
             }
 
             var sorted = (query.Sort switch
@@ -243,13 +285,13 @@ public sealed partial class MusicLibrary : IDisposable
     {
         ArgumentNullException.ThrowIfNull(query);
         query.Paging.EnsureValid();
+        var search = query.Name is { } name ? LibrarySearch.Contains(SearchField.Artist, name, "--name") : null;
         return Guard(() =>
         {
             IEnumerable<ArtistRecord> artists = _db.Artists.FindAll();
-            if (query.Text is { Length: > 0 } text)
+            if (search is not null)
             {
-                var needle = LibraryKeys.NameKey(text);
-                artists = artists.Where(a => a.Key.Contains(needle, StringComparison.Ordinal));
+                artists = artists.Where(a => LibrarySearch.Score(search, WithKeys(a)) is not null);
             }
 
             var sorted = (query.Sort switch
@@ -263,17 +305,29 @@ public sealed partial class MusicLibrary : IDisposable
         });
     }
 
-    /// <summary>Artists and albums whose names contain <paramref name="text"/>, plus a page of matching tracks.</summary>
+    /// <summary>
+    /// Search syntax (see <see cref="LibrarySearch.Parse"/>) over artists, albums and tracks, best matches first:
+    /// up to 50 artists and 50 albums, plus a page of tracks.
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidArgument for empty or unusable search text.</exception>
     public SearchResult Search(string text, Paging? paging = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(text);
-        var needle = LibraryKeys.NameKey(text);
-        var artists = Artists(new ArtistQuery { Text = text, Paging = new Paging(0, Paging.MaxLimit) }).Items.Take(50).ToList();
-        var albums = Guard(() => _db.Albums.FindAll()
-            .Where(a => a.TitleKey.Contains(needle, StringComparison.Ordinal))
-            .OrderBy(a => a.AlbumArtistKey, StringComparer.Ordinal).ThenBy(a => a.TitleKey, StringComparer.Ordinal)
-            .Take(50).ToList());
-        var tracks = Tracks(new TrackQuery { Text = text, Paging = paging ?? new Paging() });
+        var query = LibrarySearch.Parse(text);
+        var (artists, albums) = Guard(() =>
+        {
+            var artists = _db.Artists.FindAll()
+                .Select(a => (Item: a, Score: LibrarySearch.Score(query, WithKeys(a))))
+                .Where(m => m.Score is not null)
+                .OrderByDescending(m => m.Score).ThenBy(m => m.Item.Key, StringComparer.Ordinal)
+                .Take(50).Select(m => m.Item).ToList();
+            var albums = _db.Albums.FindAll()
+                .Select(a => (Item: a, Score: LibrarySearch.Score(query, WithKeys(a))))
+                .Where(m => m.Score is not null)
+                .OrderByDescending(m => m.Score).ThenBy(m => m.Item.AlbumArtistKey, StringComparer.Ordinal).ThenBy(m => m.Item.TitleKey, StringComparer.Ordinal)
+                .Take(50).Select(m => m.Item).ToList();
+            return (artists, albums);
+        });
+        var tracks = Tracks(new TrackQuery { Text = text, Sort = TrackSort.Relevance, Paging = paging ?? new Paging() });
         return new SearchResult(artists, albums, tracks);
     }
 
@@ -340,10 +394,10 @@ public sealed partial class MusicLibrary : IDisposable
     public IReadOnlyList<TrackRecord> AlbumQueue(string album, string? artist = null) => Guard(() =>
     {
         var candidates = MatchAlbums(album);
-        if (artist is not null)
+        if (artist is not null && candidates.Count > 0)
         {
-            var key = LibraryKeys.NameKey(artist);
-            candidates = candidates.Where(a => a.AlbumArtistKey == key || a.ArtistKeys.Contains(key)).ToList();
+            var keys = ArtistKeys(artist);
+            candidates = candidates.Where(a => keys.Contains(a.AlbumArtistKey) || a.ArtistKeys.Any(keys.Contains)).ToList();
         }
 
         if (candidates.Count == 0)
@@ -365,8 +419,8 @@ public sealed partial class MusicLibrary : IDisposable
     /// <summary>All tracks by an artist (as track artist or album artist), albums by year then disc/track order.</summary>
     public IReadOnlyList<TrackRecord> ArtistQueue(string artist) => Guard(() =>
     {
-        var key = LibraryKeys.NameKey(artist);
-        var tracks = _db.Tracks.Find(t => t.ArtistKey == key || t.AlbumArtistKey == key).ToList();
+        var keys = new BsonArray(ArtistKeys(artist).Select(k => new BsonValue(k)));
+        var tracks = _db.Tracks.Find(BsonExpression.Create("($.ArtistKey IN @0 OR $.AlbumArtistKey IN @0)", keys)).ToList();
         if (tracks.Count == 0)
         {
             throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No tracks by '{artist}'. See 'music-spin artists'.");
@@ -395,6 +449,7 @@ public sealed partial class MusicLibrary : IDisposable
 
     // ---------------------------------------------------------------- helpers
 
+    /// <summary>Albums with this id, or this title: exact (case/whitespace-insensitive) first, else ignoring diacritics/punctuation.</summary>
     private List<AlbumRecord> MatchAlbums(string album)
     {
         if (_db.Albums.FindById(album) is { } byId)
@@ -403,14 +458,67 @@ public sealed partial class MusicLibrary : IDisposable
         }
 
         var key = LibraryKeys.NameKey(album);
-        return _db.Albums.Find(a => a.TitleKey == key).ToList();
+        var exact = _db.Albums.Find(a => a.TitleKey == key).ToList();
+        if (exact.Count > 0)
+        {
+            return exact;
+        }
+
+        var folded = LibrarySearch.Fold(album);
+        return folded.Length == 0 ? [] : _db.Albums.FindAll().Where(a => WithKeys(a).SearchTitle == folded).ToList();
     }
 
-    private List<string> ResolveAlbumIds(string album)
+    /// <summary>Album ids for an exact <c>--album</c>. Unknown: NotFound (the same for listings and for play).</summary>
+    private List<string> AlbumIds(string album)
     {
         var ids = MatchAlbums(album).Select(a => a.Id).ToList();
-        return ids.Count == 0 ? [album] : ids;
+        return ids.Count > 0 ? ids
+            : throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No album matching '{album}'. See 'music-spin albums' or 'music-spin search'.");
     }
+
+    /// <summary>
+    /// Artist keys for an exact <c>--artist</c>: the case/whitespace-insensitive name, else every artist whose name is equal
+    /// ignoring diacritics/punctuation ("Bjork" finds "Björk"). Unknown: NotFound.
+    /// </summary>
+    private HashSet<string> ArtistKeys(string artist)
+    {
+        var key = LibraryKeys.NameKey(artist);
+        if (key.Length > 0 && _db.Artists.Exists(a => a.Key == key))
+        {
+            return new HashSet<string>([key], StringComparer.Ordinal);
+        }
+
+        var folded = LibrarySearch.Fold(artist);
+        var keys = folded.Length == 0 ? [] : _db.Artists.FindAll().Where(a => WithKeys(a).SearchName == folded).Select(a => a.Key).ToHashSet(StringComparer.Ordinal);
+        return keys.Count > 0 ? keys
+            : throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No artist named '{artist}'. See 'music-spin artists' or 'music-spin search'.");
+    }
+
+    /// <summary>Fills search keys missing in an older database opened read-only (see <see cref="LibraryDatabase.StaleKeys"/>).</summary>
+    private AlbumRecord WithKeys(AlbumRecord album)
+    {
+        if (_db.StaleKeys && album.SearchTitle.Length == 0)
+        {
+            album.SearchTitle = LibrarySearch.Key(album.Title);
+            album.SearchArtist = LibrarySearch.Key([album.AlbumArtist, .. album.ArtistKeys]);
+        }
+
+        return album;
+    }
+
+    private ArtistRecord WithKeys(ArtistRecord artist)
+    {
+        if (_db.StaleKeys && artist.SearchName.Length == 0)
+        {
+            LibraryIndexer.SetSearchKeys(artist);
+        }
+
+        return artist;
+    }
+
+    private static int? Max(int? a, int? b) => a is null ? b : b is null ? a : Math.Max(a.Value, b.Value);
+
+    private static int? Min(int? a, int? b) => a is null ? b : b is null ? a : Math.Min(a.Value, b.Value);
 
     private static List<string> MissingTagNames(TrackRecord t)
     {

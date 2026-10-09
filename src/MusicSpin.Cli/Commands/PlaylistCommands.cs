@@ -179,7 +179,10 @@ internal static class PlaylistCommands
         var files = new Argument<string[]>("files") { Description = "Audio files (library tracks or other existing files).", Arity = ArgumentArity.ZeroOrMore };
         var album = new Option<string?>("--album") { Description = "A library album (title or id); with --artist to disambiguate." };
         var artist = new Option<string?>("--artist") { Description = "All library tracks by an artist, or narrow --album." };
-        var search = new Option<string?>("--search") { Description = "Library tracks matching this text (as 'music-spin search')." };
+        var search = new Option<string?>("--search") { Description = "Library tracks matching this search (syntax as 'music-spin search')." };
+        var title = new Option<string?>("--title") { Description = "Library tracks whose title contains these words." };
+        var albumContains = new Option<string?>("--album-contains") { Description = "Library tracks whose album title contains these words." };
+        var artistContains = new Option<string?>("--artist-contains") { Description = "Library tracks whose artist contains these words." };
         var trackIds = new Option<string[]>("--track-id")
         {
             Description = "Library track id(s) (from 'tracks --json' / 'search --json'). Repeat or comma-separate.",
@@ -188,15 +191,16 @@ internal static class PlaylistCommands
         var position = new Option<int?>("--position") { Description = "Insert before this 1-based position (default: append)." };
         var command = new Command("add", "Add files, an album, an artist's tracks, search results or track ids to a playlist (exit 12 if it does not exist).")
         {
-            name, files, album, artist, search, trackIds, position,
+            name, files, album, artist, search, title, albumContains, artistContains, trackIds, position,
         };
         command.Validators.Add(r =>
         {
-            var kinds = (Options.Get(r, files) is { Length: > 0 } ? 1 : 0) + (Options.Get(r, album) is not null || Options.Get(r, artist) is not null ? 1 : 0)
-                        + (Options.Get(r, search) is not null ? 1 : 0) + (Options.Get(r, trackIds) is { Length: > 0 } ? 1 : 0);
+            var selection = new LibrarySelection(Options.Get(r, album), Options.Get(r, artist), Options.Get(r, search), Options.Get(r, title),
+                Options.Get(r, albumContains), Options.Get(r, artistContains));
+            var kinds = (Options.Get(r, files) is { Length: > 0 } ? 1 : 0) + selection.Kinds + (Options.Get(r, trackIds) is { Length: > 0 } ? 1 : 0);
             if (kinds > 1)
             {
-                r.AddError("Give either file(s), --album/--artist, --search, or --track-id, not several.");
+                r.AddError("Give either file(s), --album/--artist, --search/--title/--album-contains/--artist-contains, or --track-id, not several.");
             }
             else if (kinds == 0)
             {
@@ -206,8 +210,9 @@ internal static class PlaylistCommands
         runner.SetAction(command, (parseResult, json, _) =>
         {
             var ids = (parseResult.GetValue(trackIds) ?? []).SelectMany(i => i.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
-            var inputs = Inputs(runner, parseResult, parseResult.GetValue(files), parseResult.GetValue(album), parseResult.GetValue(artist),
-                parseResult.GetValue(search), ids);
+            var selection = new LibrarySelection(parseResult.GetValue(album), parseResult.GetValue(artist), parseResult.GetValue(search),
+                parseResult.GetValue(title), parseResult.GetValue(albumContains), parseResult.GetValue(artistContains));
+            var inputs = Inputs(runner, parseResult, parseResult.GetValue(files), selection, ids);
             using var library = runner.OpenLibraryForWrite(parseResult);
             var change = library.AddToPlaylist(parseResult.GetValue(name)!, inputs, parseResult.GetValue(position));
             return Task.FromResult(WriteChange(runner, json, "playlist add", change, $"Added {change.Added} entr{(change.Added == 1 ? "y" : "ies")} to"));
@@ -357,10 +362,10 @@ internal static class PlaylistCommands
     }
 
     /// <summary>Entries for <c>playlist add</c> (CLI and MCP): library tracks for album/artist/search, track ids, or files.</summary>
-    public static IReadOnlyList<PlaylistInput> Inputs(CommandRunner runner, ParseResult parseResult, IReadOnlyList<string>? files, string? album, string? artist,
-        string? search, IReadOnlyList<string>? trackIds)
+    public static IReadOnlyList<PlaylistInput> Inputs(CommandRunner runner, ParseResult parseResult, IReadOnlyList<string>? files, LibrarySelection selection,
+        IReadOnlyList<string>? trackIds)
     {
-        if (QueueSource.LibraryTracks(runner, parseResult, album, artist, search) is { } tracks)
+        if (QueueSource.LibraryTracks(runner, parseResult, selection) is { } tracks)
         {
             return [.. tracks.Select(PlaylistInput.From)];
         }

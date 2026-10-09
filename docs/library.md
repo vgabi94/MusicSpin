@@ -89,7 +89,7 @@ The database for 3,000 tracks is about 4.9 MB.
 | Tags | title, artist, album artist, album, track number/total, disc number/total, year, genre, compilation flag, ReplayGain track/album gain and peak, embedded cover present |
 | Audio | duration, format id (`flac`, `alac`, `pcm`, `dsd`, `wavpack`, `ape`, `tta`, `mp3`, `aac`, `vorbis`, `opus`, `wma`, ...), codec, sample rate, bits per sample, bitrate, channels, lossless, hi-res |
 | Provenance | `tagSource` (`taglib`, `taglib+ffmpeg`, `ffmpeg`) |
-| Derived | effective album artist, normalized keys, album id, sort key, search text |
+| Derived | effective album artist, normalized keys, album id, sort key, folded search keys (title, artists, album, genre, file name, combined) |
 
 Cover art is only recorded as a flag. **Planned:** album art extraction and caching in `.usrdata/`.
 
@@ -105,30 +105,63 @@ The album id is derived from that artist and title. "Various", "VA", "V.A.", "V/
 
 ## Search and filter
 
-### Name normalization
+### Folding (search keys)
 
-Artist names and album titles are compared through a normalized key: trimmed, runs of whitespace collapsed to one space, Unicode NFC, lowercased with `ToLowerInvariant`. **Diacritics are kept**: `Björk` ≠ `Bjork`, `Sigur Rós` ≠ `Sigur Ros`.
+Search compares **folded** text. Folding is applied to the stored fields at scan time and to the query, the same way:
 
-### What each command matches
+- case-insensitive; Unicode compatibility decomposition (NFKD), then **diacritics removed**: `Beyoncé` → `beyonce`, `Mötley Crüe` → `motley crue`, full-width `ＡＢＣ` → `abc`, `ﬁ` → `fi`;
+- letters without a decomposition are mapped: `ß`→`ss`, `æ`→`ae`, `œ`→`oe`, `ø`→`o`, `ł`→`l`, `đ`/`ð`→`d`, `þ`→`th`, `ı`→`i`;
+- apostrophes and dots are **dropped** (`Pharaoh's` → `pharaohs`, `R.E.M.` → `rem`); every other non-letter/digit (`/`, `-`, `&`, `,`, emoji, ...) is a **word break** (`AC/DC` → `ac dc`, so `acdc` does not find it);
+- whitespace collapsed.
 
-| Command / option | Field(s) | Match |
+Side effect: marks are stripped in every script, e.g. Japanese dakuten (`が` → `か`), so search is slightly broader there. CJK and Hangul text is otherwise kept as is.
+
+The keys are stored per track (title, artists, album, genre, file name, and all of them combined), per album (title, album + track artists, genres) and per artist (name). The library database records a **schema version** (LiteDB user version, now **2**). Opening an older database for writing (any command that is not on a read-only folder) recomputes the keys once (about 0.9 s for 3,000 tracks). An older database on read-only media still works: the keys are computed on the fly, which is slower.
+
+### Search syntax
+
+Used by `search`, `--search` (`tracks`, `filter`, `play`, `queue add`, `playlist add`) and the MCP `search`/`tracks`/`play` tools.
+
+| Syntax | Meaning |
+|---|---|
+| `miles blue` | **every word** must appear (as a substring) in some field: here artist "Miles Davis" and album "Kind of Blue" |
+| `"kind of blue"` | the phrase must appear as a whole, **inside one field** (`"davis kind"` does not match artist + album) |
+| `artist:davis`, `artist:"miles davis"` | restrict a word or phrase to the track artist / album artist (including "Various Artists" for compilations) |
+| `album:`, `title:`, `genre:` | the same for album title, track title, genre |
+| `year:1959`, `year:1950-1959` | year or inclusive range; several `year:` terms intersect |
+| `foo:bar` | an unknown prefix is plain text (`foo bar`) |
+
+Errors (exit **2 `usage`**): empty text; text with no letters or digits (`!!!`, `""`); a prefix without a value (`artist:`, `title:""`); a bad year (`year:abc`, `year:2000-1990`); more than **1,000 characters** or more than **32 terms**. Stray punctuation between words (`miles & davis`) is ignored. Smart quotes work like `"`; an unterminated quote runs to the end.
+
+**Which results a query can return:** artists only match plain terms and `artist:` against the name; albums match plain terms, `album:`, `artist:` (album artist or any track artist), `genre:` and `year:`; tracks match everything. A query with `title:` therefore returns no artists or albums.
+
+### Ranking
+
+`search` sorts artists, albums and tracks **best first**. Each term scores its best match: **exact** (a whole field) > **prefix** (the field starts with it) > **word start** > **anywhere**, with a small field weight (track title > artist/album > genre > file name). If the plain words together equal a whole field, that result gets a bonus, so `search "so what"` puts the track titled "So What" first. Ties keep the library order. `tracks`/`filter` keep their `--sort` (default: library order) and accept `--sort relevance`. `play --search` queues in **library order** (album artist, album, disc, track), not by relevance.
+
+### Field filters ("contains")
+
+| Option | Commands | Field |
 |---|---|---|
-| `search <text>` → artists | artist name | normalized key **contains** normalized text (max 50 results) |
-| `search <text>` → albums | album title | normalized key **contains** normalized text (max 50, sorted by album artist, then title) |
-| `search <text>` → tracks | title, artist, album artist, album, genre, file name | `text.Trim().ToLowerInvariant()` is found as **one contiguous substring** of these fields joined with single spaces and lowercased. Paged |
-| `play --search`, `queue add --search`, MCP `play`/`queue_add` `search` | same as `search` tracks | same, up to 10,000 tracks |
-| `tracks --artist`, `filter --artist`, `play --artist` | track artist **or** album artist | normalized key **equals** (exact, case-insensitive) |
-| `albums --artist`, MCP `albums` `artist` | album artist **or** any track artist on the album | normalized key **equals** |
-| `tracks --album`, `filter --album` | album id, or album title | id, or normalized title key **equals**. Unknown: empty page (exit 0) |
-| `play --album`, `queue add --album`, MCP `album` | album id, or album title (+ optional `--artist`) | same. Unknown: exit 12. Ambiguous title: exit 2 with candidates |
-| `artists` | – | no text filter (sort and paging only) |
+| `--title <words>` | `tracks`, `filter`, `play`, `queue add`, `playlist add` | track title |
+| `--album-contains <words>` | same | album title |
+| `--artist-contains <words>` | same | track artist or album artist |
+| `--title <words>` | `albums` | album title |
+| `--artist-contains <words>` | `albums` | album artist or any track artist |
+| `--name <words>` | `artists` | artist name |
 
-Consequences:
+Every word must appear in that field (folded, substring). They combine with each other and with `--search` (AND). An empty value or one without letters/digits is exit 2. A filter that matches nothing is an **empty result, exit 0** in listings; `play`/`queue add`/`playlist add` exit **12** because there is nothing to queue.
 
-- **There is no field-specific "contains" filter.** You can't ask for "title contains X" alone. `search` matches the text in any of the fields, and `--artist`/`--album` need the exact name.
-- Track search is **not per word**: `search "nils frahm"` finds the tracks, but `search "frahm says"` finds nothing, because the words are not adjacent in `says nils frahm nils frahm spaces ...`. The search text of a track is its title, artist, album artist, album, genre and file name joined in that order.
-- In track search the needle is only trimmed and lowercased. Internal double spaces are not collapsed, so `search "nils  frahm"` (two spaces) finds the artist but no tracks.
-- Matching is case-insensitive (invariant culture) and diacritic-sensitive everywhere.
+Design choice: separate `--…-contains` options instead of a `--match exact|contains` switch. `--album` and `--artist` stay **exact selectors** (an album id or the exact name), so their meaning never depends on another option, and `play --album` can still report an ambiguous title.
+
+### Exact selectors (`--album`, `--artist`)
+
+| Option | Match |
+|---|---|
+| `--artist <name>` (`tracks`, `filter`, `albums`, `play`, `queue add`, `playlist add`) | track artist or album artist (for `albums`: album artist or any track artist) whose name equals `<name>` (case/whitespace-insensitive). If none does, names equal after folding (`bjork` → `Björk`) |
+| `--album <title\|id>` | album id, or album title equal to `<title>` (then folded, as above). With `--artist` for play: narrows the albums |
+
+An **unknown album or artist is exit 12 `not_found` everywhere** (`tracks`, `filter`, `albums --artist`, `play`, `queue add`, `playlist add`, MCP). Earlier versions returned an empty page for `tracks --album <unknown>`. An ambiguous title is still exit 2 for `play --album` (one album is needed), while `tracks --album` lists every album with that title.
 
 ### filter
 
@@ -137,7 +170,7 @@ Consequences:
 - `--min-bit-depth`, `--min-sample-rate`: tracks without a known value (e.g. lossy files have no bit depth) are excluded.
 - `--format flac,dsd` or a repeated `--format`: matches the format id (lowercased).
 - `--year-from`, `--year-to`: inclusive. Tracks without a year are excluded.
-- `--hires`, `--artist`, `--album`: as above.
+- `--hires`, `--artist`, `--album`, `--search`, `--title`, `--album-contains`, `--artist-contains`: as above.
 
 ```console
 $ music-spin filter --hires --format flac --sort title
