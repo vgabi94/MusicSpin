@@ -196,7 +196,7 @@ public sealed class PlayerCliTests : IAsyncDisposable
         Assert.True(up.GetProperty("running").GetBoolean());
         Assert.Equal(Environment.ProcessId, up.GetProperty("pid").GetInt32());
         Assert.Equal("playing", up.GetProperty("state").GetString());
-        Assert.StartsWith("unix:", up.GetProperty("endpoint").GetString(), StringComparison.Ordinal);
+        Assert.StartsWith(OperatingSystem.IsWindows() ? "pipe:" : "unix:", up.GetProperty("endpoint").GetString(), StringComparison.Ordinal);
         Assert.Equal(30, up.GetProperty("idleTimeoutSeconds").GetDouble());
 
         var stop = await Ok("player", "stop");
