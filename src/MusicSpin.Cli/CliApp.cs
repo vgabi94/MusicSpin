@@ -39,6 +39,11 @@ public static class CliApp
         {
             root.Add(command);
         }
+
+        foreach (var command in ControlCommands.Create(runner))
+        {
+            root.Add(command);
+        }
         return root;
     }
 

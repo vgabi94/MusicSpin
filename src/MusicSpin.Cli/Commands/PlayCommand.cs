@@ -12,158 +12,217 @@ internal static class PlayCommand
 {
     public static Command Create(CommandRunner runner)
     {
-        var file = new Argument<string?>("file") { Description = "Audio file to play (or use --album / --artist to play from the library).", Arity = ArgumentArity.ZeroOrOne };
-        var album = new Option<string?>("--album") { Description = "Play an album from the library (title, case-insensitive, or album id). Combine with --artist to disambiguate." };
-        var artist = new Option<string?>("--artist") { Description = "Play all library tracks by an artist (albums by year), or narrow --album." };
-        var shuffle = new Option<bool>("--shuffle") { Description = "Shuffle the library queue." };
-        var seed = new Option<int?>("--seed") { Description = "Shuffle seed for a reproducible order (default: random, reported in the JSON result)." };
+        var source = new QueueSource();
         var backend = Options.Backend();
         var device = Options.Device();
         var exclusive = Options.Exclusive();
-        var volume = new Option<float>("--volume")
+        var volume = new Option<float?>("--volume")
         {
             Description = "Volume 0.0-1.0. 1.0 (default) leaves samples untouched (bit-perfect path).",
-            DefaultValueFactory = _ => 1f,
         };
         Options.Validated(volume, v => v is < 0f or > 1f ? "--volume must be between 0.0 and 1.0." : null);
         var start = new Option<double>("--start") { Description = "Start position in seconds (first track only)." };
-        var duration = new Option<double?>("--duration") { Description = "Stop after this many seconds (default: play to the end). With a library queue: per track." };
+        Options.Validated(start, v => v < 0 || !double.IsFinite(v) ? "--start must be 0 or greater." : null);
+        var foreground = new Option<bool>("--foreground", "--wait")
+        {
+            Description = "Play in this process and block until done (the pre-background behaviour). Ctrl+C stops (exit 130).",
+        };
+        var duration = new Option<double?>("--duration")
+        {
+            Description = "Stop after this many seconds (implies --foreground). With a library queue: per track.",
+        };
 
         var command = new Command("play",
-            "Play a file, or a library queue (--album / --artist [--shuffle]), to the end (blocks). Ctrl+C stops (exit 130). " +
-            "Queue: unplayable/missing files are skipped and reported.")
-        {
-            file, album, artist, shuffle, seed, backend, device, exclusive, volume, start, duration,
-        };
+            "Play file(s) or a library queue (--album / --artist / --search [--shuffle]) in the background player and return " +
+            "immediately with its status. Starts the player for this data folder if needed, or hands the queue to the running one. " +
+            "Control it with pause/resume/toggle/stop/next/prev/seek/volume/status/queue/quit. --foreground keeps the old blocking mode.");
+        source.AddTo(command);
+        command.Add(backend);
+        command.Add(device);
+        command.Add(exclusive);
+        command.Add(volume);
+        command.Add(start);
+        command.Add(foreground);
+        command.Add(duration);
         command.Validators.Add(r =>
         {
-            var hasFile = !string.IsNullOrWhiteSpace(Options.Get(r, file));
-            var hasLibrary = Options.Get(r, album) is not null || Options.Get(r, artist) is not null;
-            if (hasFile == hasLibrary)
+            source.Validate(r);
+            var files = Options.Get(r, source.Files) ?? [];
+            var blocking = Options.Get(r, foreground) || Options.Get(r, duration) is not null;
+            if (blocking && files.Length > 1)
             {
-                r.AddError(hasFile
-                    ? "Give either a file or --album/--artist, not both."
-                    : "Nothing to play: give a file, --album <title> or --artist <name>.");
+                r.AddError("--foreground/--duration play one file or a library queue; pass several files without them to queue them in the background player.");
             }
-            else if (hasFile && (Options.Get(r, shuffle) || Options.Get(r, seed) is not null))
+            else if (blocking && files.Length == 1 && Options.Get(r, source.Shuffle))
             {
-                r.AddError("--shuffle/--seed only apply to --album/--artist queues.");
+                r.AddError("--shuffle/--seed only apply to queues.");
             }
         });
 
         runner.SetAction(command, async (parseResult, json, cancellationToken) =>
         {
-            var env = runner.Env;
-            var settings = new Settings(
-                TimeSpan.FromSeconds(Math.Max(0, parseResult.GetValue(start))),
-                parseResult.GetValue(duration) is { } limitSeconds && limitSeconds > 0 ? TimeSpan.FromSeconds(limitSeconds) : null,
-                parseResult.GetValue(volume));
-
-            if (parseResult.GetValue(file) is { Length: > 0 } path)
+            var blocking = parseResult.GetValue(foreground) || parseResult.GetValue(duration) is not null;
+            if (blocking)
             {
-                return await PlayFileAsync(runner, parseResult, json, path, settings, backend, device, exclusive, cancellationToken).ConfigureAwait(false);
+                return await ForegroundAsync(runner, parseResult, json, source, backend, device, exclusive, volume, start, duration, cancellationToken)
+                    .ConfigureAwait(false);
             }
 
-            // Build the queue and release the library lock before playing.
-            IReadOnlyList<TrackRecord> queue;
-            using (var library = runner.OpenLibraryForRead(parseResult))
+            // Build the queue (and release the library) before talking to the player.
+            var (items, seed) = source.Resolve(runner, parseResult);
+            var requestedBackend = parseResult.GetValue(backend)!;
+            var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, requestedBackend,
+                parseResult.GetValue(device), parseResult.GetValue(exclusive), cancellationToken).ConfigureAwait(false);
+            await using (client.ConfigureAwait(false))
             {
-                queue = parseResult.GetValue(album) is { } albumName
-                    ? library.AlbumQueue(albumName, parseResult.GetValue(artist))
-                    : library.ArtistQueue(parseResult.GetValue(artist)!);
-            }
-
-            int? usedSeed = null;
-            if (parseResult.GetValue(shuffle))
-            {
-#pragma warning disable CA5394 // not security sensitive
-                usedSeed = parseResult.GetValue(seed) ?? Random.Shared.Next();
-#pragma warning restore CA5394
-                queue = MusicLibrary.Shuffle(queue, usedSeed.Value);
-            }
-
-            var provider = env.OutputProviders(parseResult.GetValue(backend)!);
-            var options = new PlayerOptions { Output = new AudioOutputOptions(parseResult.GetValue(device), parseResult.GetValue(exclusive)) };
-            using var player = new Player(env.Decoders, provider, options);
-            var played = new List<QueueEntryDto>();
-            var skipped = new List<QueueSkipDto>();
-            var stopReason = "ended";
-            try
-            {
-                if (!json)
+                var warnings = new List<string>();
+                if (!started)
                 {
-                    env.Out.WriteLine($"Queue: {queue.Count} track(s){(usedSeed is { } s ? $", shuffled (seed {s})" : string.Empty)} via {provider.Name}");
+                    var info = await client.HelloAsync(cancellationToken).ConfigureAwait(false);
+                    if (OutputDiffers(parseResult, backend, device, exclusive, info.Output))
+                    {
+                        warnings.Add($"The running player uses output '{info.Output.Backend}' ({info.Output.Device ?? "default device"}, " +
+                            $"{(info.Output.Exclusive ? "exclusive" : "shared")}); --backend/--device/--exclusive apply when it starts. " +
+                            "Run 'musicspin quit' first to change them.");
+                    }
                 }
 
-                for (var i = 0; i < queue.Count; i++)
+                var startSeconds = parseResult.GetValue(start);
+                var data = await client.SendAsync("queue.set", new
                 {
-                    var entry = queue[i];
-                    TrackInfo info;
-                    try
-                    {
-                        info = player.Load(entry.Path);
-                    }
-                    catch (MusicSpinException ex) when (ex.Code is MusicSpinErrorCode.FileNotFound or MusicSpinErrorCode.UnsupportedFormat or MusicSpinErrorCode.DecodeFailed)
-                    {
-                        skipped.Add(new QueueSkipDto(entry.Path, ExitCodes.Name(ExitCodes.From(ex.Code)), ex.Message));
-                        if (!json)
-                        {
-                            env.Error.WriteLine($"musicspin play: skipping {entry.Path}: {ex.Message}");
-                        }
-
-                        continue;
-                    }
-
-                    if (!json)
-                    {
-                        env.Out.WriteLine($"[{i + 1}/{queue.Count}] {Title(info)}  ({Human.Describe(info)})");
-                    }
-
-                    var (seconds, reason) = await PlayLoadedAsync(player, info, i == 0 ? settings : settings with { Start = TimeSpan.Zero }, cancellationToken)
-                        .ConfigureAwait(false);
-                    played.Add(new QueueEntryDto(LibraryTrackDto.From(entry), seconds, reason));
-                    if (reason == "cancelled")
-                    {
-                        stopReason = "cancelled";
-                        break;
-                    }
+                    items,
+                    start = 0,
+                    play = true,
+                    startSeconds = startSeconds > 0 ? startSeconds : (double?)null,
+                }, cancellationToken).ConfigureAwait(false);
+                if (parseResult.GetValue(volume) is { } v)
+                {
+                    data = await client.SendAsync("volume", new { value = v }, cancellationToken).ConfigureAwait(false);
                 }
-            }
-            finally
-            {
-                player.Dispose();
-                (provider as IDisposable)?.Dispose();
-            }
 
-            var result = new QueuePlayResultDto("queue", parseResult.GetValue(album), parseResult.GetValue(artist), usedSeed is not null, usedSeed,
-                queue.Count, played, skipped, stopReason);
-            if (stopReason == "cancelled")
-            {
-                return runner.Fail(json, "play", ExitCodes.Cancelled, "Playback cancelled.", result);
+                PlayerSupport.WriteStatus(runner, json, "play", data, new Dictionary<string, object?>
+                {
+                    ["mode"] = "background",
+                    ["playerStarted"] = started,
+                    ["seed"] = seed,
+                    ["warnings"] = warnings.Count > 0 ? warnings : null,
+                });
+                return ExitCodes.Success;
             }
-
-            if (played.Count == 0)
-            {
-                return runner.Fail(json, "play", ExitCodes.FileNotFound,
-                    $"None of the {queue.Count} queued file(s) could be played (moved or deleted? run 'musicspin library scan').", result);
-            }
-
-            if (json)
-            {
-                JsonOutput.WriteSuccess(env.Out, "play", result);
-            }
-            else
-            {
-                env.Out.WriteLine($"Played {played.Count} of {queue.Count} track(s){(skipped.Count > 0 ? $", skipped {skipped.Count}" : string.Empty)}.");
-            }
-
-            return ExitCodes.Success;
         });
 
         return command;
     }
 
+    private static bool OutputDiffers(ParseResult parseResult, Option<string> backend, Option<string?> device, Option<bool> exclusive, OutputInfo running)
+    {
+        var backendGiven = parseResult.GetResult(backend) is { Implicit: false };
+        var wantsNull = parseResult.GetValue(backend) == "null";
+        var isNull = running.Backend.StartsWith("null", StringComparison.Ordinal);
+        return (backendGiven && wantsNull != isNull)
+            || (parseResult.GetValue(device) is { } d && !string.Equals(d, running.Device, StringComparison.Ordinal))
+            || (parseResult.GetResult(exclusive) is { Implicit: false } && parseResult.GetValue(exclusive) != running.Exclusive);
+    }
+
     private sealed record Settings(TimeSpan Start, TimeSpan? Limit, float Volume);
+
+    private static async Task<int> ForegroundAsync(CommandRunner runner, ParseResult parseResult, bool json, QueueSource source,
+        Option<string> backend, Option<string?> device, Option<bool> exclusive, Option<float?> volume, Option<double> start, Option<double?> duration,
+        CancellationToken cancellationToken)
+    {
+        var env = runner.Env;
+        var settings = new Settings(
+            TimeSpan.FromSeconds(Math.Max(0, parseResult.GetValue(start))),
+            parseResult.GetValue(duration) is { } limitSeconds && limitSeconds > 0 ? TimeSpan.FromSeconds(limitSeconds) : null,
+            parseResult.GetValue(volume) ?? 1f);
+
+        if (source.HasFiles(parseResult))
+        {
+            return await PlayFileAsync(runner, parseResult, json, parseResult.GetValue(source.Files)![0], settings, backend, device, exclusive, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        // Build the queue and release the library lock before playing.
+        var queue = source.LibraryTracks(runner, parseResult)!;
+        var usedSeed = source.ApplyShuffle(parseResult, ref queue);
+
+        var provider = env.OutputProviders(parseResult.GetValue(backend)!);
+        var options = new PlayerOptions { Output = new AudioOutputOptions(parseResult.GetValue(device), parseResult.GetValue(exclusive)) };
+        using var player = new Player(env.Decoders, provider, options);
+        var played = new List<QueueEntryDto>();
+        var skipped = new List<QueueSkipDto>();
+        var stopReason = "ended";
+        try
+        {
+            if (!json)
+            {
+                env.Out.WriteLine($"Queue: {queue.Count} track(s){(usedSeed is { } s ? $", shuffled (seed {s})" : string.Empty)} via {provider.Name}");
+            }
+
+            for (var i = 0; i < queue.Count; i++)
+            {
+                var entry = queue[i];
+                TrackInfo info;
+                try
+                {
+                    info = player.Load(entry.Path);
+                }
+                catch (MusicSpinException ex) when (ex.Code is MusicSpinErrorCode.FileNotFound or MusicSpinErrorCode.UnsupportedFormat or MusicSpinErrorCode.DecodeFailed)
+                {
+                    skipped.Add(new QueueSkipDto(entry.Path, ExitCodes.Name(ExitCodes.From(ex.Code)), ex.Message));
+                    if (!json)
+                    {
+                        env.Error.WriteLine($"musicspin play: skipping {entry.Path}: {ex.Message}");
+                    }
+
+                    continue;
+                }
+
+                if (!json)
+                {
+                    env.Out.WriteLine($"[{i + 1}/{queue.Count}] {Title(info)}  ({Human.Describe(info)})");
+                }
+
+                var (seconds, reason) = await PlayLoadedAsync(player, info, i == 0 ? settings : settings with { Start = TimeSpan.Zero }, cancellationToken)
+                    .ConfigureAwait(false);
+                played.Add(new QueueEntryDto(LibraryTrackDto.From(entry), seconds, reason));
+                if (reason == "cancelled")
+                {
+                    stopReason = "cancelled";
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            player.Dispose();
+            (provider as IDisposable)?.Dispose();
+        }
+
+        var result = new QueuePlayResultDto("queue", parseResult.GetValue(source.Album), parseResult.GetValue(source.Artist), usedSeed is not null, usedSeed,
+            queue.Count, played, skipped, stopReason);
+        if (stopReason == "cancelled")
+        {
+            return runner.Fail(json, "play", ExitCodes.Cancelled, "Playback cancelled.", result);
+        }
+
+        if (played.Count == 0)
+        {
+            return runner.Fail(json, "play", ExitCodes.FileNotFound,
+                $"None of the {queue.Count} queued file(s) could be played (moved or deleted? run 'musicspin library scan').", result);
+        }
+
+        if (json)
+        {
+            JsonOutput.WriteSuccess(env.Out, "play", result);
+        }
+        else
+        {
+            env.Out.WriteLine($"Played {played.Count} of {queue.Count} track(s){(skipped.Count > 0 ? $", skipped {skipped.Count}" : string.Empty)}.");
+        }
+
+        return ExitCodes.Success;
+    }
 
     private static async Task<int> PlayFileAsync(CommandRunner runner, ParseResult parseResult, bool json, string path, Settings settings,
         Option<string> backend, Option<string?> device, Option<bool> exclusive, CancellationToken cancellationToken)

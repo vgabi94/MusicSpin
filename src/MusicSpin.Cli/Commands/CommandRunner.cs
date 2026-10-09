@@ -68,6 +68,10 @@ internal sealed class CommandRunner(CliEnvironment env, Option<bool> json, Optio
             {
                 return await body(parseResult, asJson, cancellationToken).ConfigureAwait(false);
             }
+            catch (PlayerRequestException ex)
+            {
+                return Fail(asJson, commandName, ex.ExitCode, ex.Message);
+            }
             catch (MusicSpinException ex)
             {
                 return Fail(asJson, commandName, ExitCodes.From(ex.Code), ex.Message);

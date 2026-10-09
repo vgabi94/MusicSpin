@@ -34,6 +34,21 @@ public sealed class CliEnvironment
 
     public TimeProvider Time { get; init; } = TimeProvider.System;
 
+    /// <summary>
+    /// Starts a background player for a data folder. Default: spawn this executable as a detached
+    /// <c>musicspin player run</c> process. Tests inject an in-process <see cref="PlayerHost"/>.
+    /// </summary>
+    public Func<PlayerLaunchRequest, CancellationToken, Task<IPlayerProcess?>>? PlayerLauncher { get; init; }
+
+    /// <summary>How long `play` waits for a newly started background player to accept connections.</summary>
+    public TimeSpan PlayerStartTimeout { get; init; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>How long a control command waits for the player's answer.</summary>
+    public TimeSpan PlayerRequestTimeout { get; init; } = PlayerClient.DefaultRequestTimeout;
+
+    /// <summary>Process-level signals for `player run` (SIGTERM/SIGINT/SIGHUP); off in tests.</summary>
+    public bool HandleSignals { get; init; }
+
     public static CliEnvironment CreateDefault() => new()
     {
         Out = Console.Out,
@@ -41,6 +56,7 @@ public sealed class CliEnvironment
         In = Console.In,
         Decoders = new FFmpegDecoderFactory(),
         OutputProviders = CreateOutputProvider,
+        HandleSignals = true,
     };
 
     public static IAudioOutputProvider CreateOutputProvider(string backend) => backend switch
@@ -49,3 +65,13 @@ public sealed class CliEnvironment
         _ => new SoundFlowOutputProvider(),
     };
 }
+
+/// <summary>What `play`/`queue add` need to start a background player.</summary>
+/// <param name="Arguments">Command line for the new process, e.g. <c>player run --data-dir X --backend null</c>.</param>
+public sealed record PlayerLaunchRequest(
+    MusicSpin.Core.Hosting.DataDirectory DataDirectory,
+    PlayerEndpoint Endpoint,
+    IReadOnlyList<string> Arguments,
+    string Backend,
+    string? Device,
+    bool Exclusive);

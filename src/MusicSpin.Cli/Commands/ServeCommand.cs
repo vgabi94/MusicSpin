@@ -14,7 +14,9 @@ internal static class ServeCommand
         var exclusive = Options.Exclusive();
         var command = new Command("serve",
             "Run a long-lived player controlled by JSON lines on stdin; responses/events are JSON lines on stdout. " +
-            "Requests: {\"id\":1,\"cmd\":\"load\",\"path\":\"a.flac\"} with cmd = load|play|pause|stop|seek(seconds)|volume(value)|status|info(path)|quit.")
+            "Same protocol as the background player: {\"id\":1,\"cmd\":\"load\",\"path\":\"a.flac\"} with cmd = " +
+            "hello|status|load(path)|play(index?)|pause|resume|toggle|stop|next|prev|seek(seconds|delta)|volume(value|delta)|info(path)|" +
+            "queue|queue.set(items)|queue.add(items)|queue.clear|quit.")
         {
             backend, device, exclusive,
         };
@@ -27,7 +29,8 @@ internal static class ServeCommand
             using var player = new Player(env.Decoders, provider, options);
             try
             {
-                var server = new JsonLinesServer(player, env.Decoders, env.In, env.Out);
+                var server = new JsonLinesServer(player, env.Decoders, env.In, env.Out,
+                    new OutputInfo(provider.Name, parseResult.GetValue(device), parseResult.GetValue(exclusive)));
                 await server.RunAsync(cancellationToken).ConfigureAwait(false);
                 return ExitCodes.Success;
             }

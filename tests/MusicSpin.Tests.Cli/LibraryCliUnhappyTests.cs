@@ -8,9 +8,11 @@ namespace MusicSpin.Tests.Cli;
 
 /// <summary>Every failure: exact exit code + JSON error shape {ok:false, command, error{code, exitCode, message}}.</summary>
 [Trait("Category", "Unhappy")]
-public sealed class LibraryCliUnhappyTests
+public sealed class LibraryCliUnhappyTests : IAsyncDisposable
 {
     private readonly CliHarness _cli = new();
+
+    public ValueTask DisposeAsync() => _cli.DisposeAsync();
     private readonly string _music = LibraryTestData.CreateSmallLibrary(TempDir.Create("music"));
 
     private static void RequirePosixNonRoot()
@@ -161,14 +163,14 @@ public sealed class LibraryCliUnhappyTests
         var freddie = Path.Combine(_music, "Miles", "Kind of Blue", "02 Freddie Freeloader.flac");
         _cli.Decoders.With(TestAudio.Track(freddie, seconds: 0.05)); // So What is "gone" for the decoder
 
-        var result = await _cli.RunAsync("play", "--album", "kind of blue", "--backend", "null", "--json");
+        var result = await _cli.RunAsync("play", "--album", "kind of blue", "--foreground", "--backend", "null", "--json");
         Assert.Equal(0, result.ExitCode);
         var data = result.Json().GetProperty("data");
         Assert.Equal(so, data.GetProperty("skipped")[0].GetProperty("path").GetString());
         Assert.Equal("file_not_found", data.GetProperty("skipped")[0].GetProperty("code").GetString());
         Assert.Single(data.GetProperty("played").EnumerateArray());
 
-        var none = await Error(ExitCodes.FileNotFound, "play", "play", "--album", "bitches brew", "--backend", "null");
+        var none = await Error(ExitCodes.FileNotFound, "play", "play", "--album", "bitches brew", "--foreground", "--backend", "null");
         Assert.Equal(1, none.GetProperty("data").GetProperty("skipped").GetArrayLength());
     }
 
@@ -195,7 +197,7 @@ public sealed class LibraryCliUnhappyTests
     [InlineData("library", "bogus")]
     [InlineData("play")]
     [InlineData("play", "/music/song.flac", "--album", "x")]
-    [InlineData("play", "/music/song.flac", "--shuffle")]
+    [InlineData("play", "/music/song.flac", "--shuffle", "--foreground")]
     [InlineData("play", "--artist", "x", "--seed", "abc")]
     [InlineData("play", "/music/song.flac", "--volume", "loud")]
     [InlineData("play", "/music/song.flac", "--volume", "2")]

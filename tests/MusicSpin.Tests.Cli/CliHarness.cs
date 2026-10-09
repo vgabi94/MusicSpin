@@ -3,13 +3,16 @@ using MusicSpin.Cli;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Decoding.FFmpeg;
 using MusicSpin.Core.Output;
+using MusicSpin.Core.Remote;
 using MusicSpin.Tests.Shared;
 
 namespace MusicSpin.Tests.Cli;
 
-/// <summary>Runs the CLI in-process with fakes and captures output.</summary>
-internal sealed class CliHarness
+/// <summary>Runs the CLI in-process with fakes and captures output. Background players run in-process too.</summary>
+internal sealed class CliHarness : IAsyncDisposable
 {
+    private readonly List<PlayerHost> _hosts = [];
+
     public const string Song = "/music/song.flac";
 
     public FakeDecoderFactory Decoders { get; init; } = new FakeDecoderFactory().With(TestAudio.Track(Song, sampleRate: 96_000, seconds: 0.2));
@@ -28,6 +31,53 @@ internal sealed class CliHarness
     public TimeSpan LockTimeout { get; init; } = TimeSpan.FromMilliseconds(300);
 
     public string DataDir => Path.Combine(BaseDirectory, ".usrdata");
+
+    /// <summary>How `play` starts a background player. Default: an in-process <see cref="PlayerHost"/> (see <see cref="Hosts"/>).</summary>
+    public Func<PlayerLaunchRequest, CancellationToken, Task<IPlayerProcess?>>? Launcher { get; set; }
+
+    /// <summary>Idle timeout of in-process players (a safety net against leaks; tests dispose the harness).</summary>
+    public TimeSpan? PlayerIdleTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    public TimeSpan PlayerStartTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    public int Launches => Volatile.Read(ref _launches);
+
+    private int _launches;
+
+    public IReadOnlyList<PlayerHost> Hosts
+    {
+        get { lock (_hosts) { return [.. _hosts]; } }
+    }
+
+    public Task<IPlayerProcess?> LaunchInProcess(PlayerLaunchRequest request, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref _launches);
+        var host = PlayerHost.TryStart(new PlayerHostOptions
+        {
+            DataDirectory = request.DataDirectory,
+            Decoders = Decoders,
+            Outputs = Outputs(request.Backend),
+            Output = new AudioOutputOptions(request.Device, request.Exclusive),
+            IdleTimeout = PlayerIdleTimeout,
+        });
+        if (host is not null)
+        {
+            lock (_hosts)
+            {
+                _hosts.Add(host);
+            }
+        }
+
+        return Task.FromResult<IPlayerProcess?>(null);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        foreach (var host in Hosts)
+        {
+            await host.DisposeAsync();
+        }
+    }
 
     /// <summary>Stdout of the command currently running (thread-safe snapshot via <see cref="LockedStringWriter.Snapshot"/>).</summary>
     public LockedStringWriter? LiveOut { get; private set; }
@@ -50,6 +100,8 @@ internal sealed class CliHarness
             BaseDirectory = BaseDirectory,
             GetEnvironmentVariable = name => EnvironmentVariables.GetValueOrDefault(name),
             LibraryLockTimeout = LockTimeout,
+            PlayerLauncher = Launcher ?? LaunchInProcess,
+            PlayerStartTimeout = PlayerStartTimeout,
         };
 
         var exitCode = await CliApp.RunAsync(args, env, cancellationToken);

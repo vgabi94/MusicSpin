@@ -4,9 +4,11 @@ using MusicSpin.Core.Decoding.FFmpeg;
 
 namespace MusicSpin.Tests.Cli;
 
-public class CliTests
+public sealed class CliTests : IAsyncDisposable
 {
     private readonly CliHarness _cli = new();
+
+    public ValueTask DisposeAsync() => _cli.DisposeAsync();
 
     [Fact]
     public async Task Help_lists_all_commands_and_exit_codes()
@@ -141,7 +143,7 @@ public class CliTests
     [Fact]
     public async Task Play_to_end_on_null_backend()
     {
-        var result = await _cli.RunAsync("play", CliHarness.Song, "--backend", "null", "--json");
+        var result = await _cli.RunAsync("play", CliHarness.Song, "--foreground", "--backend", "null", "--json");
         var data = result.Json().GetProperty("data");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);

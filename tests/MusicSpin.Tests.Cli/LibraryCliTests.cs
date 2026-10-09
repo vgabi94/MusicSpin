@@ -6,9 +6,11 @@ using MusicSpin.Tests.Shared;
 
 namespace MusicSpin.Tests.Cli;
 
-public sealed class LibraryCliTests
+public sealed class LibraryCliTests : IAsyncDisposable
 {
     private readonly CliHarness _cli = new();
+
+    public ValueTask DisposeAsync() => _cli.DisposeAsync();
     private readonly string _music = LibraryTestData.CreateSmallLibrary(TempDir.Create("music"));
 
     private async Task<JsonElement> Ok(params string[] args)
@@ -139,7 +141,7 @@ public sealed class LibraryCliTests
         await ScanAsync();
         RegisterLibraryFiles();
 
-        var data = await Ok("play", "--album", "kind of blue", "--backend", "null");
+        var data = await Ok("play", "--album", "kind of blue", "--foreground", "--backend", "null");
 
         Assert.Equal("queue", data.GetProperty("mode").GetString());
         Assert.Equal(2, data.GetProperty("queueLength").GetInt32());
@@ -154,8 +156,8 @@ public sealed class LibraryCliTests
         await ScanAsync();
         RegisterLibraryFiles();
 
-        var a = await Ok("play", "--artist", "MILES DAVIS", "--shuffle", "--seed", "7", "--backend", "null");
-        var b = await Ok("play", "--artist", "miles davis", "--shuffle", "--seed", "7", "--backend", "null");
+        var a = await Ok("play", "--artist", "MILES DAVIS", "--shuffle", "--seed", "7", "--wait", "--backend", "null");
+        var b = await Ok("play", "--artist", "miles davis", "--shuffle", "--seed", "7", "--wait", "--backend", "null");
 
         Assert.Equal(7, a.GetProperty("seed").GetInt32());
         Assert.True(a.GetProperty("shuffle").GetBoolean());
