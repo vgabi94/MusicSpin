@@ -63,10 +63,13 @@ public static class PlayerTransport
             await socket.ConnectAsync(new UnixDomainSocketEndPoint(endpoint.Address), cts.Token).ConfigureAwait(false);
             return new NetworkStream(socket, ownsSocket: true);
         }
-        catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionRefused or SocketError.AddressNotAvailable or SocketError.AddressFamilyNotSupported)
+        catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionRefused or SocketError.AddressNotAvailable
+                                             or SocketError.AddressFamilyNotSupported or SocketError.NotSocket)
         {
+            // Stale socket file nobody listens on (ECONNREFUSED), or a regular file squatting on the path
+            // (Linux: ECONNREFUSED, macOS: ENOTSOCK).
             socket.Dispose();
-            throw NotRunning(endpoint); // stale socket file: nobody listens
+            throw NotRunning(endpoint);
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AccessDenied)
         {
