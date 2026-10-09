@@ -20,10 +20,25 @@ internal sealed class CliHarness
 
     public string Input { get; init; } = string.Empty;
 
-    public async Task<CliResult> RunAsync(params string[] args)
+    /// <summary>Pretend executable directory (portable data goes to &lt;BaseDirectory&gt;/.usrdata). Unique per harness.</summary>
+    public string BaseDirectory { get; init; } = TempDir.Create("exe");
+
+    public Dictionary<string, string> EnvironmentVariables { get; } = new(StringComparer.Ordinal);
+
+    public TimeSpan LockTimeout { get; init; } = TimeSpan.FromMilliseconds(300);
+
+    public string DataDir => Path.Combine(BaseDirectory, ".usrdata");
+
+    /// <summary>Stdout of the command currently running (thread-safe snapshot via <see cref="LockedStringWriter.Snapshot"/>).</summary>
+    public LockedStringWriter? LiveOut { get; private set; }
+
+    public Task<CliResult> RunAsync(params string[] args) => RunAsync(TestContext.Current.CancellationToken, args);
+
+    public async Task<CliResult> RunAsync(CancellationToken cancellationToken, params string[] args)
     {
-        using var stdout = new StringWriter();
-        using var stderr = new StringWriter();
+        using var stdout = new LockedStringWriter();
+        using var stderr = new LockedStringWriter();
+        LiveOut = stdout;
         var env = new CliEnvironment
         {
             Out = stdout,
@@ -32,10 +47,13 @@ internal sealed class CliHarness
             Decoders = Decoders,
             OutputProviders = Outputs,
             FFmpegStatus = () => FFmpeg,
+            BaseDirectory = BaseDirectory,
+            GetEnvironmentVariable = name => EnvironmentVariables.GetValueOrDefault(name),
+            LibraryLockTimeout = LockTimeout,
         };
 
-        var exitCode = await CliApp.RunAsync(args, env, TestContext.Current.CancellationToken);
-        return new CliResult(exitCode, stdout.ToString(), stderr.ToString());
+        var exitCode = await CliApp.RunAsync(args, env, cancellationToken);
+        return new CliResult(exitCode, stdout.Snapshot(), stderr.Snapshot());
     }
 }
 
@@ -52,4 +70,50 @@ internal sealed record CliResult(int ExitCode, string Out, string Err)
     public string[] Lines() => Out.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public JsonElement[] JsonLines() => [.. Lines().Select(l => JsonDocument.Parse(l).RootElement.Clone())];
+}
+
+/// <summary>StringWriter safe for concurrent writes (watch events) and reads (test polling).</summary>
+internal sealed class LockedStringWriter : StringWriter
+{
+    private readonly Lock _gate = new();
+
+    public override void Write(char value)
+    {
+        lock (_gate)
+        {
+            base.Write(value);
+        }
+    }
+
+    public override void Write(string? value)
+    {
+        lock (_gate)
+        {
+            base.Write(value);
+        }
+    }
+
+    public override void Write(char[] buffer, int index, int count)
+    {
+        lock (_gate)
+        {
+            base.Write(buffer, index, count);
+        }
+    }
+
+    public override void WriteLine(string? value)
+    {
+        lock (_gate)
+        {
+            base.WriteLine(value);
+        }
+    }
+
+    public string Snapshot()
+    {
+        lock (_gate)
+        {
+            return ToString();
+        }
+    }
 }

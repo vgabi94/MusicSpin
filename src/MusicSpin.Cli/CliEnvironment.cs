@@ -1,5 +1,6 @@
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Decoding.FFmpeg;
+using MusicSpin.Core.Library;
 using MusicSpin.Core.Output;
 using MusicSpin.Core.Output.SoundFlow;
 
@@ -21,6 +22,17 @@ public sealed class CliEnvironment
 
     /// <summary>FFmpeg load status, for `doctor`/`formats`.</summary>
     public Func<FFmpegStatus?> FFmpegStatus { get; init; } = () => FFmpegRuntime.Status;
+
+    /// <summary>Environment variable accessor (MUSICSPIN_DATA_DIR, ...).</summary>
+    public Func<string, string?> GetEnvironmentVariable { get; init; } = Environment.GetEnvironmentVariable;
+
+    /// <summary>Executable directory used for the portable <c>.usrdata</c> folder.</summary>
+    public string BaseDirectory { get; init; } = AppContext.BaseDirectory;
+
+    /// <summary>How long to wait for another MusicSpin process to release the library.</summary>
+    public TimeSpan LibraryLockTimeout { get; init; } = MusicLibrary.DefaultLockTimeout;
+
+    public TimeProvider Time { get; init; } = TimeProvider.System;
 
     public static CliEnvironment CreateDefault() => new()
     {

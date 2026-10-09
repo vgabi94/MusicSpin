@@ -44,9 +44,10 @@ public sealed record CodecDto(string Name, string? LongName);
 
 public sealed record DevicesDto(string Backend, IReadOnlyList<AudioDeviceInfo> Devices);
 
-public sealed record PlayResultDto(TrackDto Track, double StartSeconds, double PlayedSeconds, string StopReason);
+public sealed record PlayResultDto(TrackDto Track, double StartSeconds, double PlayedSeconds, string StopReason, string Mode = "file");
 
-public sealed record DoctorDto(string Version, string Runtime, string Os, DecoderDto Decoder, string? AudioBackend, string? AudioError, int PlaybackDevices);
+public sealed record DoctorDto(string Version, string Runtime, string Os, DecoderDto Decoder, string? AudioBackend, string? AudioError, int PlaybackDevices,
+    DataDirDto DataDir, string ExecutableDirectory);
 
 internal static class Human
 {

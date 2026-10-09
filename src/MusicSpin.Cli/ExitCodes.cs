@@ -16,6 +16,10 @@ public static class ExitCodes
     public const int DecoderUnavailable = 6;
     public const int AudioDeviceError = 7;
     public const int InvalidState = 8;
+    public const int DataDirNotWritable = 9;
+    public const int LibraryCorrupt = 10;
+    public const int LibraryLocked = 11;
+    public const int NotFound = 12;
     public const int Cancelled = 130;
 
     public static int From(MusicSpinErrorCode code) => code switch
@@ -26,6 +30,11 @@ public static class ExitCodes
         MusicSpinErrorCode.DecoderUnavailable => DecoderUnavailable,
         MusicSpinErrorCode.AudioDeviceError => AudioDeviceError,
         MusicSpinErrorCode.InvalidState => InvalidState,
+        MusicSpinErrorCode.DataDirectoryNotWritable => DataDirNotWritable,
+        MusicSpinErrorCode.LibraryCorrupt => LibraryCorrupt,
+        MusicSpinErrorCode.LibraryLocked => LibraryLocked,
+        MusicSpinErrorCode.NotFound => NotFound,
+        MusicSpinErrorCode.InvalidArgument => Usage,
         _ => Error,
     };
 
@@ -40,11 +49,16 @@ public static class ExitCodes
         DecoderUnavailable => "decoder_unavailable",
         AudioDeviceError => "audio_device_error",
         InvalidState => "invalid_state",
+        DataDirNotWritable => "data_dir_not_writable",
+        LibraryCorrupt => "library_corrupt",
+        LibraryLocked => "library_locked",
+        NotFound => "not_found",
         Cancelled => "cancelled",
         _ => "error",
     };
 
     public const string HelpText =
         "Exit codes: 0 ok, 1 error, 2 usage, 3 file_not_found, 4 unsupported_format, 5 decode_failed, " +
-        "6 decoder_unavailable (FFmpeg missing), 7 audio_device_error, 8 invalid_state, 130 cancelled.";
+        "6 decoder_unavailable (FFmpeg missing), 7 audio_device_error, 8 invalid_state, 9 data_dir_not_writable, " +
+        "10 library_corrupt, 11 library_locked (another MusicSpin process), 12 not_found, 130 cancelled.";
 }
