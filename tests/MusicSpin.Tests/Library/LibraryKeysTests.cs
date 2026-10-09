@@ -49,8 +49,7 @@ public sealed class LibraryKeysTests
         Assert.Matches("^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", id);
         Assert.True(LibraryKeys.IsId(id));
         Assert.Equal(id, LibraryKeys.ParseId(id.ToUpperInvariant(), "track"));
-        Assert.True(LibraryKeys.IsLegacyId("df9d30f537ed77fff65d4304a0248449"));
-        Assert.Contains("old-format", Assert.Throws<MusicSpinException>(() => LibraryKeys.ParseId("df9d30f537ed77fff65d4304a0248449", "track")).Message);
+        Assert.Contains("is not a valid track id", Assert.Throws<MusicSpinException>(() => LibraryKeys.ParseId("df9d30f537ed77fff65d4304a0248449", "track")).Message);
         Assert.Contains("not a valid", Assert.Throws<MusicSpinException>(() => LibraryKeys.ParseId("not-an-id", "album")).Message);
     }
 

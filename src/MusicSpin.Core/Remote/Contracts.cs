@@ -108,6 +108,6 @@ public sealed record QueueSnapshot(
     int? Seed,
     DateTimeOffset SavedAt)
 {
-    /// <summary>2: track ids are GUIDs (library schema 3). Version 1 files (path-hash ids) are still read: their entries are matched by path.</summary>
-    public const int CurrentVersion = 2;
+    /// <summary>The only format read and written. No migrations before the first release: another version is treated like a corrupt file.</summary>
+    public const int CurrentVersion = 1;
 }

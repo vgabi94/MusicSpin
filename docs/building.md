@@ -20,6 +20,8 @@ dotnet run --project src/MusicSpin.Cli -- doctor
 
 During development the data folder is `.usrdata` inside the build output (e.g. `src/MusicSpin.Cli/bin/Debug/net10.0/.usrdata`). Use `--data-dir` or `MUSICSPIN_DATA_DIR` to share one folder between builds.
 
+**No migrations before the first release.** The library schema (`library.db`) and the `queue.json` format may change freely between development builds; nothing converts old files. When a build changes them, bump `LibraryDatabase.SchemaVersion` / `QueueSnapshot.CurrentVersion`: an older `library.db` then fails with exit 10 ("created by a different MusicSpin version"), and an older `queue.json` is set aside as `queue.json.bad`. Delete `.usrdata/library.db` and run `library add` / `library scan` again to rebuild.
+
 ## Tests
 
 The tests use xUnit v3 on **Microsoft.Testing.Platform** (configured in `global.json`).
@@ -34,7 +36,7 @@ dotnet test --solution MusicSpin.slnx -- --timeout 300s       # abort a hung run
 
 | Project | What it covers |
 |---|---|
-| `MusicSpin.Tests` | Core: formats, decoder (bit-exact 24-bit PCM, sample-accurate seeking), player, queue, IPC host/client, library (scanner, change detection, move detection and relocate, search, queries, keys and ids, schema upgrade from a real schema-2 fixture in `Fixtures/schema2`, data folder), playlists, queue resolution |
+| `MusicSpin.Tests` | Core: formats, decoder (bit-exact 24-bit PCM, sample-accurate seeking), player, queue, IPC host/client, library (scanner, change detection, move detection and relocate, search, queries, keys and ids, schema version check, data folder), playlists, queue resolution |
 | `MusicSpin.Tests.Cli` | CLI in-process: parsing, `--json`, exit codes, `serve`, library commands, player commands, MCP (in-memory streams). End to end: the real `music-spin` executable spawning detached background players (crash recovery, racing starts, process-group kills, MCP over stdio) |
 | `MusicSpin.Tests.Ui` | Avalonia headless smoke test |
 

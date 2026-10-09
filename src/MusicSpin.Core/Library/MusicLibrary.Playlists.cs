@@ -185,7 +185,7 @@ public sealed partial class MusicLibrary
                 $"Not found (neither a library track nor a file): {string.Join(", ", missing.Take(5))}{(missing.Count > 5 ? $" and {missing.Count - 5} more" : string.Empty)}. Nothing was added.");
     });
 
-    /// <exception cref="MusicSpinException">InvalidArgument (malformed or old-format id); NotFound (lists unknown ids).</exception>
+    /// <exception cref="MusicSpinException">InvalidArgument (not a GUID); NotFound (lists unknown ids).</exception>
     public IReadOnlyList<PlaylistInput> PlaylistInputsForTrackIds(IEnumerable<string> ids) => Guard(() =>
     {
         ArgumentNullException.ThrowIfNull(ids);

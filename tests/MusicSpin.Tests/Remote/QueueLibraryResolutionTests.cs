@@ -60,21 +60,6 @@ public sealed class QueueLibraryResolutionTests : PlayerHostTestBase
     }
 
     [Fact]
-    public async Task A_version_1_queue_json_is_read_and_linked_to_library_ids_by_path()
-    {
-        var ids = SeedLibrary();
-        WriteQueue(1, new QueueItem(Paths[0], TrackId: LibraryKeys.PathKey(Paths[0])), new QueueItem("/not/in/library.flac", TrackId: "0123456789abcdef0123456789abcdef"));
-
-        StartHost(Fast());
-        var client = await ConnectAsync();
-        var items = (await ListAsync(client)).Items;
-        Assert.Equal(ids[0], items[0].Item.TrackId);
-        Assert.Null(items[1].Item.TrackId);
-        Assert.Contains("upgraded from version 1", Log.ToString(), StringComparison.Ordinal);
-        await PlayerTestKit.WaitUntilAsync(() => Saved()?.Version == QueueSnapshot.CurrentVersion, "queue.json saved as version 2");
-    }
-
-    [Fact]
     public async Task A_queued_track_that_moved_while_the_player_runs_is_played_from_its_new_path()
     {
         var ids = SeedLibrary();
@@ -104,6 +89,25 @@ public sealed class QueueLibraryResolutionUnhappyTests : PlayerHostTestBase
     {
         var snapshot = new QueueSnapshot(QueueSnapshot.CurrentVersion, [item], [0], 0, 0, RepeatMode.Off, false, null, DateTimeOffset.UtcNow);
         File.WriteAllText(Endpoint.QueueFile, JsonSerializer.Serialize(snapshot, ProtocolJson.Options));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(42)]
+    public async Task A_queue_json_from_another_version_is_set_aside_like_a_corrupt_one(int version)
+    {
+        var id = Seed();
+        Directory.CreateDirectory(Data.Path);
+        var snapshot = new QueueSnapshot(version, [new QueueItem(Paths[0], TrackId: id)], [0], 0, 0, RepeatMode.Off, false, null, DateTimeOffset.UtcNow);
+        File.WriteAllText(Endpoint.QueueFile, JsonSerializer.Serialize(snapshot, ProtocolJson.Options));
+        StartHost(Options());
+        var status = await (await ConnectAsync()).StatusAsync(Ct);
+        Assert.Equal(0, status.QueueLength);
+        Assert.Contains("different MusicSpin version", status.LastError, StringComparison.Ordinal);
+        Assert.Contains($"queue format {version}", status.LastError, StringComparison.Ordinal);
+        Assert.True(File.Exists(Endpoint.QueueFile + ".bad"));
+        Assert.False(File.Exists(Endpoint.QueueFile));
     }
 
     [Fact]

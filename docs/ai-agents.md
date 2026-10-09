@@ -23,7 +23,7 @@
 | Tracks of an album | `tracks --album "<exact title or id>" --json` |
 | Hi-res / format / year | `filter --hires --format flac --year-from 1990 --json` |
 
-Tip: when the user gives a partial name, call `search` first (or play directly with `play --search 'artist:"name" album:words'`), then use the exact `name`/`title` or the album `id` it returns with `--artist`/`--album`. Ids are lowercase GUIDs. Album ids are stable for a given album artist and title; track ids stay the same when files are renamed or moved. Old 32-hex ids (before library schema 3) are rejected with exit 2.
+Tip: when the user gives a partial name, call `search` first (or play directly with `play --search 'artist:"name" album:words'`), then use the exact `name`/`title` or the album `id` it returns with `--artist`/`--album`. Ids are lowercase GUIDs. Album ids are stable for a given album artist and title; track ids stay the same when files are renamed or moved.
 
 ## Library maintenance
 

@@ -508,30 +508,28 @@ public sealed class PlayerHost : IAsyncDisposable
                 snapshot = JsonSerializer.Deserialize<QueueSnapshot>(stream, ProtocolJson.Options);
             }
 
-            if (snapshot is null || snapshot.Version is < 1 or > QueueSnapshot.CurrentVersion)
+            if (snapshot is null || snapshot.Version != QueueSnapshot.CurrentVersion)
             {
-                throw new InvalidDataException(snapshot is null ? "empty document" : $"unsupported version {snapshot.Version}");
+                throw new InvalidDataException(snapshot is null ? "empty document"
+                    : $"written by a different MusicSpin version (queue format {snapshot.Version}; this version uses {QueueSnapshot.CurrentVersion})");
             }
 
-            if (snapshot.Items is { Count: > 0 } items)
+            if (_options.ResolveFromLibrary && snapshot.Items is { Count: > 0 } items)
             {
-                string? problem = null;
-                var resolved = _options.ResolveFromLibrary
-                    ? QueueTrackResolver.Resolve(_options.DataDirectory, items, null, out problem)
-                    : items.Select(i => i.TrackId is null || LibraryKeys.IsId(i.TrackId) ? i : i with { TrackId = null }).ToList();
-                if (_options.ResolveFromLibrary && problem is not null)
+                var resolved = QueueTrackResolver.Resolve(_options.DataDirectory, items, null, out var problem);
+                if (problem is not null)
                 {
                     Log($"queue entries not checked against the library: {problem}");
                 }
 
                 var moved = resolved.Where((item, k) => !string.Equals(item.Path, items[k].Path, StringComparison.Ordinal)).Count();
-                if (moved > 0 || snapshot.Version < QueueSnapshot.CurrentVersion)
+                if (moved > 0)
                 {
-                    Log($"queue: {moved} entr{(moved == 1 ? "y" : "ies")} found at a new path{(snapshot.Version < QueueSnapshot.CurrentVersion ? $"; upgraded from version {snapshot.Version}" : string.Empty)}");
+                    Log($"queue: {moved} entr{(moved == 1 ? "y" : "ies")} found at a new path");
                     Interlocked.Exchange(ref _queueDirty, 1);
                 }
 
-                snapshot = snapshot with { Items = resolved, Version = QueueSnapshot.CurrentVersion };
+                snapshot = snapshot with { Items = resolved };
             }
 
             var status = _queue.Restore(snapshot);

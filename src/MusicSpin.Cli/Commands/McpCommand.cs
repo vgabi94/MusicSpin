@@ -196,7 +196,7 @@ internal static class McpCommand
                 }), readOnly: true);
             yield return Tool("tracks", "List library tracks with filters (all must match). Text filters are case/diacritic-insensitive; every word must match.",
                 ([Description("Exact artist name (track or album artist); unknown: not_found.")] string? artist = null,
-                 [Description("Exact album title or album id (GUID); unknown: not_found; old 32-hex ids: usage.")] string? album = null,
+                 [Description("Exact album title or album id (GUID); unknown: not_found.")] string? album = null,
                  [Description("Search syntax as the search tool.")] string? search = null,
                  [Description("Title contains these words.")] string? title = null,
                  [Description("Album title contains these words.")] string? albumContains = null,
@@ -280,7 +280,7 @@ internal static class McpCommand
                 (string name,
                  [Description("Absolute paths of audio files (library tracks or other existing files).")] string[]? files = null,
                  string? album = null, string? artist = null, string? search = null, string? title = null, string? albumContains = null, string? artistContains = null,
-                 [Description("Library track ids: GUIDs (lowercase 'D' format) from search/tracks results. Unknown: not_found; malformed or old 32-hex ids: usage.")] string[]? trackIds = null,
+                 [Description("Library track ids: GUIDs (lowercase 'D' format) from search/tracks results. Unknown: not_found; not a GUID: usage.")] string[]? trackIds = null,
                  [Description("Insert before this 1-based position (default: append).")] int? position = null) => Guard(() =>
                 {
                     var selection = new LibrarySelection(album, artist, search, title, albumContains, artistContains);

@@ -14,7 +14,7 @@ internal sealed class LibraryDatabase : IDisposable
 
     private readonly FileStream? _lock;
 
-    private LibraryDatabase(LiteDatabase db, FileStream? lockFile, bool readOnly, string? file = null, string? dataDirectory = null)
+    private LibraryDatabase(LiteDatabase db, FileStream? lockFile, bool readOnly, string? file = null)
     {
         Db = db;
         _lock = lockFile;
@@ -25,32 +25,10 @@ internal sealed class LibraryDatabase : IDisposable
         Artists = db.GetCollection<ArtistRecord>("artists");
         Issues = db.GetCollection<ScanIssueRecord>("scan_issues");
         Playlists = db.GetCollection<PlaylistRecord>("playlists");
-        var version = LibraryMigration.StoredVersion(db);
-        var hasData = version < SchemaVersion && (Tracks.Count() > 0 || Playlists.Count() > 0);
+        CheckVersion(db, readOnly, file);
         if (readOnly)
         {
-            if (hasData)
-            {
-                throw new MusicSpinException(MusicSpinErrorCode.DataDirectoryNotWritable,
-                    $"The library database{(file is null ? string.Empty : $" '{file}'")} is from an older MusicSpin version (schema {version}) and needs a one-time " +
-                    $"upgrade to schema {SchemaVersion}, which needs write access. Open it once from a writable data folder.");
-            }
-
             return;
-        }
-
-        if (hasData)
-        {
-            Migration = LibraryMigration.Run(this, version, file, dataDirectory, DateTimeOffset.UtcNow);
-        }
-        else if (version < SchemaVersion)
-        {
-            LibraryMigration.WriteMarker(db, SchemaVersion);
-        }
-
-        if (db.UserVersion < SchemaVersion)
-        {
-            db.UserVersion = SchemaVersion;
         }
 
         Tracks.EnsureIndex(t => t.PathKey, unique: true);
@@ -65,14 +43,10 @@ internal sealed class LibraryDatabase : IDisposable
     }
 
     /// <summary>
-    /// Schema version (LiteDB's user version, plus a marker document written inside the migration transaction).
-    /// 1: initial; 2: folded search keys (TrackRecord.Search*, AlbumRecord.Search*, ArtistRecord.SearchName);
-    /// 3: GUID track ids + TrackRecord.PathKey, "D"-format playlist ids, name-based UUID album/artist ids (see <see cref="LibraryMigration"/>).
+    /// Schema version, stored as LiteDB's user version. There are no migrations before the first release: the schema may
+    /// change freely, and a database with any other version is refused (delete library.db and rescan).
     /// </summary>
-    public const int SchemaVersion = 3;
-
-    /// <summary>Set when this open upgraded an older database.</summary>
-    public LibraryMigrationReport? Migration { get; }
+    public const int SchemaVersion = 1;
 
     public LiteDatabase Db { get; }
     public bool ReadOnly { get; }
@@ -93,7 +67,7 @@ internal sealed class LibraryDatabase : IDisposable
         try
         {
             ValidateExistingFile(dir.LibraryDatabaseFile);
-            return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: false), lockFile, readOnly: false, dir.Path);
+            return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: false), lockFile, readOnly: false);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -131,7 +105,7 @@ internal sealed class LibraryDatabase : IDisposable
         if (!AppPaths.IsWritable(dir, out _))
         {
             ValidateExistingFile(dir.LibraryDatabaseFile);
-            return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: true), null, readOnly: true, dir.Path);
+            return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: true), null, readOnly: true);
         }
 
         var lockFile = AcquireLock(dir, lockTimeout);
@@ -140,12 +114,12 @@ internal sealed class LibraryDatabase : IDisposable
             ValidateExistingFile(dir.LibraryDatabaseFile);
             try
             {
-                return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: false), lockFile, readOnly: false, dir.Path);
+                return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: false), lockFile, readOnly: false);
             }
             catch (UnauthorizedAccessException)
             {
                 // library.db itself is read-only: still answer queries.
-                return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: true), lockFile, readOnly: true, dir.Path);
+                return Create(dir.LibraryDatabaseFile, Open(dir.LibraryDatabaseFile, readOnly: true), lockFile, readOnly: true);
             }
         }
         catch
@@ -156,11 +130,11 @@ internal sealed class LibraryDatabase : IDisposable
     }
 
     /// <summary>Constructs (touching collections/indexes) and maps LiteDB failures to LibraryCorrupt.</summary>
-    private static LibraryDatabase Create(string file, LiteDatabase db, FileStream? lockFile, bool readOnly, string dataDirectory)
+    private static LibraryDatabase Create(string file, LiteDatabase db, FileStream? lockFile, bool readOnly)
     {
         try
         {
-            return new LibraryDatabase(db, lockFile, readOnly, file, dataDirectory);
+            return new LibraryDatabase(db, lockFile, readOnly, file);
         }
         catch (Exception ex) when (IsCorruption(ex))
         {
@@ -172,6 +146,32 @@ internal sealed class LibraryDatabase : IDisposable
             db.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Stamps a new (empty) database with <see cref="SchemaVersion"/>; refuses one written with another version.
+    /// </summary>
+    private static void CheckVersion(LiteDatabase db, bool readOnly, string? file)
+    {
+        var version = db.UserVersion;
+        if (version == SchemaVersion)
+        {
+            return;
+        }
+
+        if (version == 0 && !db.GetCollectionNames().Any())
+        {
+            if (!readOnly)
+            {
+                db.UserVersion = SchemaVersion;
+            }
+
+            return;
+        }
+
+        throw new MusicSpinException(MusicSpinErrorCode.LibraryCorrupt,
+            $"The library database{(file is null ? string.Empty : $" '{file}'")} was created by a different MusicSpin version (schema {version}; this version uses {SchemaVersion}). " +
+            "Delete it (your music files are untouched; playlists saved in the library are lost), then re-add folders with 'music-spin library add' and run 'music-spin library scan'.");
     }
 
     public void Dispose()

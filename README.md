@@ -117,7 +117,7 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 - [x] Saved playlists, M3U/M3U8/PLS import/export, persistent queue
 - [x] Ranked, diacritic-insensitive search with field syntax and per-field filters
 - [x] Rename/move detection (fingerprints) and `library relocate`
-- [x] Path-independent GUID track ids, with an automatic, backed-up upgrade of older libraries
+- [x] Path-independent GUID track ids
 - [ ] Gapless playback; decoding on a separate thread into a ring buffer
 - [ ] Native DSD/DoP output; bit-perfect verification on real hardware (WASAPI exclusive, ALSA `hw:`, CoreAudio)
 - [ ] Audio-only LGPL FFmpeg build (~120 MB → a few MB), LGPL FFmpeg for macOS, signing/notarization, GitHub releases

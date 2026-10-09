@@ -110,17 +110,6 @@ public sealed class MoveDetectionUnhappyTests : LibraryTestBase
     }
 
     [Fact]
-    public void Unreadable_unchanged_file_keeps_an_empty_fingerprint_and_is_retried_next_scan()
-    {
-        RequirePosixNonRoot();
-        AddAndScan(new ScanOptions { DetectMoves = false });
-        Chmod(SoWhat, UnixFileMode.None);
-        Assert.Equal(5, Rescan().Fingerprinted);
-        Chmod(SoWhat, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        Assert.Equal(1, Rescan().Fingerprinted);
-    }
-
-    [Fact]
     public void Fingerprint_of_a_missing_or_unreadable_file_is_null()
     {
         Assert.Null(FileFingerprint.Compute(Path.Combine(Root, "nope.flac")));

@@ -20,8 +20,8 @@ public sealed record ScanOptions
     public int BatchSize { get; init; } = 256;
 
     /// <summary>
-    /// Fingerprint files that are read (and, once, unchanged files that have no fingerprint yet) and treat a vanished track
-    /// whose fingerprint matches a new file as moved (default true).
+    /// Treat a vanished track whose fingerprint matches a new file as moved (default true). Files that are read are always
+    /// fingerprinted, so turning this on later still recognises moves of tracks scanned without it.
     /// </summary>
     public bool DetectMoves { get; init; } = true;
 }
@@ -50,9 +50,6 @@ public sealed record ScanResult
 
     /// <summary>Vanished and new files that shared a fingerprint but could not be paired one-to-one (duplicates): handled as removed + added.</summary>
     public int AmbiguousMoves { get; init; }
-
-    /// <summary>Unchanged tracks that got their first fingerprint in this scan (once per file, e.g. after an upgrade).</summary>
-    public int Fingerprinted { get; init; }
 
     /// <summary>Playlist entries that now point at a moved track.</summary>
     public int PlaylistEntriesUpdated { get; init; }
@@ -170,32 +167,6 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             db.Tracks.Update(folderMoves);
         }
 
-        // 2b. Fingerprint unchanged tracks that have none yet (libraries scanned before fingerprints existed), once.
-        var fingerprinted = 0;
-        if (options.DetectMoves && !cancelled)
-        {
-            var reading = toRead.Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
-            var missingPrints = found.Keys.Where(key => !reading.Contains(key) && existing.TryGetValue(key, out var t) && t.Fingerprint.Length == 0)
-                .Select(key => existing[key]).ToList();
-            if (missingPrints.Count > 0)
-            {
-                try
-                {
-                    Parallel.ForEach(missingPrints,
-                        new ParallelOptions { MaxDegreeOfParallelism = options.MaxParallelism ?? Math.Clamp(Environment.ProcessorCount, 2, 16), CancellationToken = cancellationToken },
-                        t => t.Fingerprint = FileFingerprint.Compute(t.Path) ?? string.Empty);
-                }
-                catch (OperationCanceledException)
-                {
-                    cancelled = true;
-                }
-
-                var done = missingPrints.Where(t => t.Fingerprint.Length > 0).ToList();
-                db.Tracks.Update(done);
-                fingerprinted = done.Count;
-            }
-        }
-
         // 3. Read in parallel, write batches on this thread.
         int added = 0, updated = 0, failed = 0, read = 0;
         var addedTracks = new List<TrackRecord>();
@@ -216,7 +187,7 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                             try
                             {
                                 var track = reader.Read(item.File.Path);
-                                var print = options.DetectMoves ? FileFingerprint.Compute(item.File.Path) : null;
+                                var print = FileFingerprint.Compute(item.File.Path);
                                 queue.Add(new ReadOutcome(item.File, track, null, print), cancellationToken);
                             }
                             catch (TrackReadException ex)
@@ -415,7 +386,6 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             Failed = failed,
             Moved = moves.Count,
             AmbiguousMoves = ambiguous,
-            Fingerprinted = fingerprinted,
             PlaylistEntriesUpdated = playlistEntries,
             Moves = [.. moveList.OrderBy(m => m.To, StringComparer.Ordinal).Take(MaxMovesListed)],
             SkippedUnreadable = skippedUnreadable,

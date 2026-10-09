@@ -81,7 +81,7 @@ Limits (by design):
 - Moves are matched within one scan. If a scan runs between the delete and the re-create (for example `library watch` during a slow copy), the track is removed and later added as new.
 - The saved player queue (`queue.json`) is not rewritten by the scan. Its entries carry the track id, so when the player restores the queue, or reaches an entry whose file is gone, it looks the id up in the library and plays the track from its new path (see [Persistent queue](playback.md#persistent-queue)).
 
-Libraries scanned before fingerprints existed are fingerprinted once by the next scan (`fingerprinted` in the result; files are not re-read for tags). `library scan --no-move-detection` turns fingerprints and move matching off; renames are then removed + added.
+`library scan --no-move-detection` turns move matching off; renames are then removed + added (new id). Files that are read are fingerprinted either way, so a later scan with detection recognises moves of those tracks.
 
 ### Relocating a folder
 
@@ -110,24 +110,18 @@ Ids in JSON output (CLI and MCP) are GUIDs in the **"D" format, lower case**: `0
 
 | Id | Kind | Lifetime |
 |---|---|---|
-| Track | Random, time-ordered **UUIDv7** (RFC 9562), assigned when the track is first added | Kept through tag edits, renames and moves (scan), `library relocate`, `--full` rescans and database upgrades. A file that is removed from the library (deleted, or its folder removed) and later added again is a **new** track with a **new** id, and a new "date added" |
+| Track | Random, time-ordered **UUIDv7** (RFC 9562), assigned when the track is first added | Kept through tag edits, renames and moves (scan), `library relocate` and `--full` rescans. A file that is removed from the library (deleted, or its folder removed) and later added again is a **new** track with a **new** id, and a new "date added" |
 | Album | Name-based **UUIDv8**: SHA-256 of the album artist key and title key (folded, case/diacritic-insensitive) | The same on every machine and after a rebuild. Changes when the album artist or title tag changes |
 | Artist | Name-based UUIDv8 of the artist key | As for albums |
 | Playlist | UUIDv7, assigned at creation | Kept through renames |
 
 Why UUIDv7 for tracks: ids are generated locally without coordination, never collide in practice (74 random bits per millisecond), contain no MAC address (unlike v1), sort by creation time (new tracks append at the end of the index) and are built into .NET (`Guid.CreateVersion7`). Albums and artists are *defined* by their names (retagging an album makes it a different album), so their ids are derived from the names: a random id would have exactly the same lifetime, without being reproducible.
 
-Ids from MusicSpin versions before library schema 3 were 32 hex digits (a hash of the path). They are rejected with exit **2 `usage`** and a message that explains the new format. Get current ids from `tracks`, `albums` or `search --json`. A well-formed GUID that is not in the library is exit **12 `not_found`**.
+A track or playlist id that is not a GUID is exit **2 `usage`**; a well-formed GUID that is not in the library is exit **12 `not_found`**. `--album` takes a title or an id, so anything that is neither is exit 12. Get ids from `tracks`, `albums` or `search --json`.
 
-### Upgrading an older library
+### Schema version
 
-The library database has a schema version. When a command or the player opens a database written by an older MusicSpin version (schema 2, path-based ids), it upgrades it once:
-
-1. **Backup:** the database is copied to `.usrdata/library.db.bak-<old version>` (for example `library.db.bak-2`). An existing backup with that name is kept, not overwritten. If the copy fails (disk full, permissions), nothing is changed and the command fails with exit **9**.
-2. **One transaction:** every track gets a UUIDv7 (its timestamp is the track's "date added"); album and artist ids are recomputed; playlist ids and every playlist entry's track id are remapped; the search keys are rebuilt; then the new schema version is recorded. Two records with the same normalized path (MusicSpin does not write those, but a damaged or hand-edited database can contain them) are merged into one track; playlist entries of both follow the kept track.
-3. **Queue:** a `queue.json` from the older version is rewritten with the new ids (by old id, else by path; entries that match nothing keep their path and lose the id). The original is kept as `queue.json.bak-1`. A `queue.json` that cannot be read is moved to `queue.json.bad` with a warning.
-
-The CLI prints one notice on stderr (`{"event":"library_upgraded","fromVersion":2,"toVersion":3,"backup":...,"tracks":...,"elapsedSeconds":...}` with `--json`); the player logs it to `player.log`. Any error during the transaction (a damaged record, an I/O error) rolls everything back and fails with exit **10 `library_corrupt`**: the database is exactly as it was, and the next run tries again. A library on read-only media cannot be upgraded: exit **9** ("needs a one-time upgrade"); open it once from a writable location. Downgrading is not supported: restore the backup to go back to an older MusicSpin. Upgrading 3,000 tracks takes about 1.5 s ([timings](#timings)).
+The database records a **schema version** (LiteDB user version, currently **1**). Until the first release there are **no migrations**: the schema may change freely between development builds. A `library.db` written with another schema version is refused with exit **10 `library_corrupt`** ("created by a different MusicSpin version"; nothing is changed). Delete `.usrdata/library.db` (your music files are untouched; playlists saved in the library are lost), then `library add` your folders again and `library scan`.
 
 ### Watching
 
@@ -140,19 +134,17 @@ Synthetic library of 2,999 tagged files (FLAC 16/44.1 and 24/96 plus MP3, about 
 | Operation | Scan time | Wall time (including process start) |
 |---|---:|---:|
 | Initial scan | 1.59-1.89 s | 2.04-2.24 s |
-| Initial scan, `--no-move-detection` | 1.45-1.64 s | 1.80-2.00 s |
+| Initial scan, `--no-move-detection` | 1.60-1.82 s | 1.90-2.17 s |
 | Rescan, nothing changed | 0.21-0.26 s | 0.55-0.63 s |
 | Rescan, 50 files touched | 0.63-0.64 s | 0.97-0.98 s |
-| Rescan, 50 files touched, `--no-move-detection` | 0.63-0.64 s | 0.97-1.00 s |
+| Rescan, 50 files touched, `--no-move-detection` | 0.57-0.59 s | 0.89-0.96 s |
 | Rescan, 1 file deleted | 0.56-0.61 s | 0.91-0.97 s |
 | Rescan after renaming a folder of 100 files (100 moves) | 0.70-0.76 s | 1.06-1.10 s |
-| One-time fingerprint backfill (library from an older version) | 0.64-0.70 s | 1.01-1.06 s |
 | Full rescan (`--full`) | 1.87-2.10 s | 2.40-2.54 s |
 | `library relocate` of a folder with 100 tracks | | 0.86-0.87 s |
-| One-time [upgrade](#upgrading-an-older-library) of a schema-2 library (2,999 tracks, a playlist with 2,999 entries) | 1.48 s | 1.91-1.93 s |
 | `tracks`, `albums`, `search`, `filter`, `stats`, `check` | | 0.32-0.48 s each |
 
-Fingerprinting made no measurable difference to full scans here (the differences between runs are larger). It adds about 0.05-0.1 s per 50 re-read files. Rescans with changes also rebuild the folded search keys, which costs about 0.1 s for 3,000 tracks. On real files it adds one read of the last 64 KB per new or changed file; on a cold spinning disk that is an extra seek per file (not measured). GUID track ids with a separate unique path key did not change scan times measurably either (same runs, interleaved with the previous version: initial 1.55-1.71 s, rescan 0.22-0.26 s, `--full` 1.86-2.29 s). The database for 3,000 tracks is about 6.4 MB (5.5 MB before GUID ids: the extra path-key index and 36-character ids). An upgraded database is larger (about 12.7 MB here) because LiteDB keeps the pages freed by the upgrade and reuses them for later writes instead of shrinking the file.
+Fingerprinting made no measurable difference to full scans here (the differences between runs are larger). It adds about 0.05-0.1 s per 50 re-read files. Rescans with changes also rebuild the folded search keys, which costs about 0.1 s for 3,000 tracks. On real files it adds one read of the last 64 KB per new or changed file; on a cold spinning disk that is an extra seek per file (not measured). GUID track ids with a separate unique path key did not change scan times measurably (interleaved runs against path-hash ids). The database for 3,000 tracks is about 6.4 MB.
 
 ## What is stored per track
 
@@ -190,7 +182,7 @@ Search compares **folded** text. Folding is applied to the stored fields at scan
 
 Side effect: marks are stripped in every script, e.g. Japanese dakuten (`が` → `か`), so search is slightly broader there. CJK and Hangul text is otherwise kept as is.
 
-The keys are stored per track (title, artists, album, genre, file name, and all of them combined), per album (title, album + track artists, genres) and per artist (name). The library database records a **schema version** (LiteDB user version, now **2**). Opening an older database for writing (any command that is not on a read-only folder) recomputes the keys once (about 0.9 s for 3,000 tracks). An older database on read-only media still works: the keys are computed on the fly, which is slower.
+The keys are stored per track (title, artists, album, genre, file name, and all of them combined), per album (title, album + track artists, genres) and per artist (name). They are computed when a track is read and when albums/artists are indexed after a scan.
 
 ### Search syntax
 

@@ -31,9 +31,6 @@ public sealed partial class MusicLibrary : IDisposable
     /// <summary>True when the data folder is read-only; modifying calls throw.</summary>
     public bool IsReadOnly => _db.ReadOnly;
 
-    /// <summary>Set when opening this library upgraded an older database (show it to the user once).</summary>
-    public LibraryMigrationReport? Migration => _db.Migration;
-
     /// <summary>Opens for reading and writing (creates the data folder and database on first use).</summary>
     /// <exception cref="MusicSpinException">DataDirectoryNotWritable, LibraryLocked, LibraryCorrupt.</exception>
     public static MusicLibrary OpenWritable(DataDirectory dir, IAudioDecoderFactory? ffmpeg = null, TimeSpan? lockTimeout = null, TimeProvider? time = null, ITrackReader? reader = null)
@@ -464,11 +461,6 @@ public sealed partial class MusicLibrary : IDisposable
 
         var folded = LibrarySearch.Fold(album);
         var matches = folded.Length == 0 ? [] : _db.Albums.FindAll().Where(a => a.SearchTitle == folded).ToList();
-        if (matches.Count == 0 && LibraryKeys.IsLegacyId(album.Trim()))
-        {
-            LibraryKeys.ParseId(album, "album"); // throws: explains the id format change
-        }
-
         return matches;
     }
 

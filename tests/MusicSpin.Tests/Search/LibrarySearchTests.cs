@@ -188,44 +188,22 @@ public sealed class LibrarySearchTests : LibraryTestBase
     }
 
     [Fact]
-    public void Opening_an_older_database_upgrades_once_and_rebuilds_search_keys()
-    {
-        CreateLibrary();
-        var before = AllTracks().ToDictionary(t => t.Path, t => t.Id, StringComparer.Ordinal);
-        DowngradeToSchema2();
-        using (var library = Open())
-        {
-            Assert.NotNull(library.Migration);
-            Assert.Equal(["Jóga"], Titles(library.Search("joga").Tracks));
-            Assert.Equal(before.Count, library.Migration!.Tracks);
-        }
-
-        using var db = new LiteDatabase(new ConnectionString { Filename = Data.LibraryDatabaseFile, Connection = ConnectionType.Direct, ReadOnly = true });
-        Assert.Equal(LibraryDatabase.SchemaVersion, LibraryMigration.StoredVersion(db));
-        Assert.All(db.GetCollection("tracks").FindAll(), d =>
-        {
-            Assert.NotEqual(string.Empty, d["SearchText"].AsString);
-            Assert.True(LibraryKeys.IsId(d["_id"].AsString));
-            Assert.Equal(32, d["PathKey"].AsString.Length);
-        });
-        Assert.True(File.Exists(Data.LibraryDatabaseFile + ".bak-2"));
-        // Ids are new GUIDs (schema 2 used path hashes); playlists would be remapped the same way.
-        Assert.All(AllTracks(), t => Assert.NotEqual(before[t.Path], t.Id));
-    }
-
-    [Fact]
     [Trait("Category", "Unhappy")]
-    public void An_older_database_on_read_only_media_needs_a_writable_upgrade()
+    public void A_library_from_another_schema_version_on_read_only_media_is_refused()
     {
         RequirePosixNonRoot();
         CreateLibrary();
-        DowngradeToSchema2();
+        using (var db = new LiteDatabase(new ConnectionString { Filename = Data.LibraryDatabaseFile, Connection = ConnectionType.Direct }))
+        {
+            db.UserVersion = LibraryDatabase.SchemaVersion + 1;
+        }
+
         Chmod(Data.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         try
         {
             var ex = Assert.Throws<MusicSpinException>(() => OpenRead());
-            Assert.Equal(MusicSpinErrorCode.DataDirectoryNotWritable, ex.Code);
-            Assert.Contains("upgrade", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(MusicSpinErrorCode.LibraryCorrupt, ex.Code);
+            Assert.Contains("different MusicSpin version", ex.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -241,8 +219,6 @@ public sealed class LibrarySearchTests : LibraryTestBase
         LibraryTestData.Write(Path.Combine(Music, "Beyonce", "01.flac"), LibraryTestData.Tiny16, "Crazy in Love", "Beyoncé", "Dangerously in Love", null, 1, 1, 2003, "R&B");
         AddAndScan();
     }
-
-    private void DowngradeToSchema2() => LegacyLibrary.DowngradeToSchema2(Data);
 
     private static string?[] Titles(Page<TrackRecord> page) => [.. page.Items.Select(t => t.Title)];
 }

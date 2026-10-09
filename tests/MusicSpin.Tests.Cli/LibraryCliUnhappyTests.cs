@@ -122,6 +122,29 @@ public sealed class LibraryCliUnhappyTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Database_from_another_schema_version_is_exit_10_and_left_alone()
+    {
+        Assert.Equal(0, (await _cli.RunAsync("library", "add", _music, "--json")).ExitCode);
+        var file = Path.Combine(_cli.DataDir, "library.db");
+        using (var db = new LiteDB.LiteDatabase(new LiteDB.ConnectionString { Filename = file, Connection = LiteDB.ConnectionType.Direct }))
+        {
+            db.UserVersion = 7;
+        }
+
+        var before = File.ReadAllBytes(file);
+        foreach (var args in new[] { new[] { "library", "scan" }, ["tracks"], ["playlist", "list"] })
+        {
+            var message = (await Error(ExitCodes.LibraryCorrupt, string.Join(' ', args), args)).GetProperty("error").GetProperty("message").GetString();
+            Assert.Contains("created by a different MusicSpin version (schema 7", message, StringComparison.Ordinal);
+            Assert.Contains("Delete it", message, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(file));
+        File.Delete(file);
+        Assert.Equal(0, (await _cli.RunAsync("library", "add", _music, "--json")).ExitCode);
+    }
+
+    [Fact]
     public async Task Locked_database_is_exit_11()
     {
         await ScanAsync();

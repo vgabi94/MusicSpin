@@ -21,7 +21,7 @@ public sealed class MoveDetectionTests : LibraryTestBase
     public void Initial_scan_fingerprints_every_track()
     {
         var result = AddAndScan();
-        Assert.Equal((6, 0, 0), (result.Added, result.Moved, result.Fingerprinted));
+        Assert.Equal((6, 0), (result.Added, result.Moved));
         Assert.All(AllTracks(), t => Assert.Matches("^[0-9a-f]+:[0-9a-f]{32}$", t.Fingerprint));
         Assert.Equal(6, AllTracks().Select(t => t.Fingerprint).Distinct().Count());
     }
@@ -135,18 +135,16 @@ public sealed class MoveDetectionTests : LibraryTestBase
     }
 
     [Fact]
-    public void Older_library_without_fingerprints_is_backfilled_once_then_moves_work()
+    public void Tracks_scanned_without_detection_are_fingerprinted_so_later_moves_are_recognised()
     {
         AddAndScan(new ScanOptions { DetectMoves = false });
-        Assert.All(AllTracks(), t => Assert.Equal(string.Empty, t.Fingerprint));
-
-        var backfill = Rescan();
-        Assert.Equal((6, 6, 0), (backfill.Fingerprinted, backfill.Unchanged, backfill.Added));
         Assert.All(AllTracks(), t => Assert.NotEmpty(t.Fingerprint));
-        Assert.Equal(0, Rescan().Fingerprinted);
+        var id = ByPath(AllTracks(), SoWhat).Id;
 
         File.Move(SoWhat, SoWhat + ".moved.flac");
-        Assert.Equal(1, Rescan().Moved);
+        var result = Rescan();
+        Assert.Equal((1, 0, 0), (result.Moved, result.Added, result.Removed));
+        Assert.Equal(id, ByPath(AllTracks(), SoWhat + ".moved.flac").Id);
     }
 
     [Fact]
@@ -155,8 +153,7 @@ public sealed class MoveDetectionTests : LibraryTestBase
         AddAndScan();
         File.Move(SoWhat, Path.Combine(Music, "renamed.flac"));
         var result = Rescan(new ScanOptions { DetectMoves = false });
-        Assert.Equal((1, 1, 0, 0), (result.Added, result.Removed, result.Moved, result.Fingerprinted));
-        Assert.Equal(string.Empty, ByPath(AllTracks(), Path.Combine(Music, "renamed.flac")).Fingerprint);
+        Assert.Equal((1, 1, 0), (result.Added, result.Removed, result.Moved));
     }
 
     [Fact]

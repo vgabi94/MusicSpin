@@ -51,13 +51,10 @@ public static class LibraryKeys
     /// <summary>True for an id in the current format: a GUID in the "D" format (any case).</summary>
     public static bool IsId(string? value) => value is { Length: 36 } && Guid.TryParseExact(value, "D", out _);
 
-    /// <summary>True for a 32-hex-digit id from MusicSpin before library schema 3 (path/name hashes).</summary>
-    public static bool IsLegacyId(string? value) => value is { Length: 32 } && value.All(char.IsAsciiHexDigit);
-
     /// <summary>
     /// Validates an id given by a user/agent and returns it in canonical (lowercase "D") form.
     /// </summary>
-    /// <exception cref="MusicSpinException">InvalidArgument: an old 32-hex id, or not a GUID.</exception>
+    /// <exception cref="MusicSpinException">InvalidArgument: not a GUID.</exception>
     public static string ParseId(string value, string what)
     {
         var trimmed = value?.Trim() ?? string.Empty;
@@ -66,10 +63,8 @@ public static class LibraryKeys
             return trimmed.ToLowerInvariant();
         }
 
-        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, IsLegacyId(trimmed)
-            ? $"'{trimmed}' is an old-format {what} id (32 hex digits, before library schema 3). Ids are GUIDs now " +
-              "(e.g. 0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e); get the current id from 'music-spin tracks/albums/search --json'."
-            : $"'{trimmed}' is not a valid {what} id. Ids are GUIDs in the form 0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e.");
+        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument,
+            $"'{trimmed}' is not a valid {what} id. Ids are GUIDs in the form 0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e (see 'music-spin tracks/albums/search --json').");
     }
 
     /// <summary>True when <paramref name="path"/> equals or is inside <paramref name="folder"/>.</summary>

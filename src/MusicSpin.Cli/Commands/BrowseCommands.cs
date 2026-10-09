@@ -96,7 +96,7 @@ internal static class BrowseCommands
         var (limit, offset, desc) = (Options.Limit(), Options.Offset(), Options.Descending());
         var sort = Options.Sort("default", TrackSorts);
         var artist = new Option<string?>("--artist") { Description = "Track artist or album artist (exact name, case-insensitive). Unknown: exit 12." };
-        var album = new Option<string?>("--album") { Description = "Album title (exact, case-insensitive) or album id (GUID). Unknown: exit 12; old 32-hex id: exit 2." };
+        var album = new Option<string?>("--album") { Description = "Album title (exact, case-insensitive) or album id (GUID). Unknown: exit 12." };
         var text = new TrackTextOptions();
         var command = new Command("tracks", "List tracks (default order: album artist, album, disc, track).") { album, artist, sort, desc, limit, offset };
         foreach (var option in text.All)

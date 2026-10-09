@@ -153,7 +153,7 @@ internal static class LibraryCommand
         var quiet = new Option<bool>("--quiet") { Description = "No progress on stderr." };
         var noMoves = new Option<bool>("--no-move-detection")
         {
-            Description = "Do not fingerprint files or recognise renamed/moved files (they are then removed + added, losing playlist entries and date added).",
+            Description = "Do not recognise renamed/moved files (they are then removed + added: new id and date added; playlist entries become missing).",
         };
         var command = new Command("scan",
             "Scan library folders: add new, update changed, drop deleted files. Progress goes to stderr (JSON lines with --json). " +

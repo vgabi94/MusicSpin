@@ -125,6 +125,8 @@ public sealed class QueuePersistenceTests : PlayerHostTestBase
     [InlineData("")]
     [InlineData("null")]
     [InlineData("[1,2,3]")]
+    [InlineData("""{"version":0,"items":[],"order":[],"positionSeconds":0,"repeat":"off","shuffle":false,"savedAt":"2026-01-01T00:00:00Z"}""")]
+    [InlineData("""{"version":2,"items":[{"path":"/music/q/01.flac","trackId":"0192f0c4-7b1e-7c3a-9d2e-5f1a2b3c4d5e"}],"order":[0],"index":0,"positionSeconds":0,"repeat":"off","shuffle":false,"savedAt":"2026-01-01T00:00:00Z"}""")]
     [InlineData("""{"version":99,"items":[],"order":[],"positionSeconds":0,"repeat":"off","shuffle":false,"savedAt":"2026-01-01T00:00:00Z"}""")]
     [InlineData("""{"version":1,"items":[{"path":"/music/q/01.flac"}],"order":[0],"index":5,"positionSeconds":0,"repeat":"off","shuffle":false,"savedAt":"2026-01-01T00:00:00Z"}""")]
     [InlineData("""{"version":1,"items":[{"path":"/music/q/01.flac"},{"path":"/music/q/02.flac"}],"order":[0,0],"index":0,"positionSeconds":0,"repeat":"off","shuffle":false,"savedAt":"2026-01-01T00:00:00Z"}""")]
