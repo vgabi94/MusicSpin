@@ -92,3 +92,21 @@ public sealed record PlayerProcessInfo(
     string? LogFile,
     double? IdleTimeoutSeconds,
     OutputInfo Output);
+
+/// <summary>
+/// The persisted state of a queue (<c>.usrdata/queue.json</c>): entries in play order, their original-order keys (so
+/// shuffle off can restore the original order after a restart), the current index and position, and the modes.
+/// </summary>
+public sealed record QueueSnapshot(
+    int Version,
+    IReadOnlyList<QueueItem> Items,
+    IReadOnlyList<long> Order,
+    int? Index,
+    double PositionSeconds,
+    RepeatMode Repeat,
+    bool Shuffle,
+    int? Seed,
+    DateTimeOffset SavedAt)
+{
+    public const int CurrentVersion = 1;
+}

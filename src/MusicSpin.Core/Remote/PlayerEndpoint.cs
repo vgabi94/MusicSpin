@@ -18,6 +18,7 @@ public sealed record PlayerEndpoint(string DataDirectory, string Address, bool I
     public const string LockFileName = "player.lock";
     public const string InfoFileName = "player.json";
     public const string LogFileName = "player.log";
+    public const string QueueFileName = "queue.json";
 
     /// <summary>Longest socket path we use directly (sun_path is 104 bytes on macOS, 108 on Linux, incl. NUL).</summary>
     public const int MaxSocketPathBytes = 100;
@@ -27,6 +28,9 @@ public sealed record PlayerEndpoint(string DataDirectory, string Address, bool I
     public string InfoFile => Path.Combine(DataDirectory, InfoFileName);
 
     public string LogFile => Path.Combine(DataDirectory, LogFileName);
+
+    /// <summary>The persisted queue (<c>queue.json</c>), restored when a player starts.</summary>
+    public string QueueFile => Path.Combine(DataDirectory, QueueFileName);
 
     /// <summary>Human-readable endpoint, e.g. <c>unix:/path/player.sock</c> or <c>pipe:musicspin-ab12...</c>.</summary>
     public string Display => IsNamedPipe ? $"pipe:{Address}" : $"unix:{Address}";

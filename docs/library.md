@@ -192,4 +192,48 @@ Only one process writes the library at a time (`.usrdata/library.lock`). A secon
 
 ## Playlists
 
-**Not supported yet.** There are no saved playlists and no M3U/M3U8/PLS import or export. The background player's queue is the only list of tracks, and it is not persisted across player restarts. **Planned.**
+Saved playlists live in `library.db` (collection `playlists`), next to the tracks. Commands: [`playlist`](cli-reference.md#playlist) in the CLI, `playlists`/`playlist_*` tools in the [MCP server](mcp.md#tools).
+
+**Names.** Trimmed, 1-200 characters, no control characters. Unique **case-insensitively** (same normalization as artist names). Creating or renaming onto a taken name is exit **8 `invalid_state`**; `import --replace` / `queue save --replace` overwrite on purpose. Every command also accepts the playlist id.
+
+**Entries** are ordered and keep both the library **track id** and the **path**. Positions are **1-based** everywhere; ranges are `3`, `2-5` or `1,3,5-7`. Positions outside the playlist, `0`, reversed ranges or bad syntax are exit **2 `usage`**. Each entry has a status:
+
+| Status | Meaning |
+|---|---|
+| `library` | A library track. Title/artist/album/duration come from the library |
+| `file` | Not in the library, but the file exists. It is played like any file |
+| `missing` | Neither. Kept (so it can come back after a rescan or remount) and **left out with a warning** when the playlist is played or queued |
+
+An entry is resolved by track id first, then by path, then by checking the file on disk. Writing a playlist (add/remove/move/...) refreshes stored ids and paths. A playlist holds at most 50,000 entries (exit 2 beyond that). Playing an empty playlist, or one where every entry is missing, is exit **12 `not_found`**.
+
+### Import (M3U, M3U8, PLS)
+
+`playlist import <file> [--name N] [--replace]` (default name: the file name without extension).
+
+- **Format** from the extension (`.m3u`, `.m3u8`, `.pls`), otherwise sniffed (`[playlist]` → PLS).
+- **Encoding:** a BOM (UTF-8, UTF-16 LE/BE) wins. Otherwise strict UTF-8, falling back to **Latin-1** when the bytes are not valid UTF-8 (reported in `encoding`, e.g. `latin1 (invalid UTF-8)` for a mislabelled `.m3u8`). A file containing NUL bytes is not a playlist: exit **4 `unsupported_format`**. Files above 64 MB are refused (exit 2).
+- **M3U/M3U8:** `#EXTM3U` is optional. `#EXTINF:<seconds>,<artist> - <title>` is used as the display text for entries that are not in the library; a malformed `#EXTINF` is a warning. Other `#` lines are ignored.
+- **PLS:** `FileN`, `TitleN`, `LengthN`. A missing `[playlist]` header or a wrong `NumberOfEntries` is a warning (a file with neither a header nor `FileN` lines is exit 4). For a duplicate `FileN` the last one wins. Unknown keys are reported.
+- **Paths:** relative paths are relative to the playlist file's folder. `\` and `/` both work as separators, `file://` URIs and `%20`-style encoding are decoded. Windows paths from another machine (`D:\Music\Artist\Album\01.flac`) are matched to the library by their trailing folder + file name, but only when exactly one library track matches (ties and file-name-only matches stay missing).
+- **Streams** (`http://`, `https://`, ...) are skipped with a warning and listed in `skippedStreams`.
+- **Unresolved entries** are imported as `missing` and listed (line number + text) in `missing` (first 200; `missingCount` has the total).
+- Warnings are capped at 50 per import.
+
+The result reports `playlist`, `entries`, `inLibrary`, `outsideLibrary`, `missingCount`, `missing`, `skippedStreams`, `format`, `encoding`, `warnings` and `replaced`.
+
+### Export
+
+`playlist export <name> <file> [--format m3u8|m3u|pls] [--relative] [--force]`
+
+- Format: `--format`, else the file's extension, else `m3u8`.
+- `m3u8`: UTF-8 without BOM, `#EXTM3U` + `#EXTINF`. `m3u`: Latin-1 when every character fits, otherwise UTF-8 with a warning. `pls`: `[playlist]` version 2.
+- `--relative` writes paths relative to the target file's folder (paths on another drive stay absolute).
+- Missing entries are written with their stored path, with a warning.
+- The file is written to a temporary file and renamed into place (atomic). An existing file needs `--force` (otherwise exit **8**). A missing target folder is exit **3**; a target that is a folder is exit **2**; a write error (permissions, read-only media) is exit **1** and leaves no partial file.
+
+### Playing playlists and saving the queue
+
+- `play --playlist <name>` replaces the queue with the playlist; `queue add --playlist <name>` appends it. Both take `--shuffle`/`--seed` like the other sources.
+- `queue save <name> [--replace]` saves the running player's queue **in its current play order** (the shuffled order when shuffle is on). An empty queue is exit 8; without a player exit 13.
+
+The background player's queue itself is also persisted (see [Playback → Persistent queue](playback.md#persistent-queue)).

@@ -64,6 +64,40 @@ internal static class PlayerSupport
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// <c>resume</c>: on the running player, or (when none runs but a saved queue exists) on a newly started player,
+    /// which restores the saved queue and continues where the last one stopped.
+    /// </summary>
+    /// <exception cref="MusicSpinException">PlayerNotRunning when no player runs and nothing is saved.</exception>
+    public static async Task<(JsonElement Data, bool Started)> ResumeAsync(CommandRunner runner, ParseResult parseResult,
+        string backend, string? device, bool exclusive, CancellationToken cancellationToken)
+    {
+        PlayerClient client;
+        var started = false;
+        try
+        {
+            client = await ConnectAsync(runner, parseResult, cancellationToken).ConfigureAwait(false);
+        }
+        catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.PlayerNotRunning && File.Exists(Endpoint(runner, parseResult).QueueFile))
+        {
+            (client, started) = await ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (client.ConfigureAwait(false))
+        {
+            try
+            {
+                return (await client.SendAsync("resume", null, cancellationToken).ConfigureAwait(false), started);
+            }
+            catch (PlayerRequestException ex) when (started && ex.ExitCode == ExitCodes.InvalidState)
+            {
+                // e.g. the saved queue was corrupt or empty: say why the new player has nothing to play
+                var status = await client.StatusAsync(cancellationToken).ConfigureAwait(false);
+                throw new MusicSpinException(MusicSpinErrorCode.InvalidState, status.LastError is { } notice ? $"{ex.Message} {notice}" : ex.Message);
+            }
+        }
+    }
+
     /// <summary>Runs one request against the running player and prints the resulting status.</summary>
     public static void Control(CommandRunner runner, Command command, string cmd, Func<ParseResult, object?>? args = null, string? name = null)
     {

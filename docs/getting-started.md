@@ -39,7 +39,8 @@ Settings, the library database and the background player's files all live in **`
 ├── player.sock        background player endpoint (Unix socket, mode 0600; a named pipe on Windows)
 ├── player.json        running player info: pid, endpoint, version, output (0600)
 ├── player.lock        held by the running player (one player per data folder)
-└── player.log         background player log (rotated to player.log.1 above 1 MiB)
+├── player.log         background player log (rotated to player.log.1 above 1 MiB)
+└── queue.json         the player's saved queue, restored paused by the next player (a corrupt one is moved to queue.json.bad)
 ```
 
 **How the data folder is chosen** (the first match wins):

@@ -24,6 +24,7 @@ internal sealed class LibraryDatabase : IDisposable
         Albums = db.GetCollection<AlbumRecord>("albums");
         Artists = db.GetCollection<ArtistRecord>("artists");
         Issues = db.GetCollection<ScanIssueRecord>("scan_issues");
+        Playlists = db.GetCollection<PlaylistRecord>("playlists");
         if (!readOnly)
         {
             Tracks.EnsureIndex(t => t.FolderId);
@@ -33,6 +34,7 @@ internal sealed class LibraryDatabase : IDisposable
             Tracks.EnsureIndex(t => t.SortKey);
             Albums.EnsureIndex(a => a.AlbumArtistKey);
             Artists.EnsureIndex(a => a.Key);
+            Playlists.EnsureIndex(p => p.NameKey, unique: true);
         }
     }
 
@@ -43,6 +45,7 @@ internal sealed class LibraryDatabase : IDisposable
     public ILiteCollection<AlbumRecord> Albums { get; }
     public ILiteCollection<ArtistRecord> Artists { get; }
     public ILiteCollection<ScanIssueRecord> Issues { get; }
+    public ILiteCollection<PlaylistRecord> Playlists { get; }
 
     internal static BsonMapper Mapper { get; } = CreateMapper();
 
@@ -245,6 +248,16 @@ internal sealed class LibraryDatabase : IDisposable
         mapper.Entity<AlbumRecord>().Id(x => x.Id, autoId: false);
         mapper.Entity<ArtistRecord>().Id(x => x.Id, autoId: false);
         mapper.Entity<ScanIssueRecord>().Id(x => x.Id, autoId: false);
+        mapper.Entity<PlaylistRecord>().Id(x => x.Id, autoId: false);
+
+        // LiteDB 5 builds entity mappers lazily on first use and publishes them before their member lists are complete, so two
+        // databases serializing a type for the first time on different threads (MCP tool calls, parallel tests) can see a half-built
+        // mapper ("Collection was modified", or members silently skipped). Build every mapper once, here, before the mapper is shared.
+        foreach (var type in new[] { typeof(LibraryFolderRecord), typeof(TrackRecord), typeof(AlbumRecord), typeof(ArtistRecord), typeof(ScanIssueRecord), typeof(PlaylistRecord), typeof(PlaylistEntryRecord) })
+        {
+            mapper.ToObject(type, mapper.ToDocument(type, Activator.CreateInstance(type)!));
+        }
+
         return mapper;
     }
 }

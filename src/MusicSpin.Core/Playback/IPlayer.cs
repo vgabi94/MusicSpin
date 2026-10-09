@@ -63,6 +63,13 @@ public interface IPlayer : IDisposable
 
     void Seek(TimeSpan position);
 
+    /// <summary>
+    /// Positions a stopped track at <paramref name="position"/> and reports it as Paused without opening the audio device
+    /// (used when a saved queue is restored). <see cref="Play"/> continues from there.
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidState when no track is loaded.</exception>
+    void Cue(TimeSpan position);
+
     event EventHandler<PlayerStateChangedEventArgs>? StateChanged;
 
     event EventHandler<PlayerPositionChangedEventArgs>? PositionChanged;

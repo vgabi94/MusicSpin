@@ -73,15 +73,19 @@ $ music-spin status --json; echo $?
 
 Notes:
 
-- `play` and `queue add` are the only commands that start the player. Everything else is safe to call at any time.
+- `play`, `queue add` and (with a saved queue) `resume` are the only commands that start the player. Everything else is safe to call at any time.
 - `status` includes the hi-res facts: `track.sampleRate`, `track.bitsPerSample`, `track.codec`, `track.lossless`, `track.hiRes` and `output.exclusive`.
 - After a crash (e.g. `kill -9`), commands exit 13 and mention the stale pid. The next `play` cleans up the leftovers.
 - `player status` is the cheap "is anything running?" check. It exits 0 either way.
-- `repeat off|one|all` and `shuffle on|off|toggle [--seed N]` change the running queue; `status` reports `repeat`, `shuffle` and `shuffleSeed`. Changes are saved as defaults for the next player (see [Playback](playback.md#shuffle-and-repeat)). There are no playlists.
+- `repeat off|one|all` and `shuffle on|off|toggle [--seed N]` change the running queue; `status` reports `repeat`, `shuffle` and `shuffleSeed`. Changes are saved as defaults for the next player (see [Playback](playback.md#shuffle-and-repeat)).
+- Playlists: `playlist create/add/show/...` (positions are 1-based), `play --playlist <name>`, `queue add --playlist <name>`, `queue save <name>`, `playlist import/export` for M3U/M3U8/PLS. Missing entries come back as `warnings` when played. See [Music library → Playlists](library.md#playlists).
+- The queue survives the player: a new player restores it **paused**, and `resume` starts the player again when no player runs but a saved queue exists ([Persistent queue](playback.md#persistent-queue)).
 
 ## `serve`: JSON-lines protocol (v1)
 
 `music-spin serve` runs a player **inside** the calling process. Use it when you want to own the player's lifetime and receive events, rather than use the shared background player. It speaks the same protocol as the background player's socket.
+
+The protocol works on files and the queue only: it has no library or playlist commands, because the player does not own the library. To play a saved playlist through `serve`, read its paths with `music-spin playlist show <name> --json` and send them as the queue. `serve` does not persist its queue (`queue.json` belongs to the background player).
 
 One request per line on stdin; one response per line on stdout with the same `id`. Events have no `id` and can arrive at any time.
 

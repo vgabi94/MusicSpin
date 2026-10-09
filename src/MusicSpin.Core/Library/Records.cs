@@ -113,3 +113,30 @@ public sealed class ScanIssueRecord
     public long ModifiedUtcTicks { get; set; }
     public long AtUtcTicks { get; set; }
 }
+
+/// <summary>A saved playlist. Entries are embedded and ordered; names are unique case-insensitively (<see cref="NameKey"/>).</summary>
+public sealed class PlaylistRecord
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary><see cref="LibraryKeys.NameKey"/> of <see cref="Name"/> (unique index).</summary>
+    public string NameKey { get; set; } = string.Empty;
+    public long CreatedUtcTicks { get; set; }
+    public long ModifiedUtcTicks { get; set; }
+    public List<PlaylistEntryRecord> Entries { get; set; } = [];
+}
+
+/// <summary>
+/// One playlist entry: the library track id when the file is in the library (null otherwise) and the path, so the entry
+/// can be re-resolved when the track id is unknown or gone. Title/artist/duration are hints from an imported file
+/// (#EXTINF / PLS TitleN) for entries outside the library.
+/// </summary>
+public sealed class PlaylistEntryRecord
+{
+    public string? TrackId { get; set; }
+    public string Path { get; set; } = string.Empty;
+    public string? Title { get; set; }
+    public string? Artist { get; set; }
+    public double? DurationSeconds { get; set; }
+}

@@ -8,7 +8,7 @@ namespace MusicSpin.Core.Library;
 /// The music library stored in <c>&lt;data dir&gt;/library.db</c>. Holds an exclusive cross-process lock while open,
 /// so keep instances short-lived (one per command / operation).
 /// </summary>
-public sealed class MusicLibrary : IDisposable
+public sealed partial class MusicLibrary : IDisposable
 {
     public static readonly TimeSpan DefaultLockTimeout = TimeSpan.FromSeconds(3);
 

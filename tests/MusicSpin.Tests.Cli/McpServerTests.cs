@@ -69,7 +69,8 @@ public sealed class McpServerTests : IAsyncDisposable
         var tools = await client.ListToolsAsync(cancellationToken: _cts.Token);
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
-                     "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle" })
+                     "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "playlists", "playlist_show", "playlist_create", "playlist_rename",
+                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export" })
         {
             Assert.Contains(name, names);
         }
@@ -188,5 +189,62 @@ public sealed class McpServerTests : IAsyncDisposable
         await Call("play", new() { ["files"] = new[] { Long[0] } });
         Assert.StartsWith("usage:", await CallError("shuffle", new() { ["mode"] = "off", ["seed"] = 3 }), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(_cli.DataDir, "settings.json"))); // nothing was saved by the failures
+    }
+
+    [Fact]
+    public async Task Playlist_tools_create_fill_play_and_export()
+    {
+        var dir = TempDir.Create("mcp-files");
+        string[] files = [Path.Combine(dir, "a.flac"), Path.Combine(dir, "b.flac"), Path.Combine(dir, "c.flac")];
+        foreach (var path in files)
+        {
+            await File.WriteAllBytesAsync(path, [0], TestContext.Current.CancellationToken);
+            _cli.Decoders.With(TestAudio.Track(path, sampleRate: 96_000, seconds: 60));
+        }
+
+        await StartAsync();
+        Assert.Equal(0, (await Call("playlists")).GetProperty("total").GetInt32());
+        await Call("playlist_create", new() { ["name"] = "Agent Mix" });
+        var added = await Call("playlist_add", new() { ["name"] = "agent mix", ["files"] = files });
+        Assert.Equal(3, added.GetProperty("added").GetInt32());
+        Assert.Equal(1, (await Call("playlist_remove", new() { ["name"] = "agent mix", ["positions"] = "2" })).GetProperty("removed").GetInt32());
+        await Call("playlist_move", new() { ["name"] = "agent mix", ["from"] = 2, ["to"] = 1 });
+        var show = await Call("playlist_show", new() { ["name"] = "agent mix" });
+        Assert.Equal(files[2], show.GetProperty("entries").GetProperty("items")[0].GetProperty("path").GetString());
+        Assert.Equal("file", show.GetProperty("entries").GetProperty("items")[0].GetProperty("status").GetString());
+
+        var play = await Call("play", new() { ["playlist"] = "Agent Mix" });
+        Assert.Equal(2, play.GetProperty("queueLength").GetInt32());
+        await Call("queue_add", new() { ["playlist"] = "agent mix" });
+        Assert.Equal(4, (await Call("queue_save", new() { ["name"] = "Saved" })).GetProperty("added").GetInt32());
+
+        var file = Path.Combine(TempDir.Create("mcp"), "saved.m3u8");
+        Assert.Equal(4, (await Call("playlist_export", new() { ["name"] = "saved", ["file"] = file })).GetProperty("entries").GetInt32());
+        Assert.Equal(4, (await Call("playlist_import", new() { ["file"] = file, ["name"] = "Imported" })).GetProperty("entries").GetInt32());
+        await Call("playlist_rename", new() { ["name"] = "imported", ["newName"] = "Renamed" });
+        Assert.Equal(4, (await Call("playlist_clear", new() { ["name"] = "renamed" })).GetProperty("removed").GetInt32());
+        Assert.True((await Call("playlist_delete", new() { ["name"] = "renamed" })).GetProperty("deleted").GetBoolean());
+        Assert.Equal(2, (await Call("playlists")).GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Playlist_tools_report_stable_error_codes()
+    {
+        await StartAsync();
+        await Call("playlist_create", new() { ["name"] = "one" });
+        Assert.StartsWith("invalid_state:", await CallError("playlist_create", new() { ["name"] = "ONE" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("playlist_create", new() { ["name"] = " " }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found:", await CallError("playlist_show", new() { ["name"] = "two" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("playlist_add", new() { ["name"] = "one" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("playlist_add", new() { ["name"] = "one", ["files"] = new[] { Long[0] }, ["search"] = "x" }), StringComparison.Ordinal);
+        Assert.StartsWith("file_not_found:", await CallError("playlist_add", new() { ["name"] = "one", ["files"] = new[] { "/nope.flac" } }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("playlist_remove", new() { ["name"] = "one", ["positions"] = "1" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("playlist_export", new() { ["name"] = "one", ["file"] = "/tmp/x.wpl", ["format"] = "wpl" }), StringComparison.Ordinal);
+        Assert.StartsWith("file_not_found:", await CallError("playlist_import", new() { ["file"] = "/nope/x.m3u" }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found:", await CallError("play", new() { ["playlist"] = "one" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("play", new() { ["playlist"] = "one", ["album"] = "x" }), StringComparison.Ordinal);
+        Assert.StartsWith("player_not_running:", await CallError("queue_save", new() { ["name"] = "q" }), StringComparison.Ordinal);
+        Assert.StartsWith("player_not_running:", await CallError("resume"), StringComparison.Ordinal);
     }
 }

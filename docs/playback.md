@@ -67,7 +67,7 @@ $ music-spin queue
 $ music-spin quit
 ```
 
-- **One player per data folder.** `play` and `queue add` are the only commands that start it. Control commands exit **13 `player_not_running`** without one.
+- **One player per data folder.** `play` and `queue add` start it, and so does `resume` when a saved queue exists (see [Persistent queue](#persistent-queue)). Other control commands exit **13 `player_not_running`** without one.
 - It survives the terminal, the agent and the MCP client that started it.
 - **Idle timeout:** it exits after `playerIdleTimeoutSeconds` (default 900 s; `0` = never) when it is stopped, or the queue has ended, and no client is subscribed. A **paused** player stays alive.
 - **Output:** `--backend`, `--device`, `--exclusive` are fixed when the player starts. `play` warns if a running player uses a different output. Run `music-spin quit` first to change it.
@@ -89,7 +89,21 @@ How it works internally: [Architecture → Background player and IPC](architectu
 | Queue size | At most 100,000 entries (exit 2 `usage` beyond that) |
 | Missing or undecodable file | Skipped, listed in `skipped` with its error code, playback continues |
 
-Library queues (`--album`, `--artist`, `--search`) carry the tags from the library, so `queue` and `status` show titles before a track is opened.
+Library queues (`--album`, `--artist`, `--search`, `--playlist`) carry the tags from the library, so `queue` and `status` show titles before a track is opened.
+
+`play --playlist <name>` / `queue add --playlist <name>` queue a saved playlist; its `missing` entries are left out with a warning. `queue save <name>` stores the queue as a playlist (see [Music library → Playlists](library.md#playlists)).
+
+## Persistent queue
+
+The background player saves its queue to **`.usrdata/queue.json`**: the entries in play order, the original order (to undo shuffle), the current index and position, the repeat and shuffle modes and the shuffle seed.
+
+- **When:** about once a second after the queue, the current entry or the modes change; the position alone is saved when it has moved by 10 s or more; and once more when the player shuts down (quit, idle timeout). The file is written to a temporary file and renamed into place, so a crash leaves the previous version.
+- **Restore:** a new player loads the saved queue and **cues** the current track at the saved position, **paused**. It never starts playing on its own and does not open the audio device until you `resume`. A position past the end of the file restores at 0. If the current file has gone, the player starts stopped and reports it under `skipped`.
+- **`resume` with no player running** starts one when `queue.json` exists, and continues where the last player stopped (`playerStarted: true` in the result; `--backend`/`--device`/`--exclusive` apply to the new player). Without a saved queue it is still exit 13.
+- **`play` with a new source** replaces the restored queue, as usual. `queue clear` saves an empty queue.
+- The saved repeat/shuffle modes win over the defaults in `settings.json`.
+- **Corrupt or inconsistent file:** it is moved to `queue.json.bad`, the player starts with an empty queue, logs `warning: Saved queue ignored ...` to `player.log` and shows the message as `lastError` in `status` until the next queue change. `resume` then exits 8 with that message.
+- `serve` (the in-process JSON-lines player) does not read or write `queue.json`.
 
 ## Shuffle and repeat
 

@@ -581,6 +581,87 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
+    /// <summary>Shows a notice as <see cref="PlayerStatus.LastError"/> until the next queue is set (e.g. "saved queue ignored").</summary>
+    public void SetNotice(string message)
+    {
+        lock (_gate)
+        {
+            _lastError = message;
+        }
+    }
+
+    /// <summary>The state to persist (entries in play order with their original-order keys, index, position, modes).</summary>
+    public QueueSnapshot Snapshot(DateTimeOffset savedAt)
+    {
+        lock (_gate)
+        {
+            var has = _index >= 0 && _index < _items.Count;
+            return new QueueSnapshot(QueueSnapshot.CurrentVersion, [.. _items.Select(s => s.Item)], [.. _items.Select(s => s.Order)],
+                has ? _index : null, has && !_ended ? Math.Round(_player.Position.TotalSeconds, 3) : 0, _repeat, _shuffle, _shuffle ? _seed : null, savedAt);
+        }
+    }
+
+    /// <summary>
+    /// Restores a saved queue without playing: the current entry is loaded and cued (Paused) at the saved position.
+    /// If that file cannot be opened the queue is kept, stopped, and the entry is listed under skipped.
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidArgument when the snapshot is inconsistent (nothing is changed).</exception>
+    public PlayerStatus Restore(QueueSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (snapshot.Items is null || snapshot.Order is null)
+        {
+            throw Invalid("Saved queue: items and order are required.");
+        }
+
+        ValidateItems(snapshot.Items);
+        if (snapshot.Order.Count != snapshot.Items.Count || snapshot.Order.Distinct().Count() != snapshot.Order.Count || snapshot.Order.Any(o => o < 0))
+        {
+            throw Invalid("Saved queue: the order keys do not match the items.");
+        }
+
+        if (snapshot.Index is { } i && (i < 0 || i >= snapshot.Items.Count))
+        {
+            throw Invalid($"Saved queue: index {i} is outside the queue (0-{snapshot.Items.Count - 1}).");
+        }
+
+        if (!Enum.IsDefined(snapshot.Repeat) || !double.IsFinite(snapshot.PositionSeconds) || snapshot.PositionSeconds < 0)
+        {
+            throw Invalid("Saved queue: invalid repeat mode or position.");
+        }
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            _stoppedByUser = true;
+            _player.Stop();
+            _items.Clear();
+            for (var k = 0; k < snapshot.Items.Count; k++)
+            {
+                _items.Add(new Slot(snapshot.Items[k], snapshot.Order[k]));
+            }
+
+            _nextOrder = snapshot.Order.Count == 0 ? 0 : snapshot.Order.Max() + 1;
+            _repeat = snapshot.Repeat;
+            _shuffle = snapshot.Shuffle;
+            _seed = snapshot.Shuffle ? snapshot.Seed ?? NewSeed() : null;
+            _random = new Random(_seed ?? NewSeed());
+            _skipped.Clear();
+            _ended = false;
+            _lastError = null;
+            _rapidLoops = 0;
+            _index = _items.Count == 0 ? -1 : snapshot.Index ?? 0;
+            if (_index >= 0 && TryLoad(_items[_index].Item, _index, null))
+            {
+                var position = TimeSpan.FromSeconds(snapshot.PositionSeconds);
+                _player.Cue(position < _player.Duration ? position : TimeSpan.Zero);
+            }
+
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+            return StatusCore();
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)

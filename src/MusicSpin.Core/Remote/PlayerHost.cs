@@ -31,6 +31,17 @@ public sealed record PlayerHostOptions
     /// <summary>Shuffle mode at start (settings.json "shuffle").</summary>
     public bool InitialShuffle { get; init; }
 
+    /// <summary>
+    /// Save the queue (entries, index, position, repeat/shuffle) to <c>queue.json</c> in the data folder and restore it,
+    /// paused, when the player starts. A saved queue's modes win over <see cref="InitialRepeat"/>/<see cref="InitialShuffle"/>.
+    /// </summary>
+    public bool PersistQueue { get; init; } = true;
+
+    /// <summary>How often the queue is checked for changes to save (position changes are saved every <see cref="QueuePositionSaveSeconds"/>).</summary>
+    public TimeSpan QueueSaveInterval { get; init; } = TimeSpan.FromSeconds(1);
+
+    public double QueuePositionSaveSeconds { get; init; } = 10;
+
     /// <summary>Requests/messages longer than this are rejected and the connection closed.</summary>
     public int MaxMessageBytes { get; init; } = 4 * 1024 * 1024;
 
@@ -70,6 +81,11 @@ public sealed class PlayerHost : IAsyncDisposable
     private int _subscribers;
     private long _idleSinceTicks = -1;
     private int _shutdownStarted;
+    private readonly ITimer? _saveTimer;
+    private readonly Lock _saveGate = new();
+    private int _queueDirty;
+    private (PlayerState State, int? Index, int Length, RepeatMode Repeat, bool Shuffle, int? Seed, double Position)? _savedSignature;
+    private string? _lastSaveError;
 
     private PlayerHost(PlayerHostOptions options, PlayerEndpoint endpoint, FileStream lockFile, IPlayerListener listener)
     {
@@ -98,6 +114,15 @@ public sealed class PlayerHost : IAsyncDisposable
         _queue.TrackSkipped += (_, e) => Log($"skipped {e.Item.Path}: {e.Item.Message}");
         _queue.QueueEnded += (_, _) => Log("queue ended");
         _queue.Error += (_, e) => Log($"error: {e.Exception.Message}");
+
+        if (options.PersistQueue)
+        {
+            RestoreQueue();
+            _queue.QueueChanged += (_, _) => Interlocked.Exchange(ref _queueDirty, 1);
+            _queue.TrackLoaded += (_, _) => Interlocked.Exchange(ref _queueDirty, 1);
+            var every = options.QueueSaveInterval > TimeSpan.Zero ? options.QueueSaveInterval : TimeSpan.FromSeconds(1);
+            _saveTimer = options.Time.CreateTimer(static s => ((PlayerHost)s!).SaveQueue(force: false), this, every, every);
+        }
 
         var interval = IdleCheckInterval(options.IdleTimeout);
         _idleTimer = options.Time.CreateTimer(static s => ((PlayerHost)s!).CheckIdle(), this, interval, interval);
@@ -239,6 +264,11 @@ public sealed class PlayerHost : IAsyncDisposable
         try
         {
             await _idleTimer.DisposeAsync().ConfigureAwait(false);
+            if (_saveTimer is not null)
+            {
+                await _saveTimer.DisposeAsync().ConfigureAwait(false);
+            }
+
             await _stopping.CancelAsync().ConfigureAwait(false);
             await _listener.DisposeAsync().ConfigureAwait(false);
             if (_acceptLoop is { } loop)
@@ -253,6 +283,11 @@ public sealed class PlayerHost : IAsyncDisposable
             }
 
             await Task.WhenAll(sessions).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            if (_options.PersistQueue)
+            {
+                SaveQueue(force: true);
+            }
+
             _queue.Dispose();
             _player.Dispose();
             (_options.Outputs as IDisposable)?.Dispose();
@@ -443,6 +478,101 @@ public sealed class PlayerHost : IAsyncDisposable
         => timeout is { } t && t > TimeSpan.Zero
             ? TimeSpan.FromMilliseconds(Math.Clamp(t.TotalMilliseconds / 4, 20, 1000))
             : Timeout.InfiniteTimeSpan;
+
+    /// <summary>Loads <c>queue.json</c> if present. A corrupt or inconsistent file is moved to <c>queue.json.bad</c>, logged and reported.</summary>
+    private void RestoreQueue()
+    {
+        var file = Endpoint.QueueFile;
+        if (!File.Exists(file))
+        {
+            return;
+        }
+
+        try
+        {
+            QueueSnapshot? snapshot;
+            using (var stream = File.OpenRead(file))
+            {
+                snapshot = JsonSerializer.Deserialize<QueueSnapshot>(stream, ProtocolJson.Options);
+            }
+
+            if (snapshot is null || snapshot.Version != QueueSnapshot.CurrentVersion)
+            {
+                throw new InvalidDataException(snapshot is null ? "empty document" : $"unsupported version {snapshot.Version}");
+            }
+
+            var status = _queue.Restore(snapshot);
+            _savedSignature = Signature(status);
+            Log($"restored queue: {status.QueueLength} entries, index {status.QueueIndex?.ToString(CultureInfo.InvariantCulture) ?? "-"}, " +
+                $"position {status.PositionSeconds.ToString("0.###", CultureInfo.InvariantCulture)}s, state {status.State}");
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException or MusicSpinException or NotSupportedException or IOException or UnauthorizedAccessException)
+        {
+            var bad = file + ".bad";
+            var moved = false;
+            try
+            {
+                File.Move(file, bad, overwrite: true);
+                moved = true;
+            }
+            catch (Exception moveEx) when (moveEx is IOException or UnauthorizedAccessException)
+            {
+                Log($"could not move the bad queue file aside: {moveEx.Message}");
+            }
+
+            var message = $"Saved queue ignored ({ex.Message}){(moved ? $"; the file was moved to {bad}" : string.Empty)}. Starting with an empty queue.";
+            Log($"warning: {message}");
+            _queue.SetNotice(message);
+        }
+    }
+
+    /// <summary>Writes <c>queue.json</c> atomically when the queue, index, state or modes changed, or the position moved enough.</summary>
+    private void SaveQueue(bool force)
+    {
+        if (!force && Volatile.Read(ref _shutdownStarted) != 0)
+        {
+            return;
+        }
+
+        lock (_saveGate)
+        {
+            try
+            {
+                var status = _queue.Status();
+                var signature = Signature(status);
+                var dirty = Interlocked.Exchange(ref _queueDirty, 0) == 1;
+                if (!force && !dirty && _savedSignature is { } last
+                    && last with { Position = 0 } == signature with { Position = 0 }
+                    && Math.Abs(last.Position - signature.Position) < _options.QueuePositionSaveSeconds)
+                {
+                    return;
+                }
+
+                var snapshot = _queue.Snapshot(_options.Time.GetUtcNow());
+                var temp = Endpoint.QueueFile + ".tmp";
+                using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    JsonSerializer.Serialize(stream, snapshot, ProtocolJson.Options);
+                }
+
+                File.Move(temp, Endpoint.QueueFile, overwrite: true);
+                _savedSignature = signature;
+                _lastSaveError = null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException or NotSupportedException)
+            {
+                Interlocked.Exchange(ref _queueDirty, 1); // retry on the next tick
+                if (_lastSaveError != ex.Message)
+                {
+                    _lastSaveError = ex.Message;
+                    Log($"could not save the queue: {ex.Message}");
+                }
+            }
+        }
+    }
+
+    private static (PlayerState State, int? Index, int Length, RepeatMode Repeat, bool Shuffle, int? Seed, double Position) Signature(PlayerStatus s)
+        => (s.State, s.QueueIndex, s.QueueLength, s.Repeat, s.Shuffle, s.ShuffleSeed, s.PositionSeconds);
 
     private void WriteInfoFile()
     {

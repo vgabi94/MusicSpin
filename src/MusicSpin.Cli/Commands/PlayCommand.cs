@@ -33,7 +33,7 @@ internal static class PlayCommand
         };
 
         var command = new Command("play",
-            "Play file(s) or a library queue (--album / --artist / --search [--shuffle]) in the background player and return " +
+            "Play file(s) or a library queue (--album / --artist / --search / --playlist [--shuffle]) in the background player and return " +
             "immediately with its status. Starts the player for this data folder if needed, or hands the queue to the running one. " +
             "Control it with pause/resume/toggle/stop/next/prev/seek/volume/status/queue/quit. --foreground keeps the old blocking mode.");
         source.AddTo(command);
@@ -57,6 +57,10 @@ internal static class PlayCommand
             {
                 r.AddError("--shuffle/--seed only apply to queues.");
             }
+            else if (blocking && Options.Get(r, source.Playlist) is not null)
+            {
+                r.AddError("--playlist plays in the background player; --foreground/--duration support files, --album, --artist and --search.");
+            }
         });
 
         runner.SetAction(command, async (parseResult, json, cancellationToken) =>
@@ -70,15 +74,15 @@ internal static class PlayCommand
 
             // Build the queue (and release the library) before talking to the player.
             // --shuffle is the player's shuffle mode (so 'shuffle off' restores the album order); same order as before for a seed.
-            var (items, _) = QueueSource.Resolve(runner, parseResult, parseResult.GetValue(source.Files), parseResult.GetValue(source.Album),
-                parseResult.GetValue(source.Artist), parseResult.GetValue(source.Search), shuffle: false, seed: null);
+            var resolved = source.Resolve(runner, parseResult, shuffle: false);
+            var items = resolved.Items;
             var seed = QueueSource.PickSeed(parseResult.GetValue(source.Shuffle), parseResult.GetValue(source.Seed));
             var requestedBackend = parseResult.GetValue(backend)!;
             var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, requestedBackend,
                 parseResult.GetValue(device), parseResult.GetValue(exclusive), cancellationToken).ConfigureAwait(false);
             await using (client.ConfigureAwait(false))
             {
-                var warnings = new List<string>();
+                var warnings = resolved.Warnings;
                 if (!started)
                 {
                     var info = await client.HelloAsync(cancellationToken).ConfigureAwait(false);

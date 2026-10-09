@@ -20,6 +20,7 @@ Every command accepts these, before or after the subcommand:
 | Files and environment | [`info`](#info) · [`formats`](#formats) · [`devices`](#devices) · [`doctor`](#doctor) |
 | Playback | [`play`](#play) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
 | Library | [`library add/remove/folders/scan/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) |
+| Playlists | [`playlist list/show/create/rename/delete/add/remove/move/clear/import/export`](#playlist) · [`queue save`](#queue) |
 | Integration | [`serve`](#serve) · [`mcp`](#mcp) |
 
 ---
@@ -72,7 +73,7 @@ Decoder: FFmpeg n9.0.2-23-g27b46f0fbc-20261008 (LGPL version 3 or later)
 ## play
 
 ```
-music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--search <text>]
+music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--search <text>] [--playlist <name>]
                 [--shuffle] [--seed <n>] [--start <seconds>] [--volume <0..1>]
                 [--backend auto|null] [--device <id|name>] [--exclusive]
                 [--foreground|--wait] [--duration <seconds>]
@@ -86,6 +87,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--album <album>` | A library album: title (case-insensitive exact match after normalization) or album id. If several albums share the title: exit 2 with the candidates; add `--artist` to pick one. Unknown: exit 12 |
 | `--artist <artist>` | All library tracks by this artist (track artist or album artist, case-insensitive exact match), albums ordered by year, then disc/track. With `--album`: narrows the album |
 | `--search <text>` | Library tracks whose search text contains `<text>` (same matching as [`search`](#search)), up to 10,000. No match: exit 12 |
+| `--playlist <name>` | A saved [playlist](#playlist) (name or id, case-insensitive). `missing` entries are left out with a warning (`warnings` in the JSON). Unknown, empty or nothing playable: exit 12. Not with `--foreground` (exit 2) |
 | `--shuffle` | Turn the player's shuffle mode on and shuffle the new queue (Fisher-Yates over the whole list). Without `--shuffle` the queue is shuffled anyway when shuffle mode is already on (see [`shuffle`](#shuffle)) |
 | `--seed <n>` | Shuffle seed for a reproducible order. Default: random. The seed is reported in the JSON result. Needs `--shuffle` |
 | `--start <s>` | Start position in seconds (first track only) |
@@ -96,14 +98,14 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--foreground`, `--wait` | Play in this process and block until done (Ctrl+C: exit 130) |
 | `--duration <s>` | Stop after this many seconds. Implies `--foreground`. For a library queue it applies per track |
 
-Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, or `--search`. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
+Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, `--search`, or `--playlist`. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
 
 ## pause, resume, toggle, stop
 
 | Command | Meaning |
 |---|---|
 | `pause` | Pause (does nothing when not playing) |
-| `resume` | Resume, or start, the current queue entry. After the queue ended: continue with newly added entries, or restart from the first |
+| `resume [--backend] [--device] [--exclusive]` | Resume, or start, the current queue entry. After the queue ended: continue with newly added entries, or restart from the first. **Without a running player:** starts one if a saved queue exists (`.usrdata/queue.json`) and continues where the last player stopped (`playerStarted: true`); otherwise exit 13. The output options only apply when the player is started (see [Persistent queue](playback.md#persistent-queue)) |
 | `toggle` | Pause when playing, otherwise resume |
 | `stop` | Stop and rewind the current track. The queue is kept. The player exits after the idle timeout |
 
@@ -151,8 +153,11 @@ State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, d
 | Command | Meaning |
 |---|---|
 | `queue [--limit N] [--offset N]` | List the queue (index, current flag, path, tags) |
-| `queue add [<files>...] \| --album ... \| --artist ... \| --search ... [--shuffle] [--seed]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue |
+| `queue add [<files>...] \| --album ... \| --artist ... \| --search ... \| --playlist <name> [--shuffle] [--seed]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue |
 | `queue clear` | Stop playback and empty the queue |
+| `queue save <name> [--replace]` | Save the queue, in its current play order (shuffled order when shuffle is on), as a playlist. Name taken: exit 8 unless `--replace`. Empty queue: exit 8. No player: exit 13 |
+
+The queue is persisted in `.usrdata/queue.json` and restored (paused) by the next player. See [Persistent queue](playback.md#persistent-queue).
 
 ## quit / player
 
@@ -163,7 +168,7 @@ State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, d
 | `player quit`, `player stop` | Same as `quit` |
 | `player run` | Hidden. The background player process itself (started by `play`/`queue add`; not meant to be called by hand) |
 
-Control commands (`pause` … `quit`, `repeat`, `shuffle`) **never start** a player. Without one they exit **13 `player_not_running`**.
+Control commands (`pause` … `quit`, `repeat`, `shuffle`, `queue save`) **never start** a player. Without one they exit **13 `player_not_running`**. The one exception is `resume` when a saved queue exists.
 
 ---
 
@@ -228,6 +233,39 @@ It is **not** a per-word search: `search "frahm says"` finds nothing, even thoug
 
 ---
 
+## playlist
+
+Saved playlists in the library database. Names are case-insensitive and unique; positions are 1-based. Details (entry status, import/export rules): [Music library → Playlists](library.md#playlists). All subcommands take `--json`.
+
+| Command | Meaning |
+|---|---|
+| `playlist` / `playlist list` | Name, entries, missing entries, total duration, created/modified |
+| `playlist show <name> [--limit N] [--offset N]` | Entries: position, status (`library`/`file`/`missing`), path, track id, tags |
+| `playlist create <name>` | Create an empty playlist. Name taken: exit 8. Invalid name (empty, >200 chars, control characters): exit 2 |
+| `playlist rename <name> <new-name>` | Rename. Changing only the case is allowed. Taken: exit 8 |
+| `playlist delete <name>` | Delete the playlist (music files are not touched) |
+| `playlist add <name> [<files>...] \| --album <a> [--artist <x>] \| --artist <x> \| --search <text> \| --track-id <id>[,<id>...] [--position N]` | Add one source kind (exit 2 for none or several). Files must exist (exit 3 lists the ones that don't; nothing is added). Unknown album/artist/track id or no search match: exit 12. `--position` inserts before that 1-based position (default: append) |
+| `playlist remove <name> <positions>` | Remove `3`, `2-5` or `1,3,5-7`. Out of range, `0`, reversed or malformed: exit 2 |
+| `playlist move <name> <from> <to>` | Move one entry |
+| `playlist clear <name>` | Remove all entries, keep the playlist |
+| `playlist import <file> [--name N] [--replace]` | Import M3U/M3U8/PLS. Exit 3 file not found, 4 not a playlist (binary), 8 name taken |
+| `playlist export <name> <file> [--format m3u8\|m3u\|pls] [--relative] [--force]` | Atomic write. Exit 8 file exists (without `--force`), 3 folder missing, 2 target is a folder or unknown format, 1 cannot write |
+
+Unknown playlist: exit **12 `not_found`**. Writes take the library write lock (exit 11 during a scan).
+
+```console
+$ music-spin playlist create "Late Night"
+$ music-spin playlist add "late night" --album "Kind of Blue"
+$ music-spin playlist import ~/old/mix.m3u --name Mix
+Imported playlist 'Mix' from /home/me/old/mix.m3u (m3u, latin1):
+  12 entries: 10 in the library, 1 other files, 1 missing; 0 stream(s) skipped
+  missing (line 7): ..\Old Disk\gone.flac
+$ music-spin play --playlist mix
+$ music-spin playlist export mix ~/mix.m3u8 --relative
+```
+
+JSON results: `list` → `{total, items}`; `show` → `{playlist, entries: {total, offset, limit, count, items}}`; changes → `{playlist, added, removed, replaced}`; `delete` → `{deleted, playlist}`; `import` → the import report; `export` → `{name, file, format, entries, missingCount, relative, warnings}`.
+
 ## serve
 
 `music-spin serve [--backend] [--device] [--exclusive]`: a long-running player in this process, controlled by JSON lines on stdin, with responses and events as JSON lines on stdout. It uses the same protocol as the background player. See [AI agents → serve](ai-agents.md#serve-json-lines-protocol-v1).
@@ -263,11 +301,11 @@ With `--json`, stdout carries **exactly one compact JSON object per line**, also
 | 5 | `decode_failed` | Decoder error while reading |
 | 6 | `decoder_unavailable` | FFmpeg shared libraries missing or of the wrong version |
 | 7 | `audio_device_error` | No usable audio device / the device cannot be opened |
-| 8 | `invalid_state` | e.g. `next` at the end of the queue, `prev` on the first entry, `play` before `load` in `serve` |
+| 8 | `invalid_state` | e.g. `next` at the end of the queue, `prev` on the first entry, `play` before `load` in `serve`, playlist name taken, export target exists, `queue save` of an empty queue |
 | 9 | `data_dir_not_writable` | Data folder can't be created or written (or `.usrdata` is a file) |
 | 10 | `library_corrupt` | `library.db` is corrupt or not a MusicSpin database |
 | 11 | `library_locked` | Another MusicSpin process is writing the library |
-| 12 | `not_found` | Library item not found (folder, album, artist, search with no tracks) |
-| 13 | `player_not_running` | No background player for this data folder (control commands never start one) |
+| 12 | `not_found` | Library item not found (folder, album, artist, playlist, track id, search with no tracks, playlist with nothing playable) |
+| 13 | `player_not_running` | No background player for this data folder (control commands never start one; `resume` does when a saved queue exists) |
 | 14 | `player_unavailable` | The background player could not be started or reached (see `.usrdata/player.log`) |
 | 130 | `cancelled` | Interrupted (Ctrl+C) |

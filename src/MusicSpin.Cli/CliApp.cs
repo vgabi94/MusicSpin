@@ -36,6 +36,7 @@ public static class CliApp
         root.Add(McpCommand.Create(runner));
         root.Add(DoctorCommand.Create(runner));
         root.Add(LibraryCommand.Create(runner));
+        root.Add(PlaylistCommands.Create(runner));
         foreach (var command in BrowseCommands.Create(runner))
         {
             root.Add(command);

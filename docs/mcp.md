@@ -134,10 +134,10 @@ $ printf '%s\n' \
 
 | Tool | Parameters (default) | Read-only | What it does |
 |---|---|:-:|---|
-| `play` | `files` (string[]), `album`, `artist`, `search` (strings), `shuffle` (false), `seed` (int) | | Replace the queue and play; starts the player if needed. Give exactly one of: `files`, `album` (optionally with `artist`), `artist`, `search`. `shuffle: true` turns the player's shuffle mode on for the new queue. Returns the player status |
+| `play` | `files` (string[]), `album`, `artist`, `search`, `playlist` (strings), `shuffle` (false), `seed` (int) | | Replace the queue and play; starts the player if needed. Give exactly one of: `files`, `album` (optionally with `artist`), `artist`, `search`, `playlist`. Missing playlist entries are left out and reported in `warnings`. `shuffle: true` turns the player's shuffle mode on for the new queue. Returns the player status |
 | `queue_add` | same as `play` | | Append to the queue; starts the player (stopped) if needed |
 | `pause` | – | | Pause playback |
-| `resume` | – | | Resume (or start) the current entry |
+| `resume` | – | | Resume (or start) the current entry. With no player running but a saved queue: starts the player, which continues where the last one stopped (`playerStarted: true`); otherwise `player_not_running` |
 | `toggle` | – | | Pause when playing, otherwise resume |
 | `stop` | – | | Stop and rewind; the queue is kept |
 | `next` | – | | Next entry; `invalid_state` at the end |
@@ -147,6 +147,7 @@ $ printf '%s\n' \
 | `status` | – | ✓ | Player status, or `{"running":false,"message":...}` when no player runs (not an error) |
 | `queue` | `offset` (0), `limit` (50) | ✓ | List the queue |
 | `queue_clear` | – | | Stop and empty the queue |
+| `queue_save` | `name` (required), `replace` (false) | | Save the queue in its current play order as a playlist. `invalid_state` for a taken name (without `replace`) or an empty queue |
 | `repeat` | `mode`: `off`, `one`, `all` (omit to read) | | Show or set the repeat mode. `one` replays a track that ends (next/previous still move); `all` loops the queue and makes next/previous wrap. Saved as the default for new players |
 | `shuffle` | `mode`: `on`, `off`, `toggle` (omit to read); `seed` (int, only when turning on) | | Shuffle the entries after the current track (it keeps playing) or restore the original order. Returns the status with `shuffle` and `shuffleSeed` |
 | `quit_player` | – | | Shut the background player down; returns `{stopped, pid}` |
@@ -154,10 +155,21 @@ $ printf '%s\n' \
 | `albums` | `artist`, `hiresOnly` (false), `offset` (0), `limit` (50) | ✓ | List albums, optionally by one artist (exact name, case-insensitive) |
 | `artists` | `offset` (0), `limit` (100) | ✓ | List artists (no text filter; use `search`) |
 | `library_stats` | – | ✓ | Totals, formats, hi-res counts |
+| `playlists` | – | ✓ | Saved playlists: name, entries, missing entries, duration |
+| `playlist_show` | `name` (required), `offset` (0), `limit` (100) | ✓ | Entries: 1-based `position`, `status` (`library`/`file`/`missing`), path, track id, tags |
+| `playlist_create` | `name` (required) | | Create an empty playlist (`invalid_state` if the name is taken, case-insensitively) |
+| `playlist_rename` | `name`, `newName` (required) | | Rename |
+| `playlist_add` | `name` (required); one of `files` (string[]), `album` (+ `artist`), `artist`, `search`, `trackIds` (string[]); `position` (1-based, default: append) | | Add entries. Files must exist (`file_not_found`, nothing added) |
+| `playlist_remove` | `name`, `positions` (required): `"3"`, `"2-5"`, `"1,3,5-7"` | | Remove entries (`usage` for positions outside the playlist) |
+| `playlist_move` | `name`, `from`, `to` (required, 1-based) | | Move one entry |
+| `playlist_clear` | `name` (required) | | Remove all entries (marked destructive) |
+| `playlist_delete` | `name` (required) | | Delete the playlist; music files are untouched (marked destructive) |
+| `playlist_import` | `file` (required), `name`, `replace` (false) | | Import an M3U/M3U8/PLS file readable by the server. Returns the import report (unresolved entries, skipped streams, encoding, warnings) |
+| `playlist_export` | `name`, `file` (required), `format` (`m3u8`/`m3u`/`pls`), `relative` (false), `overwrite` (false) | | Export to a file writable by the server (atomic; `invalid_state` if it exists without `overwrite`). Marked destructive |
 
 `album` accepts an exact title (case-insensitive) or an album id from `albums`/`search`. `artist` is an exact name (case-insensitive). `files` must be paths the server process can read; absolute paths are recommended. The parameters match the CLI options described in the [CLI reference](cli-reference.md#play).
 
-There are no tools for playlists or library scanning yet. Scan with `music-spin library scan` (see [Music library](library.md)).
+Playlist rules (names, entry status, import/export details) are in [Music library → Playlists](library.md#playlists). There is no tool for library scanning yet. Scan with `music-spin library scan` (see [Music library](library.md)).
 
 ## Results and errors
 

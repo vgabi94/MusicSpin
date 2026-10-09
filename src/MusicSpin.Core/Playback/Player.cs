@@ -180,6 +180,29 @@ public sealed class Player : IPlayer
         RaisePosition();
     }
 
+    public void Cue(TimeSpan position)
+    {
+        lock (_sync)
+        {
+            if (_source is null)
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.InvalidState, "No track loaded.");
+            }
+
+            if (_state == PlayerState.Playing)
+            {
+                _output?.Pause();
+                StopPositionTimer();
+            }
+
+            _source.Seek(position < TimeSpan.Zero ? TimeSpan.Zero : position);
+            _ended = false;
+            SetState(PlayerState.Paused);
+        }
+
+        RaisePosition();
+    }
+
     public void Dispose()
     {
         if (_disposed)

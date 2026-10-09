@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using MusicSpin.Cli.Output;
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
@@ -14,7 +15,7 @@ internal static class ControlCommands
     public static IEnumerable<Command> Create(CommandRunner runner)
     {
         yield return Simple(runner, "pause", "pause", "Pause playback (no-op when not playing).");
-        yield return Simple(runner, "resume", "resume", "Resume (or start) playback of the current queue entry; after the queue ended, continue with newly added entries or restart.");
+        yield return Resume(runner);
         yield return Simple(runner, "toggle", "toggle", "Pause when playing, otherwise resume.");
         yield return Simple(runner, "stop", "stop", "Stop and rewind the current track; the queue is kept. The player exits after the idle timeout.");
         yield return Simple(runner, "next", "next", "Play the next queue entry (skipping unplayable files). Exit 8 at the end of the queue.");
@@ -28,6 +29,28 @@ internal static class ControlCommands
         yield return Queue(runner);
         yield return Quit(runner, new Command("quit", "Shut the background player down (stops playback, removes its endpoint)."));
         yield return Player(runner);
+    }
+
+    private static Command Resume(CommandRunner runner)
+    {
+        var backend = Options.Backend();
+        var device = Options.Device();
+        var exclusive = Options.Exclusive();
+        var command = new Command("resume",
+            "Resume (or start) playback of the current queue entry; after the queue ended, continue with newly added entries or restart. " +
+            "Without a running player: starts one if a saved queue exists (it continues where the last player stopped), otherwise exit 13. " +
+            "--backend/--device/--exclusive apply only when the player is started.")
+        {
+            backend, device, exclusive,
+        };
+        runner.SetAction(command, async (parseResult, json, cancellationToken) =>
+        {
+            var (data, started) = await PlayerSupport.ResumeAsync(runner, parseResult, parseResult.GetValue(backend)!,
+                parseResult.GetValue(device), parseResult.GetValue(exclusive), cancellationToken).ConfigureAwait(false);
+            PlayerSupport.WriteStatus(runner, json, "resume", data, started ? new Dictionary<string, object?> { ["playerStarted"] = true } : null);
+            return ExitCodes.Success;
+        });
+        return command;
     }
 
     private static Command Simple(CommandRunner runner, string name, string cmd, string description)
@@ -203,7 +226,7 @@ internal static class ControlCommands
         var backend = Options.Backend();
         var device = Options.Device();
         var exclusive = Options.Exclusive();
-        var add = new Command("add", "Append file(s) or library tracks (--album/--artist/--search [--shuffle]) to the queue. Starts the player (stopped) if needed.");
+        var add = new Command("add", "Append file(s) or library tracks (--album/--artist/--search/--playlist [--shuffle]) to the queue. Starts the player (stopped) if needed.");
         source.AddTo(add);
         add.Add(backend);
         add.Add(device);
@@ -211,7 +234,7 @@ internal static class ControlCommands
         add.Validators.Add(r => source.Validate(r));
         runner.SetAction(add, async (parseResult, json, cancellationToken) =>
         {
-            var (items, seed) = source.Resolve(runner, parseResult);
+            var (items, seed, warnings) = source.Resolve(runner, parseResult);
             var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, parseResult.GetValue(backend)!,
                 parseResult.GetValue(device), parseResult.GetValue(exclusive), cancellationToken).ConfigureAwait(false);
             await using (client.ConfigureAwait(false))
@@ -222,6 +245,7 @@ internal static class ControlCommands
                     ["added"] = items.Count,
                     ["playerStarted"] = started,
                     ["seed"] = seed,
+                    ["warnings"] = warnings.Count > 0 ? warnings : null,
                 });
             }
 
@@ -232,7 +256,23 @@ internal static class ControlCommands
         var clear = new Command("clear", "Stop playback and empty the queue.");
         PlayerSupport.Control(runner, clear, "queue.clear", name: "queue clear");
         queue.Add(clear);
+        queue.Add(QueueSave(runner));
         return queue;
+    }
+
+    private static Command QueueSave(CommandRunner runner)
+    {
+        var name = new Argument<string>("name") { Description = "Playlist name (case-insensitive, unique)." };
+        var replace = new Option<bool>("--replace") { Description = "Overwrite an existing playlist with this name." };
+        var save = new Command("save", "Save the player's queue, in its current play order, as a playlist.") { name, replace };
+        save.Validators.Add(r => PlaylistCommands.ValidateName(r, name));
+        runner.SetAction(save, async (parseResult, json, cancellationToken) =>
+        {
+            var change = await PlaylistCommands.SaveQueueAsync(runner, parseResult, parseResult.GetValue(name)!, parseResult.GetValue(replace), cancellationToken)
+                .ConfigureAwait(false);
+            return PlaylistCommands.WriteChange(runner, json, "queue save", change, $"Saved {change.Added} queue entr{(change.Added == 1 ? "y" : "ies")} as");
+        }, "queue save");
+        return save;
     }
 
     private static Command Quit(CommandRunner runner, Command command, string? name = null)

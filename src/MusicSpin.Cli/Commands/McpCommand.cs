@@ -21,7 +21,7 @@ internal static class McpCommand
     public const string Instructions =
         "MusicSpin controls a local hi-res music player. play/queue_add start the background player when needed and return at once; " +
         "the other playback tools need a running player (error 'player_not_running' otherwise). Use search/albums/artists to find music, " +
-        "then play with album/artist/search or file paths. Tool errors start with a stable code such as 'not_found', 'invalid_state' or 'usage'.";
+        "then play with album/artist/search/playlist or file paths. Tool errors start with a stable code such as 'not_found', 'invalid_state' or 'usage'.";
 
     public static Command Create(CommandRunner runner)
     {
@@ -30,7 +30,9 @@ internal static class McpCommand
         var exclusive = Options.Exclusive();
         var command = new Command("mcp",
             "Run an MCP (Model Context Protocol) server on stdin/stdout. Tools: play, pause, resume, toggle, stop, next, previous, seek, volume, " +
-            "status, queue, queue_add, queue_clear, quit_player, search, albums, artists, library_stats. --backend/--device/--exclusive apply " +
+            "status, queue, queue_add, queue_clear, queue_save, repeat, shuffle, quit_player, search, albums, artists, library_stats, playlists, playlist_show, " +
+            "playlist_create, playlist_rename, playlist_add, playlist_remove, playlist_move, playlist_clear, playlist_delete, playlist_import, playlist_export. " +
+            "--backend/--device/--exclusive apply " +
             "when a tool has to start the background player.")
         {
             backend, device, exclusive,
@@ -70,16 +72,23 @@ internal static class McpCommand
         public IEnumerable<McpServerTool> Create()
         {
             yield return Tool("play", "Play files or library music in the background player (starts it if needed) and return its status. " +
-                "Give exactly one of: files, album (optionally with artist), artist, search.",
+                "Give exactly one of: files, album (optionally with artist), artist, search, playlist.",
                 ([Description("Absolute paths of audio files, played in order.")] string[]? files = null,
                  [Description("Album title or id from 'albums'.")] string? album = null,
                  [Description("Artist name (all their tracks), or the album artist when album is given.")] string? artist = null,
                  [Description("Play every library track matching this text.")] string? search = null,
+                 [Description("A saved playlist name (see 'playlists'). Missing entries are left out with a warning.")] string? playlist = null,
                  [Description("Turn the player's shuffle mode on for this queue.")] bool shuffle = false,
                  [Description("Shuffle seed for a reproducible order.")] int? seed = null,
-                 CancellationToken ct = default) => Guard(() => SetQueueAsync(files, album, artist, search, shuffle, seed, ct)));
+                 CancellationToken ct = default) => Guard(() => SetQueueAsync(files, album, artist, search, playlist, shuffle, seed, ct)));
             yield return Simple("pause", "Pause playback.");
-            yield return Simple("resume", "Resume (or start) playback of the current queue entry.");
+            yield return Tool("resume", "Resume (or start) playback of the current queue entry. When no player runs but a saved queue exists, " +
+                "starts the player, which restores that queue and continues where it stopped.",
+                (CancellationToken ct = default) => Guard(async () =>
+                {
+                    var (data, started) = await PlayerSupport.ResumeAsync(runner, parseResult, backend, device, exclusive, ct).ConfigureAwait(false);
+                    return started ? With(data, true, null, null) : data;
+                }));
             yield return Simple("toggle", "Pause when playing, otherwise resume.");
             yield return Simple("stop", "Stop and rewind the current track (the queue is kept).");
             yield return Simple("next", "Play the next queue entry. Error 'invalid_state' at the end of the queue.");
@@ -122,9 +131,15 @@ internal static class McpCommand
                 }), readOnly: true);
             yield return Tool("queue", "List the player's queue.",
                 (int offset = 0, int limit = 50, CancellationToken ct = default) => Guard(() => SendAsync("queue", new { offset, limit }, ct)), readOnly: true);
-            yield return Tool("queue_add", "Append files or library tracks to the queue (starts the player, stopped, if needed).",
-                (string[]? files = null, string? album = null, string? artist = null, string? search = null, bool shuffle = false, int? seed = null,
-                 CancellationToken ct = default) => Guard(() => AddAsync(files, album, artist, search, shuffle, seed, ct)));
+            yield return Tool("queue_add", "Append files, library tracks or a playlist to the queue (starts the player, stopped, if needed). " +
+                "shuffle shuffles only the added tracks.",
+                (string[]? files = null, string? album = null, string? artist = null, string? search = null, string? playlist = null, bool shuffle = false,
+                 int? seed = null, CancellationToken ct = default) => Guard(() => AddAsync(files, album, artist, search, playlist, shuffle, seed, ct)));
+            yield return Tool("queue_save", "Save the player's queue (current play order) as a playlist.",
+                ([Description("Playlist name (unique, case-insensitive).")] string name,
+                 [Description("Overwrite an existing playlist with this name.")] bool replace = false,
+                 CancellationToken ct = default) => Guard(async () =>
+                    ToElement(await PlaylistCommands.SaveQueueAsync(runner, parseResult, name, replace, ct).ConfigureAwait(false))));
             yield return Simple("queue_clear", "Stop playback and empty the queue.", "queue.clear");
             yield return Tool("repeat", "Show or set the repeat mode. off: play the queue once; one: a track that ends starts again (next/previous still move); " +
                 "all: loop the queue (next/previous wrap around). Saved as the default for new players.",
@@ -194,20 +209,94 @@ internal static class McpCommand
                 using var library = runner.OpenLibraryForRead(parseResult);
                 return Task.FromResult(ToElement(library.Stats()));
             }), readOnly: true);
+            foreach (var tool in PlaylistTools())
+            {
+                yield return tool;
+            }
+        }
+
+        private IEnumerable<McpServerTool> PlaylistTools()
+        {
+            yield return Tool("playlists", "List saved playlists: name, entry count, missing entries, duration.", () => Library(read: true, library =>
+                new { total = library.Playlists().Count, items = library.Playlists() }), readOnly: true);
+            yield return Tool("playlist_show", "A playlist's entries (1-based position, status library|file|missing, path, tags).",
+                (string name, int offset = 0, int limit = 100) => Library(read: true, library =>
+                {
+                    var details = library.Playlist(name, Paging(offset, limit));
+                    return new { playlist = details.Playlist, entries = new PageDto<PlaylistEntry>(details.Entries.Total, details.Entries.Offset, details.Entries.Limit, details.Entries.Items.Count, details.Entries.Items) };
+                }), readOnly: true);
+            yield return Tool("playlist_create", "Create an empty playlist. Names are unique case-insensitively ('invalid_state' if taken).",
+                (string name) => Library(read: false, library => library.CreatePlaylist(name)));
+            yield return Tool("playlist_rename", "Rename a playlist.",
+                (string name, [Description("New name.")] string newName) => Library(read: false, library => library.RenamePlaylist(name, newName)));
+            yield return Tool("playlist_add", "Add to a playlist: give exactly one of files, album (optionally with artist), artist, search, trackIds.",
+                (string name,
+                 [Description("Absolute paths of audio files (library tracks or other existing files).")] string[]? files = null,
+                 string? album = null, string? artist = null, string? search = null,
+                 [Description("Library track ids (from search/tracks results).")] string[]? trackIds = null,
+                 [Description("Insert before this 1-based position (default: append).")] int? position = null) => Guard(() =>
+                {
+                    var kinds = (files is { Length: > 0 } ? 1 : 0) + (album is not null || artist is not null ? 1 : 0) + (search is not null ? 1 : 0) + (trackIds is { Length: > 0 } ? 1 : 0);
+                    if (kinds != 1)
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument,
+                            kinds == 0 ? "Nothing to add: give files, album, artist, search or trackIds." : "Give only one of files, album/artist, search, trackIds.");
+                    }
+
+                    var inputs = PlaylistCommands.Inputs(runner, parseResult, files, album, artist, search, trackIds);
+                    using var library = runner.OpenLibraryForWrite(parseResult);
+                    return Task.FromResult(ToElement(library.AddToPlaylist(name, inputs, position)));
+                }));
+            yield return Tool("playlist_remove", "Remove entries by 1-based position(s): \"3\", \"2-5\" or \"1,3,5-7\".",
+                (string name, string positions) => Library(read: false, library => library.RemoveFromPlaylist(name, positions)));
+            yield return Tool("playlist_move", "Move the entry at 1-based position 'from' to position 'to'.",
+                (string name, int from, int to) => Library(read: false, library => library.MovePlaylistEntry(name, from, to)));
+            yield return Tool("playlist_clear", "Remove all entries of a playlist (the playlist is kept).",
+                (string name) => Library(read: false, library => library.ClearPlaylist(name)), destructive: true);
+            yield return Tool("playlist_delete", "Delete a playlist (music files are not touched).",
+                (string name) => Library(read: false, library => new { deleted = true, playlist = library.DeletePlaylist(name) }), destructive: true);
+            yield return Tool("playlist_import", "Import an M3U/M3U8/PLS file (path readable by this server) as a playlist; reports unresolved entries and skipped streams.",
+                ([Description("Path of the .m3u/.m3u8/.pls file.")] string file,
+                 [Description("Playlist name (default: the file name).")] string? name = null,
+                 [Description("Overwrite an existing playlist with that name.")] bool replace = false) => Library(read: false, library => library.ImportPlaylist(file, name, replace)));
+            yield return Tool("playlist_export", "Export a playlist to an M3U8/M3U/PLS file (path writable by this server).",
+                (string name,
+                 [Description("Target file path.")] string file,
+                 [Description("m3u8, m3u or pls (default: from the extension, else m3u8).")] string? format = null,
+                 [Description("Write paths relative to the file's folder.")] bool relative = false,
+                 [Description("Overwrite an existing file.")] bool overwrite = false) => Library(read: true, library =>
+                {
+                    PlaylistFormat? chosen = null;
+                    if (format is not null)
+                    {
+                        chosen = PlaylistFiles.TryParseFormat(format, out var parsed)
+                            ? parsed
+                            : throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, $"Unknown format '{format}'. Use m3u8, m3u or pls.");
+                    }
+
+                    return library.ExportPlaylist(name, file, chosen, relative, overwrite);
+                }), destructive: true);
         }
 
         private McpServerTool Simple(string name, string description, string? cmd = null)
             => Tool(name, description, (CancellationToken ct = default) => Guard(() => SendAsync(cmd ?? name, null, ct)));
 
-        private static McpServerTool Tool(string name, string description, Delegate method, bool readOnly = false)
+        private static McpServerTool Tool(string name, string description, Delegate method, bool readOnly = false, bool destructive = false)
             => McpServerTool.Create(method, new McpServerToolCreateOptions
             {
                 Name = name,
                 Description = description,
                 ReadOnly = readOnly,
-                Destructive = false,
+                Destructive = destructive,
                 OpenWorld = false,
             });
+
+        /// <summary>Runs <paramref name="action"/> on a short-lived library handle and returns its result as JSON.</summary>
+        private Task<CallToolResult> Library<T>(bool read, Func<MusicLibrary, T> action) => Guard(() =>
+        {
+            using var library = read ? runner.OpenLibraryForRead(parseResult) : runner.OpenLibraryForWrite(parseResult);
+            return Task.FromResult(ToElement(action(library)));
+        });
 
         private static Paging Paging(int offset, int limit)
             => MusicSpin.Core.Library.Paging.Validate(offset, limit) is { } error
@@ -222,38 +311,52 @@ internal static class McpCommand
             return await client.SendAsync(cmd, args, ct).ConfigureAwait(false);
         }
 
-        private async Task<JsonElement> SetQueueAsync(string[]? files, string? album, string? artist, string? search, bool shuffle, int? seed, CancellationToken ct)
+        private async Task<JsonElement> SetQueueAsync(string[]? files, string? album, string? artist, string? search, string? playlist, bool shuffle, int? seed,
+            CancellationToken ct)
         {
-            var (items, _) = Resolve(files, album, artist, search, shuffle: false, seed: shuffle ? null : seed);
-            var used = QueueSource.PickSeed(shuffle, seed);
-            var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, ct).ConfigureAwait(false);
-            await using (client.ConfigureAwait(false))
-            {
-                var status = await client.SendAsync("queue.set", new { items, play = true, shuffle = used is not null ? true : (bool?)null, seed = used }, ct)
-                    .ConfigureAwait(false);
-                return With(status, started, used, null);
-            }
-        }
-
-        private async Task<JsonElement> AddAsync(string[]? files, string? album, string? artist, string? search, bool shuffle, int? seed, CancellationToken ct)
-        {
-            var (items, used) = Resolve(files, album, artist, search, shuffle, seed);
-            var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, ct).ConfigureAwait(false);
-            await using (client.ConfigureAwait(false))
-            {
-                var status = await client.SendAsync("queue.add", new { items }, ct).ConfigureAwait(false);
-                return With(status, started, used, items.Count);
-            }
-        }
-
-        private (List<QueueItem> Items, int? Seed) Resolve(string[]? files, string? album, string? artist, string? search, bool shuffle, int? seed)
-        {
-            if (QueueSource.ValidateValues(files, album, artist, search, shuffle, seed) is { } error)
+            if (QueueSource.ValidateValues(files, album, artist, search, playlist, shuffle, seed) is { } error)
             {
                 throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, error);
             }
 
-            return QueueSource.Resolve(runner, parseResult, files, album, artist, search, shuffle, seed);
+            var resolved = QueueSource.Resolve(runner, parseResult, files, album, artist, search, playlist, shuffle: false, seed: null);
+            var used = QueueSource.PickSeed(shuffle, seed);
+            var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, ct).ConfigureAwait(false);
+            await using (client.ConfigureAwait(false))
+            {
+                var status = await client.SendAsync("queue.set", new { items = resolved.Items, play = true, shuffle = used is not null ? true : (bool?)null, seed = used }, ct)
+                    .ConfigureAwait(false);
+                return WithWarnings(With(status, started, used, null), resolved.Warnings);
+            }
+        }
+
+        private async Task<JsonElement> AddAsync(string[]? files, string? album, string? artist, string? search, string? playlist, bool shuffle, int? seed,
+            CancellationToken ct)
+        {
+            if (QueueSource.ValidateValues(files, album, artist, search, playlist, shuffle, seed) is { } error)
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, error);
+            }
+
+            var resolved = QueueSource.Resolve(runner, parseResult, files, album, artist, search, playlist, shuffle, seed);
+            var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, ct).ConfigureAwait(false);
+            await using (client.ConfigureAwait(false))
+            {
+                var status = await client.SendAsync("queue.add", new { items = resolved.Items }, ct).ConfigureAwait(false);
+                return WithWarnings(With(status, started, resolved.Seed, resolved.Items.Count), resolved.Warnings);
+            }
+        }
+
+        private static JsonElement WithWarnings(JsonElement status, List<string> warnings)
+        {
+            if (warnings.Count == 0)
+            {
+                return status;
+            }
+
+            var node = JsonNode.Parse(status.GetRawText())!.AsObject();
+            node["warnings"] = new JsonArray([.. warnings.Select(w => (JsonNode?)JsonValue.Create(w))]);
+            return JsonSerializer.SerializeToElement(node);
         }
 
         private static JsonElement WithWarning(JsonElement status, string? warning)
