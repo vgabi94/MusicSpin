@@ -119,6 +119,29 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     }
 
     [Fact]
+    public async Task A_launched_process_whose_pid_differs_from_the_player_did_not_start_it()
+    {
+        PlayerHost? started = null;
+        var (client, isStarter) = await PlayerConnector.ConnectOrStartAsync(Endpoint, _ =>
+        {
+            started = StartHost(); // the in-process player has our pid
+            return Task.FromResult<IPlayerProcess?>(new RunningProcess(Environment.ProcessId + 1));
+        }, TimeSpan.FromSeconds(5), cancellationToken: Ct);
+        await client.DisposeAsync();
+        Assert.NotNull(started);
+        Assert.False(isStarter);
+
+        await started!.StopAsync("quit");
+        var (again, winner) = await PlayerConnector.ConnectOrStartAsync(Endpoint, _ =>
+        {
+            StartHost();
+            return Task.FromResult<IPlayerProcess?>(new RunningProcess(Environment.ProcessId));
+        }, TimeSpan.FromSeconds(5), cancellationToken: Ct);
+        await again.DisposeAsync();
+        Assert.True(winner);
+    }
+
+    [Fact]
     public async Task Start_timeout_is_player_unavailable()
     {
         var ex = await Assert.ThrowsAsync<MusicSpinException>(() => PlayerConnector.ConnectOrStartAsync(Endpoint,
@@ -386,6 +409,15 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
         dead.Bind(new UnixDomainSocketEndPoint(temp));
         dead.Listen(1);
         File.Move(temp, path);
+    }
+
+    private sealed class RunningProcess(int id) : IPlayerProcess
+    {
+        public bool HasExited => false;
+
+        public int? ExitCode => null;
+
+        public int? Id => id;
     }
 
     private sealed class ExitedProcess(int code) : IPlayerProcess

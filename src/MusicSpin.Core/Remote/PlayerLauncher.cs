@@ -8,7 +8,11 @@ public interface IPlayerProcess
     /// <summary>True once the process ended (e.g. it lost the start race to another player, or crashed).</summary>
     bool HasExited { get; }
 
+    /// <summary>Exit code once exited, when known (null for a detached player that is not our child).</summary>
     int? ExitCode { get; }
+
+    /// <summary>Process id, when known: tells whether this launch became the player or lost the start race.</summary>
+    int? Id => null;
 }
 
 /// <summary>Finds the running player for a data folder or starts one, then connects.</summary>
@@ -46,7 +50,23 @@ public static class PlayerConnector
         {
             try
             {
-                return (await PlayerClient.ConnectAsync(endpoint, requestTimeout: requestTimeout, cancellationToken: cancellationToken).ConfigureAwait(false), true);
+                var client = await PlayerClient.ConnectAsync(endpoint, requestTimeout: requestTimeout, cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (process?.Id is not { } id)
+                {
+                    return (client, true);
+                }
+
+                try
+                {
+                    // Several callers may have launched a process at the same time; only the lock winner "started" it.
+                    var hello = await client.HelloAsync(cancellationToken).ConfigureAwait(false);
+                    return (client, hello.Pid == id);
+                }
+                catch
+                {
+                    await client.DisposeAsync().ConfigureAwait(false);
+                    throw;
+                }
             }
             catch (MusicSpinException ex) when (ex.Code is MusicSpinErrorCode.PlayerNotRunning or MusicSpinErrorCode.PlayerUnavailable)
             {
@@ -54,10 +74,12 @@ public static class PlayerConnector
             }
 
             // Our process died without another player taking over: fail fast with its exit code.
-            if (process is { HasExited: true, ExitCode: not 0 } && !PlayerHost.IsLockHeld(endpoint))
+            // (Exit code 0 = it lost the start race; unknown = detached process, judged by the lock alone.)
+            if (process is { HasExited: true } && process.ExitCode is not 0 && !PlayerHost.IsLockHeld(endpoint))
             {
+                var code = process.ExitCode is { } c ? $" with code {c}" : string.Empty;
                 throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable,
-                    $"The background player exited with code {process.ExitCode} during startup. See {endpoint.LogFile}.");
+                    $"The background player exited{code} during startup. See {endpoint.LogFile}.");
             }
 
             await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
@@ -108,10 +130,13 @@ public static class PlayerProcessLauncher
         }
         else
         {
-            // /bin/sh does the fd plumbing so nothing of ours (e.g. an agent's stdout pipe) is inherited by the player.
-            info = new ProcessStartInfo("/bin/sh") { UseShellExecute = false };
+            // /bin/sh does the fd plumbing so nothing of ours (e.g. an agent's stdout pipe) is inherited by the player,
+            // and backgrounds it: the shell exits at once, so the player is re-parented (init or a subreaper) instead of
+            // staying our child. Tools that kill a whole process tree (e.g. an MCP client stopping `music-spin mcp`)
+            // then leave the player alone. The player calls setsid itself (no controlling terminal, own process group).
+            info = new ProcessStartInfo("/bin/sh") { UseShellExecute = false, RedirectStandardOutput = true };
             info.ArgumentList.Add("-c");
-            info.ArgumentList.Add($"exec \"$@\" </dev/null >>\"${LogEnvironmentVariable}\" 2>&1");
+            info.ArgumentList.Add($"\"$@\" </dev/null >>\"${LogEnvironmentVariable}\" 2>&1 & echo $!");
             info.ArgumentList.Add("music-spin-player");
             info.ArgumentList.Add(exe);
             foreach (var a in prefix.Concat(arguments))
@@ -130,9 +155,20 @@ public static class PlayerProcessLauncher
             process.StandardInput.Close();
             process.StandardOutput.Close();
             process.StandardError.Close();
+            return new SpawnedProcess(process);
         }
 
-        return new SpawnedProcess(process);
+        using (process)
+        {
+            var line = process.StandardOutput.ReadLine();
+            process.WaitForExit(5000);
+            if (!int.TryParse(line, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid))
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, $"Could not start '{exe}' via /bin/sh.");
+            }
+
+            return new DetachedProcess(pid);
+        }
     }
 
     private static (string Exe, string[] Prefix) ResolveCommand(string? executable, string? entryAssembly)
@@ -183,8 +219,48 @@ public static class PlayerProcessLauncher
         }
     }
 
+    /// <summary>A player that is no longer our child: its exit code is unknown, only whether it still runs.</summary>
+    private sealed class DetachedProcess : IPlayerProcess
+    {
+        private readonly Process? _process;
+
+        public DetachedProcess(int pid)
+        {
+            Id = pid;
+            try
+            {
+                _process = Process.GetProcessById(pid);
+            }
+            catch (ArgumentException)
+            {
+                _process = null; // already gone
+            }
+        }
+
+        public int? Id { get; }
+
+        public bool HasExited
+        {
+            get
+            {
+                try
+                {
+                    return _process is null || _process.HasExited;
+                }
+                catch (InvalidOperationException)
+                {
+                    return true;
+                }
+            }
+        }
+
+        public int? ExitCode => null;
+    }
+
     private sealed class SpawnedProcess(Process process) : IPlayerProcess
     {
+        public int? Id { get; } = process.Id;
+
         public bool HasExited
         {
             get
