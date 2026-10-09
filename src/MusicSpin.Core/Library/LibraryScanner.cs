@@ -18,7 +18,16 @@ public sealed record ScanOptions
 
     /// <summary>Upserts per database batch.</summary>
     public int BatchSize { get; init; } = 256;
+
+    /// <summary>
+    /// Fingerprint files that are read (and, once, unchanged files that have no fingerprint yet) and treat a vanished track
+    /// whose fingerprint matches a new file as moved (default true).
+    /// </summary>
+    public bool DetectMoves { get; init; } = true;
 }
+
+/// <summary>A track recognised at a new path (same fingerprint): <paramref name="FromId"/> was replaced by <paramref name="ToId"/>.</summary>
+public sealed record TrackMove(string From, string To, string FromId, string ToId);
 
 /// <param name="Phase">walk | read | index | done.</param>
 public sealed record ScanProgress(string Phase, int FilesFound, int FilesToRead, int FilesRead, int Failed, string? CurrentPath);
@@ -35,6 +44,20 @@ public sealed record ScanResult
     public int Unchanged { get; init; }
     public int Removed { get; init; }
     public int Failed { get; init; }
+
+    /// <summary>Tracks found at a new path (rename/move): kept with their date added, playlists follow them. Not counted in Added/Removed.</summary>
+    public int Moved { get; init; }
+
+    /// <summary>Vanished and new files that shared a fingerprint but could not be paired one-to-one (duplicates): handled as removed + added.</summary>
+    public int AmbiguousMoves { get; init; }
+
+    /// <summary>Unchanged tracks that got their first fingerprint in this scan (once per file, e.g. after an upgrade).</summary>
+    public int Fingerprinted { get; init; }
+
+    /// <summary>Playlist entries that now point at a moved track.</summary>
+    public int PlaylistEntriesUpdated { get; init; }
+
+    public IReadOnlyList<TrackMove> Moves { get; init; } = [];
 
     /// <summary>Files that failed earlier and were skipped because they did not change (use --full to retry).</summary>
     public int SkippedUnreadable { get; init; }
@@ -58,7 +81,7 @@ public sealed record ScanResult
 /// </summary>
 internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, TimeProvider time)
 {
-    private sealed record ReadOutcome(FoundFile File, TrackRecord? Track, TrackReadException? Error);
+    private sealed record ReadOutcome(FoundFile File, TrackRecord? Track, TrackReadException? Error, string? Fingerprint);
 
     public ScanResult Scan(ScanOptions options, CancellationToken cancellationToken)
     {
@@ -147,8 +170,35 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             db.Tracks.Update(folderMoves);
         }
 
+        // 2b. Fingerprint unchanged tracks that have none yet (libraries scanned before fingerprints existed), once.
+        var fingerprinted = 0;
+        if (options.DetectMoves && !cancelled)
+        {
+            var reading = toRead.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+            var missingPrints = found.Keys.Where(id => !reading.Contains(id) && existing.TryGetValue(id, out var t) && t.Fingerprint.Length == 0)
+                .Select(id => existing[id]).ToList();
+            if (missingPrints.Count > 0)
+            {
+                try
+                {
+                    Parallel.ForEach(missingPrints,
+                        new ParallelOptions { MaxDegreeOfParallelism = options.MaxParallelism ?? Math.Clamp(Environment.ProcessorCount, 2, 16), CancellationToken = cancellationToken },
+                        t => t.Fingerprint = FileFingerprint.Compute(t.Path) ?? string.Empty);
+                }
+                catch (OperationCanceledException)
+                {
+                    cancelled = true;
+                }
+
+                var done = missingPrints.Where(t => t.Fingerprint.Length > 0).ToList();
+                db.Tracks.Update(done);
+                fingerprinted = done.Count;
+            }
+        }
+
         // 3. Read in parallel, write batches on this thread.
         int added = 0, updated = 0, failed = 0, read = 0;
+        var addedTracks = new List<TrackRecord>();
         var removedIds = new HashSet<string>(StringComparer.Ordinal);
         var newIssueRecords = new List<ScanIssueRecord>();
         if (!cancelled && toRead.Count > 0)
@@ -165,11 +215,13 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                         {
                             try
                             {
-                                queue.Add(new ReadOutcome(item.File, reader.Read(item.File.Path), null), cancellationToken);
+                                var track = reader.Read(item.File.Path);
+                                var print = options.DetectMoves ? FileFingerprint.Compute(item.File.Path) : null;
+                                queue.Add(new ReadOutcome(item.File, track, null, print), cancellationToken);
                             }
                             catch (TrackReadException ex)
                             {
-                                queue.Add(new ReadOutcome(item.File, null, ex), cancellationToken);
+                                queue.Add(new ReadOutcome(item.File, null, ex, null), cancellationToken);
                             }
                         });
                 }
@@ -195,6 +247,7 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                     track.FileName = System.IO.Path.GetFileName(normalized);
                     track.SizeBytes = outcome.File.SizeBytes;
                     track.ModifiedUtcTicks = outcome.File.ModifiedUtcTicks;
+                    track.Fingerprint = outcome.Fingerprint ?? string.Empty;
                     if (existing.TryGetValue(id, out var old))
                     {
                         track.AddedUtcTicks = old.AddedUtcTicks;
@@ -205,6 +258,7 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                     {
                         track.AddedUtcTicks = nowTicks;
                         added++;
+                        addedTracks.Add(track);
                     }
 
                     batch.Add(track);
@@ -269,6 +323,7 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
 
         // 4. Removals: only for complete walks, only under available roots, never under folders we could not list.
         var availableIds = available.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
+        var vanished = new List<TrackRecord>();
         if (!cancelled)
         {
             foreach (var track in existing.Values)
@@ -277,8 +332,23 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                     && !problemDirs.Any(d => LibraryKeys.IsUnder(track.Path, d)))
                 {
                     removedIds.Add(track.Id);
+                    vanished.Add(track);
                 }
             }
+        }
+
+        // 4b. Moves: a vanished track and a new file with the same fingerprint are the same track.
+        var (moves, ambiguous) = options.DetectMoves && !cancelled ? MatchMoves(vanished, addedTracks) : ([], 0);
+        var playlistEntries = 0;
+        if (moves.Count > 0)
+        {
+            foreach (var (old, now) in moves)
+            {
+                now.AddedUtcTicks = old.AddedUtcTicks;
+            }
+
+            db.Tracks.Update(moves.Select(m => m.New));
+            playlistEntries = PlaylistMaintenance.Retarget(db, moves.ToDictionary(m => m.Old.Id, m => m.New, StringComparer.Ordinal), null);
         }
 
         foreach (var id in removedIds)
@@ -329,11 +399,16 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             Folders = folders.Count,
             FoldersMissing = folders.Count - available.Count,
             FilesFound = found.Count,
-            Added = added,
+            Added = added - moves.Count,
             Updated = updated,
             Unchanged = unchanged,
-            Removed = removedIds.Count,
+            Removed = removedIds.Count - moves.Count,
             Failed = failed,
+            Moved = moves.Count,
+            AmbiguousMoves = ambiguous,
+            Fingerprinted = fingerprinted,
+            PlaylistEntriesUpdated = playlistEntries,
+            Moves = [.. moves.OrderBy(m => m.New.Path, StringComparer.Ordinal).Take(MaxMovesListed).Select(m => new TrackMove(m.Old.Path, m.New.Path, m.Old.Id, m.New.Id))],
             SkippedUnreadable = skippedUnreadable,
             Albums = albums,
             Artists = artists,
@@ -343,6 +418,51 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             Elapsed = stopwatch.Elapsed,
             Issues = issues.ToList(),
         };
+    }
+
+    public const int MaxMovesListed = 200;
+
+    /// <summary>
+    /// Pairs vanished tracks with new files of the same fingerprint. One-to-one groups are moves. In a group with several
+    /// candidates (duplicates), a vanished and a new file are paired only when they are the only two with that file name;
+    /// everything else in the group stays removed + added (never a guess).
+    /// </summary>
+    internal static (List<(TrackRecord Old, TrackRecord New)> Moves, int Ambiguous) MatchMoves(List<TrackRecord> vanished, List<TrackRecord> added)
+    {
+        var moves = new List<(TrackRecord Old, TrackRecord New)>();
+        var ambiguous = 0;
+        var newByPrint = added.Where(t => t.Fingerprint.Length > 0).GroupBy(t => t.Fingerprint, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        foreach (var group in vanished.Where(t => t.Fingerprint.Length > 0).GroupBy(t => t.Fingerprint, StringComparer.Ordinal))
+        {
+            if (!newByPrint.TryGetValue(group.Key, out var news))
+            {
+                continue;
+            }
+
+            var olds = group.ToList();
+            if (olds.Count == 1 && news.Count == 1)
+            {
+                moves.Add((olds[0], news[0]));
+                continue;
+            }
+
+            var paired = 0;
+            foreach (var old in olds)
+            {
+                var sameNameNew = news.Where(n => n.FileName.Equals(old.FileName, StringComparison.OrdinalIgnoreCase)).ToList();
+                var sameNameOld = olds.Count(o => o.FileName.Equals(old.FileName, StringComparison.OrdinalIgnoreCase));
+                if (sameNameNew.Count == 1 && sameNameOld == 1)
+                {
+                    moves.Add((old, sameNameNew[0]));
+                    paired++;
+                }
+            }
+
+            ambiguous += olds.Count + news.Count - 2 * paired;
+        }
+
+        return (moves, ambiguous);
     }
 
     private sealed class ProgressThrottle(IProgress<ScanProgress>? target, TimeSpan interval)

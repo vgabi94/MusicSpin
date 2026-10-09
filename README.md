@@ -6,7 +6,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 
 - **Plays almost any format**, decoded by [FFmpeg](https://ffmpeg.org) 9.0: FLAC, ALAC, WAV/W64/RF64, AIFF, DSD (DSF/DFF, played as PCM), WavPack, APE, TTA, MP3, AAC, Vorbis, Opus and more.
 - **Aims for bit-perfect output:** no resampling, a device format matching the source bit depth, untouched samples at volume 1.0, and optional exclusive mode (WASAPI exclusive, ALSA hw, CoreAudio) through [SoundFlow](https://github.com/LSXPrime/SoundFlow)/[miniaudio](https://miniaud.io).
-- **Music library:** LiteDB database, TagLib# tags with FFmpeg fallback, fast parallel incremental scanning, album grouping including compilations/Various Artists, ranked case- and diacritic-insensitive search (per-word, phrases, `artist:`/`album:`/`title:`/`genre:`/`year:`), per-field filters, quality filters (hi-res, sample rate, bit depth, format, year), health check, folder watching.
+- **Music library:** LiteDB database, TagLib# tags with FFmpeg fallback, fast parallel incremental scanning, album grouping including compilations/Various Artists, ranked case- and diacritic-insensitive search (per-word, phrases, `artist:`/`album:`/`title:`/`genre:`/`year:`), per-field filters, quality filters (hi-res, sample rate, bit depth, format, year), rename/move detection by content fingerprint (date added and playlist entries follow), `library relocate` for moved folders or remounted drives, health check, folder watching.
 - **Background player:** `music-spin play` returns at once. Quick commands (`pause`, `next`, `seek`, `volume`, `status`, `queue`, ...) control it. Playback survives the terminal or agent that started it.
 - **Playlists:** saved in the library (case-insensitive unique names, entries keep track id + path, missing files kept and flagged), M3U/M3U8/PLS import (encodings, relative/Windows/`file://` paths) and export, `play --playlist`, `queue save`. The player's queue persists across restarts (restored paused).
 - **Repeat and shuffle:** repeat off/one/all and a shuffle toggle on the running queue (the current track keeps playing; `off` restores the original order; reproducible with `--seed`), saved as defaults.
@@ -15,7 +15,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 
 ## Status
 
-**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (654) work. The desktop app is an empty Avalonia window until the UI design is decided.
+**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (708) work. The desktop app is an empty Avalonia window until the UI design is decided.
 
 | Platform | Status |
 |---|---|
@@ -77,7 +77,7 @@ Every command and option, with the exit code table, is in the [CLI reference](do
 }
 ```
 
-18 tools (`play`, `pause`, `next`, `seek`, `volume`, `status`, `queue_add`, `search`, `albums`, ...) drive the same background player and library as the CLI. Setup for Claude Desktop, Cursor, Claude Code and Grok CLI: [MCP server](docs/mcp.md).
+34 tools (`play`, `pause`, `next`, `seek`, `volume`, `status`, `queue_add`, `repeat`, `shuffle`, `search`, `tracks`, `albums`, `playlist_*`, `library_relocate`, ...) drive the same background player and library as the CLI. Setup for Claude Desktop, Cursor, Claude Code and Grok CLI: [MCP server](docs/mcp.md).
 
 ## Build and test
 
@@ -99,7 +99,7 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 |---|---|
 | [Getting started](docs/getting-started.md) | portable layout, `.usrdata`, FFmpeg, first commands |
 | [CLI reference](docs/cli-reference.md) | every command and option, `--json`, exit codes |
-| [Music library](docs/library.md) | scanning, change detection, stored metadata, search/filter semantics |
+| [Music library](docs/library.md) | scanning, change detection, renames/moves and relocate, stored metadata, search/filter semantics |
 | [Playback](docs/playback.md) | formats, bit-perfect/exclusive mode, DSD, background player, queue, repeat and shuffle |
 | [AI agents](docs/ai-agents.md) | JSON conventions, background-player workflow, `serve` protocol |
 | [MCP server](docs/mcp.md) | transport, client configuration, tools, errors |
@@ -115,6 +115,8 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 - [ ] Desktop UI design. The app will attach to the background player (`PlayerClient` + `subscribe`) or host it in-process
 - [x] Repeat one/all and a shuffle toggle
 - [x] Saved playlists, M3U/M3U8/PLS import/export, persistent queue
+- [x] Ranked, diacritic-insensitive search with field syntax and per-field filters
+- [x] Rename/move detection (fingerprints) and `library relocate`
 - [ ] Gapless playback; decoding on a separate thread into a ring buffer
 - [ ] Native DSD/DoP output; bit-perfect verification on real hardware (WASAPI exclusive, ALSA `hw:`, CoreAudio)
 - [ ] Audio-only LGPL FFmpeg build (~120 MB → a few MB), LGPL FFmpeg for macOS, signing/notarization, GitHub releases

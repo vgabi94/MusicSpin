@@ -25,6 +25,9 @@ public sealed class TrackRecord
     public long ModifiedUtcTicks { get; set; }
     public long AddedUtcTicks { get; set; }
 
+    /// <summary><see cref="FileFingerprint"/> of the file as last read (empty: not computed yet). Used to detect renames/moves.</summary>
+    public string Fingerprint { get; set; } = string.Empty;
+
     // Tags
     public string? Title { get; set; }
     public string? Artist { get; set; }

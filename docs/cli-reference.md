@@ -19,7 +19,7 @@ Every command accepts these, before or after the subcommand:
 |---|---|
 | Files and environment | [`info`](#info) · [`formats`](#formats) · [`devices`](#devices) · [`doctor`](#doctor) |
 | Playback | [`play`](#play) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
-| Library | [`library add/remove/folders/scan/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) |
+| Library | [`library add/remove/folders/scan/relocate/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) |
 | Playlists | [`playlist list/show/create/rename/delete/add/remove/move/clear/import/export`](#playlist) · [`queue save`](#queue) |
 | Integration | [`serve`](#serve) · [`mcp`](#mcp) |
 
@@ -180,8 +180,9 @@ Control commands (`pause` … `quit`, `repeat`, `shuffle`, `queue save`) **never
 |---|---|
 | `library add <folder>` | Add a folder. `status`: `added`, `exists`, or `covered` (already inside a library folder). Library folders inside the new one are absorbed (listed in `absorbed`). Then run `library scan` |
 | `library remove <folder>` | Remove a folder and its tracks from the library (music files are not touched). Exit 12 if it is not a library folder |
+| `library relocate <old> <new> [--dry-run] [--force]` (alias `library move`) | After you moved/renamed a folder: rewrite the paths of all tracks under `<old>` to `<new>` without rescanning; library folders under `<old>` move along, playlist entries follow. JSON: `{from, to, dryRun, tracks, foldersRelocated, playlistEntries, missingAtNewLocation, sample, warnings}`. Exit 3 if `<new>` does not exist; 2 for same/nested paths or a file; 12 if nothing in the library is under `<old>`; 8 if `<new>` is outside the library folders, a new path is already a track, or no file exists at `<new>` (without `--force`). [Details](library.md#relocating-a-folder) |
 | `library folders` | List folders: path, exists, track count, added, last scan |
-| `library scan [--full] [--parallel N] [--quiet]` | Incremental scan: add new files, re-read changed ones, drop deleted ones. `--full` re-reads every file. `--parallel` = reader threads (default: CPU count, clamped to 2-16). Progress goes to stderr (JSON lines with `--json`); `--quiet` hides it. Ctrl+C: exit 130, work done so far is kept |
+| `library scan [--full] [--parallel N] [--quiet] [--no-move-detection]` | Incremental scan: add new files, re-read changed ones, drop deleted ones, recognise renamed/moved files by fingerprint (`moved`, `moves`, `ambiguousMoves`, `fingerprinted`, `playlistEntriesUpdated` in the result; [details](library.md#renames-and-moves)). `--no-move-detection` turns fingerprints and move matching off. `--full` re-reads every file. `--parallel` = reader threads (default: CPU count, clamped to 2-16). Progress goes to stderr (JSON lines with `--json`); `--quiet` hides it. Ctrl+C: exit 130, work done so far is kept |
 | `library stats` | Totals: tracks, albums, artists, size, duration, by format, by resolution, hi-res and lossless counts, last scan |
 | `library check` | Health report: missing files/folders, likely duplicates, missing tags, unreadable files. **Exit 0 even when issues are found**; see `healthy` |
 | `library watch [--debounce-ms N]` | Watch the library folders and run an incremental scan after changes (quiet period: default 2000 ms). One line per event (`watching`, `scan`, `error`). Runs until Ctrl+C (exit 0) |

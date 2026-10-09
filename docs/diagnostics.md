@@ -111,6 +111,8 @@ There is no separate log for CLI commands. Errors are in the JSON `error` object
 | Exit 10 `library_corrupt` | Move `.usrdata/library.db` away and run `library add` + `library scan` again |
 | Exit 11 `library_locked` | Another MusicSpin process (e.g. a scan or `library watch`) is writing. Wait, or stop it |
 | A file edit isn't picked up by `library scan` | Its size and modification time didn't change. Run `library scan --full` (see [change detection](library.md#change-detection)) |
+| After moving the music folder (or mounting the drive elsewhere), the library shows the old folder as missing | Run `library relocate <old> <new>` (try `--dry-run` first). See [relocating a folder](library.md#relocating-a-folder) |
+| A renamed file came back as a new track (`added` + `removed` instead of `moved`) | It was also edited (different fingerprint), it has identical copies (`ambiguousMoves`), or the scan ran with `--no-move-detection`. See [renames and moves](library.md#renames-and-moves) |
 | `search "artist title"` finds nothing | Track search matches one contiguous substring, not separate words. Search for one name (`search "says"`) or use `tracks --artist "<name>"` |
 | `library scan` fails with exit 1 mentioning TagLib# | `TagLibSharp.dll` is missing next to the executable. Restore it from the release |
 | Music keeps playing after the terminal / agent / MCP client closed | By design: the player is detached. `music-spin quit` stops it, and it exits by itself after the idle timeout once stopped |

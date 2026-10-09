@@ -70,7 +70,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
                      "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
-                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export" })
+                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate" })
         {
             Assert.Contains(name, names);
         }
@@ -258,6 +258,29 @@ public sealed class McpServerTests : IAsyncDisposable
 
         Assert.Equal(0, (await _cli.RunAsync("library", "add", music)).ExitCode);
         Assert.Equal(0, (await _cli.RunAsync("library", "scan", "--quiet")).ExitCode);
+    }
+
+    [Fact]
+    public async Task Library_relocate_tool_rewrites_paths_and_reports_errors()
+    {
+        await WithLibraryAsync();
+        var music = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(
+            (await _cli.RunAsync("tracks", "--album", "Kind of Blue", "--json")).Json().GetProperty("data").GetProperty("items")[0].GetProperty("path").GetString())))!;
+        var miles = Path.Combine(music, "Miles");
+        var target = Path.Combine(music, "Miles Davis");
+        await StartAsync();
+
+        Assert.StartsWith("file_not_found:", await CallError("library_relocate", new() { ["from"] = miles, ["to"] = target }), StringComparison.Ordinal);
+        Directory.Move(miles, target);
+        Assert.StartsWith("not_found:", await CallError("library_relocate", new() { ["from"] = Path.Combine(music, "None"), ["to"] = target }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("library_relocate", new() { ["from"] = miles, ["to"] = miles }), StringComparison.Ordinal);
+
+        var dry = await Call("library_relocate", new() { ["from"] = miles, ["to"] = target, ["dryRun"] = true });
+        Assert.Equal((3, true), (dry.GetProperty("tracks").GetInt32(), dry.GetProperty("dryRun").GetBoolean()));
+        var real = await Call("library_relocate", new() { ["from"] = miles, ["to"] = target });
+        Assert.Equal((3, false), (real.GetProperty("tracks").GetInt32(), real.GetProperty("dryRun").GetBoolean()));
+        var tracks = await Call("tracks", new() { ["album"] = "Kind of Blue" });
+        Assert.All(tracks.GetProperty("items").EnumerateArray(), t => Assert.StartsWith(target, t.GetProperty("path").GetString(), StringComparison.Ordinal));
     }
 
     private static string?[] Titles(JsonElement page) => [.. page.GetProperty("items").EnumerateArray().Select(t => t.GetProperty("title").GetString())];

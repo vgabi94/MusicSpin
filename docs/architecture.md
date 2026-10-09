@@ -58,7 +58,7 @@ Shared build settings: `Directory.Build.props` (net10.0, nullable, `TreatWarning
 - **Decoding:** `FFmpegRuntime` finds and loads the FFmpeg 9.0 shared libraries (search order in [Getting started](getting-started.md#ffmpeg)). `FFmpegAudioDecoder` demuxes and decodes, and libswresample converts to interleaved float32 at the native rate and channel layout.
 - **Output:** `SoundFlowAudioOutput` opens a miniaudio device per track at the source rate, as S16/S24/F32, with exclusive-mode settings when requested. `NullAudioOutput` consumes samples in real time with no device.
 - **Playback:** `Player` (load/play/pause/stop/seek/volume, events) and `QueuePlayer` (queue, next/prev, skipping unplayable files, end-of-queue handling). The decoder currently runs inside the audio callback (fine for local files). **Planned:** decode on a separate thread into a ring buffer.
-- **Library:** the `MusicLibrary` facade over `LibraryDatabase` (LiteDB), `LibraryScanner` + `FileWalker` + `TrackReader` (TagLib#, FFmpeg fallback), `LibraryIndexer` (albums and artists), `LibraryKeys` (normalization and ids), `LibraryWatcher`.
+- **Library:** the `MusicLibrary` facade over `LibraryDatabase` (LiteDB), `LibraryScanner` + `FileWalker` + `TrackReader` (TagLib#, FFmpeg fallback), `LibraryIndexer` (albums, artists, search keys), `LibrarySearch` (folding, query syntax, ranking), `FileFingerprint` + `PlaylistMaintenance` (rename/move detection, `Relocate`; playlist entries follow moved tracks), `LibraryKeys` (normalization and ids), `LibraryWatcher`.
 - **Hosting:** `AppPaths` resolves the portable `.usrdata` folder. **Settings:** `AppSettings` + `SettingsStore`.
 
 ## Background player and IPC

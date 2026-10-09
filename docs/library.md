@@ -48,11 +48,12 @@ Everything else follows from that rule:
 | New file | Read and added (`added`) |
 | Size or mtime differs | Re-read (`updated`). The track keeps its id and its "date added" |
 | File deleted | Removed from the library (`removed`), but only after a complete, non-cancelled walk of its folder |
-| File renamed or moved inside the library | Seen as one removal plus one addition: re-read, with a new id and a new "date added". There is no rename/move detection and no content hash |
+| File renamed or moved inside the library (also between library folders) | Recognised by its [fingerprint](#renames-and-moves) (`moved`): the track gets the new path and id, keeps its "date added", and playlist entries follow it |
+| File renamed **and** edited (tags rewritten, re-encoded) | The fingerprint differs: one removal plus one addition (new "date added"; playlist entries pointing at it become `missing`) |
 | File edited with **the same size and the same mtime** (for example a tag editor that preserves timestamps and pads tags in place) | **Not detected.** Run `library scan --full` |
 | Root folder missing (unplugged drive, unmounted share) | `folder_missing` issue. Its tracks are **kept** until it comes back or you run `library remove` |
-| Root folder moved or renamed | The old root shows up as missing (tracks kept). `library add` the new path: its files are added as new tracks. Then `library remove` the old path |
-| Subfolder moved within a root | Removal plus addition, as for a rename |
+| Root folder moved or renamed | The old root shows up as missing (tracks kept). Run [`library relocate <old> <new>`](#relocating-a-folder): the root and its tracks are rewritten in place, no rescan. (A scan cannot see this as a move: the old root is missing, so its tracks are never removed) |
+| Subfolder moved or renamed within the library | Every file in it is a move (as above). `library relocate` does the same without reading the files |
 | Subfolder that cannot be listed | Its tracks are kept |
 | A previously readable file becomes unreadable | Removed from the tracks and recorded as an unreadable issue |
 | An unreadable file with unchanged size and mtime | Skipped (`skippedUnreadable`); `--full` retries it |
@@ -62,30 +63,76 @@ Everything else follows from that rule:
 
 **`--full`** skips the size and mtime check and re-reads **every** file, including files previously recorded as unreadable. Deleted files are still removed. Use it after replacing `TagLibSharp.dll` or FFmpeg, after the edits described above, or when in doubt.
 
+### Renames and moves
+
+Every file that a scan reads gets a **fingerprint**: its size plus a SHA-256 (truncated to 128 bits) of the first and last 64 KB (the whole file when it is smaller than 128 KB). That is at most 128 KB of extra reading per new or changed file; the head is usually already in the cache from reading the tags.
+
+After the walk, the scan compares **vanished** tracks (gone from a complete walk) with **new** files:
+
+- one vanished track and one new file with the same fingerprint: a **move**. The track is re-keyed to the new path (the id is derived from the path, so it changes), keeps its "date added", and playlist entries that pointed at it now point at the new path. It is counted in `moved`, not in `added`/`removed`, and listed in `moves` (`{from, to, fromId, toId}`, first 200);
+- several vanished tracks and/or new files with the same fingerprint (identical copies): a pair is matched only when its **file name** is unique on both sides (for example a folder of identical files renamed as a whole). Everything else in such a group is handled as **removed + added** and counted in `ambiguousMoves`. MusicSpin never guesses which copy is which;
+- an identical copy that stays where it was is not involved: only vanished tracks are candidates, so a rename of one copy is a move of that copy.
+
+Limits (by design):
+
+- An edit that changes neither the size nor the first/last 64 KB (rare: same-size changes in the middle of the audio) keeps the fingerprint. A file moved *and* edited like that is still a move, and its tags are read fresh anyway.
+- A file moved *and* retagged is a new track. Tag editors rewrite the header, which changes the fingerprint.
+- Moves out of a library folder that is **missing** at scan time (unplugged drive) are not seen: the missing folder keeps its tracks, and the file is added as new where it appeared.
+- Moves are matched within one scan. If a scan runs between the delete and the re-create (for example `library watch` during a slow copy), the track is removed and later added as new.
+- The saved player queue (`queue.json`) is not rewritten; a queued file that moved is skipped as missing when the queue is restored.
+
+Libraries scanned before fingerprints existed are fingerprinted once by the next scan (`fingerprinted` in the result; files are not re-read for tags). `library scan --no-move-detection` turns fingerprints and move matching off; renames are then removed + added.
+
+### Relocating a folder
+
+`library relocate <old> <new>` (alias `library move`) is for when **you** moved or renamed a folder, or a drive is mounted at a new path. It rewrites the stored paths of every track under `<old>` to the same relative path under `<new>` **without reading any file**, so it is instant even for large libraries, and the next scan sees the files as unchanged.
+
+- `<old>` can be a library folder (the folder entry moves too) or any folder inside one. `<new>` must exist.
+- Tracks keep their "date added" and all stored data. Playlist entries follow, including `file`/`missing` entries whose path is under `<old>`.
+- `--dry-run` reports what would change and writes nothing. The result lists the counts, the relocated library folders, the playlist entries updated and a sample of the first 10 path changes, plus warnings (some files missing at `<new>`, or files still present at `<old>`).
+- Everything is written in one transaction: on any error, nothing changes.
+
+| Problem | Exit |
+|---|---|
+| `<new>` does not exist (move the files first) | 3 `file_not_found` |
+| Same folder, one inside the other, `<new>` is a file | 2 `usage` |
+| Nothing in the library is under `<old>` | 12 `not_found` |
+| `<new>` is outside every library folder (and `<old>` is not a library folder itself): `library add` it first | 8 `invalid_state` |
+| A relocated library folder would overlap another library folder | 8 `invalid_state` |
+| A new path is already a library track (the files were copied and scanned): use `library scan` instead | 8 `invalid_state` |
+| **None** of the files exist under `<new>` (wrong path?). `--force` relocates anyway; the next scan then drops them | 8 `invalid_state` |
+
+The MCP server has the same operation as the `library_relocate` tool.
+
 ### Watching
 
 `library watch [--debounce-ms 2000]` uses a FileSystemWatcher on every library folder (file and folder names, last write, size; subfolders included). After a quiet period it runs the same incremental scan. A watcher buffer overflow also triggers a rescan. Each event is printed as one line (`watching`, `scan`, `error`). It runs until Ctrl+C. The desktop app does not watch yet (`watchLibrary` in settings.json is reserved).
 
 ### Timings
 
-Synthetic library of 3,000 tagged files (FLAC 16/44.1 and 24/96 plus MP3), Release build, 8 cores, Linux:
+Synthetic library of 2,999 tagged files (FLAC 16/44.1 and 24/96 plus MP3, about 12 KB each), Release build, 8 cores, Linux, warm file cache. Two runs each:
 
 | Operation | Scan time | Wall time (including process start) |
 |---|---:|---:|
-| Initial scan | 1.43 s | 1.74 s |
-| Rescan, nothing changed | 0.19 s | 0.50 s |
-| Rescan, 50 files touched | 0.45 s | 0.78 s |
-| Rescan, 1 file deleted | 0.39 s | 0.70 s |
-| Full rescan (`--full`) | 1.78 s | 2.10 s |
+| Initial scan | 1.48-1.89 s | 1.82-2.30 s |
+| Initial scan, `--no-move-detection` | 1.69-1.74 s | 2.04-2.11 s |
+| Rescan, nothing changed | 0.24-0.26 s | 0.58-0.60 s |
+| Rescan, 50 files touched | 0.64-0.69 s | 1.01-1.05 s |
+| Rescan, 50 files touched, `--no-move-detection` | 0.57-0.58 s | 0.91-0.93 s |
+| Rescan, 1 file deleted | 0.55-0.63 s | 0.87-1.00 s |
+| Rescan after renaming a folder of 100 files (100 moves) | 0.71-0.75 s | 1.03-1.11 s |
+| One-time fingerprint backfill (library from an older version) | 0.61-0.62 s | 0.95-1.02 s |
+| Full rescan (`--full`) | 2.02-2.03 s | 2.38 s |
+| `library relocate` of a folder with 100 tracks | | 0.88 s |
 | `tracks`, `albums`, `search`, `filter`, `stats`, `check` | | 0.32-0.48 s each |
 
-The database for 3,000 tracks is about 4.9 MB.
+Fingerprinting made no measurable difference to full scans here (the differences between runs are larger). It adds about 0.05-0.1 s per 50 re-read files. Rescans with changes also rebuild the folded search keys, which costs about 0.1 s for 3,000 tracks. On real files it adds one read of the last 64 KB per new or changed file; on a cold spinning disk that is an extra seek per file (not measured). The database for 3,000 tracks is about 4.9 MB.
 
 ## What is stored per track
 
 | Group | Fields |
 |---|---|
-| File | path, directory, file name, size, modification time (UTC ticks), date added |
+| File | path, directory, file name, size, modification time (UTC ticks), date added, fingerprint (size + hash of the first/last 64 KB) |
 | Tags | title, artist, album artist, album, track number/total, disc number/total, year, genre, compilation flag, ReplayGain track/album gain and peak, embedded cover present |
 | Audio | duration, format id (`flac`, `alac`, `pcm`, `dsd`, `wavpack`, `ape`, `tta`, `mp3`, `aac`, `vorbis`, `opus`, `wma`, ...), codec, sample rate, bits per sample, bitrate, channels, lossless, hi-res |
 | Provenance | `tagSource` (`taglib`, `taglib+ffmpeg`, `ffmpeg`) |

@@ -156,6 +156,7 @@ $ printf '%s\n' \
 | `albums` | `artist` (exact; unknown → `not_found`), `title`, `artistContains` (words), `hiresOnly` (false), `offset` (0), `limit` (50) | ✓ | List albums |
 | `artists` | `name` (words), `offset` (0), `limit` (100) | ✓ | List artists, optionally whose name contains the words |
 | `library_stats` | – | ✓ | Totals, formats, hi-res counts |
+| `library_relocate` | `from`, `to` (required), `dryRun` (false), `force` (false) | | After a folder was moved/renamed on disk: rewrite the paths of library tracks under `from` to `to` without rescanning; playlist entries follow. Same rules and errors as [`library relocate`](library.md#relocating-a-folder): `file_not_found` (no `to`), `not_found` (nothing under `from`), `invalid_state` (outside the library, collision, no files at `to` without `force`), `usage`. Marked destructive |
 | `playlists` | – | ✓ | Saved playlists: name, entries, missing entries, duration |
 | `playlist_show` | `name` (required), `offset` (0), `limit` (100) | ✓ | Entries: 1-based `position`, `status` (`library`/`file`/`missing`), path, track id, tags |
 | `playlist_create` | `name` (required) | | Create an empty playlist (`invalid_state` if the name is taken, case-insensitively) |
@@ -170,7 +171,7 @@ $ printf '%s\n' \
 
 `album` accepts an exact title (case-insensitive) or an album id from `albums`/`search`. `artist` is an exact name (case-insensitive; diacritics are ignored when nothing matches exactly). Unknown album/artist: `not_found`. `title`/`albumContains`/`artistContains`/`name` match when every word appears in that field. `files` must be paths the server process can read; absolute paths are recommended. The parameters match the CLI options described in the [CLI reference](cli-reference.md#play).
 
-Playlist rules (names, entry status, import/export details) are in [Music library → Playlists](library.md#playlists). There is no tool for library scanning yet. Scan with `music-spin library scan` (see [Music library](library.md)).
+Playlist rules (names, entry status, import/export details) are in [Music library → Playlists](library.md#playlists). There is no tool for library scanning (it can take minutes on large libraries). Scan with `music-spin library scan`, which also recognises renamed and moved files (see [Music library](library.md#renames-and-moves)).
 
 ## Results and errors
 

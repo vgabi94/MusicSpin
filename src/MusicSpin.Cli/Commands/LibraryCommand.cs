@@ -11,9 +11,9 @@ internal static class LibraryCommand
 {
     public static Command Create(CommandRunner runner)
     {
-        var command = new Command("library", "Manage the music library (folders, scan, stats, check, watch). Data lives in the data folder (see 'doctor').")
+        var command = new Command("library", "Manage the music library (folders, scan, relocate, stats, check, watch). Data lives in the data folder (see 'doctor').")
         {
-            Add(runner), Remove(runner), Folders(runner), Scan(runner), Stats(runner), Check(runner), Watch(runner),
+            Add(runner), Remove(runner), Folders(runner), Scan(runner), Relocate(runner), Stats(runner), Check(runner), Watch(runner),
         };
         return command;
     }
@@ -68,6 +68,55 @@ internal static class LibraryCommand
         return command;
     }
 
+    private static Command Relocate(CommandRunner runner)
+    {
+        var from = new Argument<string>("old") { Description = "Old folder (library folder or any folder inside one)." };
+        var to = new Argument<string>("new") { Description = "Folder the files are now in (must exist)." };
+        var dryRun = new Option<bool>("--dry-run") { Description = "Validate and report what would change; write nothing." };
+        var force = new Option<bool>("--force") { Description = "Relocate even when none of the files exist at the new location." };
+        var command = new Command("relocate",
+            "Point library tracks under <old> at <new> after you moved or renamed the folder (or mounted a drive elsewhere), without rescanning. " +
+            "Keeps date added and playlist entries; library folders under <old> move along. " +
+            "Exit 3 if <new> does not exist, 12 if nothing in the library is under <old>, 8 if <new> is outside the library, " +
+            "a new path is already a track, or no file exists at <new> (without --force).")
+        {
+            from, to, dryRun, force,
+        };
+        command.Aliases.Add("move");
+        runner.SetAction(command, (parseResult, json, _) =>
+        {
+            using var library = runner.OpenLibraryForWrite(parseResult);
+            var result = library.Relocate(parseResult.GetValue(from)!, parseResult.GetValue(to)!, parseResult.GetValue(dryRun), parseResult.GetValue(force));
+            var output = runner.Env.Out;
+            if (json)
+            {
+                JsonOutput.WriteSuccess(output, "library relocate", result);
+                return Task.FromResult(ExitCodes.Success);
+            }
+
+            output.WriteLine($"{(result.DryRun ? "Would relocate" : "Relocated")} {result.Tracks} track(s) from {result.From} to {result.To}" +
+                             $"{(result.FoldersRelocated.Count > 0 ? $"; library folder(s) moved: {string.Join(", ", result.FoldersRelocated)}" : string.Empty)}" +
+                             $"; {result.PlaylistEntries} playlist entr{(result.PlaylistEntries == 1 ? "y" : "ies")} updated.");
+            foreach (var move in result.Sample)
+            {
+                output.WriteLine($"  {move.From} -> {move.To}");
+            }
+
+            if (result.Tracks > result.Sample.Count)
+            {
+                output.WriteLine($"  ... {result.Tracks - result.Sample.Count} more.");
+            }
+
+            foreach (var warning in result.Warnings)
+            {
+                output.WriteLine($"warning: {warning}");
+            }
+
+            return Task.FromResult(ExitCodes.Success);
+        }, "library relocate");
+        return command;
+    }
+
     private static Command Folders(CommandRunner runner)
     {
         var command = new Command("folders", "List library folders.");
@@ -102,11 +151,15 @@ internal static class LibraryCommand
         var parallel = Options.Validated(new Option<int?>("--parallel") { Description = "Parallel file readers (default: CPU count, 2-16)." },
             v => v is < 1 or > 64 ? "--parallel must be between 1 and 64." : null);
         var quiet = new Option<bool>("--quiet") { Description = "No progress on stderr." };
+        var noMoves = new Option<bool>("--no-move-detection")
+        {
+            Description = "Do not fingerprint files or recognise renamed/moved files (they are then removed + added, losing playlist entries and date added).",
+        };
         var command = new Command("scan",
             "Scan library folders: add new, update changed, drop deleted files. Progress goes to stderr (JSON lines with --json). " +
             "Ctrl+C cancels (exit 130); work done so far is kept.")
         {
-            full, parallel, quiet,
+            full, parallel, quiet, noMoves,
         };
 
         runner.SetAction(command, (parseResult, json, cancellationToken) =>
@@ -117,6 +170,7 @@ internal static class LibraryCommand
             {
                 Full = parseResult.GetValue(full),
                 MaxParallelism = parseResult.GetValue(parallel),
+                DetectMoves = !parseResult.GetValue(noMoves),
                 Progress = parseResult.GetValue(quiet) ? null : new SyncProgress<ScanProgress>(p => WriteProgress(env.Error, json, p)),
             };
             var result = library.Scan(options, cancellationToken);
@@ -144,8 +198,29 @@ internal static class LibraryCommand
     {
         output.WriteLine($"Scanned {r.Folders} folder(s){(r.FoldersMissing > 0 ? $" ({r.FoldersMissing} missing)" : string.Empty)}: " +
                          $"{r.FilesFound} audio file(s), {r.Added} added, {r.Updated} updated, {r.Unchanged} unchanged, {r.Removed} removed, " +
+                         $"{(r.Moved > 0 ? $"{r.Moved} moved, " : string.Empty)}" +
                          $"{r.Failed} failed{(r.SkippedUnreadable > 0 ? $", {r.SkippedUnreadable} unreadable skipped" : string.Empty)} in {r.ElapsedSeconds:0.00}s.");
         output.WriteLine($"Library: {r.Tracks} track(s), {r.Albums} album(s), {r.Artists} artist(s).");
+        foreach (var move in r.Moves.Take(20))
+        {
+            output.WriteLine($"  moved: {move.From} -> {move.To}");
+        }
+
+        if (r.Moved > 20)
+        {
+            output.WriteLine($"  ... {r.Moved - 20} more move(s); see --json.");
+        }
+
+        if (r.PlaylistEntriesUpdated > 0)
+        {
+            output.WriteLine($"  {r.PlaylistEntriesUpdated} playlist entr{(r.PlaylistEntriesUpdated == 1 ? "y" : "ies")} now point at moved tracks.");
+        }
+
+        if (r.AmbiguousMoves > 0)
+        {
+            output.WriteLine($"  {r.AmbiguousMoves} file(s) looked moved but had identical copies; treated as removed + added.");
+        }
+
         foreach (var issue in r.Issues.Take(20))
         {
             output.WriteLine($"  [{issue.Kind}] {issue.Path}: {issue.Message}");

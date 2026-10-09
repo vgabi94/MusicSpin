@@ -10,7 +10,7 @@ These pages describe what the code does **today**. Anything not implemented yet 
 |---|---|
 | [Getting started](getting-started.md) | Download, the portable folder layout, the `.usrdata` data folder, the FFmpeg folder, first commands |
 | [CLI reference](cli-reference.md) | Every command and option, `--json` output, exit codes |
-| [Music library](library.md) | Scanning, change detection, stored metadata, search/filter semantics, `library check` |
+| [Music library](library.md) | Scanning, change detection, renames/moves and relocate, stored metadata, search/filter semantics, `library check` |
 | [Playback](playback.md) | Formats, hi-res and bit-perfect output, exclusive mode, DSD, the background player, the queue, repeat and shuffle |
 | [Diagnostics](diagnostics.md) | `doctor`, `devices`, logs, common problems and fixes |
 

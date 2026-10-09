@@ -25,6 +25,13 @@
 
 Tip: when the user gives a partial name, call `search` first (or play directly with `play --search 'artist:"name" album:words'`), then use the exact `name`/`title` or the album `id` it returns with `--artist`/`--album`. Album ids are stable for a given album artist and title.
 
+## Library maintenance
+
+| Goal | Command |
+|---|---|
+| Pick up new, changed, deleted, renamed and moved files | `library scan --quiet --json`. Renamed/moved files are reported in `moved`/`moves` and keep their playlist entries |
+| The user moved or renamed a music folder, or remounted a drive | `library relocate "<old>" "<new>" --dry-run --json`, check `tracks`/`warnings`, then run it without `--dry-run` (MCP: `library_relocate`). Exit 3: `<new>` doesn't exist; 12: nothing under `<old>`; 8: outside the library or wrong place |
+
 ## Background player workflow
 
 Each command returns in about 0.2 s (the first `play` in about 0.9 s, including starting the player), prints one JSON line and sets the exit code. This is real output from the published linux-x64 build (long `track`/`item` objects are shortened to `...` after the first two answers):

@@ -112,6 +112,11 @@ public sealed record ScanResultDto(
     int Removed,
     int Failed,
     int SkippedUnreadable,
+    int Moved,
+    int AmbiguousMoves,
+    int Fingerprinted,
+    int PlaylistEntriesUpdated,
+    IReadOnlyList<TrackMove> Moves,
     int Tracks,
     int Albums,
     int Artists,
@@ -125,7 +130,7 @@ public sealed record ScanResultDto(
 
     public static ScanResultDto From(ScanResult r) => new(
         r.Folders, r.FoldersMissing, r.FilesFound, r.Added, r.Updated, r.Unchanged, r.Removed, r.Failed, r.SkippedUnreadable,
-        r.Tracks, r.Albums, r.Artists, r.Full, r.Cancelled, Math.Round(r.Elapsed.TotalSeconds, 3), r.Issues.Count,
+        r.Moved, r.AmbiguousMoves, r.Fingerprinted, r.PlaylistEntriesUpdated, r.Moves, r.Tracks, r.Albums, r.Artists, r.Full, r.Cancelled, Math.Round(r.Elapsed.TotalSeconds, 3), r.Issues.Count,
         r.Issues.Take(MaxIssues).Select(ScanIssueDto.From).ToList());
 }
 

@@ -34,7 +34,7 @@ dotnet test --solution MusicSpin.slnx -- --timeout 300s       # abort a hung run
 
 | Project | What it covers |
 |---|---|
-| `MusicSpin.Tests` | Core: formats, decoder (bit-exact 24-bit PCM, sample-accurate seeking), player, queue, IPC host/client, library (scanner, change detection, queries, keys, data folder) |
+| `MusicSpin.Tests` | Core: formats, decoder (bit-exact 24-bit PCM, sample-accurate seeking), player, queue, IPC host/client, library (scanner, change detection, move detection and relocate, search, queries, keys, data folder), playlists |
 | `MusicSpin.Tests.Cli` | CLI in-process: parsing, `--json`, exit codes, `serve`, library commands, player commands, MCP (in-memory streams). End to end: the real `music-spin` executable spawning detached background players (crash recovery, racing starts, process-group kills, MCP over stdio) |
 | `MusicSpin.Tests.Ui` | Avalonia headless smoke test |
 

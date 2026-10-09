@@ -247,6 +247,15 @@ internal static class McpCommand
                 using var library = runner.OpenLibraryForRead(parseResult);
                 return Task.FromResult(ToElement(library.Stats()));
             }), readOnly: true);
+            yield return Tool("library_relocate",
+                "After a music folder was moved or renamed on disk (or a drive is mounted elsewhere), point the library tracks under 'from' at 'to' " +
+                "without rescanning; date added and playlist entries follow. Use dryRun first. 'file_not_found' if 'to' does not exist, 'not_found' if nothing " +
+                "in the library is under 'from', 'invalid_state' if 'to' is outside the library folders, a new path is already a track, or no file exists at 'to' (without force).",
+                ([Description("Old folder (a library folder or a folder inside one).")] string from,
+                 [Description("Folder the files are in now (must exist).")] string to,
+                 [Description("Only report what would change.")] bool dryRun = false,
+                 [Description("Relocate even if none of the files exist at 'to'.")] bool force = false)
+                    => Library(read: false, library => library.Relocate(from, to, dryRun, force)), destructive: true);
             foreach (var tool in PlaylistTools())
             {
                 yield return tool;
