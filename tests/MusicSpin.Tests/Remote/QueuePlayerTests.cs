@@ -18,10 +18,10 @@ public sealed class QueuePlayerTests : IDisposable
         }
     }
 
-    private (QueuePlayer Queue, string[] Paths, FakeDecoderFactory Decoders) Create(int tracks = 3, double seconds = 30, IAudioOutputProvider? outputs = null)
+    private (QueuePlayer Queue, string[] Paths, FakeDecoderFactory Decoders) Create(int tracks = 3, double seconds = 30, IAudioOutputProvider? outputs = null, PlayerOptions? options = null)
     {
         var (decoders, paths) = PlayerTestKit.Tracks(tracks, seconds);
-        var player = new Player(decoders, outputs ?? Outputs.Realtime());
+        var player = new Player(decoders, outputs ?? Outputs.Realtime(), options);
         var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
         _owned.Add(player);
         _owned.Add(queue);
@@ -198,10 +198,10 @@ public sealed class QueuePlayerUnhappyTests : IDisposable
         }
     }
 
-    private (QueuePlayer Queue, string[] Paths, FakeDecoderFactory Decoders) Create(int tracks = 3, double seconds = 30, IAudioOutputProvider? outputs = null)
+    private (QueuePlayer Queue, string[] Paths, FakeDecoderFactory Decoders) Create(int tracks = 3, double seconds = 30, IAudioOutputProvider? outputs = null, PlayerOptions? options = null)
     {
         var (decoders, paths) = PlayerTestKit.Tracks(tracks, seconds);
-        var player = new Player(decoders, outputs ?? Outputs.Realtime());
+        var player = new Player(decoders, outputs ?? Outputs.Realtime(), options);
         var queue = new QueuePlayer(player);
         _owned.Add(player);
         _owned.Add(queue);
@@ -380,8 +380,9 @@ public sealed class QueuePlayerUnhappyTests : IDisposable
     [Fact]
     public async Task Audio_device_failure_during_auto_advance_is_recorded_not_thrown()
     {
+        // Gapless off: the point is the device restart between tracks (same-format tracks would otherwise play straight on).
         var faulty = new FaultyOutputProvider(Outputs.Fast());
-        var (queue, paths, _) = Create(tracks: 2, seconds: 0.05, outputs: faulty);
+        var (queue, paths, _) = Create(tracks: 2, seconds: 0.05, outputs: faulty, options: new PlayerOptions { Gapless = false });
         var errors = 0;
         queue.Error += (_, _) => Interlocked.Increment(ref errors);
         queue.SetQueue(Items(paths));

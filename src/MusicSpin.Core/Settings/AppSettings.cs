@@ -33,4 +33,13 @@ public sealed record AppSettings
 
     /// <summary>Whether a new background player starts with shuffle on. Updated by 'music-spin shuffle'.</summary>
     public bool Shuffle { get; init; }
+
+    /// <summary>
+    /// How much audio (milliseconds) is decoded ahead of the output. Bigger survives slower disks/CPUs; smaller reacts to
+    /// nothing faster (seek and skip flush it). Values outside 100..10000 are clamped.
+    /// </summary>
+    public int PlaybackBufferMs { get; init; } = 2000;
+
+    /// <summary>Play consecutive tracks with the same sample rate, channels and bit depth without a gap.</summary>
+    public bool Gapless { get; init; } = true;
 }

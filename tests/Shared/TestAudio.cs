@@ -163,9 +163,12 @@ internal sealed class FakeDecoderFactory : IAudioDecoderFactory
 /// <summary>Output whose "audio thread" is driven manually by the test via <see cref="Pump"/>.</summary>
 internal sealed class ManualAudioOutput : IAudioOutput
 {
-    public IPcmSource? Source { get; private set; }
+    private volatile IPcmSource? _source;
+    private volatile bool _started;
 
-    public bool Started { get; private set; }
+    public IPcmSource? Source { get => _source; private set => _source = value; }
+
+    public bool Started { get => _started; private set => _started = value; }
 
     public int OpenCount { get; private set; }
 
@@ -189,16 +192,26 @@ internal sealed class ManualAudioOutput : IAudioOutput
 
     public void Dispose() => Stop();
 
-    /// <summary>Pulls <paramref name="samples"/> interleaved samples like a device callback would.</summary>
-    public float[] Pump(int samples)
+    /// <summary>
+    /// Pulls <paramref name="samples"/> interleaved samples like a device callback would. By default first waits for the
+    /// decode thread to have them ready (deterministic content); <paramref name="wait"/> = false pulls whatever is there,
+    /// like a real device that cannot wait (underruns play silence).
+    /// </summary>
+    public float[] Pump(int samples, bool wait = true)
     {
         var buffer = new float[samples];
-        if (Source is null || !Started)
+        var source = Source; // the player may close the device from another thread meanwhile
+        if (source is null || !Started)
         {
             return [];
         }
 
-        var read = Source.Read(buffer);
+        if (wait && source is MusicSpin.Core.Playback.PlaybackBuffer ring && !ring.WaitUntilReadable(samples, TimeSpan.FromSeconds(30)))
+        {
+            throw new TimeoutException("The decode thread did not fill the buffer.");
+        }
+
+        var read = source.Read(buffer);
         return buffer[..read];
     }
 }

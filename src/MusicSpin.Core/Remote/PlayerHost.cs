@@ -32,6 +32,12 @@ public sealed record PlayerHostOptions
     /// <summary>Shuffle mode at start (settings.json "shuffle").</summary>
     public bool InitialShuffle { get; init; }
 
+    /// <summary>Decode-ahead buffer (settings.json "playbackBufferMs"); clamped by <see cref="PlayerOptions.ClampBuffer"/>.</summary>
+    public int BufferMilliseconds { get; init; } = PlayerOptions.DefaultBufferMilliseconds;
+
+    /// <summary>Gapless playback between same-format tracks (settings.json "gapless").</summary>
+    public bool Gapless { get; init; } = true;
+
     /// <summary>
     /// Save the queue (entries, index, position, repeat/shuffle) to <c>queue.json</c> in the data folder and restore it,
     /// paused, when the player starts. A saved queue's modes win over <see cref="InitialRepeat"/>/<see cref="InitialShuffle"/>.
@@ -102,7 +108,7 @@ public sealed class PlayerHost : IAsyncDisposable
         _listener = listener;
         _startedAt = options.Time.GetUtcNow();
         var output = new OutputInfo(options.Outputs.Name, options.Output.DeviceId, options.Output.Exclusive);
-        _player = new Player(options.Decoders, options.Outputs, new PlayerOptions { Output = options.Output }, options.Time)
+        _player = new Player(options.Decoders, options.Outputs, new PlayerOptions { Output = options.Output, BufferMilliseconds = options.BufferMilliseconds, Gapless = options.Gapless }, options.Time)
         {
             Volume = Math.Clamp(options.InitialVolume, 0f, 1f),
         };

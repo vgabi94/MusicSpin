@@ -26,6 +26,33 @@ public sealed class TrackLoadedEventArgs(TrackInfo track) : EventArgs
     public TrackInfo Track { get; } = track;
 }
 
+/// <summary>An entry the player may continue with gaplessly; <paramref name="Token"/> identifies it to the caller (a queue slot).</summary>
+public sealed record NextTrack(string Path, object Token);
+
+/// <summary>A next-track entry that could not be opened while preparing gapless playback.</summary>
+public sealed record SkippedNextTrack(NextTrack Entry, MusicSpinException Error);
+
+/// <summary>Playback moved on to a pre-decoded next track without stopping (gapless), at its first sample.</summary>
+public sealed class TrackAdvancedEventArgs(TrackInfo track, object token, TimeSpan previousPlayed, IReadOnlyList<SkippedNextTrack> skipped) : EventArgs
+{
+    public TrackInfo Track { get; } = track;
+
+    /// <summary>The <see cref="NextTrack.Token"/> of the entry now playing.</summary>
+    public object Token { get; } = token;
+
+    /// <summary>How much of the previous track was played (its length when it played to the end).</summary>
+    public TimeSpan PreviousPlayed { get; } = previousPlayed;
+
+    /// <summary>Entries before this one that could not be opened (missing, unsupported) and were passed over.</summary>
+    public IReadOnlyList<SkippedNextTrack> Skipped { get; } = skipped;
+}
+
+/// <summary>Decode-ahead buffer health and gapless state.</summary>
+/// <param name="Underruns">Audio callbacks that found no decoded audio and played silence, since the player started.</param>
+/// <param name="BufferMilliseconds">Configured decode-ahead buffer.</param>
+/// <param name="BufferedMilliseconds">Audio decoded and waiting to be played right now.</param>
+public sealed record PlaybackDiagnostics(long Underruns, bool Gapless, int BufferMilliseconds, double BufferedMilliseconds);
+
 public sealed class PlayerErrorEventArgs(Exception exception) : EventArgs
 {
     public Exception Exception { get; } = exception;
@@ -80,4 +107,21 @@ public interface IPlayer : IDisposable
     event EventHandler? PlaybackEnded;
 
     event EventHandler<PlayerErrorEventArgs>? Error;
+
+    /// <summary>
+    /// The entries to continue with when the current track ends, in order (first playable one wins). Players that support
+    /// gapless playback decode ahead into them; others ignore this. Call again whenever the order changes.
+    /// </summary>
+    void SetNextTracks(IReadOnlyList<NextTrack> next)
+    {
+    }
+
+    /// <summary>Raised instead of <see cref="PlaybackEnded"/> when playback continued gaplessly into a <see cref="NextTrack"/>.</summary>
+    event EventHandler<TrackAdvancedEventArgs>? TrackAdvanced
+    {
+        add { }
+        remove { }
+    }
+
+    PlaybackDiagnostics? Diagnostics => null;
 }

@@ -415,6 +415,8 @@ internal static class ControlCommands
                 InitialVolume = (float)Math.Clamp(double.IsFinite(settings.Volume) ? settings.Volume : 1, 0, 1),
                 InitialRepeat = PlaybackModes.TryParseRepeat(settings.Repeat, out var repeatMode) ? repeatMode : RepeatMode.Off,
                 InitialShuffle = settings.Shuffle,
+                BufferMilliseconds = settings.PlaybackBufferMs,
+                Gapless = settings.Gapless,
                 Log = log,
                 Time = env.Time,
             });

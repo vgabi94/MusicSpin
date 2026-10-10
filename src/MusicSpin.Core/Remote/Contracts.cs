@@ -59,6 +59,8 @@ public sealed record OutputInfo(string Backend, string? Device, bool Exclusive);
 /// <param name="Repeat">off | one | all.</param>
 /// <param name="Shuffle">True when the queue is in shuffled play order (turning it off restores the original order).</param>
 /// <param name="ShuffleSeed">Seed of the latest full shuffle (reproduces it); null when shuffle is off.</param>
+/// <param name="Gapless">Whether same-format tracks follow each other without a gap (settings.json "gapless").</param>
+/// <param name="Underruns">Times the output ran dry and played silence because decoding fell behind (since the player started).</param>
 public sealed record PlayerStatus(
     PlayerState State,
     double PositionSeconds,
@@ -74,7 +76,9 @@ public sealed record PlayerStatus(
     IReadOnlyList<SkippedItem>? Skipped,
     RepeatMode Repeat = RepeatMode.Off,
     bool Shuffle = false,
-    int? ShuffleSeed = null);
+    int? ShuffleSeed = null,
+    bool? Gapless = null,
+    long? Underruns = null);
 
 /// <summary>A page of the queue.</summary>
 public sealed record QueueListing(int Total, int Offset, int Limit, int? CurrentIndex, IReadOnlyList<QueueEntry> Items);

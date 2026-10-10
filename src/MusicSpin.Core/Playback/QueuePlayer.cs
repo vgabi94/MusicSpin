@@ -65,6 +65,7 @@ public sealed class QueuePlayer : IDisposable
         _player.StateChanged += OnStateChanged;
         _player.TrackLoaded += OnTrackLoaded;
         _player.Error += OnPlayerError;
+        _player.TrackAdvanced += OnTrackAdvanced;
     }
 
     public OutputInfo? Output { get; }
@@ -699,6 +700,7 @@ public sealed class QueuePlayer : IDisposable
         _player.StateChanged -= OnStateChanged;
         _player.TrackLoaded -= OnTrackLoaded;
         _player.Error -= OnPlayerError;
+        _player.TrackAdvanced -= OnTrackAdvanced;
         try
         {
             _player.Stop();
@@ -864,7 +866,9 @@ public sealed class QueuePlayer : IDisposable
 
     private PlayerStatus StatusCore()
     {
+        SyncNext();
         EnrichCurrent();
+        var diagnostics = _player.Diagnostics;
         var has = _index >= 0 && _index < _items.Count;
         var loaded = CurrentLoaded();
         var track = loaded ? _player.CurrentTrack : null;
@@ -883,7 +887,97 @@ public sealed class QueuePlayer : IDisposable
             _skipped.Count > 0 ? [.. _skipped] : null,
             _repeat,
             _shuffle,
-            _shuffle ? _seed : null);
+            _shuffle ? _seed : null,
+            diagnostics?.Gapless,
+            diagnostics?.Underruns);
+    }
+
+    private const int MaxNextTracks = 16;
+
+    /// <summary>Tells the player which entries follow the current one in play order (gapless decode-ahead).</summary>
+    private void SyncNext()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var next = new List<NextTrack>();
+        if (!_ended && CurrentLoaded())
+        {
+            if (_repeat == RepeatMode.One)
+            {
+                next.AddRange(Enumerable.Repeat(new NextTrack(_items[_index].Item.Path, _items[_index]), MaxNextTracks));
+            }
+            else
+            {
+                // Repeat all: keep going round (a short queue may loop several times within the decode-ahead).
+                var order = _repeat == RepeatMode.All
+                    ? Enumerable.Range(1, MaxNextTracks).Select(k => (_index + k) % _items.Count)
+                    : Enumerable.Range(_index + 1, _items.Count - _index - 1);
+
+                foreach (var i in order.Take(MaxNextTracks))
+                {
+                    var slot = _items[i];
+
+                    // A missing file may have moved: leave it to the normal path, where the resolver can find it.
+                    if (ResolveMissing is not null && !File.Exists(slot.Item.Path))
+                    {
+                        break;
+                    }
+
+                    next.Add(new NextTrack(slot.Item.Path, slot));
+                }
+            }
+        }
+
+        _player.SetNextTracks(next);
+    }
+
+    private void OnTrackAdvanced(object? sender, TrackAdvancedEventArgs e)
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            var slot = (Slot)e.Token;
+            var index = _items.IndexOf(slot);
+            _playedSinceLoop += e.PreviousPlayed;
+            TrackEnded?.Invoke(this, EventArgs.Empty);
+            foreach (var skipped in e.Skipped)
+            {
+                var ex = skipped.Error;
+                AddSkipped(new SkippedItem(_items.IndexOf((Slot)skipped.Entry.Token), skipped.Entry.Path, ExitCodes.Name(ExitCodes.From(ex.Code)), ex.Message));
+            }
+
+            if (index < 0)
+            {
+                // The entry was removed while it was already playing out of the buffer: stop there.
+                _player.Stop();
+                _loadedSlot = null;
+                _ended = true;
+                QueueEnded?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            var loop = _repeat == RepeatMode.One || index <= _index;
+            _index = index;
+            _loadedSlot = slot;
+            _ended = false;
+            TrackLoaded?.Invoke(this, new TrackLoadedEventArgs(e.Track));
+            if (loop && RapidLoop())
+            {
+                _player.Stop();
+                _ended = true;
+                QueueEnded?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            SyncNext();
+        }
     }
 
     private void MarkLoaded(List<Slot> slots, int index)
@@ -992,6 +1086,20 @@ public sealed class QueuePlayer : IDisposable
     private void OnPlaybackEnded(object? sender, EventArgs e)
     {
         lock (_gate)
+        {
+            try
+            {
+                OnPlaybackEndedCore();
+            }
+            finally
+            {
+                SyncNext();
+            }
+        }
+    }
+
+    private void OnPlaybackEndedCore()
+    {
         {
             if (_disposed || _stoppedByUser || _index < 0 || _player.State != PlayerState.Stopped)
             {
