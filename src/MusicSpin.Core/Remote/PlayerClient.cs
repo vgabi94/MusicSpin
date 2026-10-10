@@ -70,7 +70,7 @@ public sealed class PlayerClient : IAsyncDisposable
                         ?? throw Unavailable($"The player closed the connection during '{cmd}' (it may have crashed; see {Endpoint.LogFile}).");
                     using var doc = JsonDocument.Parse(line);
                     var root = doc.RootElement;
-                    if (!root.TryGetProperty("id", out var rid) || rid.ValueKind != JsonValueKind.Number || rid.GetInt32() != id)
+                    if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out var rid) || rid.ValueKind != JsonValueKind.Number || !rid.TryGetInt32(out var got) || got != id)
                     {
                         continue; // an event or a stale response
                     }
@@ -144,11 +144,9 @@ public sealed class PlayerClient : IAsyncDisposable
                 yield break;
             }
 
-            using var doc = JsonDocument.Parse(line);
-            if (doc.RootElement.TryGetProperty("event", out var name) && name.ValueKind == JsonValueKind.String)
+            if (ParseEvent(line) is { } e)
             {
-                yield return new PlayerEvent(name.GetString()!,
-                    doc.RootElement.TryGetProperty("data", out var data) ? data.Clone() : default);
+                yield return e;
             }
         }
     }
@@ -159,13 +157,30 @@ public sealed class PlayerClient : IAsyncDisposable
         _requestLock.Dispose();
     }
 
+    /// <summary>An event line, or null for anything else (responses, garbage: a bad line must not end the subscription).</summary>
+    private static PlayerEvent? ParseEvent(string line)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+            return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("event", out var name) && name.ValueKind == JsonValueKind.String
+                ? new PlayerEvent(name.GetString()!, root.TryGetProperty("data", out var data) ? data.Clone() : default)
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static PlayerRequestException ToException(JsonElement root)
     {
         var exitCode = ExitCodes.Error;
         var message = "The player reported an error.";
         if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
         {
-            if (error.TryGetProperty("exitCode", out var code) && code.TryGetInt32(out var c))
+            if (error.TryGetProperty("exitCode", out var code) && code.ValueKind == JsonValueKind.Number && code.TryGetInt32(out var c))
             {
                 exitCode = c;
             }
