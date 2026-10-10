@@ -11,6 +11,7 @@
 - List commands return a page: `{"total","offset","limit","count","items"}`. Page with `--limit`/`--offset`.
 - Paths in the queue are absolute. Relative file arguments are resolved against the caller's working directory.
 - On a machine without a sound card, add `--backend null` to the command that starts the player.
+- Library, settings and the background player belong to one data folder: by default `.usrdata` next to the executable, so every call to the same `music-spin` shares them. Only pass `--data-dir` (or set `MUSICSPIN_DATA_DIR`) to deliberately use another one, and then pass it on every call. See [Data folder](getting-started.md#data-folder).
 
 ## Finding music
 

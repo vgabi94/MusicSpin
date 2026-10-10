@@ -9,7 +9,7 @@ Every command accepts these, before or after the subcommand:
 | Option | Meaning |
 |---|---|
 | `--json` | Write exactly one compact JSON object per line on stdout, errors included (see [Output](#json-output)) |
-| `--data-dir <folder>` | Data folder (settings.json, library.db, player files). Default: `.usrdata` next to the executable. The `MUSICSPIN_DATA_DIR` environment variable also overrides it |
+| `--data-dir <folder>` | Optional. Use `<folder>` itself as the data folder (no `.usrdata` appended) instead of the default `.usrdata` next to the executable. Wins over `MUSICSPIN_DATA_DIR`. See [Data folder](getting-started.md#data-folder) |
 | `-h`, `-?`, `--help` | Help for the command |
 | `--version` | Version (root command only) |
 
@@ -107,7 +107,7 @@ Use **exactly one source kind**: files, `--album` (optionally with `--artist`), 
 | Command | Meaning |
 |---|---|
 | `pause` | Pause (does nothing when not playing) |
-| `resume [--backend] [--device] [--exclusive]` | Resume, or start, the current queue entry. After the queue ended: continue with newly added entries, or restart from the first. **Without a running player:** starts one if a saved queue exists (`.usrdata/queue.json`) and continues where the last player stopped (`playerStarted: true`); otherwise exit 13. The output options only apply when the player is started (see [Persistent queue](playback.md#persistent-queue)) |
+| `resume [--backend] [--device] [--exclusive]` | Resume, or start, the current queue entry. After the queue ended: continue with newly added entries, or restart from the first. **Without a running player:** starts one if a saved queue exists (`queue.json` in the data folder) and continues where the last player stopped (`playerStarted: true`); otherwise exit 13. The output options only apply when the player is started (see [Persistent queue](playback.md#persistent-queue)) |
 | `toggle` | Pause when playing, otherwise resume |
 | `stop` | Stop and rewind the current track. The queue is kept. The player exits after the idle timeout |
 
@@ -159,7 +159,7 @@ State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, d
 | `queue clear` | Stop playback and empty the queue |
 | `queue save <name> [--replace]` | Save the queue, in its current play order (shuffled order when shuffle is on), as a playlist. Name taken: exit 8 unless `--replace`. Empty queue: exit 8. No player: exit 13 |
 
-The queue is persisted in `.usrdata/queue.json` and restored (paused) by the next player. See [Persistent queue](playback.md#persistent-queue).
+The queue is persisted in `queue.json` in the data folder and restored (paused) by the next player. See [Persistent queue](playback.md#persistent-queue).
 
 ## quit / player
 
@@ -316,10 +316,10 @@ Track, album, artist and playlist ids in JSON output are GUIDs in the "D" format
 | 6 | `decoder_unavailable` | FFmpeg shared libraries missing or of the wrong version |
 | 7 | `audio_device_error` | No usable audio device / the device cannot be opened |
 | 8 | `invalid_state` | e.g. `next` at the end of the queue, `prev` on the first entry, `play` before `load` in `serve`, playlist name taken, export target exists, `queue save` of an empty queue |
-| 9 | `data_dir_not_writable` | Data folder can't be created or written (or `.usrdata` is a file) |
+| 9 | `data_dir_not_writable` | Data folder can't be created or written (or a file is in the way) |
 | 10 | `library_corrupt` | `library.db` is corrupt, not a MusicSpin database, or was created by a different MusicSpin version ([schema version](library.md#schema-version): no migrations before the first release; delete it and rescan) |
 | 11 | `library_locked` | Another MusicSpin process is writing the library |
 | 12 | `not_found` | Library item not found (folder, album, artist, playlist, track id, search with no tracks, playlist with nothing playable) |
 | 13 | `player_not_running` | No background player for this data folder (control commands never start one; `resume` does when a saved queue exists) |
-| 14 | `player_unavailable` | The background player could not be started or reached (see `.usrdata/player.log`) |
+| 14 | `player_unavailable` | The background player could not be started or reached (see `player.log` in the data folder) |
 | 130 | `cancelled` | Interrupted (Ctrl+C) |

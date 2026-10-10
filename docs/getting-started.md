@@ -22,14 +22,19 @@ MusicSpin/
 ├── TagLibSharp.dll             LGPL tag library, kept outside the single file so it can be replaced
 ├── ffmpeg/                     LGPL FFmpeg 9.0 shared libraries (loaded at runtime)
 ├── LICENSE, THIRD-PARTY-NOTICES.md
-└── .usrdata/                   created on first use (see below)
+└── .usrdata/                   the data folder, created on first use (see below)
 ```
 
 Linux builds need the system ICU library (`libicu`), which every desktop distribution ships.
 
-## The `.usrdata` data folder
+## Data folder
 
-Settings, the library database and the background player's files all live in **`.usrdata` next to the executable**. The App and the CLI share it when they sit side by side.
+MusicSpin keeps everything it writes (settings, the library database, the background player's files) in one folder, the **data folder**.
+
+**Default: `.usrdata` next to the executable.** This is the portable design, and most users never change it. Copy or move the MusicSpin folder and its data goes with it. The App and the CLI share the data folder when they sit side by side.
+
+- The executable folder comes from `AppContext.BaseDirectory`, so the current working directory does not matter.
+- macOS `.app` bundle: the data folder is `.usrdata` next to the `.app` (in the folder that contains `MusicSpin.app`). MusicSpin never writes inside the bundle.
 
 ```
 .usrdata/
@@ -43,23 +48,27 @@ Settings, the library database and the background player's files all live in **`
 └── queue.json         the player's saved queue, restored paused by the next player (a corrupt one is moved to queue.json.bad)
 ```
 
-**How the data folder is chosen** (the first match wins):
+**Override (optional, advanced):** `--data-dir <path>` or the `MUSICSPIN_DATA_DIR` environment variable. Precedence: `--data-dir` > `MUSICSPIN_DATA_DIR` > the default.
 
-1. `--data-dir <folder>`, on any command, placed before or after the subcommand. The folder is used as is.
-2. The `MUSICSPIN_DATA_DIR` environment variable.
-3. `<executable folder>/.usrdata`. The executable folder comes from `AppContext.BaseDirectory`, so it does not depend on the current working directory.
-   - macOS `.app` bundle: when the executable is in `X.app/Contents/MacOS`, the folder is `<folder containing X.app>/.usrdata`. MusicSpin never writes inside the bundle.
+- The path **is** the data folder: it is used as is, and no `.usrdata` is appended. `--data-dir /srv/music-data` puts `library.db` at `/srv/music-data/library.db`.
+- A relative path is resolved against the current working directory, and environment variables in it (`%APPDATA%` on Windows) are expanded. An empty `MUSICSPIN_DATA_DIR` is ignored.
+- `--data-dir` works on every CLI command, before or after the subcommand, and on the desktop app's command line.
+- Use cases:
+  - MusicSpin is installed in a read-only location, such as `C:\Program Files`, `/Applications`, or a macOS app that runs from Downloads (translocated).
+  - A separate test library that leaves your real one alone.
+  - Several independent libraries, each with its own settings, queue and background player.
+- Every command, and the MCP server, uses whichever data folder it resolves to. To share one library and player, give every invocation the same override, or none.
 
-`music-spin doctor --json` shows the resolved folder in `dataDir.path`, and where it came from in `dataDir.source` (`portable`, `environment` or `override`).
+`music-spin doctor --json` shows the resolved folder in `dataDir.path`, and where it came from in `dataDir.source`: `portable` (the default), `environment` or `override`.
 
 **When the folder is created, and failure modes:**
 
 - The first command that writes creates the folder (`doctor`, `library add`/`scan`, `play`, App start). Read-only commands such as `tracks` and `albums` never create it. Without it they return an empty library.
-- If the folder cannot be created or written, commands exit **9 `data_dir_not_writable`**. This happens in Program Files, `/Applications`, read-only media, when a *file* named `.usrdata` exists, or with a translocated macOS app. To fix it, move MusicSpin somewhere writable or set `MUSICSPIN_DATA_DIR`/`--data-dir`. On macOS, an app downloaded from the internet runs from a read-only random path until you move it (for example to `~/Applications`) or run `xattr -dr com.apple.quarantine MusicSpin.app`.
+- If the folder cannot be created or written, commands exit **9 `data_dir_not_writable`**. This happens in Program Files, `/Applications`, read-only media, when a *file* named `.usrdata` exists, or with a translocated macOS app. To fix it, move MusicSpin somewhere writable, or point the data folder elsewhere with `--data-dir` or `MUSICSPIN_DATA_DIR` (see above). On macOS, an app downloaded from the internet runs from a read-only random path until you move it (for example to `~/Applications`) or run `xattr -dr com.apple.quarantine MusicSpin.app`.
 - A corrupt `settings.json` is not fatal. MusicSpin prints a warning on stderr and uses the defaults.
 - A corrupt `library.db` gives **exit 10 `library_corrupt`**. Move the file away and rescan. Your music files are never modified.
 
-**Outside the portable folder:** a single-file .NET app extracts its native libraries (miniaudio, Avalonia's Skia/HarfBuzz) on first start to `~/.net/<app>/<hash>/` (Windows: `%TEMP%\.net\...`). To keep even these files inside the portable folder, set `DOTNET_BUNDLE_EXTRACT_BASE_DIR`, for example to `<folder>/.usrdata/.net`.
+**Outside the data folder:** a single-file .NET app extracts its native libraries (miniaudio, Avalonia's Skia/HarfBuzz) on first start to `~/.net/<app>/<hash>/` (Windows: `%TEMP%\.net\...`). To keep even these files inside the portable folder, set `DOTNET_BUNDLE_EXTRACT_BASE_DIR`, for example to `<folder>/.usrdata/.net`.
 
 ### settings.json
 

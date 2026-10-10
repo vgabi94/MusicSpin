@@ -12,7 +12,7 @@ MCP client ──stdio (JSON-RPC)──▶ music-spin mcp ──local socket / n
 
 - **Transport:** stdio only. The client launches `music-spin mcp` as a child process and talks JSON-RPC over its stdin/stdout. There is no HTTP/SSE transport and no network listener.
 - **Server info:** name `music-spin`, title `MusicSpin`, the version of the build. Capabilities: `tools` and `logging`. The server sends *instructions* that tell the model how to use the tools.
-- **Same player and library as the CLI.** The tools call the same code as the CLI commands, against the data folder of that `music-spin` executable (`.usrdata` next to it, or `MUSICSPIN_DATA_DIR`/`--data-dir`). An agent can mix MCP tools and shell commands, and a person can run `music-spin status` in a terminal while an agent plays music.
+- **Same player and library as the CLI.** The tools call the same code as the CLI commands, against the data folder of that `music-spin` executable (by default `.usrdata` next to it; see [Data folder](getting-started.md#data-folder)). An agent can mix MCP tools and shell commands, and a person can run `music-spin status` in a terminal while an agent plays music.
 - **Starting the player:** `play` and `queue_add` start the background player if needed. The other playback tools need a running player and fail with `player_not_running` otherwise. The `mcp` options `--backend auto|null`, `--device <id|name>` and `--exclusive` apply when a tool starts the player.
 - **Lifetime:** the player is fully detached. When the client stops the MCP server (by closing stdin or killing the process tree), **music keeps playing**. Use the `quit_player` tool or `music-spin quit` to stop it. The player also exits by itself after the idle timeout when it is stopped.
 - **Concurrency:** requests may be processed concurrently. If the client closes stdin while a request is in flight, that request is dropped without a response.
@@ -112,7 +112,7 @@ Older 0.x versions read a name-keyed `mcpServers` map from the project's `.grok/
 
 - `--backend null`: no sound card (headless servers, CI).
 - `--device` / `--exclusive`: output used when the player starts.
-- `--data-dir <folder>` or `MUSICSPIN_DATA_DIR`: use a different data folder. To share the library and player with your terminal, point both at the same folder, or just use the same executable.
+- `--data-dir <folder>` or `MUSICSPIN_DATA_DIR` (optional): use `<folder>` itself as the data folder instead of the default. To share the library and player with your terminal, point both at the same folder, or just use the same executable.
 
 ### Verified on this machine
 
@@ -184,4 +184,4 @@ Playlist rules (names, entry status, import/export details) are in [Music librar
 - **The client says the server failed to start:** run `/path/to/music-spin mcp` in a terminal. It should wait silently for input (Ctrl+C to quit). Run `music-spin doctor` to check FFmpeg and the data folder.
 - **`audio_device_error` on `play`:** the player could not open the output device. Try `--backend null` to confirm everything else works, then check `music-spin devices`. See [Diagnostics](diagnostics.md).
 - **Music keeps playing after closing the client:** this is by design. Call `quit_player` or run `music-spin quit`.
-- **Player errors:** see `.usrdata/player.log`.
+- **Player errors:** see `player.log` in the data folder.

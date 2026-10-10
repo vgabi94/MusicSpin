@@ -6,7 +6,7 @@
 
 1. **FFmpeg:** are the FFmpeg 9.0 shared libraries loadable? It shows the version, the license (and whether it is LGPL) and the folder they were loaded from.
 2. **Audio backend:** initializes SoundFlow/miniaudio (or the null output) and counts playback devices.
-3. **Data folder:** resolves it (`portable` / `environment` / `override`), creates it and a default `settings.json` if missing, and checks that it is writable. It also reports whether `library.db` exists and its size.
+3. **Data folder:** resolves it (`portable` = the default `.usrdata` next to the executable, `environment` = `MUSICSPIN_DATA_DIR`, `override` = `--data-dir`; see [Data folder](getting-started.md#data-folder)), creates it and a default `settings.json` if missing, and checks that it is writable. It also reports whether `library.db` exists and its size.
 
 | Exit | When |
 |---:|---|
@@ -75,11 +75,11 @@ On a desktop you would see your real outputs (speakers, HDMI, USB DAC), with one
 
 | File | Contents |
 |---|---|
-| `.usrdata/player.log` | background player log: start and stop, errors, and the player's stdout/stderr (e.g. ALSA messages). Rotated to `player.log.1` above 1 MiB |
-| `.usrdata/player.json` | pid, endpoint, version, start time and output of the running player (0600) |
-| `.usrdata/player.lock` | held open by the running player. The OS releases it when the process dies. The file itself may stay behind; it is harmless |
-| `.usrdata/player.sock` | Unix socket of the running player (0600). A stale socket nobody listens on means "not running" and is replaced by the next `play` |
-| `.usrdata/queue.json.bad` | A saved queue that could not be read (corrupt, or written by a different MusicSpin version) and was set aside |
+| `player.log` | background player log: start and stop, errors, and the player's stdout/stderr (e.g. ALSA messages). Rotated to `player.log.1` above 1 MiB |
+| `player.json` | pid, endpoint, version, start time and output of the running player (0600) |
+| `player.lock` | held open by the running player. The OS releases it when the process dies. The file itself may stay behind; it is harmless |
+| `player.sock` | Unix socket of the running player (0600). A stale socket nobody listens on means "not running" and is replaced by the next `play` |
+| `queue.json.bad` | A saved queue that could not be read (corrupt, or written by a different MusicSpin version) and was set aside |
 
 Excerpt of `player.log` after a `play` whose audio device could not be opened, followed by `music-spin quit`:
 
@@ -106,10 +106,10 @@ There is no separate log for CLI commands. Errors are in the JSON `error` object
 | Exit 7 `audio_device_error` with `Unable to init device Default Device. Result: FailedToOpenBackendDevice` | The output device could not be opened: no sound card, a headless machine, a busy device in exclusive mode, or a format the device rejects. Check `music-spin devices` and pick one with `--device`. Try without `--exclusive`. On servers/CI use `--backend null`. After a failed `play`, the background player stays up in the `stopped` state with the queue loaded: run `music-spin quit` before retrying with different output options |
 | `ALSA lib ... cannot find card '0'` messages | Printed by libasound on machines without ALSA cards while miniaudio probes backends. Harmless. In background mode they go to `player.log` |
 | Exit 13 `player_not_running` | Control commands never start a player (except `resume` with a saved queue). Start one with `play` or `queue add`. After a crash the message mentions the stale pid. The next `play` cleans up |
-| Exit 14 `player_unavailable` | The player could not be started or reached. Look at `.usrdata/player.log` |
+| Exit 14 `player_unavailable` | The player could not be started or reached. Look at `player.log` in the data folder |
 | `play` warns that the running player uses a different output | Output options only apply when the player starts. Run `music-spin quit`, then `play` again |
-| Exit 9 `data_dir_not_writable` | Move MusicSpin to a writable folder, or set `MUSICSPIN_DATA_DIR` / `--data-dir`. On macOS, move the app out of Downloads or remove the quarantine attribute |
-| Exit 10 `library_corrupt` | Move `.usrdata/library.db` away and run `library add` + `library scan` again |
+| Exit 9 `data_dir_not_writable` | Move MusicSpin to a writable folder, or point the data folder elsewhere with `--data-dir` or `MUSICSPIN_DATA_DIR` (see [Data folder](getting-started.md#data-folder)). On macOS, move the app out of Downloads or remove the quarantine attribute |
+| Exit 10 `library_corrupt` | Move `library.db` out of the data folder and run `library add` + `library scan` again |
 | Exit 11 `library_locked` | Another MusicSpin process (e.g. a scan or `library watch`) is writing. Wait, or stop it |
 | A file edit isn't picked up by `library scan` | Its size and modification time didn't change. Run `library scan --full` (see [change detection](library.md#change-detection)) |
 | After moving the music folder (or mounting the drive elsewhere), the library shows the old folder as missing | Run `library relocate <old> <new>` (try `--dry-run` first). See [relocating a folder](library.md#relocating-a-folder) |

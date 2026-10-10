@@ -22,7 +22,7 @@ public static class CliApp
 
         var dataDir = new Option<string?>("--data-dir")
         {
-            Description = "Data folder (settings.json, library.db). Default: '.usrdata' next to the executable; env MUSICSPIN_DATA_DIR also overrides.",
+            Description = "Optional: use this folder itself as the data folder (settings, library, player files) instead of the default '.usrdata' next to the executable. Takes precedence over MUSICSPIN_DATA_DIR.",
             Recursive = true,
         };
 

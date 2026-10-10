@@ -11,7 +11,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 - **Playlists:** saved in the library (case-insensitive unique names, entries keep track id + path, missing files kept and flagged), M3U/M3U8/PLS import (encodings, relative/Windows/`file://` paths) and export, `play --playlist`, `queue save`. The player's queue persists across restarts (restored paused).
 - **Repeat and shuffle:** repeat off/one/all and a shuffle toggle on the running queue (the current track keeps playing; `off` restores the original order; reproducible with `--seed`), saved as defaults.
 - **Agent-friendly:** `--json` on every command (one JSON object per line, errors included), stable exit codes, an **MCP server** (`music-spin mcp`), and a JSON-lines `serve` mode.
-- **Portable:** one self-contained executable per platform. All data lives in `.usrdata/` next to it.
+- **Portable:** one self-contained executable per platform. All data lives in the [data folder](docs/getting-started.md#data-folder): by default `.usrdata/` next to it. `--data-dir` or `MUSICSPIN_DATA_DIR` can point it elsewhere (optional).
 
 ## Status
 
@@ -98,7 +98,7 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 
 | | |
 |---|---|
-| [Getting started](docs/getting-started.md) | portable layout, `.usrdata`, FFmpeg, first commands |
+| [Getting started](docs/getting-started.md) | portable layout, the data folder (`.usrdata`), FFmpeg, first commands |
 | [CLI reference](docs/cli-reference.md) | every command and option, `--json`, exit codes |
 | [Music library](docs/library.md) | scanning, change detection, renames/moves and relocate, stored metadata, search/filter semantics |
 | [Playback](docs/playback.md) | formats, bit-perfect/exclusive mode, DSD, background player, queue, repeat and shuffle |
@@ -124,7 +124,7 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 - [ ] Native DSD/DoP output; bit-perfect verification on real hardware (WASAPI exclusive, ALSA `hw:`, CoreAudio)
 - [ ] Audio-only LGPL FFmpeg build (~120 MB → a few MB), LGPL FFmpeg for macOS, signing/notarization, GitHub releases
 - [ ] Trimming (System.Text.Json source generation), a `dotnet tool` package for the CLI
-- [ ] Album art extraction and caching in `.usrdata/`
+- [ ] Album art extraction and caching in the data folder
 
 ## License
 

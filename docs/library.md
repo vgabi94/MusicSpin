@@ -1,6 +1,6 @@
 # Music library
 
-The library is a LiteDB database (`.usrdata/library.db`) with folders, tracks, albums, artists and scan issues. Your music files are only ever **read**. MusicSpin never writes tags or moves files.
+The library is a LiteDB database (`library.db` in the [data folder](getting-started.md#data-folder)) with folders, tracks, albums, artists and scan issues. Your music files are only ever **read**. MusicSpin never writes tags or moves files.
 
 ```console
 $ music-spin library add ~/Music
@@ -121,7 +121,7 @@ A track or playlist id that is not a GUID is exit **2 `usage`**; a well-formed G
 
 ### Schema version
 
-The database records a **schema version** (LiteDB user version, currently **1**). Until the first release there are **no migrations**: the schema may change freely between development builds. A `library.db` written with another schema version is refused with exit **10 `library_corrupt`** ("created by a different MusicSpin version"; nothing is changed). Delete `.usrdata/library.db` (your music files are untouched; playlists saved in the library are lost), then `library add` your folders again and `library scan`.
+The database records a **schema version** (LiteDB user version, currently **1**). Until the first release there are **no migrations**: the schema may change freely between development builds. A `library.db` written with another schema version is refused with exit **10 `library_corrupt`** ("created by a different MusicSpin version"; nothing is changed). Delete `library.db` from the data folder (your music files are untouched; playlists saved in the library are lost), then `library add` your folders again and `library scan`.
 
 ### Watching
 
@@ -157,7 +157,7 @@ Fingerprinting made no measurable difference to full scans here (the differences
 | Provenance | `tagSource` (`taglib`, `taglib+ffmpeg`, `ffmpeg`) |
 | Derived | effective album artist, normalized keys, album id, sort key, folded search keys (title, artists, album, genre, file name, combined) |
 
-Cover art is only recorded as a flag. **Planned:** album art extraction and caching in `.usrdata/`.
+Cover art is only recorded as a flag. **Planned:** album art extraction and caching in the data folder.
 
 **Hi-res** means lossless with more than 16 bits or more than 48 kHz, or any DSD file.
 
@@ -287,7 +287,7 @@ $ music-spin library check --json
 
 ## Concurrency
 
-Only one process writes the library at a time (`.usrdata/library.lock`). A second writer gets exit **11 `library_locked`**. Readers (`tracks`, `search`, ...) can run while a scan is in progress.
+Only one process writes the library at a time (`library.lock` in the data folder). A second writer gets exit **11 `library_locked`**. Readers (`tracks`, `search`, ...) can run while a scan is in progress.
 
 ## Playlists
 

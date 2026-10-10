@@ -71,7 +71,7 @@ $ music-spin quit
 - It survives the terminal, the agent and the MCP client that started it.
 - **Idle timeout:** it exits after `playerIdleTimeoutSeconds` (default 900 s; `0` = never) when it is stopped, or the queue has ended, and no client is subscribed. A **paused** player stays alive.
 - **Output:** `--backend`, `--device`, `--exclusive` are fixed when the player starts. `play` warns if a running player uses a different output. Run `music-spin quit` first to change it.
-- **Logs:** `.usrdata/player.log` (rotated to `player.log.1` above 1 MiB).
+- **Logs:** `player.log` in the data folder (rotated to `player.log.1` above 1 MiB).
 - `--foreground` (or `--duration`) plays in the calling process instead and blocks until done.
 
 How it works internally: [Architecture → Background player and IPC](architecture.md#background-player-and-ipc).
@@ -95,7 +95,7 @@ Library queues (`--album`, `--artist`, `--search`, `--playlist`) carry the tags 
 
 ## Persistent queue
 
-The background player saves its queue to **`.usrdata/queue.json`**: the entries in play order, the original order (to undo shuffle), the current index and position, the repeat and shuffle modes and the shuffle seed.
+The background player saves its queue to **`queue.json`** in the data folder: the entries in play order, the original order (to undo shuffle), the current index and position, the repeat and shuffle modes and the shuffle seed.
 
 - **When:** about once a second after the queue, the current entry or the modes change; the position alone is saved when it has moved by 10 s or more; and once more when the player shuts down (quit, idle timeout). The file is written to a temporary file and renamed into place, so a crash leaves the previous version.
 - **Restore:** a new player loads the saved queue and **cues** the current track at the saved position, **paused**. It never starts playing on its own and does not open the audio device until you `resume`. A position past the end of the file restores at 0. If the current file has gone, the player starts stopped and reports it under `skipped`.
