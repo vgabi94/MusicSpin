@@ -30,7 +30,7 @@ public sealed class SettingsStore(DataDirectory directory)
 
         try
         {
-            using var stream = File.OpenRead(FilePath);
+            using var stream = SharedFile.OpenRead(FilePath); // another process may be saving it right now
             return JsonSerializer.Deserialize<AppSettings>(stream, JsonOptions) ?? new AppSettings();
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)

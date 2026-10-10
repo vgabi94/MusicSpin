@@ -7,6 +7,7 @@ using MusicSpin.Core.Audio;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
+using MusicSpin.Core.Settings;
 
 namespace MusicSpin.Core.Remote;
 
@@ -234,7 +235,7 @@ public sealed class PlayerHost : IAsyncDisposable
                 return null;
             }
 
-            using var stream = File.OpenRead(endpoint.InfoFile);
+            using var stream = SharedFile.OpenRead(endpoint.InfoFile);
             return JsonSerializer.Deserialize<PlayerProcessInfo>(stream, ProtocolJson.Options);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
@@ -557,7 +558,7 @@ public sealed class PlayerHost : IAsyncDisposable
         try
         {
             QueueSnapshot? snapshot;
-            using (var stream = File.OpenRead(file))
+            using (var stream = SharedFile.OpenRead(file))
             {
                 snapshot = JsonSerializer.Deserialize<QueueSnapshot>(stream, ProtocolJson.Options);
             }
