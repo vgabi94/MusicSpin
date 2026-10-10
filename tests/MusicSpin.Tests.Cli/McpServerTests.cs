@@ -325,4 +325,87 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.StartsWith("usage:", await CallError("play", new() { ["title"] = "x", ["album"] = "y" }), StringComparison.Ordinal);
         Assert.StartsWith("usage:", await CallError("playlist_add", new() { ["name"] = "p", ["title"] = "x", ["trackIds"] = new[] { "y" } }), StringComparison.Ordinal);
     }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Seek_and_volume_tools_reject_bad_values_and_take_relative_changes()
+    {
+        await StartAsync();
+        await Call("play", new() { ["files"] = new[] { Long[0] } });
+
+        Assert.StartsWith("usage:", await CallError("seek", new() { ["position"] = "soon" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("volume", new() { ["level"] = "loud" }), StringComparison.Ordinal);
+        await Call("seek", new() { ["position"] = "20" });
+        Assert.Equal(25, (await Call("seek", new() { ["position"] = "+5" })).GetProperty("positionSeconds").GetDouble(), 0);
+        Assert.Equal(0.5, (await Call("volume", new() { ["level"] = "50%" })).GetProperty("volume").GetDouble(), 3);
+        Assert.Equal(0.6, (await Call("volume", new() { ["level"] = "+10%" })).GetProperty("volume").GetDouble(), 3);
+    }
+
+    [Fact]
+    public async Task Resume_tool_starts_a_player_for_a_saved_queue()
+    {
+        await StartAsync();
+        await Call("play", new() { ["files"] = new[] { Long[0], Long[1] } });
+        await Call("next");
+        await Call("quit_player");
+
+        var resumed = await Call("resume");
+
+        Assert.True(resumed.GetProperty("playerStarted").GetBoolean());
+        Assert.Equal(1, resumed.GetProperty("queueIndex").GetInt32());
+        Assert.Equal("playing", resumed.GetProperty("state").GetString());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Queue_add_tool_rejects_two_sources_at_once()
+    {
+        await StartAsync();
+
+        Assert.StartsWith("usage:", await CallError("queue_add", new() { ["files"] = new[] { Long[0] }, ["album"] = "x" }), StringComparison.Ordinal);
+        Assert.False((await Call("status")).GetProperty("running").GetBoolean()); // nothing was started
+    }
+
+    [Fact]
+    public async Task Tracks_tool_sorts_by_sample_rate_and_bit_depth_and_rejects_unknown_sorts()
+    {
+        await WithLibraryAsync();
+        await StartAsync();
+
+        var bySampleRate = await Call("tracks", new() { ["sort"] = "samplerate", ["descending"] = true });
+        var rates = bySampleRate.GetProperty("items").EnumerateArray().Select(t => t.GetProperty("sampleRate").GetInt32()).ToArray();
+        Assert.Equal(rates.OrderDescending(), rates);
+        var byBits = await Call("tracks", new() { ["sort"] = "BitDepth" });
+        var bits = byBits.GetProperty("items").EnumerateArray().Select(t => t.TryGetProperty("bitsPerSample", out var b) && b.ValueKind == JsonValueKind.Number ? b.GetInt32() : 0).ToArray();
+        Assert.Equal(bits.Order(), bits);
+        Assert.Equal("usage: Unknown sort 'loudness'.", await CallError("tracks", new() { ["sort"] = "loudness" }));
+        Assert.StartsWith("usage:", await CallError("tracks", new() { ["sort"] = "3" }), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Warnings_ride_along_in_tool_results()
+    {
+        await StartAsync();
+        Directory.CreateDirectory(_cli.DataDir);
+        await File.WriteAllTextAsync(Path.Combine(_cli.DataDir, "settings.json"), "{ nope", TestContext.Current.CancellationToken);
+        await Call("play", new() { ["files"] = new[] { Long[0] } });
+
+        var repeat = await Call("repeat", new() { ["mode"] = "all" });
+
+        Assert.Equal("all", repeat.GetProperty("repeat").GetString());
+        Assert.StartsWith("Not saved", repeat.GetProperty("warnings")[0].GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cancelling_the_server_ends_it_with_exit_0()
+    {
+        await StartAsync();
+        await Call("status");
+
+        await _cts.CancelAsync();
+        var result = await _server!.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, result.ExitCode);
+    }
 }
