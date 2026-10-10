@@ -82,13 +82,13 @@ internal static class RadioCommand
         string backend, string? device, bool exclusive, CancellationToken cancellationToken)
     {
         filter.EnsureValid();
-        int poolSize;
+        bool any;
         using (var library = runner.OpenLibraryForRead(parseResult))
         {
-            poolSize = library.RadioPool(filter).Count;
+            any = library.HasRadioTracks(filter);
         }
 
-        if (poolSize == 0)
+        if (!any)
         {
             throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.IsEmpty
                 ? "The library is empty. Add music with 'music-spin library add <folder>' and 'music-spin library scan'."

@@ -104,6 +104,28 @@ public sealed class RadioPoolTests : LibraryTestBase
     }
 
     [Fact]
+    public void Has_radio_tracks_answers_without_reading_the_pool_and_fails_like_it()
+    {
+        using var library = OpenRead();
+        Assert.True(library.HasRadioTracks(new RadioFilter()));
+        Assert.True(library.HasRadioTracks(new RadioFilter { Artists = ["Artist C"], Genres = ["pop"] }));
+        Assert.True(library.HasRadioTracks(new RadioFilter { Searches = ["crossover"] }));
+        Assert.False(library.HasRadioTracks(new RadioFilter { Genres = ["polka"] }));
+        Assert.False(library.HasRadioTracks(new RadioFilter { Searches = ["nothing like this"] }));
+        Assert.Equal(MusicSpinErrorCode.NotFound, Assert.Throws<MusicSpinException>(() => library.HasRadioTracks(new RadioFilter { Artists = ["Nobody"] })).Code);
+        Assert.Equal(MusicSpinErrorCode.InvalidArgument, Assert.Throws<MusicSpinException>(() => library.HasRadioTracks(new RadioFilter { Genres = [""] })).Code);
+    }
+
+    [Fact]
+    public void A_track_matched_as_artist_and_album_artist_is_in_the_pool_once()
+    {
+        // "So What": artist and album artist are both Miles Davis (two indexed queries are merged).
+        using var library = OpenRead();
+        var pool = library.RadioPool(new RadioFilter { Artists = ["Miles Davis"], Searches = ["so what"] });
+        Assert.Single(pool);
+    }
+
+    [Fact]
     public void The_pool_cache_rereads_only_when_the_library_or_filter_changes()
     {
         var cache = new RadioPoolCache(Data, TimeSpan.FromMilliseconds(500));
