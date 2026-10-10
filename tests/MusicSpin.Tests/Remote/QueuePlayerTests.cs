@@ -320,7 +320,9 @@ public sealed class QueuePlayerUnhappyTests : IDisposable
     [Fact]
     public async Task A_file_deleted_while_queued_is_skipped_on_auto_advance()
     {
-        var (queue, paths, decoders) = Create(tracks: 3, seconds: 0.05, outputs: Outputs.Fast());
+        // Gapless off: with it the decode thread may already hold the next file open (as an OS keeps a deleted open file
+        // readable) and play it; skipping while decoding ahead is covered in GaplessPlaybackTests.
+        var (queue, paths, decoders) = Create(tracks: 3, seconds: 0.05, outputs: Outputs.Fast(), options: new PlayerOptions { Gapless = false });
         var skippedEvents = new List<SkippedItem>();
         queue.TrackSkipped += (_, e) => { lock (skippedEvents) { skippedEvents.Add(e.Item); } };
         queue.SetQueue(Items(paths), play: false);
