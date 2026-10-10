@@ -80,11 +80,11 @@ public sealed class SettingsStore(DataDirectory directory)
         {
             Directory.CreateDirectory(directory.Path);
             File.WriteAllText(temp, JsonSerializer.Serialize(settings, JsonOptions));
-            File.Move(temp, FilePath, overwrite: false);
-            return true;
-        }
-        catch (IOException) when (File.Exists(FilePath))
-        {
+            if (AtomicFile.TryPublish(temp, FilePath))
+            {
+                return true;
+            }
+
             TryDelete(temp);
             return false; // someone else was first; theirs are the same defaults
         }
