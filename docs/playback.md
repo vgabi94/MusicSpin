@@ -143,7 +143,7 @@ Details:
 
 ## Radio
 
-`music-spin radio` (MCP tool `radio`, protocol command `radio`) plays the library endlessly in random order. Filters narrow the **pool** of tracks it picks from; see the [CLI reference](cli-reference.md#radio) for the options and their matching rules (values of one filter are ORed, different filters ANDed).
+`music-spin radio` (MCP tool `radio`, protocol command `radio`) plays the library endlessly in random order. Filters narrow the **pool** of tracks it picks from; see the [CLI reference](cli-reference.md#radio) for the options and their matching rules (values of one filter are ORed, different filters ANDed, and any `--exclude-*` match leaves a track out even when an include matches it).
 
 **How tracks are picked**
 
@@ -171,7 +171,7 @@ Details:
 | `status` | `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text shows `[radio]` instead of the queue position and a `Radio: <filters> (<N> tracks) · Repeat: ...` line |
 
 - **Gapless:** the lookahead is the queue, so same-format radio tracks play back to back exactly like a normal queue ([Gapless](#gapless)).
-- **Persistence:** radio mode, the filters and the recent picks (for the no-repeat and spacing rules) are saved in `queue.json` with the queue and restored **paused** by the next player, like any queue. `resume` continues the station.
+- **Persistence:** radio mode, the filters (excludes included) and the recent picks (for the no-repeat and spacing rules) are saved in `queue.json` with the queue and restored **paused** by the next player, like any queue. `resume` continues the station.
 - **Safety net:** if 20 radio tracks in a row end almost immediately (broken or empty files), radio stops with `lastError` "Radio stopped: ...".
 - `serve` supports `radio` too (using the data folder's library); like the rest of `serve` it does not persist anything.
 
@@ -181,6 +181,8 @@ Details:
 |---|---|---|---|---|---|
 | 3,000 tracks | 18-25 ms | 2 ms | < 0.01 ms | 0.36-0.47 s | 0.9 s |
 | 50,000 tracks | 0.55 s (1.4 s on a cold player process) | 2 ms | 0.01 ms | 0.4 s (same filter) / 0.9 s (new filter) | 2.2 s |
+
+Excludes are applied while the pool is read and do not change these numbers: on the 50,000-track library, excluding an artist and a genre (39,968 left) reads in 0.55-0.7 s, an artist + album + year range 0.51-0.57 s, `--genre` with an excluded artist 0.36-0.39 s, and an excluded search + format (which needs whole records) 0.6 s; the CLI pre-check still stops at the first match (1-4 ms).
 
 Most of a CLI call is process start and JIT (about 0.2-0.4 s for any command). The CLI checks the filters against the library before starting a player and stops at the first match, so unknown names and empty pools fail fast.
 

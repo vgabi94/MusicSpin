@@ -118,11 +118,19 @@ Endless random playback of the library in the background player (started if need
 | `--format <id>` | Format id(s) (`flac`, `alac`, `dsd`, `mp3`, ...); repeat or comma-separate |
 | `--search <text>` | [Search syntax](library.md#search-syntax), as `music-spin search` |
 | `--hires` | Only hi-res tracks |
+| `--exclude-artist <name>` | Leave out tracks whose track **or** album artist is this (same matching as `--artist`) |
+| `--exclude-album <title\|id>` | Leave out this album |
+| `--exclude-genre <name>` | Leave out this genre (same matching as `--genre`; a `Rock; Pop` track is left out by either) |
+| `--exclude-year <N>` / `--exclude-years <A-B>` | Leave out these years / inclusive ranges (validated like `--years`) |
+| `--exclude-format <id>` | Leave out these formats; repeat or comma-separate |
+| `--exclude-search <text>` | Leave out tracks matching this search |
 
 Every filter except `--hires` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
 
-- Nothing matches, or the library is empty: exit 12 `not_found`, and no player is started. Unknown `--artist`/`--album`: exit 12 as in `tracks`.
-- Bad values (`--years 1999-1990`, `--years nineties`, `--year 10000`, an empty `--artist ""`): exit 2.
+**Excludes:** every `--exclude-*` option is repeatable, and a track matching **any** exclude value is left out, **even when an include filter matches it** (exclude wins). Excludes alone narrow the whole library: `music-spin radio --exclude-genre Christmas --exclude-artist "Kenny G"`. Unknown names in `--exclude-artist`/`--exclude-album` are **ignored silently** (excluding something the library does not have is harmless, and they are not errors as they are in includes). There is no `--exclude-hires`: use `--exclude-format` or `--hires` instead (a "lossy only" station is `--format mp3 --format aac ...`). The description shows excludes last: `genre jazz · year 1955-1965 · excluding artist Kenny G`.
+
+- Nothing matches, or the library is empty: exit 12 `not_found`, and no player is started. When the excludes leave nothing, the message says so: `No library tracks are left after the excludes (whole library · excluding year 0-9999).` Unknown `--artist`/`--album`: exit 12 as in `tracks`.
+- Bad values (`--years 1999-1990`, `--years nineties`, `--year 10000`, an empty `--artist ""`, the same for the `--exclude-*` options): exit 2.
 - The status has `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text output shows `[radio]` and a `Radio:` line. JSON adds `playerStarted`.
 
 How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` or `load` end radio.

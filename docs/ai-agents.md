@@ -88,7 +88,7 @@ Notes:
 - `player status` is the cheap "is anything running?" check. It exits 0 either way.
 - `repeat off|one|all` and `shuffle on|off|toggle [--seed N]` change the running queue; `status` reports `repeat`, `shuffle` and `shuffleSeed`. Changes are saved as defaults for the next player (see [Playback](playback.md#shuffle-and-repeat)).
 - Playlists: `playlist create/add/show/...` (positions are 1-based), `play --playlist <name>`, `queue add --playlist <name>`, `queue save <name>`, `playlist import/export` for M3U/M3U8/PLS. Missing entries come back as `warnings` when played. See [Music library → Playlists](library.md#playlists).
-- **Radio:** `music-spin radio [--artist ...] [--genre ...] [--years 1990-1999] [--hires] ... --json` (MCP `radio`) plays the library endlessly at random. It starts the player like `play`. Check `queueMode` (`"radio"` or `"queue"`) and `radio.description`/`radio.poolSize` in any status. `next` never fails in radio mode; `shuffle` is exit 8 there; `play` or `queue clear` end it. Nothing matching is exit 12. Rules: [Playback → Radio](playback.md#radio).
+- **Radio:** `music-spin radio [--artist ...] [--genre ...] [--years 1990-1999] [--hires] [--exclude-artist ...] [--exclude-genre ...] ... --json` (MCP `radio`) plays the library endlessly at random. It starts the player like `play`. Check `queueMode` (`"radio"` or `"queue"`) and `radio.description`/`radio.poolSize` in any status. `next` never fails in radio mode; `shuffle` is exit 8 there; `play` or `queue clear` end it. Nothing matching is exit 12. Rules: [Playback → Radio](playback.md#radio).
 - The queue survives the player: a new player restores it **paused**, and `resume` starts the player again when no player runs but a saved queue exists ([Persistent queue](playback.md#persistent-queue)).
 
 ## `serve`: JSON-lines protocol (v1)
@@ -123,8 +123,8 @@ One request per line on stdin; one response per line on stdout with the same `id
 {"id":21,"cmd":"repeat","mode":"all"}          // off|one|all; without "mode": just the status
 {"id":22,"cmd":"shuffle","mode":"on","seed":7} // on|off|toggle (or "enabled":true/false); without "mode": just the status
 {"id":23,"cmd":"queue.set","items":["/music/a.flac","/music/b.flac"],"shuffle":true,"seed":7}  // turn shuffle on for the new queue
-{"id":24,"cmd":"radio","filter":{"artists":["Miles Davis"],"genres":["Jazz"],"years":[{"from":1955,"to":1965}],"formats":["flac"],"searches":["blue"],"hiRes":false},"play":true}
-                                               // endless random playback; every filter is optional ("filter" omitted = whole library)
+{"id":24,"cmd":"radio","filter":{"artists":["Miles Davis"],"genres":["Jazz"],"years":[{"from":1955,"to":1965}],"formats":["flac"],"searches":["blue"],"hiRes":false,"excludeArtists":["Kenny G"],"excludeYears":[{"from":1960,"to":1960}]},"play":true}
+                                               // endless random playback; every filter is optional ("filter" omitted = whole library); exclude* lists also: excludeAlbums, excludeGenres, excludeFormats, excludeSearches
 
 // events
 {"event":"trackLoaded","data":{<track>}}
