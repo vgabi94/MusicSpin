@@ -23,6 +23,20 @@ internal static class RadioCommand
         };
         var search = Many("--search", "Search text, same syntax as 'music-spin search' (words, \"phrases\", artist:/album:/title:/genre:/year:). Repeat for several (any).");
         var hires = new Option<bool>("--hires") { Description = "Only hi-res tracks." };
+        const string Ex = " Excluded even when an include filter matches; unknown names are ignored.";
+        var xArtist = Many("--exclude-artist", "Leave out this track or album artist (exact name). Repeatable." + Ex);
+        var xAlbum = Many("--exclude-album", "Leave out this album (exact title or id). Repeatable." + Ex);
+        var xGenre = Many("--exclude-genre", "Leave out this genre (same matching as --genre). Repeatable." + Ex);
+        var xYear = new Option<int[]>("--exclude-year") { Description = "Leave out this release year. Repeatable." + Ex, AllowMultipleArgumentsPerToken = false };
+        Options.Validated(xYear, v => (v ?? []).Where(y => y is < YearRange.MinYear or > YearRange.MaxYear).Select(y => (int?)y).FirstOrDefault() is { } bad
+            ? $"--exclude-year must be between {YearRange.MinYear} and {YearRange.MaxYear} (got {bad})." : null);
+        var xYears = Many("--exclude-years", "Leave out an inclusive year range A-B. Repeatable." + Ex);
+        var xFormat = new Option<string[]>("--exclude-format")
+        {
+            Description = "Leave out format id(s). Repeat or comma-separate." + Ex,
+            AllowMultipleArgumentsPerToken = true,
+        };
+        var xSearch = Many("--exclude-search", "Leave out tracks matching this search text (search syntax). Repeatable." + Ex);
         var backend = Options.Backend();
         var device = Options.Device();
         var exclusive = Options.Exclusive();
@@ -30,21 +44,30 @@ internal static class RadioCommand
         var command = new Command("radio",
             "Endless random playback of the library in the background player; filters narrow it (OR within a filter, AND across filters). " +
             "No track repeats within the last 100 (or pool size - 1); the same artist/album is not played twice in a row when there is a choice. " +
+            "--exclude-* options leave tracks out (any match excludes; exclude wins over include). " +
             "next/prev/pause/stop/status work as usual; 'play', 'queue clear' or 'load' end radio. Nothing matches: exit 12.")
         {
-            artist, album, genre, year, years, format, search, hires, backend, device, exclusive,
+            artist, album, genre, year, years, format, search, hires,
+            xArtist, xAlbum, xGenre, xYear, xYears, xFormat, xSearch, backend, device, exclusive,
         };
         command.Validators.Add(r =>
         {
-            foreach (var text in Options.Get(r, years) ?? [])
+            foreach (var (name, option) in new[] { ("--years", years), ("--exclude-years", xYears) })
             {
-                if (YearRange.TryParse(text, out var error) is null)
+                foreach (var text in Options.Get(r, option) ?? [])
                 {
-                    r.AddError($"--years: {error}");
+                    if (YearRange.TryParse(text, out var error) is null)
+                    {
+                        r.AddError($"{name}: {error}");
+                    }
                 }
             }
 
-            foreach (var (name, option) in new[] { ("--artist", artist), ("--album", album), ("--genre", genre), ("--search", search) })
+            foreach (var (name, option) in new[]
+                     {
+                         ("--artist", artist), ("--album", album), ("--genre", genre), ("--search", search),
+                         ("--exclude-artist", xArtist), ("--exclude-album", xAlbum), ("--exclude-genre", xGenre), ("--exclude-search", xSearch),
+                     })
             {
                 if ((Options.Get(r, option) ?? []).Any(string.IsNullOrWhiteSpace))
                 {
@@ -64,6 +87,12 @@ internal static class RadioCommand
                 Formats = List(parseResult.GetValue(format)?.SelectMany(f => f.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))),
                 Searches = List(parseResult.GetValue(search)),
                 HiRes = parseResult.GetValue(hires),
+                ExcludeArtists = List(parseResult.GetValue(xArtist)),
+                ExcludeAlbums = List(parseResult.GetValue(xAlbum)),
+                ExcludeGenres = List(parseResult.GetValue(xGenre)),
+                ExcludeYears = Years(parseResult.GetValue(xYear), parseResult.GetValue(xYears)),
+                ExcludeFormats = List(parseResult.GetValue(xFormat)?.SelectMany(f => f.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))),
+                ExcludeSearches = List(parseResult.GetValue(xSearch)),
             };
             var (data, started) = await StartAsync(runner, parseResult, filter, parseResult.GetValue(backend)!, parseResult.GetValue(device),
                 parseResult.GetValue(exclusive), cancellationToken).ConfigureAwait(false);
@@ -90,9 +119,7 @@ internal static class RadioCommand
 
         if (!any)
         {
-            throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.IsEmpty
-                ? "The library is empty. Add music with 'music-spin library add <folder>' and 'music-spin library scan'."
-                : $"No library tracks match the radio filters ({filter.Describe()}).");
+            throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.EmptyPoolMessage());
         }
 
         var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, cancellationToken).ConfigureAwait(false);

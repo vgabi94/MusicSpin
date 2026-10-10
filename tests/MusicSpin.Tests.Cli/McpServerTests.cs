@@ -280,6 +280,18 @@ public sealed class McpServerTests : IAsyncDisposable
         var all = await Call("radio", new() { ["hires"] = true, ["searches"] = new[] { "so what", "freddie" } });
         Assert.False(all.GetProperty("playerStarted").GetBoolean());
         Assert.Equal(2, all.GetProperty("radio").GetProperty("poolSize").GetInt32());
+
+        foreach (var name in new[] { "excludeArtists", "excludeAlbums", "excludeGenres", "excludeYears", "excludeFormats", "excludeSearches" })
+        {
+            Assert.Contains("array", props.GetProperty(name).GetProperty("type").ToString(), StringComparison.Ordinal);
+        }
+
+        var excluded = await Call("radio", new() { ["genres"] = new[] { "jazz" }, ["excludeArtists"] = new[] { "Miles Davis", "Nobody" }, ["excludeFormats"] = new[] { "mp3" } });
+        Assert.Equal("genre jazz · excluding artist Miles Davis or Nobody, format mp3", excluded.GetProperty("radio").GetProperty("description").GetString());
+        Assert.Equal(2, excluded.GetProperty("radio").GetProperty("poolSize").GetInt32());
+        Assert.StartsWith("usage:", await CallError("radio", new() { ["excludeYears"] = new[] { "2000-1990" } }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found: No library tracks are left after the excludes (genre jazz · excluding genre jazz)",
+            await CallError("radio", new() { ["genres"] = new[] { "jazz" }, ["excludeGenres"] = new[] { "jazz" } }), StringComparison.Ordinal);
         await Call("quit_player");
     }
 

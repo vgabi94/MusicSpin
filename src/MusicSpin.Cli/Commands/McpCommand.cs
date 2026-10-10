@@ -86,7 +86,7 @@ internal static class McpCommand
                  CancellationToken ct = default) => Guard(() => SetQueueAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains),
                     playlist, shuffle, seed, ct)));
             yield return Tool("radio", "Endless random playback of the library (or the tracks the filters select) in the background player; returns its status " +
-                "(queueMode 'radio', radio.description, radio.poolSize). Each list is ORed, different filters are ANDed. No track repeats within the last 100 " +
+                "(queueMode 'radio', radio.description, radio.poolSize). Each list is ORed, different filters are ANDed; exclude* lists leave matching tracks out (exclude wins). No track repeats within the last 100 " +
                 "(or pool size - 1); the same artist/album is not played twice in a row when there is a choice. next/previous/pause/stop work as usual; " +
                 "play or queue_clear end radio; shuffle is refused (radio is random); repeat one replays the current track. Nothing matches: not_found.",
                 ([Description("Exact artist names (track or album artist); unknown: not_found.")] string[]? artists = null,
@@ -96,12 +96,20 @@ internal static class McpCommand
                  [Description("Format ids, e.g. flac, dsd, mp3.")] string[]? formats = null,
                  [Description("Search texts (syntax as the search tool); a track matching any of them qualifies.")] string[]? searches = null,
                  [Description("Only hi-res tracks.")] bool hires = false,
+             [Description("Leave out these artists (track or album artist). Excludes win over includes; unknown names are ignored.")] string[]? excludeArtists = null,
+             [Description("Leave out these albums (titles or ids; unknown ignored).")] string[]? excludeAlbums = null,
+             [Description("Leave out these genres.")] string[]? excludeGenres = null,
+             [Description("Leave out these years or inclusive ranges (\"1959\", \"1990-1999\").")] string[]? excludeYears = null,
+             [Description("Leave out these format ids.")] string[]? excludeFormats = null,
+             [Description("Leave out tracks matching any of these search texts.")] string[]? excludeSearches = null,
                  CancellationToken ct = default) => Guard(async () =>
                 {
                     var filter = new RadioFilter
                     {
                         Artists = RadioCommand.List(artists), Albums = RadioCommand.List(albums), Genres = RadioCommand.List(genres),
                         Years = RadioCommand.Years(null, years), Formats = RadioCommand.List(formats), Searches = RadioCommand.List(searches), HiRes = hires,
+                    ExcludeArtists = RadioCommand.List(excludeArtists), ExcludeAlbums = RadioCommand.List(excludeAlbums), ExcludeGenres = RadioCommand.List(excludeGenres),
+                    ExcludeYears = RadioCommand.Years(null, excludeYears), ExcludeFormats = RadioCommand.List(excludeFormats), ExcludeSearches = RadioCommand.List(excludeSearches),
                     };
                     var (status, started) = await RadioCommand.StartAsync(runner, parseResult, filter, backend, device, exclusive, ct).ConfigureAwait(false);
                     return With(status, started, null, null);

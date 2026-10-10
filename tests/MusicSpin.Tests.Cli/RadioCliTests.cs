@@ -99,6 +99,43 @@ public sealed class RadioCliTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Excludes_narrow_the_pool_and_win_over_includes()
+    {
+        await WithLibraryAsync();
+
+        static int Pool(JsonElement s) => s.GetProperty("radio").GetProperty("poolSize").GetInt32();
+        Assert.Equal(3, Pool(await Ok("radio", "--exclude-artist", "miles davis", "--backend", "null")));
+        Assert.Equal(6, Pool(await Ok("radio", "--exclude-artist", "Nobody", "--exclude-album", "Nope")));
+        Assert.Equal(4, Pool(await Ok("radio", "--exclude-album", "Kind of Blue")));
+        Assert.Equal(5, Pool(await Ok("radio", "--exclude-genre", "POP")));
+        Assert.Equal(4, Pool(await Ok("radio", "--exclude-year", "1959")));
+        Assert.Equal(1, Pool(await Ok("radio", "--exclude-year", "1959", "--exclude-years", "2001-2010")));
+        Assert.Equal(5, Pool(await Ok("radio", "--exclude-format", "mp3")));
+        Assert.Equal(1, Pool(await Ok("radio", "--hires", "--exclude-search", "freddie", "--exclude-format", "mp3,dsd")));
+        Assert.Equal(4, Pool(await Ok("radio", "--exclude-search", "freddie", "--exclude-search", "lossy")));
+        Assert.Equal(1, Pool(await Ok("radio", "--artist", "Miles Davis", "--exclude-years", "1959-1959")));
+
+        var json = await Ok("radio", "--genre", "jazz", "--exclude-artist", "Miles Davis");
+        var station = json.GetProperty("radio");
+        Assert.Equal("genre jazz · excluding artist Miles Davis", station.GetProperty("description").GetString());
+        Assert.Equal(["Miles Davis"], station.GetProperty("filter").GetProperty("excludeArtists").EnumerateArray().Select(a => a.GetString()));
+        Assert.Equal(2, station.GetProperty("poolSize").GetInt32());
+        var status = await _cli.RunAsync("status");
+        Assert.Contains("Radio: genre jazz · excluding artist Miles Davis (2 tracks) · Repeat: off", status.Out, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("No library tracks are left after the excludes (whole library · excluding year 0-9999).", "--exclude-years", "0-9999")]
+    [InlineData("No library tracks are left after the excludes (genre jazz · excluding genre jazz).", "--genre", "jazz", "--exclude-genre", "jazz")]
+    public async Task Excluding_everything_is_exit_12_naming_the_excludes(string message, params string[] filter)
+    {
+        await WithLibraryAsync();
+        var (exitCode, code, text) = await Fails(["radio", .. filter, "--backend", "null"]);
+        Assert.Equal((ExitCodes.NotFound, "not_found", message), (exitCode, code, text));
+        Assert.Empty(_cli.Hosts);
+    }
+
+    [Fact]
     public async Task Radio_works_with_next_prev_stop_repeat_and_ends_with_play_or_queue_clear()
     {
         await WithLibraryAsync();
@@ -170,6 +207,10 @@ public sealed class RadioCliTests : IAsyncDisposable
     [InlineData("--year must be between 0 and 9999 (got 10000)", "--year", "10000")]
     [InlineData("--artist must not be empty", "--artist", "")]
     [InlineData("--search must not be empty", "--search", " ")]
+    [InlineData("--exclude-years: Year range 1999-1990 is backwards", "--exclude-years", "1999-1990")]
+    [InlineData("--exclude-year must be between 0 and 9999 (got 10000)", "--exclude-year", "10000")]
+    [InlineData("--exclude-artist must not be empty", "--exclude-artist", "")]
+    [InlineData("--exclude-search must not be empty", "--exclude-search", " ")]
     public async Task Bad_arguments_are_usage_errors(string message, params string[] args)
     {
         var result = await _cli.RunAsync(["radio", .. args, "--json"]);
