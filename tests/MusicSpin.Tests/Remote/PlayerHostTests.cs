@@ -68,7 +68,7 @@ public sealed class PlayerHostTests : PlayerHostTestBase
     [Fact]
     public async Task Subscribers_receive_events()
     {
-        StartHost();
+        var host = StartHost();
         var control = await ConnectAsync();
         var listener = await ConnectAsync();
         var ct = TestContext.Current.CancellationToken;
@@ -87,8 +87,7 @@ public sealed class PlayerHostTests : PlayerHostTestBase
             }
         }, ct);
 
-        await PlayerTestKit.WaitUntilAsync(() => Log.ToString().Length > 0, "host log");
-        await Task.Delay(100, ct); // let the subscribe request land first
+        await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 1, "subscription active");
         await control.SendAsync("queue.set", QueueSet(Paths), ct);
         await control.SendAsync("pause", null, ct);
         await reader;

@@ -263,14 +263,14 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     [Fact]
     public async Task Too_many_connections_are_closed_but_the_player_survives()
     {
-        StartHost(Options() with { MaxConnections = 2 });
+        var host = StartHost(Options() with { MaxConnections = 2 });
         using var a = await RawConnectionAsync();
         using var b = await RawConnectionAsync();
-        await Task.Delay(100, Ct);
+        await PlayerTestKit.WaitUntilAsync(() => host.ConnectionCount == 2, "both connections accepted");
         using var c = await RawConnectionAsync();
-        Assert.Null(await ReadLineAsync(c, 2000));
+        Assert.Null(await ReadLineAsync(c, 2000)); // closed by the player: no answer, EOF
         a.Dispose();
-        await Task.Delay(100, Ct);
+        await PlayerTestKit.WaitUntilAsync(() => host.ConnectionCount < 2, "the first connection's session ended");
         var client = await ConnectAsync();
         Assert.Equal(0, (await client.StatusAsync(Ct)).QueueLength);
     }
@@ -304,7 +304,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
             {
             }
         }, Ct);
-        await Task.Delay(100, Ct);
+        await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 1, "subscription active");
         await client.SendAsync("stop", null, Ct);
         await Task.Delay(600, Ct);
         Assert.False(host.Completion.IsCompleted, "stopped but an app is attached");

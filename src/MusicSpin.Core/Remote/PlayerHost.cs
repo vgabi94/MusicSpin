@@ -150,6 +150,21 @@ public sealed class PlayerHost : IAsyncDisposable
     /// <summary>The player this host serves (an in-process desktop app could drive it directly).</summary>
     public QueuePlayer Player => _queue;
 
+    /// <summary>Open client connections (diagnostics; lets callers wait for a state instead of sleeping).</summary>
+    public int ConnectionCount
+    {
+        get
+        {
+            lock (_sessionsGate)
+            {
+                return _sessions.Count;
+            }
+        }
+    }
+
+    /// <summary>Connections subscribed to events. A subscription counts from before its acknowledgement is sent.</summary>
+    public int SubscriberCount => Volatile.Read(ref _subscribers);
+
     /// <summary>Completes with the shutdown reason ("quit", "idle", "signal", "disposed") once fully stopped.</summary>
     public Task<string> Completion => _completed.Task;
 
@@ -421,14 +436,21 @@ public sealed class PlayerHost : IAsyncDisposable
                 }
 
                 var reply = _protocol.Handle(line);
-                await channel.WriteLineAsync(reply.Line, token).ConfigureAwait(false);
-                if (reply.Action == ProtocolAction.Subscribe && subscription is null)
+                var subscribing = reply.Action == ProtocolAction.Subscribe && subscription is null;
+                if (subscribing)
                 {
+                    // Attach before acknowledging: once the client has the reply, no event may be missed (and the
+                    // player no longer counts as idle).
                     events = Channel.CreateBounded<string>(new BoundedChannelOptions(1024) { FullMode = BoundedChannelFullMode.DropOldest });
                     var writer = events.Writer;
                     subscription = PlayerEvents.Attach(_queue, json => writer.TryWrite(json));
                     Interlocked.Increment(ref _subscribers);
-                    eventPump = PumpEventsAsync(channel, events.Reader, token);
+                }
+
+                await channel.WriteLineAsync(reply.Line, token).ConfigureAwait(false);
+                if (subscribing)
+                {
+                    eventPump = PumpEventsAsync(channel, events!.Reader, token);
                 }
                 else if (reply.Action == ProtocolAction.Quit)
                 {
