@@ -48,6 +48,33 @@ public sealed class PlayerHostEdgeTests : PlayerHostTestBase
     }
 
     [Fact]
+    public async Task A_failure_while_shutting_down_is_logged_and_the_lock_is_still_released()
+    {
+        var host = StartHost(Options(new FailingDisposeOutputs()));
+        await host.StopAsync();
+
+        await host.Completion.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+
+        Assert.Contains("shutdown error: audio backend refused to close", Log.ToString(), StringComparison.Ordinal);
+        Assert.False(PlayerHost.IsLockHeld(Endpoint)); // the next player can start
+        var next = StartHost(Options());
+        await next.StopAsync();
+    }
+
+    private sealed class FailingDisposeOutputs : MusicSpin.Core.Audio.IAudioOutputProvider, IDisposable
+    {
+        private readonly MusicSpin.Core.Output.NullAudioOutputProvider _inner = new(realtime: false);
+
+        public string Name => _inner.Name;
+
+        public IReadOnlyList<MusicSpin.Core.Audio.AudioDeviceInfo> GetDevices() => _inner.GetDevices();
+
+        public MusicSpin.Core.Audio.IAudioOutput Create(MusicSpin.Core.Audio.AudioOutputOptions options) => _inner.Create(options);
+
+        public void Dispose() => throw new InvalidOperationException("audio backend refused to close");
+    }
+
+    [Fact]
     public void Player_info_is_null_when_missing_garbled_or_a_folder()
     {
         Directory.CreateDirectory(Data.Path);

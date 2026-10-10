@@ -27,6 +27,39 @@ public sealed class PlayerEdgeTests : IDisposable
     private static MusicSpinErrorCode Code(Action action) => Assert.Throws<MusicSpinException>(action).Code;
 
     [Fact]
+    public void A_player_disposed_while_a_file_is_opening_closes_that_decoder_and_reports_disposed()
+    {
+        Player? player = null;
+        var decoders = new DisposingFactory(_decoders, () => player!.Dispose());
+        player = new Player(decoders, _outputs, new PlayerOptions(), _time);
+
+        Assert.Throws<ObjectDisposedException>(() => player.Load(Song));
+
+        Assert.True(_decoders.Opened.Single().Disposed); // not leaked
+        Assert.Equal(0, _outputs.Output.OpenCount);
+        Assert.Throws<ObjectDisposedException>(() => player.Load(Song));
+    }
+
+    /// <summary>Runs <paramref name="duringOpen"/> while a file is being opened (the race window of Player.Load).</summary>
+    private sealed class DisposingFactory(FakeDecoderFactory inner, Action duringOpen) : MusicSpin.Core.Audio.IAudioDecoderFactory
+    {
+        public string Name => inner.Name;
+
+        public bool IsAvailable => inner.IsAvailable;
+
+        public MusicSpin.Core.Metadata.TrackInfo Probe(string path) => inner.Probe(path);
+
+        public MusicSpin.Core.Audio.IAudioDecoder Open(string path)
+        {
+            var decoder = inner.Open(path);
+            duringOpen();
+            return decoder;
+        }
+
+        public IReadOnlyList<MusicSpin.Core.Audio.AudioFormatSupport> GetSupportedFormats() => inner.GetSupportedFormats();
+    }
+
+    [Fact]
     public void Play_while_playing_is_a_no_op_and_opens_the_device_once()
     {
         _player.Load(Song);
