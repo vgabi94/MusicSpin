@@ -20,6 +20,9 @@ internal sealed class CliHarness : IAsyncDisposable
 
     public FakeDecoderFactory Decoders { get; init; } = new FakeDecoderFactory().With(TestAudio.Track(Song, sampleRate: 96_000, seconds: 0.2));
 
+    /// <summary>Replaces <see cref="Decoders"/> for the CLI itself (fault injection), when set.</summary>
+    public IAudioDecoderFactory? DecoderOverride { get; init; }
+
     public Func<string, IAudioOutputProvider> Outputs { get; init; } = _ => new NullAudioOutputProvider(realtime: false);
 
     public FFmpegStatus? FFmpeg { get; init; } = new(true, "9.0-test", "LGPL version 2.1 or later", "", new Dictionary<string, int>(), null);
@@ -105,7 +108,7 @@ internal sealed class CliHarness : IAsyncDisposable
             Out = stdout,
             Error = stderr,
             In = new StringReader(Input),
-            Decoders = Decoders,
+            Decoders = DecoderOverride ?? Decoders,
             OutputProviders = Outputs,
             FFmpegStatus = () => FFmpeg,
             BaseDirectory = BaseDirectory,
