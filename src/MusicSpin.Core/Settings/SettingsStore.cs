@@ -54,15 +54,7 @@ public sealed class SettingsStore(DataDirectory directory)
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            try
-            {
-                File.Delete(temp);
-            }
-            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
-            {
-                // best effort
-            }
-
+            TryDelete(temp);
             throw AppPaths.NotWritable(directory, ex.Message);
         }
     }

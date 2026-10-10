@@ -13,19 +13,24 @@ internal static partial class AtomicFile
     /// not enough on Unix, where .NET checks for the destination and then renames, so two racers can both "win".
     /// </summary>
     public static bool TryPublish(string temp, string destination)
+        => TryPublish(temp, destination, OperatingSystem.IsWindows() ? null : NativeLink);
+
+    /// <param name="link">link(2): 0 on success, else errno (null = no hard links: Windows).</param>
+    internal static bool TryPublish(string temp, string destination, Func<string, string, int>? link)
     {
-        if (!OperatingSystem.IsWindows())
+        if (link is not null)
         {
             // link(2) fails with EEXIST atomically. File systems without hard links (FAT/exFAT USB drives) fall through.
             try
             {
-                if (Link(temp, destination) == 0)
+                var error = link(temp, destination);
+                if (error == 0)
                 {
                     File.Delete(temp);
                     return true;
                 }
 
-                if (Marshal.GetLastPInvokeError() == EEXIST)
+                if (error == EEXIST)
                 {
                     return false;
                 }
@@ -46,6 +51,9 @@ internal static partial class AtomicFile
             return false;
         }
     }
+
+    private static int NativeLink(string existingPath, string newPath)
+        => Link(existingPath, newPath) == 0 ? 0 : Marshal.GetLastPInvokeError();
 
     [LibraryImport("libc", EntryPoint = "link", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
     private static partial int Link(string existingPath, string newPath);
