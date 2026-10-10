@@ -67,6 +67,29 @@ public sealed class RadioHostTests : PlayerHostTestBase
     }
 
     [Fact]
+    public async Task Excludes_are_saved_and_restored_with_the_station()
+    {
+        SeedLibrary();
+        var first = StartHost(Fast());
+        var client = await ConnectAsync();
+        var status = Status(await client.SendAsync("radio",
+            new { filter = new { genres = new[] { "jazz" }, excludeArtists = new[] { "Nobody" }, excludeYears = new[] { new { from = 1900, to = 1999 } } } }, Ct));
+        const string Description = "genre jazz · excluding artist Nobody, year 1900-1999";
+        Assert.Equal(Description, status.Radio!.Description);
+        await PlayerTestKit.WaitUntilAsync(() => Saved() is { Radio: not null }, "radio saved");
+        var saved = Saved()!.Radio!.Filter;
+        Assert.Equal(["Nobody"], saved.ExcludeArtists);
+        Assert.Equal([new YearRange(1900, 1999)], saved.ExcludeYears);
+
+        await first.StopAsync("quit").WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        StartHost(Fast());
+        client = await ConnectAsync();
+        var restored = await client.StatusAsync(Ct);
+        Assert.Equal((PlayerState.Paused, Description), (restored.State, restored.Radio!.Description));
+        Assert.Equal(["Nobody"], restored.Radio.Filter.ExcludeArtists);
+    }
+
+    [Fact]
     public async Task A_new_queue_ends_radio_and_the_saved_queue_drops_it()
     {
         SeedLibrary();
@@ -88,6 +111,9 @@ public sealed class RadioHostTests : PlayerHostTestBase
     [InlineData("""{"cmd":"radio","filter":{"artists":[""]}}""", ExitCodes.Usage, "must not be empty")]
     [InlineData("""{"cmd":"radio","filter":{"genres":["polka"]}}""", ExitCodes.NotFound, "No library tracks match the radio filters (genre polka).")]
     [InlineData("""{"cmd":"radio","filter":{"artists":["Nobody"]}}""", ExitCodes.NotFound, "No artist named 'Nobody'")]
+    [InlineData("""{"cmd":"radio","filter":{"excludeYears":[{"from":2000,"to":1990}]}}""", ExitCodes.Usage, "backwards")]
+    [InlineData("""{"cmd":"radio","filter":{"excludeArtists":[" "]}}""", ExitCodes.Usage, "--exclude-artist values must not be empty")]
+    [InlineData("""{"cmd":"radio","filter":{"excludeYears":[{"from":0,"to":9999}]}}""", ExitCodes.NotFound, "No library tracks are left after the excludes (whole library · excluding year 0-9999).")]
     [InlineData("""{"cmd":"radio","play":"yes"}""", ExitCodes.Usage, "\"play\" must be true or false")]
     public async Task Bad_radio_requests_get_stable_exit_codes(string request, int exitCode, string message)
     {

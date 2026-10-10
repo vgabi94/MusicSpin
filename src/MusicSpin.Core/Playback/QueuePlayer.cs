@@ -1062,9 +1062,7 @@ public sealed class QueuePlayer : IDisposable
         var pool = source(filter);
         if (pool.Count == 0)
         {
-            throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.IsEmpty
-                ? "The library is empty. Add music with 'music-spin library add <folder>' and 'music-spin library scan'."
-                : $"No library tracks match the radio filters ({filter.Describe()}).");
+            throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.EmptyPoolMessage());
         }
 
         lock (_gate)

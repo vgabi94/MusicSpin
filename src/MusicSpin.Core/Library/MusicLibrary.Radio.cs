@@ -13,7 +13,7 @@ public sealed partial class MusicLibrary
     public IReadOnlyList<RadioCandidate> RadioPool(RadioFilter filter)
     {
         var (searches, genres) = Prepare(filter);
-        return Guard(() => (IReadOnlyList<RadioCandidate>)RadioMatches(filter, searches, genres).ToList());
+        return Guard(() => (IReadOnlyList<RadioCandidate>)RadioMatches(filter, searches, genres, Excludes(filter)).ToList());
     }
 
     /// <summary>
@@ -23,7 +23,7 @@ public sealed partial class MusicLibrary
     public bool HasRadioTracks(RadioFilter filter)
     {
         var (searches, genres) = Prepare(filter);
-        return Guard(() => RadioMatches(filter, searches, genres).Any());
+        return Guard(() => RadioMatches(filter, searches, genres, Excludes(filter)).Any());
     }
 
     private static (List<SearchQuery>? Searches, HashSet<string>? Genres) Prepare(RadioFilter filter)
@@ -34,7 +34,52 @@ public sealed partial class MusicLibrary
             filter.Genres?.Select(LibrarySearch.Fold).Where(g => g.Length > 0).ToHashSet(StringComparer.Ordinal));
     }
 
-    private IEnumerable<RadioCandidate> RadioMatches(RadioFilter filter, List<SearchQuery>? searches, HashSet<string>? genres)
+    /// <summary>The excludes resolved once per pool read (null: none). Unknown artist/album names exclude nothing.</summary>
+    private sealed record ExcludeSet(
+        HashSet<string> ArtistKeys, HashSet<string> AlbumIds, HashSet<string>? Genres, IReadOnlyList<YearRange>? Years,
+        HashSet<string> Formats, List<SearchQuery>? Searches);
+
+    private ExcludeSet? Excludes(RadioFilter filter)
+    {
+        if (!filter.HasExcludes)
+        {
+            return null;
+        }
+
+        return Guard(() =>
+        {
+            static IEnumerable<string> Soft(Func<IEnumerable<string>> resolve)
+            {
+                try
+                {
+                    return resolve().ToList();
+                }
+                catch (MusicSpinException e) when (e.Code == MusicSpinErrorCode.NotFound)
+                {
+                    return [];
+                }
+            }
+
+            return new ExcludeSet(
+                (filter.ExcludeArtists ?? []).SelectMany(a => Soft(() => ArtistKeys(a))).ToHashSet(StringComparer.Ordinal),
+                (filter.ExcludeAlbums ?? []).SelectMany(a => Soft(() => AlbumIds(a))).ToHashSet(StringComparer.Ordinal),
+                filter.ExcludeGenres?.Select(LibrarySearch.Fold).Where(g => g.Length > 0).ToHashSet(StringComparer.Ordinal),
+                filter.ExcludeYears,
+                (filter.ExcludeFormats ?? []).Select(f => f.Trim().ToLowerInvariant()).ToHashSet(StringComparer.Ordinal),
+                filter.ExcludeSearches?.Select(s => LibrarySearch.Parse(s)).ToList());
+        });
+    }
+
+    private static bool Excluded(ExcludeSet? x, string artistKey, string? albumArtistKey, string albumId, string? format, int? year, string? genre, Func<TrackRecord>? record)
+        => x is not null
+           && (x.ArtistKeys.Contains(artistKey) || (albumArtistKey is not null && x.ArtistKeys.Contains(albumArtistKey))
+               || x.AlbumIds.Contains(albumId)
+               || (format is not null && x.Formats.Contains(format))
+               || (x.Years is { } ys && ys.Any(y => y.Contains(year)))
+               || (x.Genres is { Count: > 0 } gs && GenreMatches(genre, gs))
+               || (x.Searches is { Count: > 0 } ss && record is not null && record() is { } t && ss.Any(s => LibrarySearch.Score(s, t) is not null)));
+
+    private IEnumerable<RadioCandidate> RadioMatches(RadioFilter filter, List<SearchQuery>? searches, HashSet<string>? genres, ExcludeSet? excludes)
     {
         // Artist: track artist OR album artist. Two indexed queries (an OR would scan the whole collection), merged by id.
         var roots = new List<ILiteQueryable<TrackRecord>>();
@@ -75,12 +120,14 @@ public sealed partial class MusicLibrary
                 q = q.Where(t => t.IsHiRes);
             }
 
-            if (searches is { Count: > 0 })
+            if (searches is { Count: > 0 } || excludes?.Searches is { Count: > 0 })
             {
                 // Search rules need the folded keys: read whole records.
                 foreach (var t in q.ToEnumerable())
                 {
-                    if (Keep(t.Year, t.Genre) && searches.Any(s => LibrarySearch.Score(s, t) is not null) && (seen?.Add(t.Id) ?? true))
+                    if (Keep(t.Year, t.Genre) && (searches is not { Count: > 0 } || searches.Any(s => LibrarySearch.Score(s, t) is not null))
+                        && !Excluded(excludes, t.ArtistKey, t.AlbumArtistKey, t.AlbumId, t.Format, t.Year, t.Genre, () => t)
+                        && (seen?.Add(t.Id) ?? true))
                     {
                         yield return new RadioCandidate(t.Id, t.Path, t.ArtistKey, t.AlbumId, t.Title, t.Artist, t.Album, t.EffectiveAlbumArtist,
                             t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null);
@@ -94,10 +141,11 @@ public sealed partial class MusicLibrary
             foreach (var t in q.Select(t => new RadioRow
                      {
                          Id = t.Id, Path = t.Path, ArtistKey = t.ArtistKey, AlbumId = t.AlbumId, Title = t.Title, Artist = t.Artist, Album = t.Album,
-                         EffectiveAlbumArtist = t.EffectiveAlbumArtist, TrackNumber = t.TrackNumber, DurationSeconds = t.DurationSeconds, Year = t.Year, Genre = t.Genre,
+                         EffectiveAlbumArtist = t.EffectiveAlbumArtist, AlbumArtistKey = t.AlbumArtistKey, Format = t.Format, TrackNumber = t.TrackNumber, DurationSeconds = t.DurationSeconds, Year = t.Year, Genre = t.Genre,
                      }).ToEnumerable())
             {
-                if (Keep(t.Year, t.Genre) && (seen?.Add(t.Id) ?? true))
+                if (Keep(t.Year, t.Genre) && !Excluded(excludes, t.ArtistKey, t.AlbumArtistKey, t.AlbumId, t.Format, t.Year, t.Genre, null)
+                    && (seen?.Add(t.Id) ?? true))
                 {
                     yield return new RadioCandidate(t.Id, t.Path, t.ArtistKey, t.AlbumId, t.Title, t.Artist, t.Album, t.EffectiveAlbumArtist,
                         t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null);
@@ -128,6 +176,8 @@ public sealed partial class MusicLibrary
         public string? Artist { get; set; }
         public string? Album { get; set; }
         public string? EffectiveAlbumArtist { get; set; }
+        public string? AlbumArtistKey { get; set; }
+        public string? Format { get; set; }
         public int? TrackNumber { get; set; }
         public double DurationSeconds { get; set; }
         public int? Year { get; set; }

@@ -58,13 +58,27 @@ public sealed record RadioFilter
     public IReadOnlyList<string>? Searches { get; init; }
     public bool HiRes { get; init; }
 
+    // Excludes: a track matching ANY exclude value is left out, whatever the include filters say (exclude wins). Same
+    // matching rules as the includes, except that unknown artist/album names are ignored (excluding something absent is harmless).
+    public IReadOnlyList<string>? ExcludeArtists { get; init; }
+    public IReadOnlyList<string>? ExcludeAlbums { get; init; }
+    public IReadOnlyList<string>? ExcludeGenres { get; init; }
+    public IReadOnlyList<YearRange>? ExcludeYears { get; init; }
+    public IReadOnlyList<string>? ExcludeFormats { get; init; }
+    public IReadOnlyList<string>? ExcludeSearches { get; init; }
+
+    /// <summary>No include filter (the excludes may still narrow the whole library).</summary>
     [JsonIgnore]
     public bool IsEmpty => Count(Artists) + Count(Albums) + Count(Genres) + Count(Years) + Count(Formats) + Count(Searches) == 0 && !HiRes;
+
+    [JsonIgnore]
+    public bool HasExcludes => Count(ExcludeArtists) + Count(ExcludeAlbums) + Count(ExcludeGenres) + Count(ExcludeYears) + Count(ExcludeFormats) + Count(ExcludeSearches) > 0;
 
     /// <summary>Null when valid, else the problem (InvalidArgument / usage).</summary>
     public string? Validate()
     {
-        foreach (var (name, list) in new (string, IReadOnlyList<string>?)[] { ("artist", Artists), ("album", Albums), ("genre", Genres), ("format", Formats), ("search", Searches) })
+        foreach (var (name, list) in new (string, IReadOnlyList<string>?)[] { ("artist", Artists), ("album", Albums), ("genre", Genres), ("format", Formats), ("search", Searches),
+                     ("exclude-artist", ExcludeArtists), ("exclude-album", ExcludeAlbums), ("exclude-genre", ExcludeGenres), ("exclude-format", ExcludeFormats), ("exclude-search", ExcludeSearches) })
         {
             if (list is null)
             {
@@ -82,8 +96,13 @@ public sealed record RadioFilter
             }
         }
 
-        if (Years is { } years)
+        foreach (var years in new[] { Years, ExcludeYears })
         {
+            if (years is null)
+            {
+                continue;
+            }
+
             if (years.Count > MaxValuesPerFilter)
             {
                 return $"At most {MaxValuesPerFilter} year ranges.";
@@ -106,6 +125,12 @@ public sealed record RadioFilter
         return null;
     }
 
+    /// <summary>Why a station has nothing to play (empty library, nothing matches, or the excludes removed everything).</summary>
+    public string EmptyPoolMessage()
+        => IsEmpty && !HasExcludes ? "The library is empty. Add music with 'music-spin library add <folder>' and 'music-spin library scan'."
+            : HasExcludes ? $"No library tracks are left after the excludes ({Describe()})."
+            : $"No library tracks match the radio filters ({Describe()}).";
+
     public void EnsureValid()
     {
         if (Validate() is { } error)
@@ -114,15 +139,18 @@ public sealed record RadioFilter
         }
     }
 
-    /// <summary>Human description, e.g. "artist Miles Davis or Coltrane · years 1955-1965 · hi-res"; "whole library" when empty.</summary>
+    /// <summary>
+    /// Human description, e.g. "genre Jazz · year 1955-1965 · excluding artist Kenny G"; "whole library" when there are no
+    /// include filters ("whole library · excluding genre Christmas" with excludes only).
+    /// </summary>
     public string Describe()
     {
         var parts = new List<string>();
-        void Add(string name, IEnumerable<string>? values)
+        void Add(string name, IEnumerable<string>? values, List<string>? into = null)
         {
             if (values?.ToList() is { Count: > 0 } list)
             {
-                parts.Add($"{name} {string.Join(" or ", list)}");
+                (into ?? parts).Add($"{name} {string.Join(" or ", list)}");
             }
         }
 
@@ -137,7 +165,15 @@ public sealed record RadioFilter
             parts.Add("hi-res");
         }
 
-        return parts.Count == 0 ? "whole library" : string.Join(" · ", parts);
+        var excluded = new List<string>();
+        Add("artist", ExcludeArtists, excluded);
+        Add("album", ExcludeAlbums, excluded);
+        Add("genre", ExcludeGenres, excluded);
+        Add("year", ExcludeYears?.Select(y => y.ToString()), excluded);
+        Add("format", ExcludeFormats, excluded);
+        Add("search", ExcludeSearches?.Select(s => $"\"{s}\""), excluded);
+        var text = parts.Count == 0 ? "whole library" : string.Join(" · ", parts);
+        return excluded.Count == 0 ? text : $"{text} · excluding {string.Join(", ", excluded)}";
     }
 
     private static int Count<T>(IReadOnlyList<T>? list) => list?.Count ?? 0;
