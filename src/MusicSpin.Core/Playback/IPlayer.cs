@@ -109,19 +109,13 @@ public interface IPlayer : IDisposable
     event EventHandler<PlayerErrorEventArgs>? Error;
 
     /// <summary>
-    /// The entries to continue with when the current track ends, in order (first playable one wins). Players that support
-    /// gapless playback decode ahead into them; others ignore this. Call again whenever the order changes.
+    /// The entries to continue with when the current track ends, in order (first playable one wins). Used to decode
+    /// ahead for gapless playback. Call again whenever the order changes.
     /// </summary>
-    void SetNextTracks(IReadOnlyList<NextTrack> next)
-    {
-    }
+    void SetNextTracks(IReadOnlyList<NextTrack> next);
 
     /// <summary>Raised instead of <see cref="PlaybackEnded"/> when playback continued gaplessly into a <see cref="NextTrack"/>.</summary>
-    event EventHandler<TrackAdvancedEventArgs>? TrackAdvanced
-    {
-        add { }
-        remove { }
-    }
+    event EventHandler<TrackAdvancedEventArgs>? TrackAdvanced;
 
-    PlaybackDiagnostics? Diagnostics => null;
+    PlaybackDiagnostics? Diagnostics { get; }
 }
