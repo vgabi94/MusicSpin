@@ -15,8 +15,9 @@ public sealed class QueuePersistenceTests : PlayerHostTestBase
 
     private static async Task StopAsync(PlayerHost host) => await host.StopAsync("quit").WaitAsync(TimeSpan.FromSeconds(10), Ct);
 
-    private QueueSnapshot? Saved() => File.Exists(Endpoint.QueueFile)
-        ? JsonSerializer.Deserialize<QueueSnapshot>(File.ReadAllText(Endpoint.QueueFile), ProtocolJson.Options)
+    // The player may be rewriting queue.json right now: shared read, conflicts retried, "not yet" when it stays busy.
+    private QueueSnapshot? Saved() => TestFiles.TryReadShared(Endpoint.QueueFile) is { } json
+        ? JsonSerializer.Deserialize<QueueSnapshot>(json, ProtocolJson.Options)
         : null;
 
     private static string[] Order(QueueListing listing) => [.. listing.Items.Select(i => i.Item.Path)];

@@ -38,7 +38,10 @@ public sealed class QueueLibraryResolutionTests : PlayerHostTestBase
         File.WriteAllText(Endpoint.QueueFile, JsonSerializer.Serialize(snapshot, ProtocolJson.Options));
     }
 
-    private QueueSnapshot? Saved() => JsonSerializer.Deserialize<QueueSnapshot>(File.ReadAllText(Endpoint.QueueFile), ProtocolJson.Options);
+    // The player rewrites queue.json while the test polls it: read it the way the product does (shared, conflicts retried).
+    private QueueSnapshot? Saved() => TestFiles.TryReadShared(Endpoint.QueueFile) is { } json
+        ? JsonSerializer.Deserialize<QueueSnapshot>(json, ProtocolJson.Options)
+        : null;
 
     private static async Task<QueueListing> ListAsync(PlayerClient client)
         => ProtocolJson.Deserialize<QueueListing>(await client.SendAsync("queue", new { limit = 100 }, Ct))!;
