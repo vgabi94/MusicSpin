@@ -175,7 +175,7 @@ public sealed class PlayerClientTests : PlayerHostTestBase
 
     [Fact]
     [Trait("Category", "Unhappy")]
-    public async Task A_live_player_that_hangs_up_stays_unavailable_and_quit_is_never_reclassified()
+    public async Task A_live_player_that_hangs_up_stays_unavailable()
     {
         var (player, client) = await ConnectScriptedAsync();
         await using var _ = player;
@@ -190,13 +190,19 @@ public sealed class PlayerClientTests : PlayerHostTestBase
             Assert.Equal(MusicSpinErrorCode.PlayerUnavailable, ex.Code);
             Assert.Contains("closed the connection during 'next'", ex.Message, StringComparison.Ordinal);
         }
+    }
 
-        var (player2, client2) = await ConnectScriptedAsync();
-        await using var ___ = player2;
-        await using var ____ = client2;
-        var quit = client2.SendAsync("quit", null, Ct);
-        await player2.ReadRequestAsync();
-        await player2.CloseConnectionAsync();
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_hang_up_during_quit_is_never_reclassified_as_not_running()
+    {
+        var (player, client) = await ConnectScriptedAsync();
+        await using var _ = player;
+        await using var __ = client;
+        WriteLeftovers(7); // lock free: the player is gone, which is what quit asked for
+        var quit = client.SendAsync("quit", null, Ct);
+        await player.ReadRequestAsync();
+        await player.CloseConnectionAsync();
         Assert.Equal(MusicSpinErrorCode.PlayerUnavailable, (await Assert.ThrowsAsync<MusicSpinException>(() => quit)).Code);
     }
 
