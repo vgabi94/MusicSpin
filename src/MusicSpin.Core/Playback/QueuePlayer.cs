@@ -28,10 +28,12 @@ public sealed class QueuePlayer : IDisposable
     public const int MaxQueueLength = 100_000;
     private const int MaxSkippedKept = 50;
 
-    // A repeat loop (repeat-one replay or repeat-all wrap) that comes back within this time counts as "rapid"; after
+    // A repeat loop (repeat-one replay or repeat-all wrap) that played less than this much audio counts as "rapid"; after
     // MaxRapidLoops rapid loops in a row (tracks that end immediately, e.g. empty or broken files) repeat gives up.
-    private const long RapidLoopMilliseconds = 50;
-    private const int MaxRapidLoops = 100;
+    // Measured in audio played, not wall-clock time: on a busy machine a loop over a broken file can take longer than
+    // RapidLoopThreshold of real time, and repeat must still give up.
+    private static readonly TimeSpan RapidLoopThreshold = TimeSpan.FromMilliseconds(50);
+    private const int MaxRapidLoops = 20;
 
     private readonly IPlayer _player;
     private readonly Lock _gate = new();
@@ -47,7 +49,7 @@ public sealed class QueuePlayer : IDisposable
     private int? _seed;
     private Random _random = new();
     private long _nextOrder;
-    private long _lastLoopTicks;
+    private TimeSpan _playedSinceLoop;
     private int _rapidLoops;
 
     public QueuePlayer(IPlayer player, OutputInfo? output = null)
@@ -215,7 +217,7 @@ public sealed class QueuePlayer : IDisposable
             _index = loaded;
             _ended = false;
             _lastError = null;
-            _rapidLoops = 0;
+            ResetRapidLoops();
             foreach (var s in skipped)
             {
                 AddSkipped(s);
@@ -539,7 +541,7 @@ public sealed class QueuePlayer : IDisposable
         {
             ThrowIfDisposed();
             _repeat = mode;
-            _rapidLoops = 0;
+            ResetRapidLoops();
             return StatusCore();
         }
     }
@@ -655,7 +657,7 @@ public sealed class QueuePlayer : IDisposable
             _skipped.Clear();
             _ended = false;
             _lastError = null;
-            _rapidLoops = 0;
+            ResetRapidLoops();
             _index = _items.Count == 0 ? -1 : snapshot.Index ?? 0;
             if (_index >= 0 && TryLoad(_items[_index].Item, _index, null))
             {
@@ -937,17 +939,22 @@ public sealed class QueuePlayer : IDisposable
     /// <summary>True when repeat has looped too fast too often (tracks that end immediately); the caller then stops.</summary>
     private bool RapidLoop()
     {
-        var now = Environment.TickCount64;
-        _rapidLoops = now - _lastLoopTicks < RapidLoopMilliseconds ? _rapidLoops + 1 : 0;
-        _lastLoopTicks = now;
+        _rapidLoops = _playedSinceLoop < RapidLoopThreshold ? _rapidLoops + 1 : 0;
+        _playedSinceLoop = TimeSpan.Zero;
         if (_rapidLoops < MaxRapidLoops)
         {
             return false;
         }
 
-        _rapidLoops = 0;
+        ResetRapidLoops();
         _lastError = $"Repeat stopped: the queued track(s) ended immediately {MaxRapidLoops} times in a row (empty or broken files?).";
         return true;
+    }
+
+    private void ResetRapidLoops()
+    {
+        _rapidLoops = 0;
+        _playedSinceLoop = TimeSpan.Zero;
     }
 
     // Raised on a thread-pool thread after the inner player stopped at end of stream.
@@ -960,6 +967,7 @@ public sealed class QueuePlayer : IDisposable
                 return;
             }
 
+            _playedSinceLoop += _player.Position; // where the track ended: how much of it was played
             TrackEnded?.Invoke(this, EventArgs.Empty);
             if (_repeat == RepeatMode.One)
             {

@@ -309,12 +309,58 @@ public sealed class RepeatShuffleTests : IDisposable
     public async Task Repeat_gives_up_when_tracks_end_immediately_over_and_over()
     {
         var (queue, paths, _) = Create(tracks: 1, seconds: 0.001, outputs: Outputs.Fast());
+        var ended = QueueEnded(queue);
         queue.SetRepeat(RepeatMode.One);
         queue.SetQueue(Items(paths));
-        await PlayerTestKit.WaitUntilAsync(() => queue.Status().Ended, "repeat to give up", timeoutMs: 20_000);
+        await ended.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         var status = queue.Status();
+        Assert.True(status.Ended);
         Assert.Contains("Repeat stopped", status.LastError, StringComparison.Ordinal);
         Assert.Equal(RepeatMode.One, status.Repeat); // the mode itself is kept
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Repeat_all_gives_up_on_tracks_that_end_immediately_even_when_each_loop_is_slow()
+    {
+        // A loaded machine: every loop takes longer than the rapid-loop threshold in wall-clock time. The detector counts
+        // audio played, so it must still give up instead of looping over a broken track forever.
+        var (queue, paths, decoders) = Create(tracks: 2, seconds: 0.001, outputs: Outputs.Fast());
+        decoders.OpenDelay = TimeSpan.FromMilliseconds(70);
+        var ended = QueueEnded(queue);
+        queue.SetRepeat(RepeatMode.All);
+        queue.SetQueue(Items(paths)); // every track open takes 70 ms of wall-clock time
+        await ended.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Contains("Repeat stopped", queue.Status().LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Repeat_one_keeps_looping_a_short_but_real_track()
+    {
+        var (queue, paths, _) = Create(tracks: 1, seconds: 0.1, outputs: Outputs.Fast());
+        var loops = 0;
+        var enough = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        queue.TrackEnded += (_, _) =>
+        {
+            if (Interlocked.Increment(ref loops) == 60)
+            {
+                enough.TrySetResult();
+            }
+        };
+        queue.SetRepeat(RepeatMode.One);
+        queue.SetQueue(Items(paths));
+        await enough.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        var status = queue.Status();
+        Assert.False(status.Ended);
+        Assert.Null(status.LastError);
+    }
+
+    /// <summary>Completes when the queue raises QueueEnded (no polling).</summary>
+    private static Task QueueEnded(QueuePlayer queue)
+    {
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        queue.QueueEnded += (_, _) => ended.TrySetResult();
+        return ended.Task;
     }
 
     [Fact]

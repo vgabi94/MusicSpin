@@ -123,8 +123,16 @@ internal sealed class FakeDecoderFactory : IAudioDecoderFactory
 
     public TrackInfo Probe(string path) => Find(path);
 
+    /// <summary>Simulated slow open (a busy machine or slow disk).</summary>
+    public TimeSpan OpenDelay { get; set; }
+
     public IAudioDecoder Open(string path)
     {
+        if (OpenDelay > TimeSpan.Zero)
+        {
+            Thread.Sleep(OpenDelay);
+        }
+
         var decoder = new FakeDecoder(Find(path));
         Opened.Add(decoder);
         return decoder;
