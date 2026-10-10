@@ -1,6 +1,5 @@
 using System.Globalization;
 using MusicSpin.Core.Audio;
-using SoundFlow.Backends.MiniAudio;
 using SoundFlow.Backends.MiniAudio.Enums;
 using SoundFlow.Structs;
 
@@ -12,14 +11,19 @@ namespace MusicSpin.Core.Output.SoundFlow;
 /// </summary>
 public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
 {
-    private readonly IReadOnlyList<MiniAudioBackend>? _backends;
+    private readonly Func<IAudioBackend> _createBackend;
     private readonly Lock _lock = new();
-    private MiniAudioEngine? _engine;
+    private IAudioBackend? _engine;
 
     /// <param name="backends">Optional backend priority (e.g. [Alsa] for direct hardware access on Linux).</param>
     public SoundFlowOutputProvider(IReadOnlyList<MiniAudioBackend>? backends = null)
+        : this(() => new MiniAudioBackendAdapter(backends))
     {
-        _backends = backends;
+    }
+
+    internal SoundFlowOutputProvider(Func<IAudioBackend> createBackend)
+    {
+        _createBackend = createBackend;
     }
 
     public string Name
@@ -37,7 +41,7 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
         }
     }
 
-    internal MiniAudioEngine Engine
+    internal IAudioBackend Engine
     {
         get
         {
@@ -50,7 +54,7 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
 
                 try
                 {
-                    _engine = new MiniAudioEngine(_backends);
+                    _engine = _createBackend();
                     return _engine;
                 }
                 catch (Exception ex) when (ex is not MusicSpinException)
@@ -65,17 +69,18 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
     public IReadOnlyList<AudioDeviceInfo> GetDevices()
     {
         var engine = Engine;
+        IReadOnlyList<DeviceInfo> devices;
         try
         {
-            engine.UpdateAudioDevicesInfo();
+            devices = engine.RefreshPlaybackDevices();
         }
         catch (Exception ex)
         {
             throw new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, $"Could not list devices: {ex.Message}", ex);
         }
 
-        var backend = engine.ActiveBackend.ToString();
-        return engine.PlaybackDevices
+        var backend = engine.ActiveBackend;
+        return devices
             .Select((d, i) =>
             {
                 var formats = d.SupportedDataFormats ?? [];
@@ -105,11 +110,9 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
             return null;
         }
 
-        var engine = Engine;
-        engine.UpdateAudioDevicesInfo();
-        var devices = engine.PlaybackDevices;
+        var devices = Engine.RefreshPlaybackDevices();
         if (int.TryParse(deviceId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
-            && index >= 0 && index < devices.Length)
+            && index >= 0 && index < devices.Count)
         {
             return devices[index];
         }

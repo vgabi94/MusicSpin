@@ -1,8 +1,6 @@
 using MusicSpin.Core.Audio;
-using SoundFlow.Abstracts.Devices;
 using SoundFlow.Backends.MiniAudio.Devices;
 using SoundFlow.Backends.MiniAudio.Enums;
-using SoundFlow.Components;
 using SoundFlow.Enums;
 using SoundFlow.Structs;
 
@@ -16,12 +14,11 @@ namespace MusicSpin.Core.Output.SoundFlow;
 internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, AudioOutputOptions options) : IAudioOutput
 {
     private readonly Lock _lock = new();
-    private AudioPlaybackDevice? _device;
-    private SoundPlayer? _player;
+    private IPlaybackStream? _stream;
 
     public bool IsOpen
     {
-        get { lock (_lock) { return _device is not null; } }
+        get { lock (_lock) { return _stream is not null; } }
     }
 
     public void Open(IPcmSource source)
@@ -33,7 +30,6 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
         {
             try
             {
-                var engine = provider.Engine;
                 var format = new AudioFormat
                 {
                     SampleRate = source.Format.SampleRate,
@@ -42,9 +38,8 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
                     Layout = AudioFormat.GetLayoutFromChannels(source.Format.Channels),
                 };
 
-                _device = engine.InitializePlaybackDevice(provider.ResolveDevice(options.DeviceId), format, BuildConfig(options));
-                _player = new SoundPlayer(engine, format, new PcmSourceDataProvider(source));
-                _device.MasterMixer.AddComponent(_player);
+                _stream = provider.Engine.Open(
+                    provider.ResolveDevice(options.DeviceId), format, BuildConfig(options), new PcmSourceDataProvider(source));
             }
             catch (Exception ex)
             {
@@ -59,17 +54,12 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
     {
         lock (_lock)
         {
-            if (_device is null || _player is null)
+            if (_stream is null)
             {
                 throw new MusicSpinException(MusicSpinErrorCode.InvalidState, "Output is not open.");
             }
 
-            if (!_device.IsRunning)
-            {
-                _device.Start();
-            }
-
-            _player.Play();
+            _stream.Start();
         }
     }
 
@@ -77,7 +67,7 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
     {
         lock (_lock)
         {
-            _player?.Pause();
+            _stream?.Pause();
         }
     }
 
@@ -99,7 +89,7 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
         _ => SampleFormat.F32,
     };
 
-    private static MiniAudioDeviceConfig BuildConfig(AudioOutputOptions options)
+    internal static MiniAudioDeviceConfig BuildConfig(AudioOutputOptions options)
     {
         var exclusive = options.Exclusive;
         return new MiniAudioDeviceConfig
@@ -115,23 +105,7 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
 
     private void DisposeDevice()
     {
-        if (_player is not null)
-        {
-            _player.Stop();
-            _device?.MasterMixer.RemoveComponent(_player);
-            _player.Dispose();
-            _player = null;
-        }
-
-        if (_device is not null)
-        {
-            if (_device.IsRunning)
-            {
-                _device.Stop();
-            }
-
-            _device.Dispose();
-            _device = null;
-        }
+        _stream?.Dispose();
+        _stream = null;
     }
 }
