@@ -46,6 +46,9 @@ internal sealed class FaultyOutputProvider(IAudioOutputProvider inner) : IAudioO
 
     public bool FailOpen { get; set; }
 
+    /// <summary>When set, <see cref="IAudioOutput.Stop"/> throws (a driver failing while releasing the device).</summary>
+    public bool FailStop { get; set; }
+
     public string Name => "faulty(" + inner.Name + ")";
 
     public IReadOnlyList<AudioDeviceInfo> GetDevices() => inner.GetDevices();
@@ -79,7 +82,14 @@ internal sealed class FaultyOutputProvider(IAudioOutputProvider inner) : IAudioO
 
         public void Pause() => inner.Pause();
 
-        public void Stop() => inner.Stop();
+        public void Stop()
+        {
+            inner.Stop();
+            if (owner.FailStop)
+            {
+                throw new InvalidOperationException("injected: driver failed to stop");
+            }
+        }
 
         public void Dispose() => inner.Dispose();
     }

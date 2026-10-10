@@ -86,7 +86,7 @@ internal sealed class FakeDecoder(TrackInfo track) : IAudioDecoder
 
     public TimeSpan Position => TimeSpan.FromSeconds((double)_frame / Track.SampleRate);
 
-    public bool CanSeek => true;
+    public bool CanSeek { get; init; } = true;
 
     public bool Disposed { get; private set; }
 
