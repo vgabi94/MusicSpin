@@ -468,9 +468,15 @@ public sealed class Player : IPlayer
     private void DecodeLoop()
     {
         var idleWait = TimeSpan.FromMilliseconds(Math.Clamp(_options.EffectiveBufferMilliseconds / 5, 5, 20));
-        while (!_disposed)
+        while (true)
         {
+            // Reset before checking _disposed: a Dispose that sets the event after this point is seen below or wakes the wait.
             _wake.Reset();
+            if (_disposed)
+            {
+                return;
+            }
+
             Step result;
             Exception? error = null;
             try
@@ -496,7 +502,7 @@ public sealed class Player : IPlayer
             }
 
             _progress.Set();
-            _wake.Wait(result == Step.Full ? idleWait : Timeout.InfiniteTimeSpan);
+            _wake.Wait(result == Step.Full ? idleWait : TimeSpan.FromSeconds(1));
         }
     }
 
