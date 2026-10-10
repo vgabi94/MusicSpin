@@ -30,7 +30,7 @@ public abstract class PlayerHostTestBase : IAsyncDisposable
 
     protected string[] Paths { get; }
 
-    protected StringWriter Log { get; } = new();
+    protected LockedStringWriter Log { get; } = new(); // the host logs from its own threads while tests read it
 
     protected PlayerHostOptions Options(IAudioOutputProvider? outputs = null, TimeSpan? idle = null, int maxMessageBytes = 64 * 1024) => new()
     {
