@@ -37,6 +37,34 @@ internal static class SharedFile
         }
     }
 
+    /// <summary>
+    /// Atomically replaces <paramref name="destination"/> with <paramref name="temp"/>. On Windows the replace fails
+    /// (access denied) while any process has the destination open, even with shared access, so it is retried briefly.
+    /// </summary>
+    public static void Replace(string temp, string destination, Action<int>? onRetry = null)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temp, destination, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < Attempts && File.Exists(temp) && !Directory.Exists(destination)
+                                       && (ex is UnauthorizedAccessException || (ex is IOException io && (io.HResult & 0xFFFF) is 32 or 33)))
+            {
+                if (onRetry is null)
+                {
+                    Thread.Sleep(RetryDelay);
+                }
+                else
+                {
+                    onRetry(attempt);
+                }
+            }
+        }
+    }
+
     public static string ReadAllText(string path, Action<int>? onRetry = null)
     {
         using var stream = OpenRead(path, onRetry);

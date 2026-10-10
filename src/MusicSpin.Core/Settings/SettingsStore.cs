@@ -50,7 +50,7 @@ public sealed class SettingsStore(DataDirectory directory)
         {
             Directory.CreateDirectory(directory.Path);
             File.WriteAllText(temp, JsonSerializer.Serialize(settings, JsonOptions));
-            File.Move(temp, FilePath, overwrite: true);
+            SharedFile.Replace(temp, FilePath); // a reader may have the old one open for a moment
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -51,12 +51,20 @@ public sealed class SharedFileTests : IDisposable
     {
         var path = Path.Combine(_root, "settings.json");
         File.WriteAllText(path, "old");
-        using (var reader = SharedFile.OpenRead(path))
+        var reader = SharedFile.OpenRead(path);
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, "new");
+
+        // The atomic save while a reader has the old file open. Unix replaces at once; Windows refuses until the reader
+        // closes (even with FileShare.Delete), so the writer retries.
+        var retries = 0;
+        SharedFile.Replace(temp, path, _ =>
         {
-            var temp = path + ".tmp";
-            File.WriteAllText(temp, "new");
-            File.Move(temp, path, overwrite: true); // the atomic save, while a reader has the old file open
-        }
+            retries++;
+            reader.Dispose();
+        });
+        reader.Dispose();
+        Assert.Equal(OperatingSystem.IsWindows() ? 1 : 0, retries);
 
         Assert.Equal("new", SharedFile.ReadAllText(path));
     }

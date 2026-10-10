@@ -658,7 +658,7 @@ public sealed class PlayerHost : IAsyncDisposable
                     JsonSerializer.Serialize(stream, snapshot, ProtocolJson.Options);
                 }
 
-                File.Move(temp, Endpoint.QueueFile, overwrite: true);
+                SharedFile.Replace(temp, Endpoint.QueueFile);
                 _savedSignature = signature;
                 _lastSaveError = null;
             }
@@ -686,7 +686,7 @@ public sealed class PlayerHost : IAsyncDisposable
             File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
 
-        File.Move(temp, Endpoint.InfoFile, overwrite: true);
+        SharedFile.Replace(temp, Endpoint.InfoFile);
     }
 
     private void Log(string message)
