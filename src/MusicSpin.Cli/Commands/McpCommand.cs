@@ -85,6 +85,27 @@ internal static class McpCommand
                  [Description("Shuffle seed for a reproducible order.")] int? seed = null,
                  CancellationToken ct = default) => Guard(() => SetQueueAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains),
                     playlist, shuffle, seed, ct)));
+            yield return Tool("radio", "Endless random playback of the library (or the tracks the filters select) in the background player; returns its status " +
+                "(queueMode 'radio', radio.description, radio.poolSize). Each list is ORed, different filters are ANDed. No track repeats within the last 100 " +
+                "(or pool size - 1); the same artist/album is not played twice in a row when there is a choice. next/previous/pause/stop work as usual; " +
+                "play or queue_clear end radio; shuffle is refused (radio is random); repeat one replays the current track. Nothing matches: not_found.",
+                ([Description("Exact artist names (track or album artist); unknown: not_found.")] string[]? artists = null,
+                 [Description("Exact album titles or album ids; unknown: not_found.")] string[]? albums = null,
+                 [Description("Exact genre names (case/diacritic-insensitive; multi-genre tags are split on ; / , |).")] string[]? genres = null,
+                 [Description("Years or inclusive ranges: \"1959\", \"1990-1999\".")] string[]? years = null,
+                 [Description("Format ids, e.g. flac, dsd, mp3.")] string[]? formats = null,
+                 [Description("Search texts (syntax as the search tool); a track matching any of them qualifies.")] string[]? searches = null,
+                 [Description("Only hi-res tracks.")] bool hires = false,
+                 CancellationToken ct = default) => Guard(async () =>
+                {
+                    var filter = new RadioFilter
+                    {
+                        Artists = RadioCommand.List(artists), Albums = RadioCommand.List(albums), Genres = RadioCommand.List(genres),
+                        Years = RadioCommand.Years(null, years), Formats = RadioCommand.List(formats), Searches = RadioCommand.List(searches), HiRes = hires,
+                    };
+                    var (status, started) = await RadioCommand.StartAsync(runner, parseResult, filter, backend, device, exclusive, ct).ConfigureAwait(false);
+                    return With(status, started, null, null);
+                }));
             yield return Simple("pause", "Pause playback.");
             yield return Tool("resume", "Resume (or start) playback of the current queue entry. When no player runs but a saved queue exists, " +
                 "starts the player, which restores that queue and continues where it stopped.",
@@ -95,8 +116,8 @@ internal static class McpCommand
                 }));
             yield return Simple("toggle", "Pause when playing, otherwise resume.");
             yield return Simple("stop", "Stop and rewind the current track (the queue is kept).");
-            yield return Simple("next", "Play the next queue entry. Error 'invalid_state' at the end of the queue.");
-            yield return Simple("previous", "Play the previous queue entry. Error 'invalid_state' on the first entry.", "prev");
+            yield return Simple("next", "Play the next queue entry (in radio: the next pick, never runs out). Error 'invalid_state' at the end of the queue.");
+            yield return Simple("previous", "Play the previous queue entry (in radio: back through the last 100 tracks). Error 'invalid_state' on the first entry.", "prev");
             yield return Tool("seek", "Seek within the current track. Absolute positions beyond the track are an error; relative ones are clamped.",
                 ([Description("Seconds (90), mm:ss (1:30), h:mm:ss, or relative: +10, -10, +0:30.")] string position, CancellationToken ct = default)
                     => Guard(() =>

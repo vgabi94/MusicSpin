@@ -70,7 +70,7 @@ public sealed class RadioQueueTests : IDisposable
         var status = queue.StartRadio(filter);
 
         Assert.Equal(PlayerState.Playing, status.State);
-        Assert.Equal("radio", status.Mode);
+        Assert.Equal("radio", status.QueueMode);
         Assert.Equal(new RadioInfo(filter, "genre Jazz", 50), status.Radio);
         Assert.Equal(0, status.QueueIndex);
         Assert.Equal(QueuePlayer.RadioLookahead, status.QueueLength);
@@ -87,7 +87,7 @@ public sealed class RadioQueueTests : IDisposable
         var queue = Create(Pool(5, artists: 5));
         var status = queue.StartRadio(new RadioFilter(), play: false);
         Assert.Equal(PlayerState.Stopped, status.State);
-        Assert.Equal("radio", status.Mode);
+        Assert.Equal("radio", status.QueueMode);
         Assert.Equal(PlayerState.Playing, queue.Resume().State);
     }
 
@@ -112,7 +112,7 @@ public sealed class RadioQueueTests : IDisposable
         Assert.Contains("needs the music library", Fails(MusicSpinErrorCode.InvalidState, () => queue.StartRadio(new RadioFilter())).Message, StringComparison.Ordinal);
 
         var status = queue.Status();
-        Assert.Equal("queue", status.Mode);
+        Assert.Equal("queue", status.QueueMode);
         Assert.Null(status.Radio);
         Assert.Equal(other.Paths[0], status.Item!.Path);
         Assert.Equal(PlayerState.Playing, status.State);
@@ -224,7 +224,7 @@ public sealed class RadioQueueTests : IDisposable
 
         var status = queue.Status();
         Assert.Equal(0, Volatile.Read(ref ended));
-        Assert.Equal("radio", status.Mode);
+        Assert.Equal("radio", status.QueueMode);
         Assert.False(status.Ended);
         Assert.True(status.QueueLength <= QueuePlayer.RadioHistory + 1 + QueuePlayer.RadioLookahead);
     }
@@ -338,23 +338,23 @@ public sealed class RadioQueueTests : IDisposable
 
         var stopped = queue.Stop();
         Assert.Equal(PlayerState.Stopped, stopped.State);
-        Assert.Equal("radio", stopped.Mode);
-        Assert.Equal("radio", queue.Resume().Mode);
+        Assert.Equal("radio", stopped.QueueMode);
+        Assert.Equal("radio", queue.Resume().QueueMode);
 
         var played = queue.SetQueue([new QueueItem(_pool[0].Path)]);
-        Assert.Equal("queue", played.Mode);
+        Assert.Equal("queue", played.QueueMode);
         Assert.Null(played.Radio);
         Assert.Equal(1, played.QueueLength);
         Assert.False(queue.IsRadio);
 
         queue.StartRadio(new RadioFilter());
         var cleared = queue.Clear();
-        Assert.Equal("queue", cleared.Mode);
+        Assert.Equal("queue", cleared.QueueMode);
         Assert.Equal(0, cleared.QueueLength);
 
         queue.StartRadio(new RadioFilter());
         queue.Load(_pool[1].Path);
-        Assert.Equal("queue", queue.Status().Mode);
+        Assert.Equal("queue", queue.Status().QueueMode);
     }
 
     [Fact]
@@ -379,7 +379,7 @@ public sealed class RadioQueueTests : IDisposable
         Assert.Equal(extra.Paths[1], queue.Next().Item!.Path);
         var back = queue.Next();
         Assert.Equal(picks[1], Current(back));
-        Assert.Equal("radio", back.Mode);
+        Assert.Equal("radio", back.QueueMode);
     }
 
     [Fact]
@@ -401,7 +401,7 @@ public sealed class RadioQueueTests : IDisposable
         }
 
         Assert.Equal(RepeatMode.One, queue.Status().Repeat);
-        Assert.Equal("radio", queue.Status().Mode);
+        Assert.Equal("radio", queue.Status().QueueMode);
     }
 
     [Fact]
@@ -462,7 +462,7 @@ public sealed class RadioQueueTests : IDisposable
         var restoredQueue = Create(_pool, seed: 99);
         var restored = restoredQueue.Restore(loaded);
         Assert.Equal(PlayerState.Paused, restored.State);
-        Assert.Equal("radio", restored.Mode);
+        Assert.Equal("radio", restored.QueueMode);
         Assert.Equal(filter.Describe(), restored.Radio!.Description);
         Assert.Equal(4, restored.QueueIndex);
         Assert.Equal(12, restored.PositionSeconds, 1);
@@ -496,7 +496,7 @@ public sealed class RadioQueueTests : IDisposable
         var queue = Create(Pool(3, artists: 3));
         queue.StartRadio(new RadioFilter());
         var status = queue.Restore(new QueueSnapshot(QueueSnapshot.CurrentVersion, [new QueueItem(_pool[0].Path)], [0], 0, 0, RepeatMode.Off, false, null, DateTimeOffset.UnixEpoch));
-        Assert.Equal("queue", status.Mode);
+        Assert.Equal("queue", status.QueueMode);
         Assert.Null(queue.Snapshot(DateTimeOffset.UnixEpoch).Radio);
     }
 }

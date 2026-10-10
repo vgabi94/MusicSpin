@@ -21,6 +21,9 @@ public sealed class JsonLinesServer
     private readonly OutputInfo? _outputInfo;
     private readonly Lock _writeLock = new();
 
+    /// <summary>Where the <c>radio</c> command gets its tracks (the data folder's library); null: radio is invalid_state.</summary>
+    public Func<MusicSpin.Core.Library.RadioFilter, IReadOnlyList<MusicSpin.Core.Library.RadioCandidate>>? RadioPool { get; init; }
+
     public JsonLinesServer(IPlayer player, IAudioDecoderFactory decoders, TextReader input, TextWriter output, OutputInfo? outputInfo = null)
     {
         _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -32,7 +35,7 @@ public sealed class JsonLinesServer
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        using var queue = new QueuePlayer(_player, _outputInfo);
+        using var queue = new QueuePlayer(_player, _outputInfo) { RadioPool = RadioPool };
         var protocol = new PlayerProtocol(queue, _decoders);
         using var events = PlayerEvents.Attach(queue, Emit);
         Emit(new ProtocolMessages.Event("ready", new { protocol = ProtocolVersion, decoder = _decoders.Name }).ToJson());

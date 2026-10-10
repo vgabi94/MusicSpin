@@ -81,8 +81,11 @@ public sealed record PlayerStatus(
     long? Underruns = null,
     RadioInfo? Radio = null)
 {
-    /// <summary>"radio" while a radio station plays (see <see cref="Radio"/>), else "queue".</summary>
-    public string Mode => Radio is null ? "queue" : "radio";
+    /// <summary>
+    /// "radio" while a radio station plays (see <see cref="Radio"/>), else "queue". (Named so it does not clash with the
+    /// "mode": "background"|"foreground" that <c>music-spin play --json</c> adds.)
+    /// </summary>
+    public string QueueMode => Radio is null ? "queue" : "radio";
 }
 
 /// <summary>The radio station in a <see cref="PlayerStatus"/>: its filters, a description and how many tracks matched at the last top-up.</summary>

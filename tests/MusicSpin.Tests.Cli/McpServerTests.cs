@@ -70,7 +70,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
                      "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
-                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate" })
+                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio" })
         {
             Assert.Contains(name, names);
         }
@@ -250,6 +250,37 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.StartsWith("usage:", await CallError("play", new() { ["playlist"] = "one", ["album"] = "x" }), StringComparison.Ordinal);
         Assert.StartsWith("player_not_running:", await CallError("queue_save", new() { ["name"] = "q" }), StringComparison.Ordinal);
         Assert.StartsWith("player_not_running:", await CallError("resume"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Radio_tool_starts_a_station_with_filters_and_reports_errors_with_stable_codes()
+    {
+        await WithLibraryAsync();
+        var client = await StartAsync();
+        var radio = (await client.ListToolsAsync(cancellationToken: _cts.Token)).Single(t => t.Name == "radio");
+        var props = radio.JsonSchema.GetProperty("properties");
+        foreach (var name in new[] { "artists", "albums", "genres", "years", "formats", "searches" })
+        {
+            Assert.Contains("array", props.GetProperty(name).GetProperty("type").ToString(), StringComparison.Ordinal);
+        }
+
+        Assert.StartsWith("usage:", await CallError("radio", new() { ["years"] = new[] { "1999-1990" } }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found: No artist named 'Nobody'", await CallError("radio", new() { ["artists"] = new[] { "Nobody" } }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found: No library tracks match the radio filters (genre polka)",
+            await CallError("radio", new() { ["genres"] = new[] { "polka" } }), StringComparison.Ordinal);
+
+        var status = await Call("radio", new() { ["genres"] = new[] { "Jazz" }, ["years"] = new[] { "1959", "2001-2001" }, ["formats"] = new[] { "flac" } });
+        Assert.Equal("radio", status.GetProperty("queueMode").GetString());
+        Assert.True(status.GetProperty("playerStarted").GetBoolean());
+        Assert.Equal("genre Jazz · year 1959 or 2001 · format flac", status.GetProperty("radio").GetProperty("description").GetString());
+        Assert.Equal(4, status.GetProperty("radio").GetProperty("poolSize").GetInt32());
+        Assert.Equal("radio", (await Call("next")).GetProperty("queueMode").GetString());
+        Assert.StartsWith("invalid_state: Radio is already random", await CallError("shuffle", new() { ["mode"] = "on" }), StringComparison.Ordinal);
+
+        var all = await Call("radio", new() { ["hires"] = true, ["searches"] = new[] { "so what", "freddie" } });
+        Assert.False(all.GetProperty("playerStarted").GetBoolean());
+        Assert.Equal(2, all.GetProperty("radio").GetProperty("poolSize").GetInt32());
+        await Call("quit_player");
     }
 
     private async Task WithLibraryAsync()

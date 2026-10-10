@@ -43,11 +43,11 @@ public sealed class RadioHostTests : PlayerHostTestBase
 
         var status = Status(await client.SendAsync("radio", new { filter = new { years = new[] { new { from = 2000, to = 2000 } }, genres = new[] { "jazz" } } }, Ct));
         Assert.Equal(PlayerState.Playing, status.State);
-        Assert.Equal("radio", status.Mode);
+        Assert.Equal("radio", status.QueueMode);
         Assert.Equal("genre jazz · year 2000", status.Radio!.Description);
         Assert.Equal(2, status.Radio.PoolSize);
         Assert.Contains(status.Item!.Path, Paths[1..]);
-        Assert.Equal("radio", (await client.SendAsync("status", null, Ct)).GetProperty("mode").GetString());
+        Assert.Equal("radio", (await client.SendAsync("status", null, Ct)).GetProperty("queueMode").GetString());
 
         status = Status(await client.SendAsync("next", null, Ct));
         var index = status.QueueIndex;
@@ -60,10 +60,10 @@ public sealed class RadioHostTests : PlayerHostTestBase
         client = await ConnectAsync();
         var restored = await client.StatusAsync(Ct);
         Assert.Equal(PlayerState.Paused, restored.State);
-        Assert.Equal("radio", restored.Mode);
+        Assert.Equal("radio", restored.QueueMode);
         Assert.Equal("genre jazz · year 2000", restored.Radio!.Description);
         Assert.Equal((index, path), (restored.QueueIndex, restored.Item!.Path));
-        Assert.Equal("radio", Status(await client.SendAsync("next", null, Ct)).Mode);
+        Assert.Equal("radio", Status(await client.SendAsync("next", null, Ct)).QueueMode);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class RadioHostTests : PlayerHostTestBase
 
         var status = Status(await client.SendAsync("queue.set", QueueSet(Paths[0]), Ct));
 
-        Assert.Equal("queue", status.Mode);
+        Assert.Equal("queue", status.QueueMode);
         await PlayerTestKit.WaitUntilAsync(() => Saved() is { Radio: null, Items.Count: 1 }, "plain queue saved");
     }
 

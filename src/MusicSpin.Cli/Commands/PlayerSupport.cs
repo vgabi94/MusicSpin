@@ -194,7 +194,9 @@ internal static class PlayerSupport
     }
 
     private static string Modes(PlayerStatus s)
-        => $"  Repeat: {PlaybackModes.Name(s.Repeat)} · Shuffle: {(s.Shuffle ? s.ShuffleSeed is { } seed ? $"on (seed {seed})" : "on" : "off")}";
+        => s.Radio is { } radio
+            ? $"  Radio: {radio.Description} ({radio.PoolSize} track{(radio.PoolSize == 1 ? string.Empty : "s")}) · Repeat: {PlaybackModes.Name(s.Repeat)}"
+            : $"  Repeat: {PlaybackModes.Name(s.Repeat)} · Shuffle: {(s.Shuffle ? s.ShuffleSeed is { } seed ? $"on (seed {seed})" : "on" : "off")}";
 
     public static IEnumerable<string> Describe(PlayerStatus s)
     {
@@ -214,7 +216,7 @@ internal static class PlayerSupport
         var title = s.Track?.Title ?? s.Item?.Title ?? Path.GetFileName(s.Item?.Path ?? s.Track?.Path ?? "?");
         var artist = s.Track?.Artist ?? s.Item?.Artist;
         var album = s.Track?.Album ?? s.Item?.Album;
-        yield return $"{state}  [{index + 1}/{s.QueueLength}]  {(artist is null ? title : $"{artist} - {title}")}{(album is null ? string.Empty : $"  ({album})")}";
+        yield return $"{state}  [{(s.Radio is null ? $"{index + 1}/{s.QueueLength}" : "radio")}]  {(artist is null ? title : $"{artist} - {title}")}{(album is null ? string.Empty : $"  ({album})")}";
         var format = s.Track is { } t
             ? $"{t.Codec.ToUpperInvariant()} {(t.BitsPerSample is { } b ? $"{b}-bit / " : string.Empty)}{t.SampleRate / 1000.0:0.#} kHz · {t.Channels} ch"
             : "?";
