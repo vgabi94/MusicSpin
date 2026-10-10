@@ -41,7 +41,7 @@ internal static partial class AtomicFile
             File.Move(temp, destination, overwrite: false); // MoveFileEx without REPLACE_EXISTING: atomic on Windows
             return true;
         }
-        catch (IOException) when (File.Exists(destination))
+        catch (IOException) when (Path.Exists(destination)) // a file, or a folder squatting on the name (as link(2) reports)
         {
             return false;
         }
