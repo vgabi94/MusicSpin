@@ -57,3 +57,94 @@ jobs:
         run: |
           dotnet run --project src/MusicSpin.Cli --configuration Release --no-build -- --help
           dotnet run --project src/MusicSpin.Cli --configuration Release --no-build -- doctor --backend null --json || true
+
+  # Optional: Core code coverage measured on each OS's own runner (Windows/macOS-only code paths included), in parallel
+  # with the build/test jobs and never blocking them. Cobertura files are uploaded as artifacts and merged into the job
+  # summary by the next job. No external services.
+  coverage:
+    name: coverage (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Install FFmpeg 9.0 shared libraries (Linux/macOS)
+        if: runner.os != 'Windows'
+        continue-on-error: true
+        run: ./eng/get-ffmpeg.sh
+
+      - name: Install FFmpeg 9.0 shared libraries (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/get-ffmpeg.ps1
+
+      - name: Build
+        run: dotnet build MusicSpin.slnx --configuration Release
+
+      - name: Test with coverage
+        shell: bash
+        run: |
+          out="$PWD/coverage"
+          dotnet test --project tests/MusicSpin.Tests --configuration Release --no-build --coverage \
+            --coverage-output-format cobertura --coverage-settings "$PWD/eng/CodeCoverage.xml" \
+            --results-directory "$out" --coverage-output core.cobertura.xml
+          dotnet test --project tests/MusicSpin.Tests.Cli --configuration Release --no-build --coverage \
+            --coverage-output-format cobertura --coverage-settings "$PWD/eng/CodeCoverage.xml" \
+            --results-directory "$out" --coverage-output cli.cobertura.xml
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage/*.cobertura.xml
+          if-no-files-found: warn
+
+  coverage-summary:
+    name: coverage summary
+    needs: coverage
+    if: always()
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-*
+          path: coverage
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Merge and summarize
+        shell: bash
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          {
+            echo "## MusicSpin.Core coverage"
+            for os in ubuntu-latest windows-latest macos-latest; do
+              [ -d "coverage/coverage-$os" ] || continue
+              reportgenerator -reports:"coverage/coverage-$os/*.cobertura.xml" -targetdir:"report/$os" -reporttypes:"TextSummary" >/dev/null
+              echo "### $os (Core + CLI tests)"
+              echo '```'; sed -n '/^Summary/,/^$/p' "report/$os/Summary.txt"; echo '```'
+            done
+            reportgenerator -reports:"coverage/**/*.cobertura.xml" -targetdir:report/merged -reporttypes:"MarkdownSummaryGithub;Html" >/dev/null
+            echo "### All OSes merged"
+            cat report/merged/SummaryGithub.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: report/merged

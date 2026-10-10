@@ -95,3 +95,16 @@ Both workflows exist in `.github/workflows/` but **have not run yet**: the repos
 - uploads one `musicspin-<version>-<rid>.tar.gz` per RID as a build artifact (tar keeps executable bits and the `.app` bundle; kept for 14 days).
 
 It does **not** create a GitHub release or sign anything. **Planned:** GitHub releases, Windows signing, macOS signing and notarization.
+
+## Coverage
+
+Code coverage of `MusicSpin.Core` (Microsoft.Testing.Platform code coverage, no external services):
+
+```console
+$ dotnet build -c Release
+$ dotnet test --project tests/MusicSpin.Tests -c Release --no-build --coverage \
+    --coverage-output-format cobertura --coverage-settings "$PWD/eng/CodeCoverage.xml" \
+    --results-directory "$PWD/coverage" --coverage-output core.cobertura.xml
+```
+
+Run the same for `tests/MusicSpin.Tests.Cli` to include what the CLI tests reach. CI runs this on Linux, Windows and macOS in a separate `coverage` job (it never blocks the build/test jobs): each OS uploads its Cobertura files as an artifact, and the `coverage summary` job merges them (ReportGenerator) into the run's summary page, so Windows-only and macOS-only code is measured on its own runner.

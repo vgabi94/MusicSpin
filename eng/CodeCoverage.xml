@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Microsoft.Testing.Platform code coverage settings (passed as coverage-settings): measure MusicSpin.Core only.
+     See docs/building.md, section Coverage. -->
+<Configuration>
+  <CodeCoverage>
+    <ModulePaths>
+      <Include>
+        <ModulePath>.*MusicSpin\.Core\.dll$</ModulePath>
+      </Include>
+    </ModulePaths>
+    <EnableStaticManagedInstrumentation>true</EnableStaticManagedInstrumentation>
+    <EnableDynamicManagedInstrumentation>true</EnableDynamicManagedInstrumentation>
+  </CodeCoverage>
+</Configuration>
