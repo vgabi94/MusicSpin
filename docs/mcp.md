@@ -135,13 +135,14 @@ $ printf '%s\n' \
 | Tool | Parameters (default) | Read-only | What it does |
 |---|---|:-:|---|
 | `play` | `files` (string[]), `album`, `artist`, `search`, `title`, `albumContains`, `artistContains`, `playlist` (strings), `shuffle` (false), `seed` (int) | | Replace the queue and play; starts the player if needed. Give one source: `files`, `album` (optionally with `artist`), `artist`, `playlist`, or a query (`search` and/or `title`/`albumContains`/`artistContains`, combined; queued in library order). Missing playlist entries are left out and reported in `warnings`. `shuffle: true` turns the player's shuffle mode on for the new queue. Returns the player status |
+| `radio` | `artists`, `albums`, `genres`, `years` (`"1959"`, `"1990-1999"`), `formats`, `searches` (string[]); `hires` (false) | | Endless random playback of the library, narrowed by the filters (each list ORed, different filters ANDed; same matching as the [`radio` command](cli-reference.md#radio)). Starts the player if needed. Returns the status with `queueMode: "radio"`, `radio.description`, `radio.poolSize`, `playerStarted`. Nothing matches or unknown artist/album: `not_found`; bad years or empty values: `usage`. `play` and `queue_clear` end radio; `shuffle` is `invalid_state` while it plays |
 | `queue_add` | same as `play` | | Append to the queue; starts the player (stopped) if needed |
 | `pause` | – | | Pause playback |
 | `resume` | – | | Resume (or start) the current entry. With no player running but a saved queue: starts the player, which continues where the last one stopped (`playerStarted: true`); otherwise `player_not_running` |
 | `toggle` | – | | Pause when playing, otherwise resume |
 | `stop` | – | | Stop and rewind; the queue is kept |
-| `next` | – | | Next entry; `invalid_state` at the end |
-| `previous` | – | | Previous entry; `invalid_state` on the first |
+| `next` | – | | Next entry; `invalid_state` at the end (radio never ends) |
+| `previous` | – | | Previous entry; `invalid_state` on the first (radio: back through the last 100 tracks) |
 | `seek` | `position` (string, required): `90`, `1:30`, `h:mm:ss`, `+10`, `-10`, `+0:30` | | Seek in the current track |
 | `volume` | `level` (string, required): `0.5`, `50%`, `+0.1`, `-10%` | | Set or change the volume (1.0 = bit-perfect) |
 | `status` | – | ✓ | Player status, or `{"running":false,"message":...}` when no player runs (not an error) |

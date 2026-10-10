@@ -116,6 +116,7 @@ The background player saves its queue to **`queue.json`** in the data folder: th
 - **Corrupt or inconsistent file:** it is moved to `queue.json.bad`, the player starts with an empty queue, logs `warning: Saved queue ignored ...` to `player.log` and shows the message as `lastError` in `status` until the next queue change. `resume` then exits 8 with that message.
 - **Moved files:** entries keep the library track id next to the path. On restore, the player looks every entry with an id up in the library and uses the track's current path, so files that were renamed or moved (scan with move detection, `library relocate`) since the queue was saved still play. The same lookup happens while the player runs when an entry's file is gone. Entries without a library track (plain files) are only checked by path. If the library is busy (a scan holds the lock for more than 0.5 s) or unreadable, the entries are used as saved and `player.log` says so.
 - **Format:** `queue.json` has `"version": 1`. There are no migrations before the first release: a file with another version is handled like a corrupt one (below).
+- **Radio:** while a radio station plays, `queue.json` also has `radio` (the filters and the recent picks); see [Radio](#radio).
 - `serve` (the in-process JSON-lines player) does not read or write `queue.json`.
 
 ## Shuffle and repeat
@@ -139,6 +140,49 @@ Details:
 - **Safety net.** If tracks end immediately over and over (for example every file is a few milliseconds long or keeps failing), repeat stops after 20 consecutive loops that each played less than 50 ms of audio (counted in audio, not wall-clock time, so a busy machine cannot hide it): playback ends with `lastError` "Repeat stopped: ...". The mode itself is kept.
 - **Unplayable entries** are skipped as usual. Under `repeat all`, `next` tries every other entry once and comes back around to the current one; if nothing is playable it fails (exit 3) instead of looping.
 - `play --foreground --shuffle` (no background player) shuffles the list once; there is no repeat in foreground mode.
+
+## Radio
+
+`music-spin radio` (MCP tool `radio`, protocol command `radio`) plays the library endlessly in random order. Filters narrow the **pool** of tracks it picks from; see the [CLI reference](cli-reference.md#radio) for the options and their matching rules (values of one filter are ORed, different filters ANDed).
+
+**How tracks are picked**
+
+- The player keeps the current track plus a **lookahead of 20** picked tracks in the queue and tops up to 20 whenever fewer than 10 are left. The pool itself is never put in the queue, so a 50,000-track library starts as fast as a small one apart from reading the pool (below).
+- **No repeats:** a track is not picked again within the last **100** picks. Small pools clamp this to *pool size - 1*: a pool of 2 alternates, a pool of N plays each track once per N picks.
+- **Spacing:** the next track is by a different artist and from a different album than the one before it, **when the pool has such a track** that also keeps the no-repeat rule. If not (a single-artist station), the album rule is still applied when possible, then neither. The no-repeat rule is never relaxed.
+- **A pool of one track** replays that track (radio does not stop; use `stop`, `play` or `queue clear`). An **empty pool** is exit 12 before anything starts.
+- Picks use a random generator per station; there is no seed yet (see the roadmap in the README).
+
+**Library changes** are picked up at the next top-up: the pool is re-read when `library.db` changed (a scan, `library relocate`) and otherwise cached in the player. Tracks added to the library can be picked, removed tracks are no longer picked, and a queued pick whose file is gone is skipped like any missing queue entry (or played from its new path when the library knows it moved). If no track matches any more, the queued picks play out, `lastError` says so and radio ends like a queue. If the library cannot be read at a top-up (a scan holds its lock), radio keeps playing what is queued and retries at the next one.
+
+**Other commands while radio plays**
+
+| Command | Behaviour |
+|---|---|
+| `next` | The next pick; never runs out |
+| `prev` | Back through the **last 100** played tracks (older ones are dropped from the queue); exit 8 before the oldest |
+| `pause` / `resume` / `toggle` / `stop` / `seek` / `volume` | As usual. `stop` keeps radio mode; `resume` continues the station |
+| `queue` | Shows the history, the current track and the lookahead |
+| `queue add` | The added tracks play **next** (after earlier additions), then the station continues |
+| `repeat one` | Replays the current track when it ends (`next`/`prev` still move) |
+| `repeat all` | Accepted (it is a global mode) but has no effect: radio never ends, and `next`/`prev` do not wrap |
+| `shuffle on/off/toggle` | Exit 8 `invalid_state`: radio is already random. The shuffle setting is kept and applies again to the next normal queue |
+| `play`, `queue clear`, `load` (serve) | End radio mode |
+| `status` | `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text shows `[radio]` instead of the queue position and a `Radio: <filters> (<N> tracks) · Repeat: ...` line |
+
+- **Gapless:** the lookahead is the queue, so same-format radio tracks play back to back exactly like a normal queue ([Gapless](#gapless)).
+- **Persistence:** radio mode, the filters and the recent picks (for the no-repeat and spacing rules) are saved in `queue.json` with the queue and restored **paused** by the next player, like any queue. `resume` continues the station.
+- **Safety net:** if 20 radio tracks in a row end almost immediately (broken or empty files), radio stops with `lastError` "Radio stopped: ...".
+- `serve` supports `radio` too (using the data folder's library); like the rest of `serve` it does not persist anything.
+
+**Performance** (Linux, 8 cores, Release, warm file cache; libraries generated directly in the database):
+
+| Library | Read the pool (whole library) | Filtered pool (artist, indexed) | Top-up from the cached pool | `music-spin radio`, player running | `music-spin radio`, starting the player |
+|---|---|---|---|---|---|
+| 3,000 tracks | 18-25 ms | 2 ms | < 0.01 ms | 0.36-0.47 s | 0.9 s |
+| 50,000 tracks | 0.55 s (1.4 s on a cold player process) | 2 ms | 0.01 ms | 0.4 s (same filter) / 0.9 s (new filter) | 2.2 s |
+
+Most of a CLI call is process start and JIT (about 0.2-0.4 s for any command). The CLI checks the filters against the library before starting a player and stops at the first match, so unknown names and empty pools fail fast.
 
 ## Testing without a sound card
 

@@ -18,7 +18,7 @@ Every command accepts these, before or after the subcommand:
 | Area | Commands |
 |---|---|
 | Files and environment | [`info`](#info) · [`formats`](#formats) · [`devices`](#devices) · [`doctor`](#doctor) |
-| Playback | [`play`](#play) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
+| Playback | [`play`](#play) · [`radio`](#radio) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
 | Library | [`library add/remove/folders/scan/relocate/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) |
 | Playlists | [`playlist list/show/create/rename/delete/add/remove/move/clear/import/export`](#playlist) · [`queue save`](#queue) |
 | Integration | [`serve`](#serve) · [`mcp`](#mcp) |
@@ -102,6 +102,31 @@ Builds a queue, hands it to the **background player** for this data folder (star
 
 Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, a query (`--search` and/or `--title`/`--album-contains`/`--artist-contains`), or `--playlist`. Unknown album or artist: exit 12. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
 
+## radio
+
+`music-spin radio [filters] [--backend] [--device] [--exclusive]`
+
+Endless random playback of the library in the background player (started if needed). Returns at once with the player status, like `play`.
+
+| Option | Meaning |
+|---|---|
+| `--artist <name>` | Track or album artist, exact name (case-insensitive; diacritics ignored when nothing matches exactly). Unknown: exit 12 |
+| `--album <title\|id>` | Album, exact title or album id. Unknown: exit 12 |
+| `--genre <name>` | Genre, exact name ignoring case and diacritics. Multi-genre tags (`Rock; Pop`) are split on `;` `/` `,` `\|` |
+| `--year <N>` | Release year (0-9999) |
+| `--years <A-B>` | Inclusive year range, e.g. `1990-1999` (a single year also works). Backwards or outside 0-9999: exit 2 |
+| `--format <id>` | Format id(s) (`flac`, `alac`, `dsd`, `mp3`, ...); repeat or comma-separate |
+| `--search <text>` | [Search syntax](library.md#search-syntax), as `music-spin search` |
+| `--hires` | Only hi-res tracks |
+
+Every filter except `--hires` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
+
+- Nothing matches, or the library is empty: exit 12 `not_found`, and no player is started. Unknown `--artist`/`--album`: exit 12 as in `tracks`.
+- Bad values (`--years 1999-1990`, `--years nineties`, `--year 10000`, an empty `--artist ""`): exit 2.
+- The status has `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text output shows `[radio]` and a `Radio:` line. JSON adds `playerStarted`.
+
+How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` or `load` end radio.
+
 ## pause, resume, toggle, stop
 
 | Command | Meaning |
@@ -113,7 +138,7 @@ Use **exactly one source kind**: files, `--album` (optionally with `--artist`), 
 
 ## next / prev
 
-`next` plays the next entry (skipping unplayable files). Exit 8 `invalid_state` at the end of the queue. `prev` plays the previous entry. Exit 8 on the first entry (use `seek 0` to restart). Both always start playback. With `repeat all` both wrap around instead of failing; `repeat one` does not change them.
+`next` plays the next entry (skipping unplayable files). Exit 8 `invalid_state` at the end of the queue (in radio mode there is no end). `prev` plays the previous entry. Exit 8 on the first entry (use `seek 0` to restart). Both always start playback. With `repeat all` both wrap around instead of failing; `repeat one` does not change them.
 
 ## seek
 
@@ -148,7 +173,7 @@ Without a mode: show the status. Aliases: `true`/`yes`/`1`, `false`/`no`/`0`. Un
 
 ## status
 
-State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, duration, volume, repeat mode, shuffle (and its seed), queue index/length, the queue item, output backend/device, exclusive mode, skipped files.
+State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, duration, volume, repeat mode, shuffle (and its seed), queue index/length, the queue item, output backend/device, exclusive mode, skipped files, and `queueMode` (`queue` or `radio`) with `radio` (filters, description, pool size) while a radio station plays.
 
 ## queue
 

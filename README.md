@@ -9,6 +9,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 - **Music library:** LiteDB database, TagLib# tags with FFmpeg fallback, fast parallel incremental scanning, album grouping including compilations/Various Artists, ranked case- and diacritic-insensitive search (per-word, phrases, `artist:`/`album:`/`title:`/`genre:`/`year:`), per-field filters, quality filters (hi-res, sample rate, bit depth, format, year), stable GUID track ids (UUIDv7, independent of the path), rename/move detection by content fingerprint (id, date added, playlist and queue entries follow), `library relocate` for moved folders or remounted drives, health check, folder watching.
 - **Background player:** `music-spin play` returns at once. Quick commands (`pause`, `next`, `seek`, `volume`, `status`, `queue`, ...) control it. Playback survives the terminal or agent that started it.
 - **Playlists:** saved in the library (case-insensitive unique names, entries keep track id + path, missing files kept and flagged), M3U/M3U8/PLS import (encodings, relative/Windows/`file://` paths) and export, `play --playlist`, `queue save`. The player's queue persists across restarts (restored paused).
+- **Radio:** `music-spin radio` plays the whole library (or the part you filter by artist, album, genre, year/range, format, hi-res or search) endlessly in random order. No track repeats within the last 100, the same artist or album is not played twice in a row when there is a choice, `prev` goes back through what played, gapless between same-format tracks, and the station survives a player restart. See [Playback → Radio](docs/playback.md#radio).
 - **Repeat and shuffle:** repeat off/one/all and a shuffle toggle on the running queue (the current track keeps playing; `off` restores the original order; reproducible with `--seed`), saved as defaults.
 - **Agent-friendly:** `--json` on every command (one JSON object per line, errors included), stable exit codes, an **MCP server** (`music-spin mcp`), and a JSON-lines `serve` mode.
 - **Portable:** one self-contained executable per platform. All data lives in the [data folder](docs/getting-started.md#data-folder): by default `.usrdata/` next to it. `--data-dir` or `MUSICSPIN_DATA_DIR` can point it elsewhere (optional).
@@ -57,6 +58,7 @@ $ music-spin play --artist "Nils Frahm" --shuffle --seed 7
 $ music-spin queue add --search "glass"
 $ music-spin seek 1:30 && music-spin volume 80%
 $ music-spin repeat all && music-spin shuffle on
+$ music-spin radio --genre jazz --years 1955-1965   # endless random jazz from those years
 
 $ music-spin status --json
 {"ok":true,"command":"status","data":{"state":"playing","positionSeconds":1.78,"durationSeconds":240,"volume":1,"track":{"codec":"flac","sampleRate":96000,"bitsPerSample":24,"lossless":true,"hiRes":true,"title":"An Aborted Beginning",...},"queueIndex":0,"queueLength":3,...}}
@@ -125,6 +127,15 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 - [ ] Audio-only LGPL FFmpeg build (~120 MB → a few MB), LGPL FFmpeg for macOS, signing/notarization, GitHub releases
 - [ ] Trimming (System.Text.Json source generation), a `dotnet tool` package for the CLI
 - [ ] Album art extraction and caching in the data folder
+- [x] Radio: endless random playback of the library with filters
+
+### Later
+
+Deferred radio options:
+
+- `radio --seed <n>` for a reproducible station
+- Saved stations (`radio save <name>`, `radio list`, `radio <name>`)
+- Weighting toward tracks not heard recently, once play counts exist
 
 ## License
 
