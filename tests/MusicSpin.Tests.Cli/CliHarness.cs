@@ -43,6 +43,9 @@ internal sealed class CliHarness : IAsyncDisposable
 
     public TimeSpan PlayerStartTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>How long control commands wait for the player's answer (short in tests of an unresponsive player).</summary>
+    public TimeSpan PlayerRequestTimeout { get; init; } = MusicSpin.Core.Remote.PlayerClient.DefaultRequestTimeout;
+
     public Func<(Stream Input, Stream Output)>? McpStreams { get; set; }
 
     public int Launches => Volatile.Read(ref _launches);
@@ -110,6 +113,7 @@ internal sealed class CliHarness : IAsyncDisposable
             LibraryLockTimeout = LockTimeout,
             PlayerLauncher = Launcher ?? LaunchInProcess,
             PlayerStartTimeout = PlayerStartTimeout,
+            PlayerRequestTimeout = PlayerRequestTimeout,
             McpStreams = McpStreams,
         };
 
