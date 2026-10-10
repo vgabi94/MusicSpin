@@ -95,6 +95,40 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         return await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
     }
 
+    /// <summary>Everything needed to understand a failed player-process assertion: the run, player.json, player.log, endpoint.</summary>
+    private async Task<string> DiagnoseAsync(Run run)
+    {
+        static string Safe(Func<string> read)
+        {
+            try
+            {
+                return read();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return $"<{ex.GetType().Name}: {ex.Message}>";
+            }
+        }
+
+        var log = File.Exists(Path.Combine(_data, "player.log")) ? await ReadLogAsync() : "<none>";
+        var info = Path.Combine(_data, "player.json");
+        var pipes = OperatingSystem.IsWindows()
+            ? Safe(() => string.Join(", ", Directory.EnumerateFiles(@"\\.\pipe\").Select(Path.GetFileName).Where(n => n!.StartsWith("musicspin", StringComparison.OrdinalIgnoreCase))))
+            : Safe(() => File.Exists(Path.Combine(_data, "player.sock")) ? "player.sock present" : "no player.sock");
+        return $"""
+            exit {run.ExitCode} after {run.Elapsed.TotalMilliseconds:0} ms
+            stdout: {run.Out}
+            stderr: {run.Err}
+            player.json: {(File.Exists(info) ? Safe(() =>
+            {
+                using var reader = new StreamReader(new FileStream(info, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+                return reader.ReadToEnd();
+            }) : "<none>")}
+            endpoints: {pipes}
+            player.log (tail): {log[Math.Max(0, log.Length - 3000)..]}
+            """;
+    }
+
     private async Task<int> PlayerPidAsync()
     {
         var status = await Ok("player", "status");
@@ -221,7 +255,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         }
 
         var status = await RunAsync("status", "--json");
-        Assert.Equal(ExitCodes.PlayerNotRunning, status.ExitCode);
+        Assert.True(status.ExitCode == ExitCodes.PlayerNotRunning, await DiagnoseAsync(status));
         Assert.Contains($"pid {pid}", status.Error.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Equal(pid, (await Ok("player", "status")).GetProperty("stalePid").GetInt32());
 
