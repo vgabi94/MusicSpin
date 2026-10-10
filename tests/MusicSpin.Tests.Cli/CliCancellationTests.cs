@@ -108,7 +108,7 @@ public sealed class CliCancellationTests : IAsyncDisposable
         var result = await cli.RunAsync("library", "scan");
 
         Assert.Equal(0, result.ExitCode);
-        var progress = result.Err.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var progress = result.Err.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         Assert.Contains(progress, l => l.StartsWith("scan: found ", StringComparison.Ordinal));
         Assert.Contains("scan: indexing albums and artists...", progress);
         Assert.Equal("scan: done", progress[^1]);

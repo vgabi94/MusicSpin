@@ -367,6 +367,71 @@ public sealed class PlayerProcessTests : IAsyncDisposable
     }
 
     [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task An_mcp_server_whose_client_closes_stdin_mid_request_exits_0_and_the_player_keeps_working()
+    {
+        // An agent that disconnects closes the server's stdin, possibly while a tool call is still running.
+        RequireEnvironment();
+        var info = new ProcessStartInfo(Exe)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = _root,
+        };
+        foreach (var arg in new[] { "mcp", "--backend", "null", "--data-dir", _data })
+        {
+            info.ArgumentList.Add(arg);
+        }
+
+        info.Environment.Remove("MUSICSPIN_PLAYER_LOG");
+        using var server = Process.Start(info)!;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cts.CancelAfter(CommandTimeout);
+        var stderr = server.StandardError.ReadToEndAsync(cts.Token);
+        try
+        {
+            await server.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0", id = 1, method = "initialize",
+                @params = new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "test", version = "1" } },
+            }).AsMemory(), cts.Token);
+            await server.StandardInput.FlushAsync(cts.Token);
+            Assert.Contains("\"id\":1", await server.StandardOutput.ReadLineAsync(cts.Token), StringComparison.Ordinal);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""".AsMemory(), cts.Token);
+            await server.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0", id = 2, method = "tools/call", @params = new { name = "play", arguments = new { files = _tracks } },
+            }).AsMemory(), cts.Token);
+            server.StandardInput.Close(); // the client is gone; the play call may still be in flight
+
+            _ = server.StandardOutput.ReadToEndAsync(cts.Token); // drain whatever it still answers
+            await server.WaitForExitAsync(cts.Token);
+        }
+        finally
+        {
+            if (!server.HasExited)
+            {
+                server.Kill(entireProcessTree: true);
+            }
+        }
+
+        Assert.True(server.ExitCode == 0, $"exit {server.ExitCode}: {await stderr}");
+        var status = await RunAsync("status", "--json");
+        if (status.ExitCode == 0)
+        {
+            // The in-flight play may have started a player before the server noticed EOF: it must be usable and stoppable.
+            Assert.Equal(3, status.Data.GetProperty("queueLength").GetInt32());
+            await Ok("quit");
+        }
+        else
+        {
+            Assert.Equal(ExitCodes.PlayerNotRunning, status.ExitCode);
+        }
+    }
+
+    [Fact]
     public async Task Mcp_server_process_controls_the_same_background_player()
     {
         RequireEnvironment();
