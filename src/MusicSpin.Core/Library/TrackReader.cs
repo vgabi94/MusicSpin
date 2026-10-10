@@ -20,8 +20,23 @@ public interface ITrackReader
     TrackRecord Read(string path);
 }
 
-public sealed class TrackReader(IAudioDecoderFactory? ffmpeg) : ITrackReader
+public sealed class TrackReader : ITrackReader
 {
+    private readonly IAudioDecoderFactory? _ffmpeg;
+    private readonly Func<string, TagLib.File> _openTagLib;
+
+    public TrackReader(IAudioDecoderFactory? ffmpeg)
+        : this(ffmpeg, path => TagLib.File.Create(path, ReadStyle.Average | ReadStyle.PictureLazy))
+    {
+    }
+
+    /// <param name="openTagLib">Opens a file with TagLib# (a seam for tests: e.g. a broken TagLib# install).</param>
+    internal TrackReader(IAudioDecoderFactory? ffmpeg, Func<string, TagLib.File> openTagLib)
+    {
+        _ffmpeg = ffmpeg;
+        _openTagLib = openTagLib;
+    }
+
     public TrackRecord Read(string path)
     {
         var extension = System.IO.Path.GetExtension(path);
@@ -31,7 +46,7 @@ public sealed class TrackReader(IAudioDecoderFactory? ffmpeg) : ITrackReader
 
         try
         {
-            needProbe = !ReadWithTagLib(path, extension, record);
+            needProbe = !ReadWithTagLib(_openTagLib(path), extension, record);
         }
         catch (Exception ex) when (IsBrokenTagLibInstall(ex))
         {
@@ -59,7 +74,7 @@ public sealed class TrackReader(IAudioDecoderFactory? ffmpeg) : ITrackReader
             return record;
         }
 
-        if (ffmpeg is not { IsAvailable: true })
+        if (_ffmpeg is not { IsAvailable: true } ffmpeg)
         {
             if (tagLibError is null)
             {
@@ -95,9 +110,9 @@ public sealed class TrackReader(IAudioDecoderFactory? ffmpeg) : ITrackReader
     }
 
     /// <returns>False when audio properties are incomplete and FFmpeg should fill them in.</returns>
-    private static bool ReadWithTagLib(string path, string extension, TrackRecord r)
+    private static bool ReadWithTagLib(TagLib.File opened, string extension, TrackRecord r)
     {
-        using var file = TagLib.File.Create(path, ReadStyle.Average | ReadStyle.PictureLazy);
+        using var file = opened;
         var tag = file.Tag;
         r.Title = Clean(tag.Title);
         r.Artist = Clean(tag.JoinedPerformers);
