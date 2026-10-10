@@ -37,7 +37,23 @@ public sealed class PlayerClient : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        var stream = await PlayerTransport.ConnectAsync(endpoint, connectTimeout ?? DefaultConnectTimeout, cancellationToken).ConfigureAwait(false);
+        Stream stream;
+        try
+        {
+            stream = await PlayerTransport.ConnectAsync(endpoint, connectTimeout ?? DefaultConnectTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException || ex is MusicSpinException { Code: MusicSpinErrorCode.PlayerUnavailable })
+        {
+            // Windows: a killed player's pipe can still be listed (and half-connectable) for a moment after its process
+            // ended; the released lock says it is gone.
+            if (await HasExitedAsync(endpoint, cancellationToken).ConfigureAwait(false))
+            {
+                throw Exited(endpoint, null, ex);
+            }
+
+            throw;
+        }
+
         return new PlayerClient(endpoint, stream, requestTimeout ?? DefaultRequestTimeout);
     }
 
@@ -67,7 +83,7 @@ public sealed class PlayerClient : IAsyncDisposable
                 while (true)
                 {
                     var line = await _channel.ReadLineAsync(timeout.Token).ConfigureAwait(false)
-                        ?? throw Unavailable($"The player closed the connection during '{cmd}' (it may have crashed; see {Endpoint.LogFile}).");
+                        ?? throw await GoneOrUnavailableAsync(cmd, null, $"The player closed the connection during '{cmd}' (it may have crashed; see {Endpoint.LogFile}).").ConfigureAwait(false);
                     using var doc = JsonDocument.Parse(line);
                     var root = doc.RootElement;
                     if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out var rid) || rid.ValueKind != JsonValueKind.Number || !rid.TryGetInt32(out var got) || got != id)
@@ -87,7 +103,11 @@ public sealed class PlayerClient : IAsyncDisposable
             {
                 throw Unavailable($"The player did not answer '{cmd}' within {_requestTimeout.TotalSeconds:0}s.");
             }
-            catch (Exception ex) when (ex is IOException or JsonException or ObjectDisposedException)
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+                throw await GoneOrUnavailableAsync(cmd, ex, $"Lost the connection to the player during '{cmd}': {ex.Message}").ConfigureAwait(false);
+            }
+            catch (JsonException ex)
             {
                 throw Unavailable($"Lost the connection to the player during '{cmd}': {ex.Message}");
             }
@@ -195,6 +215,70 @@ public sealed class PlayerClient : IAsyncDisposable
     }
 
     private static MusicSpinException Unavailable(string message) => new(MusicSpinErrorCode.PlayerUnavailable, message);
+
+    /// <summary>How long a failed exchange waits for a dying player's lock to be released before calling it unavailable.</summary>
+    internal static TimeSpan ExitGrace { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// The connection broke: if the player process is gone (its lock released), that is PlayerNotRunning (exit 13, it
+    /// crashed or was killed) rather than PlayerUnavailable (exit 14, alive but not answering). <c>quit</c> is exempt.
+    /// </summary>
+    private async Task<MusicSpinException> GoneOrUnavailableAsync(string cmd, Exception? inner, string message)
+        => cmd != "quit" && await HasExitedAsync(Endpoint, CancellationToken.None).ConfigureAwait(false)
+            ? Exited(Endpoint, cmd, inner)
+            : new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, message, inner);
+
+    /// <summary>
+    /// True once the data folder's lock file exists and nobody holds it, waiting up to <see cref="ExitGrace"/> for a
+    /// process that is being torn down to release it. No lock file: false (not a player we can judge).
+    /// </summary>
+    internal static async Task<bool> HasExitedAsync(PlayerEndpoint endpoint, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(endpoint.LockFile))
+        {
+            return false;
+        }
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            try
+            {
+                using (new FileStream(endpoint.LockFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.None))
+                {
+                    return true; // nobody holds it
+                }
+            }
+            catch (FileNotFoundException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false; // another user's player (or no access): cannot judge, keep the original error
+            }
+            catch (IOException)
+            {
+                // still held (or another client probing it right now)
+            }
+
+            if (clock.Elapsed >= ExitGrace)
+            {
+                return false;
+            }
+
+            await Task.Delay(20, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static MusicSpinException Exited(PlayerEndpoint endpoint, string? cmd, Exception? inner)
+    {
+        var pid = PlayerHost.ReadInfo(endpoint) is { } info ? $" (pid {info.Pid})" : string.Empty;
+        var when = cmd is null ? "is no longer running" : $"exited during '{cmd}'";
+        return new MusicSpinException(MusicSpinErrorCode.PlayerNotRunning,
+            $"The background player{pid} for '{endpoint.DataDirectory}' {when} and did not shut down cleanly; its leftovers are replaced on the next start (see {endpoint.LogFile}).",
+            inner);
+    }
 }
 
 /// <summary>An error answered by the player; keeps the exact exit code it reported.</summary>

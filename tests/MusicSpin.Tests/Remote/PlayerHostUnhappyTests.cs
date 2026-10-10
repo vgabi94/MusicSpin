@@ -332,7 +332,8 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
         Assert.Equal("signal", await stop);
         if (ex is not null)
         {
-            Assert.Equal(MusicSpinErrorCode.PlayerUnavailable, Assert.IsAssignableFrom<MusicSpinException>(ex).Code);
+            // "shutting down" answers are unavailable; once the player has exited (lock released) it is not running.
+            Assert.Contains(Assert.IsAssignableFrom<MusicSpinException>(ex).Code, new[] { MusicSpinErrorCode.PlayerUnavailable, MusicSpinErrorCode.PlayerNotRunning });
         }
     }
 

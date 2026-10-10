@@ -128,6 +128,78 @@ public sealed class PlayerClientTests : PlayerHostTestBase
         Assert.Contains("closed the connection during 'next'", ex.Message, StringComparison.Ordinal);
     }
 
+    private void WriteLeftovers(int pid)
+    {
+        File.WriteAllText(Endpoint.LockFile, string.Empty);
+        File.WriteAllText(Endpoint.InfoFile, """{"protocol":1,"version":"x","pid":PID,"startedAt":"2026-01-01T00:00:00Z","endpoint":"e","dataDir":"d"}""".Replace("PID", pid.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
+    }
+
+    private FileStream HoldLock() => new(Endpoint.LockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_player_that_dies_mid_request_is_not_running_with_its_pid()
+    {
+        // The player's process is gone (its lock is free) while the connection breaks: crashed or killed, so exit 13, not 14.
+        var (player, client) = await ConnectScriptedAsync();
+        await using var _ = player;
+        await using var __ = client;
+        WriteLeftovers(4242);
+        var send = client.SendAsync("status", null, Ct);
+        await player.ReadRequestAsync();
+        await player.CloseConnectionAsync();
+
+        var ex = await Assert.ThrowsAsync<MusicSpinException>(() => send);
+        Assert.Equal(MusicSpinErrorCode.PlayerNotRunning, ex.Code);
+        Assert.Contains("(pid 4242)", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("exited during 'status'", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_player_whose_lock_is_released_while_it_tears_down_is_not_running()
+    {
+        // Windows teardown order: the connection breaks first, the lock is released a moment later (within the grace).
+        var (player, client) = await ConnectScriptedAsync();
+        await using var _ = player;
+        await using var __ = client;
+        WriteLeftovers(7);
+        var held = HoldLock();
+        var send = client.SendAsync("next", null, Ct);
+        await player.ReadRequestAsync();
+        await player.CloseConnectionAsync();
+        await held.DisposeAsync();
+
+        Assert.Equal(MusicSpinErrorCode.PlayerNotRunning, (await Assert.ThrowsAsync<MusicSpinException>(() => send)).Code);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_live_player_that_hangs_up_stays_unavailable_and_quit_is_never_reclassified()
+    {
+        var (player, client) = await ConnectScriptedAsync();
+        await using var _ = player;
+        await using var __ = client;
+        WriteLeftovers(7);
+        using (HoldLock())
+        {
+            var send = client.SendAsync("next", null, Ct);
+            await player.ReadRequestAsync();
+            await player.CloseConnectionAsync();
+            var ex = await Assert.ThrowsAsync<MusicSpinException>(() => send); // waits out the grace with the lock held
+            Assert.Equal(MusicSpinErrorCode.PlayerUnavailable, ex.Code);
+            Assert.Contains("closed the connection during 'next'", ex.Message, StringComparison.Ordinal);
+        }
+
+        var (player2, client2) = await ConnectScriptedAsync();
+        await using var ___ = player2;
+        await using var ____ = client2;
+        var quit = client2.SendAsync("quit", null, Ct);
+        await player2.ReadRequestAsync();
+        await player2.CloseConnectionAsync();
+        Assert.Equal(MusicSpinErrorCode.PlayerUnavailable, (await Assert.ThrowsAsync<MusicSpinException>(() => quit)).Code);
+    }
+
     [Fact]
     [Trait("Category", "Unhappy")]
     public async Task Error_answers_keep_their_exit_code_and_tolerate_a_missing_error_object()
