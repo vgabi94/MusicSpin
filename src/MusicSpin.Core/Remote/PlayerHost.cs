@@ -721,17 +721,4 @@ public sealed class PlayerHost : IAsyncDisposable
             // best effort
         }
     }
-
-    internal static bool ProcessExists(int pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return !process.HasExited;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
-        {
-            return false;
-        }
-    }
 }
