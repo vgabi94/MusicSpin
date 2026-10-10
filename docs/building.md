@@ -98,7 +98,7 @@ It does **not** create a GitHub release or sign anything. **Planned:** GitHub re
 
 ## Coverage
 
-Code coverage of `MusicSpin.Core` (Microsoft.Testing.Platform code coverage, no external services):
+Code coverage of `MusicSpin.Core` and the CLI (`music-spin.dll`) (Microsoft.Testing.Platform code coverage, no external services):
 
 ```console
 $ dotnet build -c Release

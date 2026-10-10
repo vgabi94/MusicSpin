@@ -132,16 +132,16 @@ jobs:
         run: |
           dotnet tool install --global dotnet-reportgenerator-globaltool
           {
-            echo "## MusicSpin.Core coverage"
+            echo "## Coverage: MusicSpin.Core and the CLI (music-spin)"
             for os in ubuntu-latest windows-latest macos-latest; do
               [ -d "coverage/coverage-$os" ] || continue
-              reportgenerator -reports:"coverage/coverage-$os/*.cobertura.xml" -targetdir:"report/$os" -reporttypes:"TextSummary" >/dev/null
+              reportgenerator -reports:"coverage/coverage-$os/*.cobertura.xml" -targetdir:"report/$os" -reporttypes:"MarkdownAssembliesSummary" >/dev/null
               echo "### $os (Core + CLI tests)"
-              echo '```'; sed -n '/^Summary/,/^$/p' "report/$os/Summary.txt"; echo '```'
+              grep -v "^!\[" "report/$os/Summary.md" | sed "s/^# Summary//"
             done
-            reportgenerator -reports:"coverage/**/*.cobertura.xml" -targetdir:report/merged -reporttypes:"MarkdownSummaryGithub;Html" >/dev/null
+            reportgenerator -reports:"coverage/**/*.cobertura.xml" -targetdir:report/merged -reporttypes:"MarkdownAssembliesSummary;Html" >/dev/null
             echo "### All OSes merged"
-            cat report/merged/SummaryGithub.md
+            grep -v "^!\[" report/merged/Summary.md | sed "s/^# Summary//"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
