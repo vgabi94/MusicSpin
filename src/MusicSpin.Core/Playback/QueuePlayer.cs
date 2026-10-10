@@ -50,6 +50,11 @@ public sealed class QueuePlayer : IDisposable
     private Random _random = new();
     private long _nextOrder;
     private TimeSpan _playedSinceLoop;
+
+    // The queue slot whose file the inner player holds. The current entry is not always loaded: a restored queue whose
+    // current file is gone, or entries added to an empty queue when none of them could be opened. The player may then
+    // still hold an earlier track, which must not be played, sought or reported as the current entry.
+    private Slot? _loadedSlot;
     private int _rapidLoops;
 
     public QueuePlayer(IPlayer player, OutputInfo? output = null)
@@ -247,7 +252,7 @@ public sealed class QueuePlayer : IDisposable
             ThrowIfDisposed();
             _player.Load(path); // throws before touching the queue when the file is bad
             _items.Clear();
-            _items.Add(new Slot(new QueueItem(path), 0));
+            _items.Add(_loadedSlot = new Slot(new QueueItem(path), 0));
             _nextOrder = 1;
             _skipped.Clear();
             _index = 0;
@@ -316,6 +321,7 @@ public sealed class QueuePlayer : IDisposable
             _stoppedByUser = true;
             _player.Stop();
             _items.Clear();
+            _loadedSlot = null;
             _nextOrder = 0;
             _skipped.Clear();
             _index = -1;
@@ -352,6 +358,12 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            if (_items.Count > 0 && !_ended && !CurrentLoaded())
+            {
+                // Nothing playable is loaded for the current entry: start at it and skip forward like auto-advance.
+                return MoveAndPlay(Math.Max(_index, 0), +1, wrap: _repeat == RepeatMode.All);
+            }
+
             RequireQueue();
             if (_ended)
             {
@@ -456,7 +468,7 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
-            RequireQueue();
+            RequireLoaded();
             var duration = _player.Duration;
             if (position < TimeSpan.Zero)
             {
@@ -479,7 +491,7 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
-            RequireQueue();
+            RequireLoaded();
             var duration = _player.Duration;
             var target = _player.Position + delta;
             if (target < TimeSpan.Zero)
@@ -605,7 +617,7 @@ public sealed class QueuePlayer : IDisposable
         {
             var has = _index >= 0 && _index < _items.Count;
             return new QueueSnapshot(QueueSnapshot.CurrentVersion, [.. _items.Select(s => s.Item)], [.. _items.Select(s => s.Order)],
-                has ? _index : null, has && !_ended ? Math.Round(_player.Position.TotalSeconds, 3) : 0, _repeat, _shuffle, _shuffle ? _seed : null, savedAt);
+                has ? _index : null, has && !_ended && CurrentLoaded() ? Math.Round(_player.Position.TotalSeconds, 3) : 0, _repeat, _shuffle, _shuffle ? _seed : null, savedAt);
         }
     }
 
@@ -733,6 +745,7 @@ public sealed class QueuePlayer : IDisposable
         try
         {
             _player.Load(item.Path);
+            MarkLoaded(slots ?? _items, index);
             return true;
         }
         catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.FileNotFound && TryLoadMoved(item, index, slots ?? _items))
@@ -775,6 +788,7 @@ public sealed class QueuePlayer : IDisposable
             return false;
         }
 
+        MarkLoaded(slots, index);
         if (index >= 0 && index < slots.Count && ReferenceEquals(slots[index].Item, item))
         {
             slots[index].Item = moved;
@@ -852,11 +866,12 @@ public sealed class QueuePlayer : IDisposable
     {
         EnrichCurrent();
         var has = _index >= 0 && _index < _items.Count;
-        var track = has ? _player.CurrentTrack : null;
+        var loaded = CurrentLoaded();
+        var track = loaded ? _player.CurrentTrack : null;
         return new PlayerStatus(
-            _player.State,
-            has ? Math.Round(_player.Position.TotalSeconds, 3) : 0,
-            has ? Math.Round(_player.Duration.TotalSeconds, 3) : 0,
+            loaded ? _player.State : PlayerState.Stopped,
+            loaded ? Math.Round(_player.Position.TotalSeconds, 3) : 0,
+            loaded ? Math.Round(_player.Duration.TotalSeconds, 3) : 0,
             _player.Volume,
             track is null ? null : TrackDto.From(track),
             has ? _index : null,
@@ -869,6 +884,22 @@ public sealed class QueuePlayer : IDisposable
             _repeat,
             _shuffle,
             _shuffle ? _seed : null);
+    }
+
+    private void MarkLoaded(List<Slot> slots, int index)
+        => _loadedSlot = index >= 0 && index < slots.Count ? slots[index] : null;
+
+    private bool CurrentLoaded()
+        => _index >= 0 && _index < _items.Count && ReferenceEquals(_items[_index], _loadedSlot) && _player.CurrentTrack is not null;
+
+    private void RequireLoaded()
+    {
+        RequireQueue();
+        if (!CurrentLoaded())
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
+                $"Entry {_index + 1} could not be loaded (see 'skipped' in 'music-spin status'). Use 'music-spin play' to continue with the next playable entry.");
+        }
     }
 
     private void RequireQueue()
