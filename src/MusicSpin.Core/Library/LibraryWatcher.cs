@@ -14,18 +14,22 @@ public sealed class LibraryWatcher : IDisposable
     private bool _disposed;
 
     public LibraryWatcher(IEnumerable<string> folders, TimeSpan debounce, TimeProvider? time = null)
+        : this(folders, debounce, time, folder => new FileSystemWatcher(folder))
+    {
+    }
+
+    /// <param name="createWatcher">Seam for tests: a watcher subclass can raise bursts, renames and buffer overflows on demand.</param>
+    internal LibraryWatcher(IEnumerable<string> folders, TimeSpan debounce, TimeProvider? time, Func<string, FileSystemWatcher> createWatcher)
     {
         ArgumentNullException.ThrowIfNull(folders);
         Debounce = debounce;
         _timer = (time ?? TimeProvider.System).CreateTimer(_ => Flush(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         foreach (var folder in folders.Where(Directory.Exists))
         {
-            var watcher = new FileSystemWatcher(folder)
-            {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size,
-                InternalBufferSize = 64 * 1024,
-            };
+            var watcher = createWatcher(folder);
+            watcher.IncludeSubdirectories = true;
+            watcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size;
+            watcher.InternalBufferSize = 64 * 1024;
             watcher.Created += OnEvent;
             watcher.Changed += OnEvent;
             watcher.Deleted += OnEvent;
