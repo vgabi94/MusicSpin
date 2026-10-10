@@ -100,10 +100,12 @@ public sealed class PlayerHost : IAsyncDisposable
     private int _queueDirty;
     private (PlayerState State, int? Index, int Length, RepeatMode Repeat, bool Shuffle, int? Seed, double Position)? _savedSignature;
     private string? _lastSaveError;
+    private readonly RadioPoolCache _radioPools;
 
     private PlayerHost(PlayerHostOptions options, PlayerEndpoint endpoint, FileStream lockFile, IPlayerListener listener)
     {
         _options = options;
+        _radioPools = new RadioPoolCache(options.DataDirectory);
         Endpoint = endpoint;
         _lock = lockFile;
         _listener = listener;
@@ -117,6 +119,7 @@ public sealed class PlayerHost : IAsyncDisposable
         if (options.ResolveFromLibrary)
         {
             _queue.ResolveMissing = ResolveMoved;
+            _queue.RadioPool = _radioPools.Get;
         }
 
         _queue.SetRepeat(options.InitialRepeat);

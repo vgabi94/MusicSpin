@@ -78,7 +78,18 @@ public sealed record PlayerStatus(
     bool Shuffle = false,
     int? ShuffleSeed = null,
     bool? Gapless = null,
-    long? Underruns = null);
+    long? Underruns = null,
+    RadioInfo? Radio = null)
+{
+    /// <summary>"radio" while a radio station plays (see <see cref="Radio"/>), else "queue".</summary>
+    public string Mode => Radio is null ? "queue" : "radio";
+}
+
+/// <summary>The radio station in a <see cref="PlayerStatus"/>: its filters, a description and how many tracks matched at the last top-up.</summary>
+public sealed record RadioInfo(MusicSpin.Core.Library.RadioFilter Filter, string Description, int PoolSize);
+
+/// <summary>Radio mode as saved in queue.json: the filters and the recent picks (so no-repeat and spacing survive a restart).</summary>
+public sealed record RadioState(MusicSpin.Core.Library.RadioFilter Filter, IReadOnlyList<string>? Recent, string? LastArtist, string? LastAlbum);
 
 /// <summary>A page of the queue.</summary>
 public sealed record QueueListing(int Total, int Offset, int Limit, int? CurrentIndex, IReadOnlyList<QueueEntry> Items);
@@ -110,7 +121,8 @@ public sealed record QueueSnapshot(
     RepeatMode Repeat,
     bool Shuffle,
     int? Seed,
-    DateTimeOffset SavedAt)
+    DateTimeOffset SavedAt,
+    RadioState? Radio = null)
 {
     /// <summary>The only format read and written. No migrations before the first release: another version is treated like a corrupt file.</summary>
     public const int CurrentVersion = 1;

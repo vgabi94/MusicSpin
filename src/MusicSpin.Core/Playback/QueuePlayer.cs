@@ -1,3 +1,4 @@
+using MusicSpin.Core.Library;
 using MusicSpin.Core.Remote;
 
 namespace MusicSpin.Core.Playback;
@@ -56,6 +57,16 @@ public sealed class QueuePlayer : IDisposable
     // still hold an earlier track, which must not be played, sought or reported as the current entry.
     private Slot? _loadedSlot;
     private int _rapidLoops;
+    private RadioSession? _radio;
+
+    /// <summary>Radio keeps this many tracks queued after the current one...</summary>
+    public const int RadioLookahead = 20;
+
+    /// <summary>...and tops up when fewer than this many are left.</summary>
+    public const int RadioLowWater = 10;
+
+    /// <summary>Played radio tracks kept before the current one (for prev); older ones are dropped.</summary>
+    public const int RadioHistory = 100;
 
     public QueuePlayer(IPlayer player, OutputInfo? output = null)
     {
@@ -75,6 +86,21 @@ public sealed class QueuePlayer : IDisposable
     /// track that was renamed or moved), or null. The entry is updated in the queue when the new file loads.
     /// </summary>
     public Func<QueueItem, QueueItem?>? ResolveMissing { get; set; }
+
+    /// <summary>
+    /// The tracks a radio station may play (usually <see cref="MusicLibrary.RadioPool"/>). Called when radio starts and on
+    /// every top-up (so library changes are picked up); may throw <see cref="MusicSpinException"/>. Null: no radio.
+    /// </summary>
+    public Func<RadioFilter, IReadOnlyList<RadioCandidate>>? RadioPool { get; set; }
+
+    /// <summary>Seeds radio picks (tests); default a random generator per station.</summary>
+    public Func<Random>? RadioRandom { get; set; }
+
+    /// <summary>True while a radio station plays.</summary>
+    public bool IsRadio
+    {
+        get { lock (_gate) { return _radio is not null; } }
+    }
 
     /// <summary>Raised on any thread. Handlers must not block or call back into the player.</summary>
     public event EventHandler<PlayerStateChangedEventArgs>? StateChanged;
@@ -211,6 +237,7 @@ public sealed class QueuePlayer : IDisposable
 
             _items.Clear();
             _items.AddRange(slots);
+            _radio = null;
             _nextOrder = order;
             _shuffle = shuffled;
             _seed = usedSeed;
@@ -254,6 +281,7 @@ public sealed class QueuePlayer : IDisposable
             _player.Load(path); // throws before touching the queue when the file is bad
             _items.Clear();
             _items.Add(_loadedSlot = new Slot(new QueueItem(path), 0));
+            _radio = null;
             _nextOrder = 1;
             _skipped.Clear();
             _index = 0;
@@ -279,7 +307,18 @@ public sealed class QueuePlayer : IDisposable
 
             var added = items.Select(item => new Slot(item, _nextOrder++)).ToList();
             var first = _items.Count;
-            if (_shuffle && _index >= 0)
+            if (_radio is not null && _index >= 0)
+            {
+                // Radio: play these next (after earlier additions), then the station continues.
+                var at = _index + 1;
+                while (at < _items.Count && !_items[at].Radio)
+                {
+                    at++;
+                }
+
+                _items.InsertRange(at, added);
+            }
+            else if (_shuffle && _index >= 0)
             {
                 MixIntoUpcoming(added);
             }
@@ -323,6 +362,7 @@ public sealed class QueuePlayer : IDisposable
             _player.Stop();
             _items.Clear();
             _loadedSlot = null;
+            _radio = null;
             _nextOrder = 0;
             _skipped.Clear();
             _index = -1;
@@ -350,7 +390,7 @@ public sealed class QueuePlayer : IDisposable
                 throw Invalid($"index {index} is outside the queue (0-{_items.Count - 1}).");
             }
 
-            return MoveAndPlay(index.Value, +1, wrap: _repeat == RepeatMode.All);
+            return MoveAndPlay(index.Value, +1, wrap: WrapAll);
         }
     }
 
@@ -359,16 +399,17 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            TopUpRadio();
             if (_items.Count > 0 && !_ended && !CurrentLoaded())
             {
                 // Nothing playable is loaded for the current entry: start at it and skip forward like auto-advance.
-                return MoveAndPlay(Math.Max(_index, 0), +1, wrap: _repeat == RepeatMode.All);
+                return MoveAndPlay(Math.Max(_index, 0), +1, wrap: WrapAll);
             }
 
             RequireQueue();
             if (_ended)
             {
-                return MoveAndPlay(_index + 1 < _items.Count ? _index + 1 : 0, +1, wrap: _repeat == RepeatMode.All);
+                return MoveAndPlay(_index + 1 < _items.Count ? _index + 1 : 0, +1, wrap: WrapAll);
             }
 
             if (_player.State != PlayerState.Playing)
@@ -424,8 +465,9 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            TopUpRadio();
             RequireQueue();
-            var wrap = _repeat == RepeatMode.All;
+            var wrap = WrapAll;
             if (_index + 1 >= _items.Count)
             {
                 if (wrap)
@@ -447,7 +489,7 @@ public sealed class QueuePlayer : IDisposable
         {
             ThrowIfDisposed();
             RequireQueue();
-            var wrap = _repeat == RepeatMode.All;
+            var wrap = WrapAll;
             if (_index <= 0)
             {
                 if (wrap)
@@ -455,8 +497,9 @@ public sealed class QueuePlayer : IDisposable
                     return MoveAndPlay(_items.Count - 1, -1, wrap);
                 }
 
-                throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
-                    "Already at the first track. Use 'music-spin seek 0' to restart it.");
+                throw new MusicSpinException(MusicSpinErrorCode.InvalidState, _radio is not null
+                    ? $"No earlier radio track (radio keeps the last {RadioHistory}). Use 'music-spin seek 0' to restart this one."
+                    : "Already at the first track. Use 'music-spin seek 0' to restart it.");
             }
 
             return MoveAndPlay(_index - 1, -1, wrap);
@@ -569,6 +612,12 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            if (_radio is not null)
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
+                    "Radio is already random; shuffle applies to normal queues (the setting is kept for them). Start a queue with 'music-spin play' to use it.");
+            }
+
             if (!enabled)
             {
                 if (seed is not null)
@@ -618,7 +667,7 @@ public sealed class QueuePlayer : IDisposable
         {
             var has = _index >= 0 && _index < _items.Count;
             return new QueueSnapshot(QueueSnapshot.CurrentVersion, [.. _items.Select(s => s.Item)], [.. _items.Select(s => s.Order)],
-                has ? _index : null, has && !_ended && CurrentLoaded() ? Math.Round(_player.Position.TotalSeconds, 3) : 0, _repeat, _shuffle, _shuffle ? _seed : null, savedAt);
+                has ? _index : null, has && !_ended && CurrentLoaded() ? Math.Round(_player.Position.TotalSeconds, 3) : 0, _repeat, _shuffle, _shuffle ? _seed : null, savedAt, _radio?.ToState());
         }
     }
 
@@ -651,6 +700,11 @@ public sealed class QueuePlayer : IDisposable
             throw Invalid("Saved queue: invalid repeat mode or position.");
         }
 
+        if (snapshot.Radio is { } radio && (radio.Filter is null || radio.Filter.Validate() is not null))
+        {
+            throw Invalid($"Saved queue: invalid radio filters ({radio.Filter?.Validate() ?? "missing"}).");
+        }
+
         lock (_gate)
         {
             ThrowIfDisposed();
@@ -663,6 +717,15 @@ public sealed class QueuePlayer : IDisposable
             }
 
             _nextOrder = snapshot.Order.Count == 0 ? 0 : snapshot.Order.Max() + 1;
+            _radio = snapshot.Radio is { } state ? RadioSession.From(state, NewRadioRandom()) : null;
+            if (_radio is not null)
+            {
+                for (var k = (snapshot.Index ?? 0) + 1; k < _items.Count; k++)
+                {
+                    _items[k].Radio = true; // upcoming picks; the station tops up after them
+                }
+            }
+
             _repeat = snapshot.Repeat;
             _shuffle = snapshot.Shuffle;
             _seed = snapshot.Shuffle ? snapshot.Seed ?? NewSeed() : null;
@@ -889,7 +952,8 @@ public sealed class QueuePlayer : IDisposable
             _shuffle,
             _shuffle ? _seed : null,
             diagnostics?.Gapless,
-            diagnostics?.Underruns);
+            diagnostics?.Underruns,
+            _radio is null ? null : new RadioInfo(_radio.Filter, _radio.Filter.Describe(), _radio.PoolSize));
     }
 
     private const int MaxNextTracks = 16;
@@ -902,6 +966,7 @@ public sealed class QueuePlayer : IDisposable
             return;
         }
 
+        TopUpRadio();
         var next = new List<NextTrack>();
         if (!_ended && CurrentLoaded())
         {
@@ -912,7 +977,7 @@ public sealed class QueuePlayer : IDisposable
             else
             {
                 // Repeat all: keep going round (a short queue may loop several times within the decode-ahead).
-                var order = _repeat == RepeatMode.All
+                var order = WrapAll
                     ? Enumerable.Range(1, MaxNextTracks).Select(k => (_index + k) % _items.Count)
                     : Enumerable.Range(_index + 1, _items.Count - _index - 1);
 
@@ -963,7 +1028,7 @@ public sealed class QueuePlayer : IDisposable
                 return;
             }
 
-            var loop = _repeat == RepeatMode.One || index <= _index;
+            var loop = _repeat == RepeatMode.One || index <= _index || _radio is not null;
             _index = index;
             _loadedSlot = slot;
             _ended = false;
@@ -979,6 +1044,142 @@ public sealed class QueuePlayer : IDisposable
             SyncNext();
         }
     }
+
+    /// <summary>Repeat all wraps a normal queue; radio never ends, so it has nothing to wrap.</summary>
+    private bool WrapAll => _repeat == RepeatMode.All && _radio is null;
+
+    /// <summary>
+    /// Starts a radio station: endless random playback of the library tracks matching <paramref name="filter"/>, picked a
+    /// few at a time (see <see cref="RadioPicker"/>). Replaces the queue. NotFound when no track matches; InvalidState
+    /// when this player has no library (<see cref="RadioPool"/> is null).
+    /// </summary>
+    public PlayerStatus StartRadio(RadioFilter filter, bool play = true)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        filter.EnsureValid();
+        var source = RadioPool ?? throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
+            "Radio needs the music library; it is available in the background player ('music-spin radio').");
+        var pool = source(filter);
+        if (pool.Count == 0)
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.IsEmpty
+                ? "The library is empty. Add music with 'music-spin library add <folder>' and 'music-spin library scan'."
+                : $"No library tracks match the radio filters ({filter.Describe()}).");
+        }
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            var session = new RadioSession(filter, new RadioPicker.History(), NewRadioRandom()) { PoolSize = pool.Count };
+            var slots = new List<Slot>();
+            long order = 0;
+            var skipped = new List<SkippedItem>();
+            var loaded = -1;
+
+            // Pick until one opens: a pool may contain files deleted since the last scan.
+            for (var round = 0; round < 3 && loaded < 0; round++)
+            {
+                var first = slots.Count;
+                foreach (var pick in RadioPicker.Pick(pool, RadioLookahead, session.History, session.Random))
+                {
+                    slots.Add(new Slot(ToItem(pick), order++) { Radio = true });
+                }
+
+                for (var i = first; i < slots.Count && loaded < 0; i++)
+                {
+                    if (TryLoad(slots[i].Item, i, skipped, slots))
+                    {
+                        loaded = i;
+                    }
+                }
+            }
+
+            if (loaded < 0)
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.FileNotFound,
+                    $"None of {slots.Count} radio picks could be played (run 'music-spin library scan'?): {Describe(skipped)}");
+            }
+
+            slots.RemoveRange(0, loaded); // unplayable picks before the first playable one are not history
+            _items.Clear();
+            _items.AddRange(slots);
+            _nextOrder = order;
+            _radio = session;
+            _skipped.Clear();
+            _index = 0;
+            _ended = false;
+            _lastError = null;
+            ResetRapidLoops();
+            foreach (var s in skipped)
+            {
+                AddSkipped(s with { Index = -1 });
+            }
+
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+            if (play)
+            {
+                PlayCurrent();
+            }
+
+            return StatusCore();
+        }
+    }
+
+    /// <summary>
+    /// Radio: drops played tracks beyond <see cref="RadioHistory"/> and, when fewer than <see cref="RadioLowWater"/> are
+    /// left after the current one, picks more from a fresh pool (library changes since the last top-up count). Under the lock.
+    /// </summary>
+    private void TopUpRadio()
+    {
+        if (_radio is not { } radio || _disposed)
+        {
+            return;
+        }
+
+        if (_index > RadioHistory)
+        {
+            var drop = _index - RadioHistory;
+            _items.RemoveRange(0, drop);
+            _index -= drop;
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        var upcoming = _items.Count - Math.Max(_index, 0) - 1;
+        if (upcoming >= RadioLowWater || RadioPool is not { } source)
+        {
+            return;
+        }
+
+        IReadOnlyList<RadioCandidate> pool;
+        try
+        {
+            pool = source(radio.Filter);
+        }
+        catch (MusicSpinException ex)
+        {
+            _lastError = $"Radio could not read the library ({ex.Message}); it keeps playing what is queued and retries.";
+            return;
+        }
+
+        radio.PoolSize = pool.Count;
+        if (pool.Count == 0)
+        {
+            _lastError = $"No library tracks match the radio filters any more ({radio.Filter.Describe()}); radio ends after the queued tracks.";
+            return;
+        }
+
+        foreach (var pick in RadioPicker.Pick(pool, RadioLookahead - upcoming, radio.History, radio.Random))
+        {
+            _items.Add(new Slot(ToItem(pick), _nextOrder++) { Radio = true });
+        }
+
+        QueueChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static QueueItem ToItem(RadioCandidate c)
+        => new(c.Path, c.Title, c.Artist, c.Album, c.AlbumArtist, c.TrackNumber, c.DurationSeconds, c.TrackId);
+
+    private Random NewRadioRandom() => RadioRandom?.Invoke() ?? new Random(NewSeed());
 
     private void MarkLoaded(List<Slot> slots, int index)
         => _loadedSlot = index >= 0 && index < slots.Count ? slots[index] : null;
@@ -1072,7 +1273,9 @@ public sealed class QueuePlayer : IDisposable
         }
 
         ResetRapidLoops();
-        _lastError = $"Repeat stopped: the queued track(s) ended immediately {MaxRapidLoops} times in a row (empty or broken files?).";
+        _lastError = _radio is not null
+            ? $"Radio stopped: {MaxRapidLoops} tracks in a row ended immediately (empty or broken files?)."
+            : $"Repeat stopped: the queued track(s) ended immediately {MaxRapidLoops} times in a row (empty or broken files?).";
         return true;
     }
 
@@ -1115,8 +1318,9 @@ public sealed class QueuePlayer : IDisposable
                     return;
                 }
             }
-            else
+            else if (_radio is null || !RapidLoop())
             {
+                TopUpRadio();
                 for (var i = _index + 1; i < _items.Count; i++)
                 {
                     if (TryLoad(_items[i].Item, i, null))
@@ -1127,7 +1331,7 @@ public sealed class QueuePlayer : IDisposable
                     }
                 }
 
-                if (_repeat == RepeatMode.All && !RapidLoop())
+                if (WrapAll && !RapidLoop())
                 {
                     for (var i = 0; i <= _index && i < _items.Count; i++)
                     {
@@ -1172,5 +1376,25 @@ public sealed class QueuePlayer : IDisposable
         public QueueItem Item { get; set; } = item;
 
         public long Order { get; } = order;
+
+        /// <summary>Picked by the radio station (as opposed to added by the user while radio plays).</summary>
+        public bool Radio { get; set; }
+    }
+
+    /// <summary>A playing radio station: filters, recent picks and its random generator.</summary>
+    private sealed class RadioSession(RadioFilter filter, RadioPicker.History history, Random random)
+    {
+        public RadioFilter Filter { get; } = filter;
+
+        public RadioPicker.History History { get; } = history;
+
+        public Random Random { get; } = random;
+
+        public int PoolSize { get; set; }
+
+        public static RadioSession From(RadioState state, Random random)
+            => new(state.Filter, new RadioPicker.History(state.Recent, state.LastArtist, state.LastAlbum), random);
+
+        public RadioState ToState() => new(Filter, History.Recent, History.LastArtist, History.LastAlbum);
     }
 }

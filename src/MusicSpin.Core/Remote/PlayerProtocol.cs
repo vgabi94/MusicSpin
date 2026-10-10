@@ -48,7 +48,7 @@ public static class ProtocolMessages
 /// <para>Commands: hello, status, load(path), play(index?), pause, resume, toggle, stop, next, prev,
 /// seek(seconds | delta), volume(value | delta), info(path), queue(offset?, limit?),
 /// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.add(items), queue.clear,
-/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), subscribe, quit.
+/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), subscribe, quit.
 /// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle without a mode just return the status.</para>
 /// </summary>
 public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory decoders, Func<object>? hello = null)
@@ -58,7 +58,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
     public static IReadOnlyList<string> Commands { get; } =
     [
         "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "info",
-        "queue", "queue.set", "queue.add", "queue.clear", "repeat", "shuffle", "subscribe", "quit",
+        "queue", "queue.set", "queue.add", "queue.clear", "repeat", "shuffle", "radio", "subscribe", "quit",
     ];
 
     public QueuePlayer Player { get; } = player ?? throw new ArgumentNullException(nameof(player));
@@ -167,6 +167,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                     : Player.Status(), ProtocolAction.None);
             case "shuffle":
                 return (Shuffle(root), ProtocolAction.None);
+            case "radio":
+                return (Player.StartRadio(RadioFilterOf(root), OptionalBool(root, "play") ?? true), ProtocolAction.None);
             case "subscribe":
                 return (Player.Status(), ProtocolAction.Subscribe);
             case "quit":
@@ -199,6 +201,23 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
         }
 
         return Player.SetShuffle(enabled, seed);
+    }
+
+    /// <summary><c>"filter": {artists, albums, genres, years: [{from, to}], formats, searches, hiRes}</c>; missing = whole library.</summary>
+    private static MusicSpin.Core.Library.RadioFilter RadioFilterOf(JsonElement root)
+    {
+        if (!root.TryGetProperty("filter", out var f) || f.ValueKind == JsonValueKind.Null)
+        {
+            return new MusicSpin.Core.Library.RadioFilter();
+        }
+
+        if (f.ValueKind != JsonValueKind.Object)
+        {
+            throw new FormatException("\"filter\" must be an object.");
+        }
+
+        var filter = ProtocolJson.Deserialize<MusicSpin.Core.Library.RadioFilter>(f) ?? new MusicSpin.Core.Library.RadioFilter();
+        return filter.Validate() is { } error ? throw new FormatException(error) : filter;
     }
 
     private static string? OptionalString(JsonElement root, string name)
