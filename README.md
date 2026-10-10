@@ -23,7 +23,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 | Windows x64 | CI (`windows-latest`): build and the full test suite, including the end-to-end background player tests (named pipe, detached spawn, MCP over stdio). Real audio output and the published build are **not verified yet** |
 | macOS | CI (`macos-latest`, arm64): build and the full test suite, including the end-to-end background player tests. Real audio output and the `.app` bundle are **not verified yet** |
 
-Not available yet: gapless playback, native DSD/DoP output. See the [Roadmap](#roadmap).
+Gapless playback between same-format tracks is supported. Not available yet: native DSD/DoP output. See the [Roadmap](#roadmap).
 
 ## Quick start
 
@@ -120,7 +120,7 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 - [x] Ranked, diacritic-insensitive search with field syntax and per-field filters
 - [x] Rename/move detection (fingerprints) and `library relocate`
 - [x] Path-independent GUID track ids
-- [ ] Gapless playback; decoding on a separate thread into a ring buffer
+- [x] Gapless playback; decoding on a separate thread into a ring buffer
 - [ ] Native DSD/DoP output; bit-perfect verification on real hardware (WASAPI exclusive, ALSA `hw:`, CoreAudio)
 - [ ] Audio-only LGPL FFmpeg build (~120 MB → a few MB), LGPL FFmpeg for macOS, signing/notarization, GitHub releases
 - [ ] Trimming (System.Text.Json source generation), a `dotnet tool` package for the CLI

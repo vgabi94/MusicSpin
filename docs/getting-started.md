@@ -81,6 +81,8 @@ Created with defaults by `doctor` (or by the first command that writes):
 | `repeat` | `"off"` | repeat mode (`off`, `one`, `all`) of a newly started background player. Written by `music-spin repeat <mode>` and the MCP `repeat` tool. An unknown value means `off` |
 | `shuffle` | `false` | shuffle mode of a newly started background player. Written by `music-spin shuffle <mode>` and the MCP `shuffle` tool |
 | `playerIdleTimeoutSeconds` | `900` | the background player exits after this long when it is stopped (or the queue has ended) and no client is subscribed. `0` means never. A paused player does not time out |
+| `playbackBufferMs` | `2000` | how much audio the background player decodes ahead of the output, in milliseconds. Values outside `100`..`10000` are clamped. Memory is rate × channels × 4 bytes per second (2 s of 192 kHz stereo = 3 MB) |
+| `gapless` | `true` | play consecutive queue entries with the same sample rate, channels and bit depth without a gap (see [Playback](playback.md#gapless)) |
 | `outputDevice` | `null` | **reserved for the App**. The CLI uses `--device` |
 | `exclusiveMode` | `false` | **reserved for the App**. The CLI uses `--exclusive` |
 | `watchLibrary` | `false` | **reserved for the App**. The CLI uses `library watch` |

@@ -51,7 +51,18 @@ DSF and DFF files play, but **as PCM**: FFmpeg converts DSD to float PCM (at 1/8
 
 ## Gapless
 
-**Not supported.** The decoder and the device are reopened for each track, so there can be a short gap between tracks. **Planned.**
+The background player (queue) plays consecutive tracks **without a gap** when the next track has the **same sample rate, channel count and bit depth** as the current one: the device stays open and the first sample of the next track follows the last sample of the current one. `status` switches track, position and index at exactly that sample. Turn it off with `"gapless": false` in [settings.json](getting-started.md#settingsjson); `status` reports `gapless` and `underruns`.
+
+How it works:
+
+- A **decode thread** decodes ahead into a ring buffer (`playbackBufferMs`, default 2 s). The audio callback only copies from it; if the decoder falls behind, the device plays silence and `underruns` counts it. Playback starts once a little audio is buffered.
+- When the current file is fully decoded, the thread opens the next entry in play order (repeat one/all and shuffle respected; missing or unsupported files are skipped and listed under `skipped`) and appends it after a track-boundary marker.
+- `next`/`prev`/`seek`, queue changes and repeat/shuffle changes drop whatever was decoded ahead for the wrong track; nothing stale is ever played.
+- A decode error mid-track is reported, the part already decoded plays, and playback continues with the next entry.
+
+When the format changes (e.g. 44.1 kHz → 96 kHz, or 16 → 24 bit) the device must be reopened at the new format to stay bit-perfect, so there is a **short gap**; this is by design. Empty tracks and tracks that fail on their first read also go through this normal path. The `play --foreground` mode plays tracks one by one (not gapless).
+
+Lossy formats carry encoder delay and padding. FFmpeg removes them (MP3 LAME/Xing header, AAC edit list in MP4/M4A, Opus pre-skip), so a gapless MP3, AAC or Opus album also joins without silence; the tests check that 1.000 s encodes decode to exactly 1.000 s. FLAC, WAV, ALAC and other lossless formats have no padding.
 
 ## Background player
 
