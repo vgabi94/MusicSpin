@@ -15,8 +15,29 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  # The version comes from Directory.Build.props; a v* tag must match it (tag v0.2.0 = <Version>0.2.0</Version>).
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the version, check the tag
+        id: read
+        shell: bash
+        run: |
+          version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -1)"
+          [[ -n "$version" ]] || { echo "::error::No <Version> in Directory.Build.props"; exit 1; }
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match <Version>$version</Version> in Directory.Build.props"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   package:
     name: ${{ matrix.rid }}
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -69,8 +90,7 @@ jobs:
         shell: bash
         run: |
           cd artifacts/publish
-          version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' ../../Directory.Build.props | head -1)"
-          tar -czf "musicspin-${version}-${{ matrix.rid }}.tar.gz" -C "${{ matrix.rid }}" .
+          tar -czf "musicspin-${{ needs.version.outputs.version }}-${{ matrix.rid }}.tar.gz" -C "${{ matrix.rid }}" .
 
       # archive: false uploads the .tar.gz as-is (no zip-in-zip); the artifact is named after the file.
       - uses: actions/upload-artifact@v7
