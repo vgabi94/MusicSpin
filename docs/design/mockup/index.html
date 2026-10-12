@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Music Spin — UI mockup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="window">
+    <!-- Custom title bar (Avalonia: ExtendClientAreaToDecorationsHint) -->
+    <header class="titlebar">
+      <div class="brand"><span class="brand-disc"></span>Music Spin</div>
+      <div class="search"><span>⌕</span><input id="search" placeholder="Search" /></div>
+      <div class="winctl"><i></i><i></i><i></i></div>
+    </header>
+
+    <aside class="sidebar">
+      <nav id="nav">
+        <div class="nav-h">Library</div>
+        <a data-page="albums" class="active">◉ Albums</a>
+        <a data-page="tracks">♪ Tracks</a>
+        <a data-page="radio"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><path class="w1" d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/><path class="w2" d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg> Radio</a>
+        <div class="nav-h">Playlists</div>
+        <div id="plNav"></div>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="toolbar">
+        <h1><span id="pageTitle">Albums</span> <small id="count"></small></h1>
+        <div class="seg" id="viewSeg">
+          <button data-view="grid" class="on">▦ Cards</button>
+          <button data-view="shelf">▤ Shelf</button>
+          <button data-view="crate">◫ Crate</button>
+        </div>
+        <div class="pl-actions" id="plActions" hidden><button class="btn" id="plPlay">▶ Play</button><button class="btn ghost" id="plQueue">＋ Queue</button></div>
+        <div class="sort">
+          <button class="dd" id="sortBtn">Sort: <b></b> ▾</button>
+          <button class="dd" id="groupBtn">Group: <b></b> ▾</button>
+        </div>
+      </div>
+      <section id="view" class="view"></section>
+    </main>
+
+    <!-- Now Playing overlay -->
+    <section class="nowplaying" id="np" aria-hidden="true">
+      <div class="np-bg" id="npBg"></div>
+      <button class="np-close" id="npClose" title="Close (Esc)">✕</button>
+      <div class="np-body">
+        <div class="np-stage">
+          <div class="deck" id="deck">
+            <div class="platter"></div>
+            <div class="vinyl big" id="bigVinyl"></div>
+            <div class="tonearm"><div class="arm-shadow"><div class="arm"></div><div class="headshell"></div></div><div class="arm-base"></div><div class="arm"></div><div class="headshell"></div></div>
+            <div class="deck-led"></div>
+            <div class="deck-brand">Music Spin</div>
+          </div>
+        </div>
+        <div class="np-info">
+          <div class="np-kicker np-radio" id="npRadio" hidden></div>
+          <h2 id="npAlbum"></h2>
+          <div class="np-artist" id="npArtist"></div>
+          <ol class="tracklist" id="npTracks"></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Queue drawer: opened from the player bar, and by itself while an album or track is dragged -->
+    <aside class="queue empty" id="queue">
+      <header>
+        <h3>Up next</h3><span class="qsum" id="qSum"></span>
+        <button class="qclear" id="qClear">Clear</button>
+        <button class="qclose" id="qClose" title="Close">✕</button>
+      </header>
+      <div class="qscroll" id="qScroll">
+        <div id="qItems"></div>
+        <div class="qline" id="qLine"></div>
+        <div class="qempty">Drag albums or tracks here,<br>or use ＋ on any track.</div>
+        <!-- while a radio station plays: the queue above plays first, then the station's next picks -->
+        <div class="qradio" id="qRadio" hidden>
+          <div class="qradio-h"><span id="qRadioIco"></span><b id="qRadioDesc"></b><button id="qRadioEnd">End radio</button></div>
+          <div id="qRadioItems"></div>
+        </div>
+      </div>
+      <footer class="qfoot">
+        <div class="qacts" id="qActs"><button class="btn" id="qPlay">▶ Play</button><button class="btn ghost" id="qSave">Save as playlist</button></div>
+        <form id="qForm" hidden><input id="qName" maxlength="40" aria-label="Playlist name"><button class="btn">Save</button><button type="button" class="btn ghost" id="qCancel">Cancel</button></form>
+      </footer>
+    </aside>
+
+    <!-- Player bar -->
+    <footer class="player">
+      <button class="mini" id="mini" title="Open Now Playing">
+        <div class="vinyl mini-vinyl" id="miniVinyl"></div>
+        <div class="cover mini-cover" id="miniCover"></div>
+      </button>
+      <div class="meta">
+        <div class="txt">
+          <div class="t"><button class="onair" id="onAir" hidden></button><span id="pTitle">—</span></div>
+          <div class="a" id="pArtist"></div>
+        </div>
+        <!-- spectrum analyzer, after Winamp's: bars jump up with the music and sink back, a peak dot hangs on each -->
+        <canvas class="vis" id="vis" aria-hidden="true"></canvas>
+        <!-- click or drag the bar (Shift: finer), scroll over it, arrow keys on it; type in the number; the speaker mutes -->
+        <div class="vol" id="vol">
+          <button id="volIco" title="Mute"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path class="w1" d="M15.2 9.3a3.8 3.8 0 0 1 0 5.4"/><path class="w2" d="M17.9 6.6a7.6 7.6 0 0 1 0 10.8"/><path class="mute" d="M15.5 9.5l5 5M20.5 9.5l-5 5"/></svg></button>
+          <div class="vbar" id="volBar" tabindex="0" role="slider" aria-label="Volume" aria-valuemin="0" aria-valuemax="100"><b id="volFill"></b></div>
+          <input class="vnum" id="volNum" aria-label="Volume, type a value" inputmode="decimal" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <div class="transport">
+        <div class="buttons">
+          <button title="Shuffle" id="shuffleBtn">⤮</button>
+          <button id="prev" title="Back to the start">⏮</button>
+          <button id="play" class="playbtn">▶</button>
+          <button id="next">⏭</button>
+          <button title="Repeat">↻</button>
+        </div>
+        <!-- drag or click the bar (Shift: finer; the left edge is 0:00), arrow keys on it; type a time in the elapsed time -->
+        <div class="progress">
+          <input class="tnum" id="tCur" value="0:00" aria-label="Position, type a time" inputmode="numeric" autocomplete="off" spellcheck="false">
+          <div class="bar" id="bar" tabindex="0" role="slider" aria-label="Position"><div id="barFill"></div><span class="bar-tip" id="barTip"></span></div>
+          <span id="tDur">0:00</span>
+        </div>
+      </div>
+      <div class="right">
+        <span class="tech"><span class="hires" id="pHra" hidden>HI-RES</span><span class="badge" id="pBadge">—</span></span>
+        <span class="pbtns">
+          <button class="qbtn" id="qBtn" title="Queue">☰<b id="qCount"></b></button>
+          <button class="qbtn" id="setBtn" title="Settings"><svg class="ico cog" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </span>
+      </div>
+    </footer>
+
+    <!-- Settings: from the cog in the player bar. Every change applies at once, so there is no Save. -->
+    <div class="dlg-back" id="setBack" hidden>
+      <section class="dlg" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+        <header><h2 id="setTitle">Settings</h2><button class="qclose" id="setClose" title="Close (Esc)">✕</button></header>
+        <h3>Appearance</h3>
+        <div class="set-row"><span>Theme</span>
+          <span class="seg" id="themeSeg"><button data-theme="dark" class="on">Dark</button><button data-theme="light">Light</button></span></div>
+        <div class="set-row"><span>Motion<small>The record spins in every mode</small></span>
+          <span class="seg" id="motionSeg"><button data-motion="smooth" class="on">Smooth</button><button data-motion="fast">Fast</button><button data-motion="none">None</button></span></div>
+        <h3>Turntable</h3>
+        <div class="set-row"><span>Speed</span>
+          <span class="seg" id="rpmSeg"><button data-rpm="33.333" class="on">33⅓</button><button data-rpm="45">45</button><button data-rpm="16.667">16⅔</button></span></div>
+        <h3>Shelf</h3>
+        <div class="set-row"><span>Tilt</span><span class="range"><input id="tilt" type="range" min="20" max="80" value="58"><output id="tiltOut">58°</output></span></div>
+        <div class="set-row"><span>Depth<small>0 is flat, higher looks deeper</small></span><span class="range"><input id="depth" type="range" min="0" max="100" value="40"><output id="depthOut">40</output></span></div>
+      </section>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

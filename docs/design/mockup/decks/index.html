@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Music Spin — deck &amp; needle studies</title>
+  <style>
+    :root { --bg: #0e0f12; --bg-2: #15171c; --fg: #eef0f4; --fg-2: #9aa1ad; --line: #ffffff12;
+      font-family: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; color-scheme: dark; }
+    body { margin: 0; background: var(--bg); color: var(--fg); padding: 26px 32px 40px; }
+    h1 { margin: 0; font-size: 22px; }
+    header p { margin: 6px 0 22px; color: var(--fg-2); font-size: 13.5px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 22px; }
+    figure { margin: 0; background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    iframe { display: block; width: 100%; aspect-ratio: 4 / 3; border: 0; }
+    figcaption { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid var(--line); }
+    figcaption b { font-size: 14.5px; }
+    figcaption span { color: var(--fg-2); font-size: 12.5px; }
+    figcaption a { margin-left: auto; color: var(--fg-2); font-size: 12.5px; text-decoration: none; }
+    figcaption a:hover { color: var(--fg); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Deck &amp; needle studies</h1>
+    <p>Click a deck to stop or play it. Open one to see it full size, try other records, and see it on the light theme.</p>
+  </header>
+  <div class="grid" id="grid"></div>
+  <script>
+    const studies = [
+      ["1-walnut-brass", "1 · Walnut & Brass", "elegant · classy", 2],
+      ["2-aluminium", "2 · Brushed Aluminium", "modern", 5],
+      ["3-carbon-signal", "3 · Carbon Signal", "techy", 2],
+      ["4-piano-chrome", "4 · Piano Black & Chrome", "classy", 6],
+      ["5-linear-tracking", "5 · Linear Tracking", "elegant · techy", 4],
+      ["6-smoked-acrylic", "6 · Smoked Acrylic", "modern · techy", 0],
+    ];
+    document.querySelector("#grid").innerHTML = studies.map(([file, name, tags, album]) =>
+      `<figure><iframe src="${file}.html?embed&album=${album}" loading="lazy" title="${name}"></iframe>
+       <figcaption><b>${name}</b><span>${tags}</span><a href="${file}.html?album=${album}" target="_blank">Open ↗</a></figcaption></figure>`).join("");
+  </script>
+</body>
+</html>

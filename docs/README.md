@@ -28,6 +28,7 @@ These pages describe what the code does **today**. Anything not implemented yet 
 | [Architecture](architecture.md) | Projects, Core/App/Cli layering, the audio pipeline, IPC design, the data folder |
 | [Building](building.md) | Build, test, publish scripts, the trimming decision, CI and release workflows |
 | [Licensing](licensing.md) | MIT, plus the LGPL obligations for FFmpeg and TagLib# |
+| [UI design](design/README.md) | The HTML mockup the desktop app is built from, and how to open it |
 
 ## Platform status
 

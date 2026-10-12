@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deck 3 — Carbon Signal</title>
+  <link rel="stylesheet" href="kit.css">
+  <style>
+    /* ---------- Deck: chamfered carbon-fibre slab, strobe-ticked platter, signal light in the arm ---------- */
+    .carbon .plate { filter: drop-shadow(0 calc(var(--u) * 30) calc(var(--u) * 40) #000000c0); }
+    .carbon .edge { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: .12; transition: opacity calc(.8s * var(--m)), stroke 1s; }
+    .carbon.spinning .edge { opacity: .5; }
+    .carbon .platter {
+      background:
+        radial-gradient(circle, #0b0b0c 0 96.4%, transparent 96.6%),
+        repeating-conic-gradient(color-mix(in srgb, var(--accent) 35%, #2a2c31) 0 1.2deg, #0b0b0c 1.2deg 5deg);
+      box-shadow: 0 0 0 1px #2a2c31, 0 calc(var(--u) * 10) calc(var(--u) * 24) #000c;
+      transition: filter calc(.6s * var(--m));
+    }
+    .carbon.spinning .platter { background:
+        radial-gradient(circle, #0b0b0c 0 96.4%, transparent 96.6%),
+        repeating-conic-gradient(var(--accent) 0 1.2deg, #0b0b0c 1.2deg 5deg); }
+    .carbon .engrave { font: 600 26px "Bahnschrift", "DIN Alternate", "Inter", sans-serif; letter-spacing: 12px; }
+    .carbon .rpm { font: 34px "Bahnschrift", "Cascadia Mono", Consolas, monospace; letter-spacing: 3px; fill: #26282d; transition: fill calc(.6s * var(--m)); }
+    .carbon.spinning .rpm { fill: var(--accent); }
+    .carbon .signal { stroke: var(--accent); opacity: .12; transition: opacity calc(.35s * var(--m)), filter calc(.35s * var(--m)); }
+    .carbon .signal.dot { fill: var(--accent); stroke: none; }
+    .carbon.arm-down .signal { opacity: 1; filter: drop-shadow(0 0 3px var(--accent)); }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="stage">
+    <div class="deck carbon" style="--py: 200; --rest: 0deg; --play: 25deg">
+      <svg class="plate" viewBox="0 0 1320 1080">
+        <defs>
+          <pattern id="cf" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <linearGradient id="cfA" x1="0" x2="1"><stop offset="0" stop-color="#1a1b1e"/><stop offset=".5" stop-color="#2a2c30"/><stop offset="1" stop-color="#1a1b1e"/></linearGradient>
+            <linearGradient id="cfB" x1="0" x2="0" y2="1"><stop offset="0" stop-color="#121315"/><stop offset=".5" stop-color="#1d1e21"/><stop offset="1" stop-color="#121315"/></linearGradient>
+            <rect width="8" height="8" fill="url(#cfA)"/><rect x="8" y="8" width="8" height="8" fill="url(#cfA)"/>
+            <rect x="8" width="8" height="8" fill="url(#cfB)"/><rect y="8" width="8" height="8" fill="url(#cfB)"/>
+          </pattern>
+          <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".09"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".4"/></linearGradient>
+          <linearGradient id="gun" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3d44"/><stop offset="1" stop-color="#16171a"/></linearGradient>
+        </defs>
+        <polygon points="60,0 1260,0 1320,60 1320,1020 1260,1080 60,1080 0,1020 0,60" fill="url(#cf)"/>
+        <polygon points="60,0 1260,0 1320,60 1320,1020 1260,1080 60,1080 0,1020 0,60" fill="url(#sheen)" stroke="#3a3d44" stroke-width="2"/>
+        <polygon class="edge" points="70,18 1250,18 1302,70 1302,1010 1250,1062 70,1062 18,1010 18,70"/>
+        <!-- hex arm board -->
+        <polygon points="1280,200 1230,286.6 1130,286.6 1080,200 1130,113.4 1230,113.4" fill="url(#gun)" stroke="#45484f" stroke-width="2"/>
+        <!-- arm rest -->
+        <path d="M1183,636 h16 l6,12 h-4 M1223,636 h-16 l-6,12" fill="none" stroke="#5a5e66" stroke-width="5" stroke-linejoin="round"/>
+        <!-- speed readout: dark segments, lit in the album colour while the platter turns -->
+        <rect x="52" y="52" width="150" height="62" rx="4" fill="#060607" stroke="#2a2c31" stroke-width="2"/>
+        <text class="rpm" x="127" y="96" text-anchor="middle">33.3</text>
+        <!-- laser-etched name -->
+
+        <text class="engrave" x="46" y="1018" fill="#ffffff1a">MUSIC SPIN</text>
+        <text class="engrave" x="46" y="1016" fill="#08090a">MUSIC SPIN</text>
+      </svg>
+      <div class="platter" data-spin></div>
+      <div class="vinyl"></div>
+      <!-- needle: tapered gunmetal blade with a signal line that lights while the stylus is in the groove -->
+      <div class="arm">
+        <svg viewBox="-300 -300 600 1200">
+          <defs>
+            <linearGradient id="gunCyl" x1="0" x2="1"><stop offset="0" stop-color="#121316"/><stop offset=".4" stop-color="#4a4e57"/><stop offset=".55" stop-color="#2c2f35"/><stop offset="1" stop-color="#0e0f11"/></linearGradient>
+          </defs>
+          <polygon points="-38,-176 38,-176 38,-96 30,-88 -30,-88 -38,-96" fill="url(#gunCyl)"/>
+          <path d="M-38,-160 h14 M-38,-148 h8 M-38,-136 h14 M-38,-124 h8 M-38,-112 h14" stroke="#6a6e77" stroke-width="2"/>
+          <rect x="-7" y="-88" width="14" height="90" fill="url(#gunCyl)"/>
+          <polygon points="-12,10 12,10 40,652 27,652" fill="url(#gunCyl)" stroke="#55596180" stroke-width="1"/>
+          <path class="signal" d="M0,40 L32,628" stroke-width="3" stroke-linecap="round"/>
+          <polygon points="-44,-18 -18,-44 18,-44 44,-18 44,18 18,44 -18,44 -44,18" fill="url(#gunCyl)" stroke="#55596180" stroke-width="1"/>
+          <circle r="13" fill="#0a0a0b" stroke="#5a5e66" stroke-width="2"/>
+          <g transform="rotate(22 0 740)">
+            <polygon points="-24,648 24,648 28,660 28,752 20,764 -20,764 -28,752 -28,660" fill="url(#gunCyl)" stroke="#55596180" stroke-width="1"/>
+            <rect x="-18" y="682" width="36" height="70" rx="2" fill="#08090a"/>
+            <circle class="signal dot" cx="0" cy="700" r="4.5"/>
+            <path d="M28,672 L80,660 L92,640" fill="none" stroke="#2c2f35" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="caption">
+      <h1>3 · Carbon Signal</h1>
+      <p>Techy. Chamfered carbon fibre with a hairline edge light. The platter rim has strobe ticks, and a speed readout lights up while the platter turns. The needle is a tapered gunmetal blade whose signal line glows while the stylus is in the groove. The name is laser-etched in Bahnschrift. The lights use the album colour.</p>
+    </div>
+    <div class="controls"><button id="play"></button><button id="next">Next record</button><button id="light">Light / dark</button></div>
+  </div>
+  <script src="../data.js"></script>
+  <script src="kit.js"></script>
+</body>
+</html>

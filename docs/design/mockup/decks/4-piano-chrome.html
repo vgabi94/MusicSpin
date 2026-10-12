@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deck 4 — Piano Black &amp; Chrome</title>
+  <link rel="stylesheet" href="kit.css">
+  <style>
+    /* ---------- Deck: high-gloss black lacquer, chrome platter rim ---------- */
+    .piano {
+      border-radius: calc(var(--u) * 20);
+      background:
+        linear-gradient(116deg, transparent 0 36%, #ffffff10 36.4% 45%, transparent 45.4%),
+        linear-gradient(116deg, transparent 0 47%, #ffffff08 47.3% 50%, transparent 50.3%),
+        linear-gradient(162deg, #2a2b30, #0b0b0d 52%, #050506);
+      box-shadow: inset 0 1px 0 #ffffff59, inset 0 0 0 1px #ffffff0f, 0 0 0 1px #000, 0 30px 60px -20px #000;
+    }
+    .piano .platter {
+      background:
+        radial-gradient(circle, #0a0a0b 0 95.6%, transparent 96%),
+        conic-gradient(from 25deg, #5b6068, #ffffff, #8c9198, #3e4248, #f1f3f5, #7b8087, #d8dbdf, #5b6068);
+      box-shadow: 0 0 0 1px #000, 0 calc(var(--u) * 10) calc(var(--u) * 24) #000;
+    }
+    .piano .engrave { font: 300 28px "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: 12px; }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="stage">
+    <div class="deck piano" style="--py: 200; --rest: 0deg; --play: 25deg">
+      <svg class="plate" viewBox="0 0 1320 1080">
+        <defs>
+          <radialGradient id="chromeR" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#c3c7cc"/><stop offset=".7" stop-color="#5b6068"/><stop offset="1" stop-color="#2a2d32"/></radialGradient>
+          <linearGradient id="silverInlay" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8d9299"/><stop offset=".45" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#c7cbd0"/><stop offset="1" stop-color="#8d9299"/></linearGradient>
+        </defs>
+        <!-- arm board: chrome collar around a black well -->
+        <circle cx="1180" cy="200" r="100" fill="url(#chromeR)"/>
+        <circle cx="1180" cy="200" r="78" fill="#0b0b0d" stroke="#000" stroke-width="2"/>
+        <!-- anti-skate dial and cue lever -->
+        <circle cx="1080" cy="345" r="24" fill="url(#chromeR)"/><circle cx="1080" cy="345" r="10" fill="#111"/>
+        <circle cx="1276" cy="330" r="22" fill="url(#chromeR)"/>
+        <rect x="1268" y="330" width="16" height="96" rx="8" fill="url(#silverInlay)"/>
+        <!-- arm rest -->
+        <circle cx="1180" cy="656" r="18" fill="url(#chromeR)"/>
+        <path d="M1163,648 q17,22 34,0" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+        <!-- name: engraved through the lacquer and filled with silver -->
+        <path d="M42,970 h200" stroke="#c7cbd0" stroke-width="1.5" opacity=".45"/>
+        <text class="engrave" x="40" y="1018" fill="#000" opacity=".9">MUSIC SPIN</text>
+        <text class="engrave" x="40" y="1016" fill="url(#silverInlay)">MUSIC SPIN</text>
+      </svg>
+      <div class="platter"></div>
+      <div class="vinyl"></div>
+      <!-- needle: chrome J-arm, knurled counterweight, black headshell with chrome finger lift -->
+      <div class="arm">
+        <svg viewBox="-300 -300 600 1200">
+          <defs>
+            <linearGradient id="chromeCyl" x1="0" x2="1"><stop offset="0" stop-color="#3e4248"/><stop offset=".28" stop-color="#f6f7f9"/><stop offset=".45" stop-color="#9ba0a7"/><stop offset=".6" stop-color="#ffffff"/><stop offset=".85" stop-color="#565b62"/><stop offset="1" stop-color="#b9bdc2"/></linearGradient>
+            <pattern id="knurl" width="10" height="9" patternUnits="userSpaceOnUse"><rect width="10" height="9" fill="none"/><rect y="6" width="10" height="3" fill="#000" opacity=".35"/></pattern>
+          </defs>
+          <rect x="-46" y="-180" width="92" height="90" rx="8" fill="url(#chromeCyl)"/>
+          <rect x="-46" y="-180" width="92" height="90" rx="8" fill="url(#knurl)"/>
+          <rect x="-8" y="-92" width="16" height="96" fill="url(#chromeCyl)"/>
+          <path d="M0,30 L0,470 C0,580 20,620 34,657" fill="none" stroke="#3e4248" stroke-width="17" stroke-linecap="round"/>
+          <path d="M0,30 L0,470 C0,580 20,620 34,657" fill="none" stroke="#c9cdd2" stroke-width="12" stroke-linecap="round"/>
+          <path d="M-2.5,30 L-2.5,470 C-2.5,580 17.5,620 31.5,657" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M3.5,40 L3.5,470 C3.5,580 23.5,620 37.5,650" fill="none" stroke="#6b7078" stroke-width="2"/>
+          <circle r="50" fill="url(#chromeCyl)"/>
+          <circle r="32" fill="#0b0b0d"/>
+          <circle r="16" fill="url(#chromeCyl)"/>
+          <g transform="rotate(22 0 740)">
+            <path d="M24,666 C60,662 82,646 96,614" fill="none" stroke="#c9cdd2" stroke-width="7" stroke-linecap="round"/>
+            <rect x="-28" y="645" width="56" height="120" rx="6" fill="#0c0c0e" stroke="#3a3d43" stroke-width="2"/>
+            <rect x="-20" y="682" width="40" height="72" rx="4" fill="url(#chromeCyl)"/>
+            <rect x="-20" y="694" width="40" height="5" fill="#0c0c0e"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="caption">
+      <h1>4 · Piano Black &amp; Chrome</h1>
+      <p>Classy, with a hi-fi heritage feel. Gloss black lacquer with long reflections and a mirror-chrome platter rim. The needle is a chrome J-arm with a knurled counterweight and a black headshell. The name is engraved through the lacquer and filled with silver.</p>
+    </div>
+    <div class="controls"><button id="play"></button><button id="next">Next record</button><button id="light">Light / dark</button></div>
+  </div>
+  <script src="../data.js"></script>
+  <script src="kit.js"></script>
+</body>
+</html>

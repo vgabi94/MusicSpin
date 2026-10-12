@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deck 1 — Walnut &amp; Brass</title>
+  <link rel="stylesheet" href="kit.css">
+  <style>
+    /* ---------- Deck: oiled walnut, brass inlay line, brass-rimmed platter ---------- */
+    .walnut {
+      border-radius: calc(var(--u) * 22);
+      background:
+        linear-gradient(160deg, #ffffff17, transparent 38%, #00000052),
+        radial-gradient(90% 18% at 28% 30%, #2a150855, transparent 70%),
+        radial-gradient(70% 14% at 70% 74%, #2a150844, transparent 70%),
+        repeating-linear-gradient(179deg, transparent 0 calc(var(--u) * 7), #1f0f0526 calc(var(--u) * 8) calc(var(--u) * 10), transparent calc(var(--u) * 11) calc(var(--u) * 19)),
+        repeating-linear-gradient(181.5deg, #ffffff09 0 calc(var(--u) * 3), transparent calc(var(--u) * 4) calc(var(--u) * 13)),
+        linear-gradient(#5d3920, #4b2d19 35%, #613c23 62%, #4a2c18);
+      box-shadow: inset 0 1px 0 #ffffff2e, 0 2px 0 #1a0d05, 0 30px 60px -20px #000;
+    }
+    .walnut::before { content: ""; position: absolute; inset: calc(var(--u) * 16); border-radius: calc(var(--u) * 10); pointer-events: none;
+      border: max(1px, calc(var(--u) * 3)) solid #d2ad6699; }
+    .walnut .platter {
+      background:
+        radial-gradient(circle, #1b1714 0 95.6%, transparent 96%),
+        conic-gradient(from 30deg, #8c6a2f, #f3dea6, #a47c37, #6d5022, #ead08d, #9a7634, #c9a65f, #8c6a2f);
+      box-shadow: 0 0 0 calc(var(--u) * 3) #2a170b, 0 calc(var(--u) * 10) calc(var(--u) * 24) #000a;
+    }
+    .walnut .engrave { font-family: "Cormorant Garamond", "Garamond", Georgia, serif; font-size: 31px; letter-spacing: 3px; }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="stage">
+    <div class="deck walnut" style="--py: 190; --rest: 0deg; --play: 24.5deg">
+      <svg class="plate" viewBox="0 0 1320 1080">
+        <defs>
+          <radialGradient id="brassR" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#fff1c4"/><stop offset=".35" stop-color="#d9b56b"/><stop offset=".8" stop-color="#8a6527"/><stop offset="1" stop-color="#5c4116"/></radialGradient>
+          <linearGradient id="brassPlate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0d699"/><stop offset=".5" stop-color="#c9a35a"/><stop offset="1" stop-color="#9c7834"/></linearGradient>
+        </defs>
+        <!-- arm board -->
+        <circle cx="1180" cy="190" r="96" fill="url(#brassR)"/>
+        <circle cx="1180" cy="190" r="82" fill="none" stroke="#6e4f1d" stroke-width="2" opacity=".6"/>
+        <!-- arm rest -->
+        <circle cx="1152" cy="648" r="17" fill="url(#brassR)"/>
+        <path d="M1134,640 q18,22 36,0" fill="none" stroke="#2a1a0c" stroke-width="5" stroke-linecap="round"/>
+        <!-- cue lever -->
+        <circle cx="1272" cy="340" r="20" fill="url(#brassR)"/>
+        <rect x="1264" y="340" width="16" height="90" rx="8" fill="url(#brassPlate)"/>
+        <!-- engraved brass name plate -->
+        <rect x="36" y="978" width="250" height="70" rx="6" fill="url(#brassPlate)" stroke="#6e4f1d" stroke-width="2"/>
+        <circle cx="52" cy="1013" r="6" fill="#8a6527"/><path d="M47,1013 h10" stroke="#4a3310" stroke-width="2"/>
+        <circle cx="270" cy="1013" r="6" fill="#8a6527"/><path d="M265,1013 h10" stroke="#4a3310" stroke-width="2"/>
+        <text class="engrave" x="161" y="1027" text-anchor="middle" fill="#fff6d6" opacity=".75">Music Spin</text>
+        <text class="engrave" x="161" y="1025" text-anchor="middle" fill="#5a3d12">Music Spin</text>
+      </svg>
+      <div class="platter"></div>
+      <div class="vinyl"></div>
+      <!-- needle: brass S-arm, offset headshell with finger lift -->
+      <div class="arm">
+        <svg viewBox="-300 -300 600 1200">
+          <defs>
+            <linearGradient id="brassCyl" x1="0" x2="1"><stop offset="0" stop-color="#6e5020"/><stop offset=".42" stop-color="#e9cf8f"/><stop offset=".52" stop-color="#fff3cc"/><stop offset=".75" stop-color="#b38b45"/><stop offset="1" stop-color="#5e4318"/></linearGradient>
+            <radialGradient id="brassR2" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#fff1c4"/><stop offset=".4" stop-color="#d9b56b"/><stop offset="1" stop-color="#6e5020"/></radialGradient>
+          </defs>
+          <rect x="-7" y="-100" width="14" height="110" fill="url(#brassCyl)"/>
+          <rect x="-40" y="-172" width="80" height="80" rx="12" fill="url(#brassCyl)"/>
+          <rect x="-40" y="-122" width="80" height="5" fill="#5e4318" opacity=".6"/>
+          <path d="M0,30 C0,220 -50,330 -30,450 C-10,560 60,580 34,657" fill="none" stroke="#5e4318" stroke-width="18" stroke-linecap="round"/>
+          <path d="M0,30 C0,220 -50,330 -30,450 C-10,560 60,580 34,657" fill="none" stroke="#c9a35a" stroke-width="13" stroke-linecap="round"/>
+          <path d="M-3,30 C-3,220 -53,330 -33,450 C-13,560 57,580 31,657" fill="none" stroke="#fff0c2" stroke-width="3.5" stroke-linecap="round" opacity=".9"/>
+          <circle r="58" fill="url(#brassR2)"/>
+          <circle r="34" fill="#2a1a0c"/>
+          <circle r="20" fill="url(#brassR2)"/>
+          <g transform="rotate(22 0 740)">
+            <path d="M28,668 C56,660 70,646 78,626" fill="none" stroke="#9c7834" stroke-width="8" stroke-linecap="round"/>
+            <rect x="-30" y="645" width="60" height="118" rx="10" fill="url(#brassCyl)"/>
+            <rect x="-21" y="680" width="42" height="74" rx="5" fill="#1b1410"/>
+            <rect x="-21" y="690" width="42" height="6" fill="#d8b866"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="caption">
+      <h1>1 · Walnut &amp; Brass</h1>
+      <p>Elegant, classy. Oiled walnut with a brass inlay line and a brass-rimmed platter. The needle is a brass S-arm with a finger lift. The name is engraved in serif on a screwed brass plate.</p>
+    </div>
+    <div class="controls"><button id="play"></button><button id="next">Next record</button><button id="light">Light / dark</button></div>
+  </div>
+  <script src="../data.js"></script>
+  <script src="kit.js"></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+/* Shared bench for the deck + needle studies. Each study styles its own plinth, platter and tonearm;
+   the kit places them in one coordinate system: --u is 1/1000 of the record size, the deck is 1320 × 1080 u,
+   the platter centre sits at (540, 540) u and the tonearm pivot at (--px, --py) u. */
+:root {
+  --bg: #0e0f12; --fg: #eef0f4; --fg-2: #9aa1ad; --line: #ffffff12; --accent: #e86a3c; --m: 1;
+  font-family: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; color-scheme: dark;
+}
+:root.light { --bg: #f4f2ee; --fg: #1b1c1f; --fg-2: #6c6f76; --line: #00000014; color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
+body { display: grid; place-items: center; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+.glow { position: fixed; inset: 0; pointer-events: none; opacity: .35;
+  background: radial-gradient(50% 60% at 40% 50%, color-mix(in srgb, var(--accent) 45%, transparent), transparent); transition: background 1s; }
+:root.light .glow { opacity: .25; }
+.stage { position: relative; display: grid; justify-items: center; gap: 26px; }
+.caption { text-align: center; max-width: 640px; }
+.caption h1 { margin: 0; font-size: 20px; font-weight: 650; }
+.caption p { margin: 6px 0 0; color: var(--fg-2); font-size: 13.5px; line-height: 1.45; }
+.controls { display: flex; gap: 8px; }
+.controls button { padding: 7px 14px; border-radius: 999px; font-size: 13px; background: #ffffff10; border: 1px solid var(--line); }
+:root.light .controls button { background: #0000000a; }
+.controls button:hover { background: #ffffff1c; }
+.embed .caption, .embed .controls { display: none; }
+
+/* ---------- Deck geometry ---------- */
+.deck {
+  --s: min(58vh, 50vw); --u: calc(var(--s) / 1000);
+  position: relative; width: calc(var(--u) * 1320); height: calc(var(--u) * 1080); cursor: pointer;
+}
+.embed .deck { --s: min(84vh, 68vw); }
+.deck > * { position: absolute; }
+.deck .plate { left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.deck .platter { left: calc(var(--u) * 40); top: calc(var(--u) * 40); width: calc(var(--u) * 1000); aspect-ratio: 1; border-radius: 50%; }
+.deck .vinyl { left: calc(var(--u) * 50); top: calc(var(--u) * 50); width: calc(var(--u) * 980);
+  transition: translate calc(.5s * var(--m)) cubic-bezier(.33,0,.2,1), scale calc(.5s * var(--m)) cubic-bezier(.33,0,.2,1), opacity calc(.4s * var(--m)); }
+.deck.lifted .vinyl { translate: 0 calc(var(--u) * -40); scale: 1.05; opacity: 0; }
+
+/* Tonearm: an empty box at the pivot; its SVG uses the same units (viewBox -300 -300 600 1200), stylus at (0, 740) */
+.deck .arm {
+  left: calc(var(--u) * var(--px, 1180)); top: calc(var(--u) * var(--py, 140)); width: 0; height: 0;
+  rotate: var(--rest, -4deg); scale: 1.035;
+  transition: rotate calc(.85s * var(--m)) cubic-bezier(.65,0,.35,1), scale calc(.45s * var(--m)) cubic-bezier(.33,0,.2,1);
+}
+.deck.arm-on .arm { rotate: var(--play, 22deg); }
+.deck.arm-down .arm { scale: 1; }
+.deck .arm > svg {
+  position: absolute; left: calc(var(--u) * -300); top: calc(var(--u) * -300); width: calc(var(--u) * 600); height: calc(var(--u) * 1200);
+  overflow: visible; filter: drop-shadow(calc(var(--u) * 24) calc(var(--u) * 30) calc(var(--u) * 7) #0000008c);
+  transition: filter calc(.45s * var(--m)) cubic-bezier(.33,0,.2,1);
+}
+.deck.arm-down .arm > svg { filter: drop-shadow(calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 3) #000000b8); }
+
+/* ---------- Record (same as the app) ---------- */
+.cover { position: relative; aspect-ratio: 1; overflow: hidden; }
+.vinyl { aspect-ratio: 1; border-radius: 50%; }
+.vinyl .disc {
+  position: absolute; inset: 0; border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 33%, #0b0b0b 33.2% 35%, transparent 35.2%),
+    repeating-radial-gradient(circle, #121212 0 1.2px, #1b1b1b 1.6px 2.4px),
+    #111;
+  box-shadow: 0 0 0 1px #000, 0 12px 30px -6px #000c;
+  will-change: transform;
+}
+.vinyl .label { position: absolute; inset: 32.5%; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 1px #0008; }
+.vinyl .label .cover { width: 100%; height: 100%; }
+.vinyl .hole { position: absolute; left: 50%; top: 50%; width: 3.2%; height: 3.2%; translate: -50% -50%;
+  border-radius: 50%; background: #050505; box-shadow: 0 0 0 1px #ffffff30; }
+.vinyl .sheen {
+  position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: screen;
+  background:
+    conic-gradient(from 20deg, transparent 0 6%, #ffffff26 11%, transparent 17% 50%, #ffffff1c 61%, transparent 67%),
+    radial-gradient(circle, transparent 0 34%, #ffffff08 34% 100%);
+  -webkit-mask: radial-gradient(circle, transparent 0 34%, #000 34.5%);
+          mask: radial-gradient(circle, transparent 0 34%, #000 34.5%);
+}

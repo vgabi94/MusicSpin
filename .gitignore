@@ -509,3 +509,6 @@ coverage-report/
 *.swo
 .directory
 .Trash-*/
+
+# Local planning notes and UI mockups
+.plan/

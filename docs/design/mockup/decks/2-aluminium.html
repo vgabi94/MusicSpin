@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deck 2 — Brushed Aluminium</title>
+  <link rel="stylesheet" href="kit.css">
+  <style>
+    /* ---------- Deck: brushed aluminium slab, machined platter edge ---------- */
+    .alu {
+      border-radius: calc(var(--u) * 16);
+      background:
+        linear-gradient(168deg, #ffffff4d, transparent 30%, #0000001a 65%, #00000033),
+        repeating-linear-gradient(0deg, #ffffff14 0 1px, transparent 1px 2px, #0000000f 2px 3px),
+        repeating-linear-gradient(0deg, transparent 0 7px, #ffffff0d 7px 8px, transparent 8px 13px),
+        linear-gradient(90deg, #b3b7bd, #d8dbdf 38%, #c6c9ce 58%, #aaaeb4);
+      box-shadow: inset 0 1px 0 #ffffffb0, inset 0 -2px 0 #00000026, 0 2px 0 #6b6e73, 0 30px 60px -20px #000;
+    }
+    .alu .platter {
+      background:
+        radial-gradient(circle, #232427 0 95.6%, transparent 96%),
+        conic-gradient(from 10deg, #8e939a, #f1f2f4, #a3a8ae, #74797f, #e3e5e8, #9aa0a6, #c8cbd0, #8e939a);
+      box-shadow: 0 0 0 1px #7d8187, 0 calc(var(--u) * 8) calc(var(--u) * 20) #0006;
+    }
+    .alu .engrave { font: 500 26px "Inter", "Segoe UI Variable", "Segoe UI", sans-serif; letter-spacing: 10px; }
+    .alu .lamp { fill: #8b8f95; transition: fill calc(.6s * var(--m)); }
+    .alu.spinning .lamp { fill: var(--accent); }
+    .alu .weight-ring { fill: var(--accent); transition: fill 1s; }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="stage">
+    <div class="deck alu" style="--py: 200; --rest: 0deg; --play: 25deg">
+      <svg class="plate" viewBox="0 0 1320 1080">
+        <defs>
+          <linearGradient id="aluInset" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9da1a7"/><stop offset="1" stop-color="#d7dadd"/></linearGradient>
+        </defs>
+        <!-- arm board: a recessed square, like a milled pocket -->
+        <rect x="1095" y="115" width="170" height="170" rx="26" fill="url(#aluInset)" stroke="#8a8e94" stroke-width="2"/>
+        <rect x="1095" y="117" width="170" height="170" rx="26" fill="none" stroke="#ffffffb0" stroke-width="1.5" opacity=".6"/>
+        <!-- arm rest -->
+        <rect x="1184" y="636" width="38" height="26" rx="8" fill="#1d1e21"/>
+        <rect x="1190" y="641" width="26" height="6" rx="3" fill="#3a3c41"/>
+        <!-- engraved name, and a single lamp that takes the album colour while the platter turns -->
+        <circle class="lamp" cx="52" cy="1007" r="8"/>
+        <text class="engrave" x="76" y="1018" fill="#ffffffc0">MUSIC SPIN</text>
+        <text class="engrave" x="76" y="1016" fill="#868a90">MUSIC SPIN</text>
+      </svg>
+      <div class="platter"></div>
+      <div class="vinyl"></div>
+      <!-- needle: straight black tube, offset headshell, cylinder counterweight with an album-colour ring -->
+      <div class="arm">
+        <svg viewBox="-300 -300 600 1200">
+          <defs>
+            <linearGradient id="blackCyl" x1="0" x2="1"><stop offset="0" stop-color="#0d0e10"/><stop offset=".45" stop-color="#3a3c42"/><stop offset=".6" stop-color="#22242a"/><stop offset="1" stop-color="#0a0b0c"/></linearGradient>
+            <linearGradient id="silverCyl" x1="0" x2="1"><stop offset="0" stop-color="#7c8188"/><stop offset=".45" stop-color="#f3f4f6"/><stop offset="1" stop-color="#83878e"/></linearGradient>
+          </defs>
+          <rect x="-36" y="-170" width="72" height="88" rx="6" fill="url(#blackCyl)"/>
+          <rect class="weight-ring" x="-36" y="-98" width="72" height="5"/>
+          <rect x="-6" y="-84" width="12" height="90" fill="url(#silverCyl)"/>
+          <path d="M0,0 L34,657" stroke="#111214" stroke-width="15" stroke-linecap="round"/>
+          <path d="M-3,10 L31,650" stroke="#ffffff38" stroke-width="3" stroke-linecap="round"/>
+          <circle r="46" fill="url(#blackCyl)"/>
+          <circle r="16" fill="url(#silverCyl)"/>
+          <g transform="rotate(22 0 740)">
+            <rect x="-24" y="648" width="48" height="112" rx="4" fill="#16171a"/>
+            <rect x="-24" y="648" width="48" height="10" rx="3" fill="#2c2e33"/>
+            <rect x="-18" y="684" width="36" height="66" rx="3" fill="url(#silverCyl)"/>
+            <path d="M24,664 L74,642" stroke="#16171a" stroke-width="7" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="caption">
+      <h1>2 · Brushed Aluminium</h1>
+      <p>Modern, with a nod to Braun. A brushed aluminium slab with a milled arm pocket. The needle is a straight matte black tube with a silver cartridge, and a ring of the album colour on the counterweight. The name is cut into the metal, with one lamp beside it.</p>
+    </div>
+    <div class="controls"><button id="play"></button><button id="next">Next record</button><button id="light">Light / dark</button></div>
+  </div>
+  <script src="../data.js"></script>
+  <script src="kit.js"></script>
+</body>
+</html>
