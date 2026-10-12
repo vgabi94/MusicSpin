@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
+using System.Globalization;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
 
@@ -49,7 +50,7 @@ internal sealed class QueueSource
 
     public Option<string?> Search { get; } = new("--search")
     {
-        Description = "Library tracks matching this text (same matching as 'music-spin search'), up to 10000.",
+        Description = "Library tracks matching this text (same matching as 'music-spin search'), up to 10000 (a warning says when more match).",
     };
 
     public Option<string?> Title { get; } = new("--title")
@@ -126,11 +127,12 @@ internal sealed class QueueSource
         parseResult.GetValue(Title), parseResult.GetValue(AlbumContains), parseResult.GetValue(ArtistContains));
 
     /// <summary>Library tracks for --album/--artist, or for --search and the contains filters (null for files). Releases the library before returning.</summary>
-    public IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult)
-        => LibraryTracks(runner, parseResult, Selection(parseResult));
+    public IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult, List<string> warnings)
+        => LibraryTracks(runner, parseResult, Selection(parseResult), warnings);
 
+    /// <summary>A query takes the first <see cref="CliEnvironment.SearchSourceLimit"/> matches, in library order; when there are more, it says so in <paramref name="warnings"/>.</summary>
     /// <exception cref="MusicSpinException">NotFound (unknown album/artist, nothing matches); InvalidArgument (unusable search text, ambiguous album).</exception>
-    public static IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult, LibrarySelection selection)
+    public static IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult, LibrarySelection selection, List<string> warnings)
     {
         if (selection.Kinds == 0)
         {
@@ -140,17 +142,26 @@ internal sealed class QueueSource
         using var library = runner.OpenLibraryForRead(parseResult);
         if (selection.IsQuery)
         {
-            var tracks = library.Tracks(new TrackQuery
+            var page = library.Tracks(new TrackQuery
             {
                 Text = selection.Search,
                 Title = selection.Title,
                 AlbumContains = selection.AlbumContains,
                 ArtistContains = selection.ArtistContains,
-                Paging = new Paging(0, Paging.MaxLimit),
-            }).Items;
-            return tracks.Count > 0
-                ? tracks
-                : throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No library tracks match {selection.Describe()}. See 'music-spin search'.");
+                Paging = new Paging(0, runner.Env.SearchSourceLimit),
+            });
+            if (page.Items.Count == 0)
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.NotFound, $"No library tracks match {selection.Describe()}. See 'music-spin search'.");
+            }
+
+            if (page.Total > page.Items.Count)
+            {
+                warnings.Add(string.Create(CultureInfo.InvariantCulture,
+                    $"{page.Total} library tracks match {selection.Describe()}; only the first {page.Items.Count} (in library order) were used. Narrow the search to reach the rest."));
+            }
+
+            return page.Items;
         }
 
         return selection.Album is not null ? library.AlbumQueue(selection.Album, selection.Artist) : library.ArtistQueue(selection.Artist!);
@@ -190,7 +201,7 @@ internal sealed class QueueSource
         var warnings = new List<string>();
         IReadOnlyList<QueueItem> items = playlist is not null
             ? PlaylistItems(runner, parseResult, playlist, warnings)
-            : LibraryTracks(runner, parseResult, selection) is { } tracks
+            : LibraryTracks(runner, parseResult, selection, warnings) is { } tracks
                 ? [.. tracks.Select(ToItem)]
                 : [.. (files ?? []).Where(f => !string.IsNullOrWhiteSpace(f)).Select(f => new QueueItem(Path.GetFullPath(f)))];
         var used = ApplyShuffle(shuffle, seed, ref items);

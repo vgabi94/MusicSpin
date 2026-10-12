@@ -173,6 +173,40 @@ public sealed class PlayerCliTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task A_search_source_cut_off_at_the_limit_says_so()
+    {
+        var music = LibraryTestData.CreateSmallLibrary(TempDir.Create("music"));
+        foreach (var file in Directory.EnumerateFiles(music, "*", SearchOption.AllDirectories))
+        {
+            _cli.Decoders.With(TestAudio.Track(file, seconds: 0.05));
+        }
+
+        Assert.Equal(0, (await _cli.RunAsync("library", "add", music)).ExitCode);
+        Assert.Equal(0, (await _cli.RunAsync("library", "scan", "--quiet")).ExitCode);
+        _cli.SearchSourceLimit = 2;
+        const string Expected = "3 library tracks match 'miles'; only the first 2 (in library order) were used. Narrow the search to reach the rest.";
+
+        var play = await Ok("play", "--search", "miles", "--backend", "null");
+        Assert.Equal(2, play.GetProperty("queueLength").GetInt32());
+        Assert.Equal(Expected, Assert.Single(play.GetProperty("warnings").EnumerateArray()).GetString());
+
+        var add = await Ok("queue", "add", "--search", "miles");
+        Assert.Equal(2, add.GetProperty("added").GetInt32());
+        Assert.Equal(Expected, Assert.Single(add.GetProperty("warnings").EnumerateArray()).GetString());
+
+        var text = await _cli.RunAsync("queue", "add", "--search", "miles");
+        Assert.Equal(0, text.ExitCode);
+        Assert.Contains($"music-spin queue add: warning: {Expected}", text.Err, StringComparison.Ordinal);
+
+        var foreground = await Ok("play", "--search", "miles", "--duration", "0.01", "--backend", "null");
+        Assert.Equal(2, foreground.GetProperty("queueLength").GetInt32());
+        Assert.Equal(Expected, Assert.Single(foreground.GetProperty("warnings").EnumerateArray()).GetString());
+
+        // within the limit: no warning
+        Assert.False((await Ok("play", "--search", "freddie")).TryGetProperty("warnings", out _));
+    }
+
+    [Fact]
     public async Task Text_output_is_human_readable()
     {
         var play = await _cli.RunAsync("play", Long[0], Long[1], "--backend", "null");

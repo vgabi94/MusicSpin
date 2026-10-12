@@ -321,9 +321,10 @@ internal static class McpCommand
                             : "Give only one of files, album/artist, search/title/albumContains/artistContains, trackIds.");
                     }
 
-                    var inputs = PlaylistCommands.Inputs(runner, parseResult, files, selection, trackIds);
+                    var warnings = new List<string>();
+                    var inputs = PlaylistCommands.Inputs(runner, parseResult, files, selection, trackIds, warnings);
                     using var library = runner.OpenLibraryForWrite(parseResult);
-                    return Task.FromResult(ToElement(library.AddToPlaylist(name, inputs, position)));
+                    return Task.FromResult(ToElement(PlaylistCommands.WithWarnings(library.AddToPlaylist(name, inputs, position), warnings)));
                 }));
             yield return Tool("playlist_remove", "Remove entries by 1-based position(s): \"3\", \"2-5\" or \"1,3,5-7\".",
                 (string name, string positions) => Library(read: false, library => library.RemoveFromPlaylist(name, positions)));

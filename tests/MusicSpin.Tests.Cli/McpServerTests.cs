@@ -192,6 +192,32 @@ public sealed class McpServerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Search_sources_cut_off_at_the_limit_carry_a_warning()
+    {
+        var music = LibraryTestData.CreateSmallLibrary(TempDir.Create("music"));
+        foreach (var file in Directory.EnumerateFiles(music, "*", SearchOption.AllDirectories))
+        {
+            _cli.Decoders.With(TestAudio.Track(file, seconds: 60));
+        }
+
+        Assert.Equal(0, (await _cli.RunAsync("library", "add", music)).ExitCode);
+        Assert.Equal(0, (await _cli.RunAsync("library", "scan", "--quiet")).ExitCode);
+        _cli.SearchSourceLimit = 2;
+        const string Expected = "3 library tracks match 'miles'; only the first 2 (in library order) were used. Narrow the search to reach the rest.";
+
+        await StartAsync();
+        var play = await Call("play", new() { ["search"] = "miles" });
+        Assert.Equal(2, play.GetProperty("queueLength").GetInt32());
+        Assert.Equal(Expected, Assert.Single(play.GetProperty("warnings").EnumerateArray()).GetString());
+
+        await Call("playlist_create", new() { ["name"] = "Miles" });
+        var added = await Call("playlist_add", new() { ["name"] = "miles", ["search"] = "miles" });
+        Assert.Equal(2, added.GetProperty("added").GetInt32());
+        Assert.Equal(Expected, Assert.Single(added.GetProperty("warnings").EnumerateArray()).GetString());
+        Assert.False((await Call("playlist_add", new() { ["name"] = "miles", ["search"] = "freddie" })).TryGetProperty("warnings", out _));
+    }
+
+    [Fact]
     public async Task Playlist_tools_create_fill_play_and_export()
     {
         var dir = TempDir.Create("mcp-files");

@@ -151,7 +151,8 @@ internal static class PlayCommand
         }
 
         // Build the queue and release the library lock before playing.
-        var queue = source.LibraryTracks(runner, parseResult)!;
+        var warnings = new List<string>();
+        var queue = source.LibraryTracks(runner, parseResult, warnings)!;
         var usedSeed = source.ApplyShuffle(parseResult, ref queue);
 
         var provider = env.OutputProviders(parseResult.GetValue(backend)!);
@@ -164,6 +165,11 @@ internal static class PlayCommand
         {
             if (!json)
             {
+                foreach (var warning in warnings)
+                {
+                    env.Error.WriteLine($"music-spin play: warning: {warning}");
+                }
+
                 env.Out.WriteLine($"Queue: {queue.Count} track(s){(usedSeed is { } s ? $", shuffled (seed {s})" : string.Empty)} via {provider.Name}");
             }
 
@@ -208,7 +214,7 @@ internal static class PlayCommand
         }
 
         var result = new QueuePlayResultDto("queue", parseResult.GetValue(source.Album), parseResult.GetValue(source.Artist), usedSeed is not null, usedSeed,
-            queue.Count, played, skipped, stopReason);
+            queue.Count, played, skipped, stopReason, warnings.Count > 0 ? warnings : null);
         if (stopReason == "cancelled")
         {
             return runner.Fail(json, "play", ExitCodes.Cancelled, "Playback cancelled.", result);

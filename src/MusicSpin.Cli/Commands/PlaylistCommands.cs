@@ -1,6 +1,8 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using MusicSpin.Cli.Output;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
@@ -212,10 +214,11 @@ internal static class PlaylistCommands
             var ids = (parseResult.GetValue(trackIds) ?? []).SelectMany(i => i.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
             var selection = new LibrarySelection(parseResult.GetValue(album), parseResult.GetValue(artist), parseResult.GetValue(search),
                 parseResult.GetValue(title), parseResult.GetValue(albumContains), parseResult.GetValue(artistContains));
-            var inputs = Inputs(runner, parseResult, parseResult.GetValue(files), selection, ids);
+            var warnings = new List<string>();
+            var inputs = Inputs(runner, parseResult, parseResult.GetValue(files), selection, ids, warnings);
             using var library = runner.OpenLibraryForWrite(parseResult);
             var change = library.AddToPlaylist(parseResult.GetValue(name)!, inputs, parseResult.GetValue(position));
-            return Task.FromResult(WriteChange(runner, json, "playlist add", change, $"Added {change.Added} entr{(change.Added == 1 ? "y" : "ies")} to"));
+            return Task.FromResult(WriteChange(runner, json, "playlist add", change, $"Added {change.Added} entr{(change.Added == 1 ? "y" : "ies")} to", warnings));
         }, "playlist add");
         return command;
     }
@@ -363,9 +366,9 @@ internal static class PlaylistCommands
 
     /// <summary>Entries for <c>playlist add</c> (CLI and MCP): library tracks for album/artist/search, track ids, or files.</summary>
     public static IReadOnlyList<PlaylistInput> Inputs(CommandRunner runner, ParseResult parseResult, IReadOnlyList<string>? files, LibrarySelection selection,
-        IReadOnlyList<string>? trackIds)
+        IReadOnlyList<string>? trackIds, List<string> warnings)
     {
-        if (QueueSource.LibraryTracks(runner, parseResult, selection) is { } tracks)
+        if (QueueSource.LibraryTracks(runner, parseResult, selection, warnings) is { } tracks)
         {
             return [.. tracks.Select(PlaylistInput.From)];
         }
@@ -403,18 +406,35 @@ internal static class PlaylistCommands
         return library.CreatePlaylist(name, [.. items.Select(i => new PlaylistInput(i.Path, i.TrackId, i.Title, i.Artist, i.DurationSeconds))], replace);
     }
 
-    public static int WriteChange(CommandRunner runner, bool json, string command, PlaylistChange change, string verb)
+    public static int WriteChange(CommandRunner runner, bool json, string command, PlaylistChange change, string verb, IReadOnlyList<string>? warnings = null)
     {
         if (json)
         {
-            JsonOutput.WriteSuccess(runner.Env.Out, command, change);
+            JsonOutput.WriteSuccess(runner.Env.Out, command, WithWarnings(change, warnings));
         }
         else
         {
+            foreach (var warning in warnings ?? [])
+            {
+                runner.Env.Error.WriteLine($"music-spin {command}: warning: {warning}");
+            }
+
             runner.Env.Out.WriteLine($"{verb} playlist {SummaryLine(change.Playlist)}");
         }
 
         return ExitCodes.Success;
+    }
+
+    /// <summary>The change as JSON, with a <c>warnings</c> array when there are any.</summary>
+    public static JsonNode WithWarnings(PlaylistChange change, IReadOnlyList<string>? warnings)
+    {
+        var node = JsonSerializer.SerializeToNode(change, JsonOutput.Options)!;
+        if (warnings is { Count: > 0 })
+        {
+            node["warnings"] = JsonSerializer.SerializeToNode(warnings, JsonOutput.Options);
+        }
+
+        return node;
     }
 
     private static string SummaryLine(PlaylistSummary p)
