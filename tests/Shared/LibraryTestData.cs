@@ -83,6 +83,14 @@ internal static class LibraryTestData
         return path;
     }
 
+    /// <summary>Replaces the pictures embedded in <paramref name="path"/> (none: removes them).</summary>
+    public static void SetPictures(string path, params (byte[] Data, TagLib.PictureType Type)[] pictures)
+    {
+        using var file = TagLib.File.Create(path);
+        file.Tag.Pictures = pictures.Select(p => (TagLib.IPicture)new TagLib.Picture(new TagLib.ByteVector(p.Data)) { Type = p.Type }).ToArray();
+        file.Save();
+    }
+
     /// <summary>Writes a file with no tags at all (stripped copy of a fixture).</summary>
     public static string WriteUntagged(string path, string source)
     {

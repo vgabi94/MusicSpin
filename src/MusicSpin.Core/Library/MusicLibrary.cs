@@ -119,14 +119,19 @@ public sealed partial class MusicLibrary : IDisposable
             }
 
             LibraryIndexer.Rebuild(_db);
+            PruneCovers();
             return new FolderRemoveResult(folder.Path, removed);
         });
     }
 
     // ---------------------------------------------------------------- scan
 
-    public ScanResult Scan(ScanOptions? options = null, CancellationToken cancellationToken = default)
-        => Guard(() => new LibraryScanner(_db, _reader, _time).Scan(options ?? new ScanOptions(), cancellationToken));
+    public ScanResult Scan(ScanOptions? options = null, CancellationToken cancellationToken = default) => Guard(() =>
+    {
+        var result = new LibraryScanner(_db, _reader, _time).Scan(options ?? new ScanOptions(), cancellationToken);
+        PruneCovers();
+        return result;
+    });
 
     // ---------------------------------------------------------------- queries
 

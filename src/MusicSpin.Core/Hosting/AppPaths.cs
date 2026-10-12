@@ -27,6 +27,9 @@ public sealed record DataDirectory(string Path, DataDirectorySource Source)
     public string LibraryLockFile => System.IO.Path.Combine(Path, LibraryLockFileName);
 
     public string LogsDirectory => System.IO.Path.Combine(Path, "logs");
+
+    /// <summary>Cached album covers, one folder per album id (see <see cref="Library.MusicLibrary.CoverPath"/>).</summary>
+    public string CoversDirectory => System.IO.Path.Combine(Path, "covers");
 }
 
 /// <summary>
