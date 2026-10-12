@@ -41,6 +41,7 @@ MusicSpin keeps everything it writes (settings, the library database, the backgr
 ├── settings.json      user settings (see below)
 ├── library.db         LiteDB music library
 ├── library.lock       cross-process write lock for the library
+├── covers/            cached album covers, one folder per album id (see library.md#cover-art)
 ├── player.sock        background player endpoint (Unix socket, mode 0600; a named pipe on Windows)
 ├── player.json        running player info: pid, endpoint, version, output (0600)
 ├── player.lock        held by the running player (one player per data folder)

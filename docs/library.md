@@ -157,7 +157,7 @@ Fingerprinting made no measurable difference to full scans here (the differences
 | Provenance | `tagSource` (`taglib`, `taglib+ffmpeg`, `ffmpeg`) |
 | Derived | effective album artist, normalized keys, album id, sort key, folded search keys (title, artists, album, genre, file name, combined) |
 
-Cover art is only recorded as a flag. **Planned:** album art extraction and caching in the data folder.
+A track only records whether it has an embedded picture; the pictures themselves are read when a cover is needed (see [Cover art](#cover-art)).
 
 **Hi-res** means lossless with more than 16 bits or more than 48 kHz, or any DSD file.
 
@@ -168,6 +168,38 @@ Cover art is only recorded as a flag. **Planned:** album art extraction and cach
 3. otherwise the track artist.
 
 The album id is derived from that artist and title. "Various", "VA", "V.A.", "V/A" and "Various Artist" are normalized to "Various Artists".
+
+## Cover art
+
+The desktop app shows each album's cover. Core finds it and keeps resized copies in the data folder; the CLI doesn't use covers.
+
+**Where a cover comes from**, best first:
+
+1. A picture embedded in the album's tracks: the first track in album order that has one. Its front cover is used, or else its first picture.
+2. An image in the album's folder named `cover`, `folder`, `front` or `album` (in that order), with the extension `jpg`, `jpeg`, `png` or `webp`, in any case. For an album split into disc folders (`CD1`, `Disc 2`, ...) the parent folder is searched too.
+3. Otherwise the album has no cover, and the app draws a placeholder.
+
+A picture that isn't a JPEG, PNG, WebP, GIF or BMP image, or that can't be decoded, is skipped for the next source.
+
+**The cache** is in `<data folder>/covers/<album id>/`. Covers are made on first request, not during a scan, so scans don't get slower. Each is cached at twice the size the app shows it, by its longest side:
+
+| Size | Pixels | Used for |
+|---|---|---|
+| small | 128 | track and queue rows, the player bar |
+| medium | 720 | album cards, shelf sleeves, crate records |
+| large | 2048 | Now Playing |
+
+Images are never enlarged. Opaque images are stored as JPEG and images with transparency as PNG.
+
+**Keeping it fresh:**
+
+- A cached file's name includes a hash of its source file's path, size and modification time. When the source changes, the next request makes a new file and deletes the old one.
+- Embedded pictures: a rescan records the track's new modification time, so a changed picture shows after the next scan (or at once with `library watch`).
+- Folder images are checked on every request, so a new or changed `cover.jpg` shows without a scan.
+- A scan, or removing a folder, deletes the cached covers of albums that are no longer in the library.
+- Deleting `covers/` is always safe; covers are made again as needed.
+
+**API.** `MusicLibrary.CoverSources(albumIds)` reads where the covers of many albums come from in one quick query. `CoverStore.GetPath(source, size)` then returns the cached file, making it if needed. Close the library between the two steps: reading and resizing images can take a while, and the library is locked while it's open. `MusicLibrary.CoverPath(albumId, size)` does both in one call. Core has no image library: the app passes a resizer (Skia), and without one the original image is cached as is.
 
 ## Search and filter
 

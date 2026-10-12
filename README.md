@@ -132,7 +132,7 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 - [ ] Native DSD/DoP output; bit-perfect verification on real hardware (WASAPI exclusive, ALSA `hw:`, CoreAudio)
 - [ ] Audio-only LGPL FFmpeg build (~120 MB → a few MB), LGPL FFmpeg for macOS, signing/notarization, GitHub releases
 - [ ] Trimming (System.Text.Json source generation), a `dotnet tool` package for the CLI
-- [ ] Album art extraction and caching in the data folder
+- [x] Album art extraction and caching in the data folder (used by the desktop app)
 - [x] Radio: endless random playback of the library with filters
 
 ### Later
