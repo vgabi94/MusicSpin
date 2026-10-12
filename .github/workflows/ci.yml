@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its run still in progress; runs on main always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -30,8 +35,8 @@ jobs:
         with:
           global-json-file: global.json
 
-      # FFmpeg-backed tests skip themselves when the libraries are missing, so a failed download
-      # degrades coverage instead of failing the build.
+      # A failed download doesn't stop the tests (the FFmpeg-backed ones skip themselves, the rest still report),
+      # but the job fails at the doctor check below.
       - name: Install FFmpeg 9.0 shared libraries (Linux/macOS)
         if: runner.os != 'Windows'
         continue-on-error: true
@@ -49,59 +54,17 @@ jobs:
       - name: Build
         run: dotnet build MusicSpin.slnx --configuration Release --no-restore
 
+      # Core and CLI tests run with code coverage of MusicSpin.Core and music-spin.dll (eng/CodeCoverage.xml), measured
+      # on each OS's own runner so Windows-only and macOS-only code counts. Every project runs even if one fails.
       - name: Test
-        run: dotnet test --solution MusicSpin.slnx --configuration Release --no-build
-
-      - name: CLI smoke test
         shell: bash
         run: |
-          dotnet run --project src/MusicSpin.Cli --configuration Release --no-build -- --help
-          dotnet run --project src/MusicSpin.Cli --configuration Release --no-build -- doctor --backend null --json || true
-
-  # Optional: Core code coverage measured on each OS's own runner (Windows/macOS-only code paths included), in parallel
-  # with the build/test jobs and never blocking them. Cobertura files are uploaded as artifacts and merged into the job
-  # summary by the next job. No external services.
-  coverage:
-    name: coverage (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-
-      - name: Install FFmpeg 9.0 shared libraries (Linux/macOS)
-        if: runner.os != 'Windows'
-        continue-on-error: true
-        run: ./eng/get-ffmpeg.sh
-
-      - name: Install FFmpeg 9.0 shared libraries (Windows)
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        shell: pwsh
-        run: ./eng/get-ffmpeg.ps1
-
-      - name: Build
-        run: dotnet build MusicSpin.slnx --configuration Release
-
-      - name: Test with coverage
-        shell: bash
-        run: |
-          out="$PWD/coverage"
-          dotnet test --project tests/MusicSpin.Tests --configuration Release --no-build --coverage \
-            --coverage-output-format cobertura --coverage-settings "$PWD/eng/CodeCoverage.xml" \
-            --results-directory "$out" --coverage-output core.cobertura.xml
-          dotnet test --project tests/MusicSpin.Tests.Cli --configuration Release --no-build --coverage \
-            --coverage-output-format cobertura --coverage-settings "$PWD/eng/CodeCoverage.xml" \
-            --results-directory "$out" --coverage-output cli.cobertura.xml
+          cov=(--coverage --coverage-output-format cobertura --coverage-settings "$PWD/eng/CodeCoverage.xml" --results-directory "$PWD/coverage")
+          failed=0
+          dotnet test --project tests/MusicSpin.Tests --configuration Release --no-build "${cov[@]}" --coverage-output core.cobertura.xml || failed=1
+          dotnet test --project tests/MusicSpin.Tests.Cli --configuration Release --no-build "${cov[@]}" --coverage-output cli.cobertura.xml || failed=1
+          dotnet test --project tests/MusicSpin.Tests.Ui --configuration Release --no-build || failed=1
+          exit $failed
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -110,9 +73,27 @@ jobs:
           path: coverage/*.cobertura.xml
           if-no-files-found: warn
 
+      # Exit 6 = FFmpeg missing: the FFmpeg-backed tests above were skipped, so the job fails here.
+      - name: CLI smoke test (FFmpeg found)
+        shell: bash
+        run: |
+          dotnet run --project src/MusicSpin.Cli --configuration Release --no-build -- --help > /dev/null
+          dotnet run --project src/MusicSpin.Cli --configuration Release --no-build -- doctor --backend null --json
+
+  # The check the "Protect main" ruleset requires (named CI): green only when the build and tests passed on every OS.
+  ci:
+    name: CI
+    needs: build-test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every OS passed
+        run: '[[ "${{ needs.build-test.result }}" == success ]]'
+
+  # Merges the per-OS Cobertura files into the run's summary page. Informational: never fails the run.
   coverage-summary:
     name: coverage summary
-    needs: coverage
+    needs: build-test
     if: always()
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -130,7 +111,7 @@ jobs:
       - name: Merge and summarize
         shell: bash
         run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool
+          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.5.11
           {
             echo "## Coverage: MusicSpin.Core and the CLI (music-spin)"
             for os in ubuntu-latest windows-latest macos-latest; do
