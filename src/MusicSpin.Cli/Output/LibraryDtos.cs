@@ -173,4 +173,5 @@ public sealed record QueuePlayResultDto(
     int QueueLength,
     IReadOnlyList<QueueEntryDto> Played,
     IReadOnlyList<QueueSkipDto> Skipped,
-    string StopReason);
+    string StopReason,
+    IReadOnlyList<string>? Warnings = null);

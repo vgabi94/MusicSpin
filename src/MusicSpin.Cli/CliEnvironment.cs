@@ -46,6 +46,9 @@ public sealed class CliEnvironment
     /// <summary>How long a control command waits for the player's answer.</summary>
     public TimeSpan PlayerRequestTimeout { get; init; } = PlayerClient.DefaultRequestTimeout;
 
+    /// <summary>Most library tracks a --search/--title/--album-contains/--artist-contains source takes (play, queue add, playlist add). Tests lower it.</summary>
+    public int SearchSourceLimit { get; init; } = Paging.MaxLimit;
+
     /// <summary>Byte streams for `mcp` (MCP over stdio). Default: the process's stdin/stdout. Tests inject pipes.</summary>
     public Func<(Stream Input, Stream Output)>? McpStreams { get; init; }
 

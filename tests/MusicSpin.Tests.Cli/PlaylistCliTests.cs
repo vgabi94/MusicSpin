@@ -60,6 +60,26 @@ public sealed class PlaylistCliTests : IAsyncDisposable
         => [.. (await Ok("queue")).GetProperty("items").EnumerateArray().Select(e => e.GetProperty("item").GetProperty("path").GetString()!)];
 
     [Fact]
+    public async Task Playlist_add_says_when_a_search_is_cut_off_at_the_limit()
+    {
+        await ScanAsync();
+        await Ok("playlist", "create", "Miles");
+        _cli.SearchSourceLimit = 2;
+        const string Expected = "3 library tracks match 'miles'; only the first 2 (in library order) were used. Narrow the search to reach the rest.";
+
+        var added = await Ok("playlist", "add", "miles", "--search", "miles");
+        Assert.Equal(2, added.GetProperty("added").GetInt32());
+        Assert.Equal(Expected, Assert.Single(added.GetProperty("warnings").EnumerateArray()).GetString());
+
+        var text = await _cli.RunAsync("playlist", "add", "miles", "--search", "miles");
+        Assert.Equal(0, text.ExitCode);
+        Assert.Contains($"music-spin playlist add: warning: {Expected}", text.Err, StringComparison.Ordinal);
+        Assert.StartsWith("Added 2 entries to playlist 'Miles'", text.Out, StringComparison.Ordinal);
+
+        Assert.False((await Ok("playlist", "add", "miles", "--search", "freddie")).TryGetProperty("warnings", out _));
+    }
+
+    [Fact]
     public async Task Playlist_commands_manage_playlists_end_to_end()
     {
         await ScanAsync();
