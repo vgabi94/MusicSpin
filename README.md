@@ -2,6 +2,10 @@
 
 An open-source (MIT), cross-platform **desktop music player for hi-res audio**, with a CLI (`music-spin`) that people and AI agents can both script.
 
+> **Work in progress.** The CLI, the background player and the library work today. The desktop app is being built from the design below, a mockup you can open in a browser ([UI design](docs/design/README.md)). Progress is tracked in the [`area: app` issues](https://github.com/vgabi94/MusicSpin/issues?q=label%3A%22area%3A+app%22).
+
+![Music Spin's Now Playing screen: a turntable playing the album, its track list, and the player bar (design mockup)](docs/design/now-playing.png)
+
 ## Features
 
 - **Plays almost any format**, decoded by [FFmpeg](https://ffmpeg.org) 9.0: FLAC, ALAC, WAV/W64/RF64, AIFF, DSD (DSF/DFF, played as PCM), WavPack, APE, TTA, MP3, AAC, Vorbis, Opus and more.
@@ -16,7 +20,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 
 ## Status
 
-**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (744) work. The desktop app is an empty Avalonia window until the UI design is decided.
+**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (744) work. The UI design is decided ([mockup](docs/design/README.md)); the desktop app is still an empty Avalonia window while it is built.
 
 | Platform | Status |
 |---|---|
@@ -117,7 +121,8 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 - [x] Playback core, library, portable single-file publishing, background player, CLI with `--json`, MCP server
 - [x] Verify the background player on Windows and macOS, and enable the end-to-end tests there (CI)
 - [ ] Verify real audio output and the published builds on Windows and macOS
-- [ ] Desktop UI design. The app will attach to the background player (`PlayerClient` + `subscribe`) or host it in-process
+- [x] Desktop UI design: an HTML mockup in [docs/design](docs/design/README.md)
+- [ ] Desktop UI, built from the mockup. The app attaches to the background player (`PlayerClient` + `subscribe`)
 - [x] Repeat one/all and a shuffle toggle
 - [x] Saved playlists, M3U/M3U8/PLS import/export, persistent queue
 - [x] Ranked, diacritic-insensitive search with field syntax and per-field filters

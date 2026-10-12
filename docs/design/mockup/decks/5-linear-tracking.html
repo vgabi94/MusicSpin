@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deck 5 — Linear Tracking</title>
+  <link rel="stylesheet" href="kit.css">
+  <style>
+    /* ---------- Deck: champagne aluminium between rosewood ends; tangential arm on twin rails ---------- */
+    .linear {
+      border-radius: calc(var(--u) * 10);
+      background:
+        linear-gradient(168deg, #ffffff40, transparent 30%, #00000014 65%, #0000002e),
+        repeating-linear-gradient(0deg, #ffffff12 0 1px, transparent 1px 2px, #0000000d 2px 3px),
+        linear-gradient(90deg, #b9b1a3, #d9d3c8 40%, #c9c2b6 60%, #b2aa9c);
+      box-shadow: inset 0 1px 0 #ffffffa0, 0 2px 0 #5b5348, 0 30px 60px -20px #000;
+    }
+    .linear::before, .linear::after { content: ""; position: absolute; top: 0; bottom: 0; width: calc(var(--u) * 30);
+      background:
+        repeating-linear-gradient(90deg, transparent 0 2px, #00000030 2px 3px, transparent 3px 7px),
+        linear-gradient(90deg, #3e1d12, #5e2c1a 50%, #3a1a10);
+      box-shadow: inset 0 1px 0 #ffffff26; }
+    .linear::before { left: 0; border-radius: calc(var(--u) * 10) 0 0 calc(var(--u) * 10); }
+    .linear::after { right: 0; border-radius: 0 calc(var(--u) * 10) calc(var(--u) * 10) 0; }
+    .linear .platter {
+      left: calc(var(--u) * 60);
+      background:
+        radial-gradient(circle, #2b2a28 0 95.6%, transparent 96%),
+        repeating-conic-gradient(#d6d0c4 0 2deg, #a39c8f 2deg 4deg);
+      box-shadow: 0 0 0 1px #8a8377, 0 calc(var(--u) * 8) calc(var(--u) * 20) #0006;
+    }
+    .linear .vinyl { left: calc(var(--u) * 70); }
+    .linear .over { filter: drop-shadow(calc(var(--u) * 10) calc(var(--u) * 16) calc(var(--u) * 6) #00000070); }
+    /* the carriage moves straight in along the rails instead of swinging; the stylus sits at the box origin */
+    .linear .arm { left: calc(var(--u) * 1130); top: calc(var(--u) * 540);
+      transition: translate calc(1s * var(--m)) cubic-bezier(.65,0,.35,1), scale calc(.45s * var(--m)) cubic-bezier(.33,0,.2,1); }
+    .linear.arm-on .arm { translate: calc(var(--u) * -105) 0; }
+    .linear .engrave { font: 400 30px "Inter", "Segoe UI Variable", "Segoe UI", sans-serif; letter-spacing: 15px; }
+    .linear .track { stroke: var(--accent); opacity: 0; transition: opacity calc(.5s * var(--m)); }
+    .linear.arm-down .track { opacity: .9; }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="stage">
+    <div class="deck linear" style="--rest: 0deg; --play: 0deg">
+      <svg class="plate" viewBox="0 0 1320 1080">
+        <text class="engrave" x="1278" y="1018" text-anchor="end" fill="#ffffffd0">MUSIC SPIN</text>
+        <text class="engrave" x="1278" y="1016" text-anchor="end" fill="#7b7366">MUSIC SPIN</text>
+      </svg>
+      <div class="platter"></div>
+      <div class="vinyl"></div>
+      <!-- twin rails cantilevered over the record from a housing on the right -->
+      <svg class="plate over" viewBox="0 0 1320 1080">
+        <defs>
+          <linearGradient id="rail" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f1ea"/><stop offset=".5" stop-color="#b9b2a5"/><stop offset="1" stop-color="#7d7669"/></linearGradient>
+          <linearGradient id="housing" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3ddd2"/><stop offset="1" stop-color="#a9a194"/></linearGradient>
+        </defs>
+        <rect x="770" y="462" width="430" height="12" rx="6" fill="url(#rail)"/>
+        <rect x="770" y="494" width="430" height="12" rx="6" fill="url(#rail)"/>
+        <rect x="1180" y="420" width="104" height="170" rx="14" fill="url(#housing)" stroke="#8a8377" stroke-width="2"/>
+        <rect x="1196" y="436" width="72" height="4" rx="2" fill="#0000001f"/>
+        <path class="track" d="M1196,566 h72" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <div class="arm">
+        <svg viewBox="-300 -300 600 1200">
+          <defs>
+            <linearGradient id="carriage" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8f5ef"/><stop offset="1" stop-color="#a39b8e"/></linearGradient>
+          </defs>
+          <rect x="-38" y="-92" width="76" height="72" rx="10" fill="url(#carriage)" stroke="#8a8377" stroke-width="2"/>
+          <rect x="-38" y="-62" width="76" height="4" fill="#0000001a"/>
+          <rect x="-16" y="-26" width="32" height="46" rx="5" fill="#1d1c1a"/>
+          <rect x="-16" y="-14" width="32" height="5" fill="#c9a15b"/>
+        </svg>
+      </div>
+    </div>
+    <div class="caption">
+      <h1>5 · Linear Tracking</h1>
+      <p>Elegant and techy, in the spirit of Bang &amp; Olufsen's Beogram. Champagne aluminium between rosewood ends. There's no swinging arm: the pickup glides straight in along twin rails cantilevered over the record. A line on the housing takes the album colour while it plays. The name is cut into the aluminium.</p>
+    </div>
+    <div class="controls"><button id="play"></button><button id="next">Next record</button><button id="light">Light / dark</button></div>
+  </div>
+  <script src="../data.js"></script>
+  <script src="kit.js"></script>
+</body>
+</html>
