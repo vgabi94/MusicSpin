@@ -79,18 +79,18 @@ Sizes (linux-x64, Release): `music-spin` ≈ 41 MB, `MusicSpin` ≈ 49 MB, `TagL
 
 ## CI and release workflows
 
-Both workflows exist in `.github/workflows/` but **have not run yet**: the repository has no remote so far.
-
-**`ci.yml`** (push to `main`, pull requests, manual):
+**`ci.yml`** (push to `main`, pull requests, manual). A new push to a pull request cancels the run still in progress on it.
 
 - matrix: `ubuntu-latest`, `windows-latest`, `macos-latest`;
 - installs FFmpeg 9.0 with `eng/get-ffmpeg.sh` / `.ps1`;
-- `dotnet restore`, `dotnet build -c Release`, `dotnet test --solution MusicSpin.slnx -c Release`;
-- CLI smoke test: `music-spin --help` and `doctor --backend null --json`.
+- `dotnet restore`, `dotnet build -c Release`, then the three test projects, the Core and CLI ones with code coverage (see [Coverage](#coverage)). Every project runs even if an earlier one fails;
+- CLI smoke test: `music-spin --help`, and `doctor --backend null --json`, which must exit 0. If the FFmpeg download failed, the FFmpeg-backed tests skip themselves and this step fails the job (exit 6);
+- a `coverage summary` job merges the per-OS coverage into the run's summary page. It never fails the run.
 
 **`release.yml`** (manual dispatch or a `v*` tag):
 
-- publishes all six RIDs on native runners, with `--download-ffmpeg`;
+- reads the version from `<Version>` in `Directory.Build.props`. A `v*` tag must match it (`v0.2.0` for `0.2.0`), or the run fails before building;
+- publishes all six RIDs with `--download-ffmpeg`, each on a runner of its OS (the arm64 packages are built on x64 runners; the macOS ones on macOS, so they get code signed);
 - smoke-tests the RIDs that match the runner from a temporary folder: checks that the desktop executable sits next to `music-spin`, runs `doctor`, `library add/scan/stats` on the test fixtures, and checks that `.usrdata/settings.json` and `library.db` appear next to the executable;
 - uploads one `musicspin-<version>-<rid>.tar.gz` per RID as a build artifact (tar keeps executable bits and the `.app` bundle; kept for 14 days).
 
@@ -107,4 +107,4 @@ $ dotnet test --project tests/MusicSpin.Tests -c Release --no-build --coverage \
     --results-directory "$PWD/coverage" --coverage-output core.cobertura.xml
 ```
 
-Run the same for `tests/MusicSpin.Tests.Cli` to include what the CLI tests reach. CI runs this on Linux, Windows and macOS in a separate `coverage` job (it never blocks the build/test jobs): each OS uploads its Cobertura files as an artifact, and the `coverage summary` job merges them (ReportGenerator) into the run's summary page, so Windows-only and macOS-only code is measured on its own runner.
+Run the same for `tests/MusicSpin.Tests.Cli` to include what the CLI tests reach. CI does both in each OS's test step, so Windows-only and macOS-only code is measured on its own runner. Each OS uploads its Cobertura files as an artifact, and the `coverage summary` job merges them (ReportGenerator) into the run's summary page.
