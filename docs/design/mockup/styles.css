@@ -256,12 +256,13 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: linear-gradient(#5a4232, #3b2a1f); box-shadow: 0 1px 0 #ffffff25 inset, 0 20px 30px -10px #000;
   pointer-events: none;
 }
-.crate-box span { font-size: 11px; letter-spacing: .4em; color: #ffffff40; }
-.crate-wrap.multi .crate-box span {
-  max-width: 88%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.crate-box .lbl { font-size: 11px; letter-spacing: .4em; color: #ffffff40; }
+.crate-wrap.multi .crate-box .lbl {
+  display: flex; max-width: calc(100% - 72px); white-space: nowrap;   /* room for the play and radio icons */
   letter-spacing: .12em; text-transform: uppercase; font-weight: 600; color: #ffffff80; transition: color calc(.3s * var(--m));
 }
-.crate-wrap.multi .crate.active .crate-box span { color: #fff; }
+.crate-box .nm { overflow: hidden; text-overflow: ellipsis; }   /* a long name is cut, the count stays */
+.crate-wrap.multi .crate.active .crate-box .lbl { color: #fff; }
 .crate-side { align-self: center; }
 .crate-wrap.multi .crate-side { align-self: start; position: sticky; top: 40px; }
 .crate-side h2 { margin: 0 0 4px; font-size: 26px; }
@@ -544,16 +545,20 @@ body.radio-on #nav [data-page="radio"] .ico path { animation: onair calc(1.8s * 
 @keyframes onair { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 body.radio-on #nav [data-page="radio"] { color: var(--accent-ink); }
 
-/* group headers (artist / genre): start that group's station */
+/* group headers (artist / genre): play the whole group, or start its station */
 .group-h { display: flex; align-items: center; gap: 12px; }
-.radio-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 8px; border-radius: 999px; border: 1px solid var(--line);
+.group-acts { display: inline-flex; gap: 6px; }
+.radio-btn, .group-play { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 8px; border-radius: 999px; border: 1px solid var(--line);
   font-size: 11.5px; font-weight: 550; letter-spacing: 0; text-transform: none; color: var(--fg-2); }
-.radio-btn:hover { color: var(--fg); background: var(--bg-2); }
+.radio-btn:hover, .group-play:hover { color: var(--fg); background: var(--bg-2); }
 .radio-btn.on { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
-.crate-box .radio-btn { position: absolute; right: 8px; top: 50%; translate: 0 -50%; pointer-events: auto; padding: 6px; border: 0; color: #ffffff99; }
-.crate-box .radio-btn:hover { background: #ffffff1f; color: #fff; }
+.group-play .tri { fill: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+/* crate labels: the label moves left to make room for both icons */
+.crate-wrap.multi .crate-box { place-items: center start; padding-left: 14px; }
+.crate-box .group-acts { position: absolute; right: 8px; top: 50%; translate: 0 -50%; gap: 2px; pointer-events: auto; }
+.crate-box .radio-btn, .crate-box .group-play { padding: 6px; border: 0; color: #ffffff99; }
+.crate-box .radio-btn:hover, .crate-box .group-play:hover { background: #ffffff1f; color: #fff; }
 .crate-box .radio-btn.on { color: #fff; background: color-mix(in srgb, var(--accent) 45%, transparent); }
-.crate-wrap.multi .crate-box span { max-width: 74%; }
 
 /* the page: tags on the left, the station on the right */
 .radio { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 36px; align-items: start; padding-top: 6px; }

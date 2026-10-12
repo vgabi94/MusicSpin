@@ -108,8 +108,17 @@
 
   // ---------- Views ----------
   const view = $("#view");
-  // artist and genre groups can start a radio station of their own
-  const groupHead = (key, n, unit = "", kind = "") => `<h3 class="group-h"><span>${key} · ${n}${unit}</span>${kind ? radioBtn(kind, key) : ""}</h3>`;
+  // artist and genre groups can be played whole (what the group shows, in its order) or start a radio station of their own
+  const groupActs = (kind, key, label = true) => `<span class="group-acts">${groupPlayBtn(kind, key, label)}${radioBtn(kind, key, label)}</span>`;
+  const groupHead = (key, n, unit = "", kind = "") => `<h3 class="group-h"><span>${key} · ${n}${unit}</span>${kind ? groupActs(kind, key) : ""}</h3>`;
+  const PLAY_ICO = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="tri" d="M8 6.5v11l9-5.5z"/></svg>`;
+  const groupPlayBtn = (k, v, label = true) =>
+    `<button class="group-play" data-gplay="${k}" data-key="${esc(v)}" title="${k === "artist" ? `Play everything by ${esc(v)}` : `Play all ${esc(v)}`}">${PLAY_ICO}${label ? "<span>Play</span>" : ""}</button>`;
+  function groupItems(k, v) {
+    if (!isAlbumPage()) return trackItems(true).filter((x) => albums[x.a][k] === v);
+    const g = albumGroups().find((g) => g.key === v);
+    return g ? g.list.flatMap((al) => albumItems(albums.indexOf(al))) : [];
+  }
 
   function renderGrid(groups) {
     const frag = document.createDocumentFragment();
@@ -192,8 +201,8 @@
       crateLists.set(k, list);
       if (!(state.crates[k] < list.length)) state.crates[k] = Math.max(0, list.indexOf(state.album));
       const c = document.createElement("div"); c.className = "crate"; c.dataset.key = k;
-      const label = multi ? `${key} · ${list.length}` : state.sort === "year" ? `${list[0].year} — ${list.at(-1).year}` : "A — Z";
-      c.innerHTML = `<div class="crate-stage"></div><div class="crate-box"><span>${label}</span>${multi ? radioBtn(albumGroupMode(), key, false) : ""}</div>`;
+      const label = multi ? `<span class="nm">${key}</span>&nbsp;· ${list.length}` : state.sort === "year" ? `${list[0].year} — ${list.at(-1).year}` : "A — Z";
+      c.innerHTML = `<div class="crate-stage"></div><div class="crate-box"><span class="lbl">${label}</span>${multi ? groupActs(albumGroupMode(), key, false) : ""}</div>`;
       const stage = $(".crate-stage", c);
       list.forEach((al, i) => {
         const r = document.createElement("div"); r.className = "rec"; r.draggable = true;
@@ -949,6 +958,8 @@
   view.addEventListener("click", (e) => {
     const rb = e.target.closest("[data-radio]"), tag = e.target.closest(".tag"), st = e.target.closest("[data-st]"), rec = e.target.closest("[data-recent]");
     if (rb) { const tags = [{ k: rb.dataset.radio, v: rb.dataset.key }]; return onAir(tags) ? setPage("radio") : startRadio(tags); }
+    const gp = e.target.closest("[data-gplay]");
+    if (gp) return playItems(groupItems(gp.dataset.gplay, gp.dataset.key));
     if (tag) return cycleTag(tag.dataset.k, tag.dataset.v);
     if (rec) { const s = state.recent[+rec.dataset.recent]; return onAir(s) ? ((state.draft = copyTags(s)), render()) : startRadio(s); }
     if (st) return ({
