@@ -15,6 +15,9 @@
         <Setter Property="MinWidth" Value="{StaticResource WindowMinWidth}" />
         <Setter Property="MinHeight" Value="{StaticResource WindowMinHeight}" />
         <Setter Property="ExtendClientAreaToDecorationsHint" Value="True" />
+        <Setter Property="ExtendClientAreaTitleBarHeightHint" Value="{StaticResource TitleBarHeightValue}" />
+        <!-- Our own system buttons, without the default title text and fullscreen button (Styles/Window.axaml). -->
+        <Setter Property="WindowDecorationsTheme" Value="{StaticResource ShellDecorations}" />
     </Style>
 
     <!-- Every button in the app starts plain; areas give it a look with classes. -->

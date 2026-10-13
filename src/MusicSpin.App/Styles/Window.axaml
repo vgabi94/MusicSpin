@@ -1,0 +1,143 @@
+<!--
+  The window frame and system buttons that Avalonia draws itself (Windows and Linux; macOS keeps its native buttons).
+  Fluent's version draws its own title text and a fullscreen button over our title bar; this one draws only
+  minimize, maximize/restore and close, at the title bar's height (mockup: .winctl). The drag area is our title bar
+  (Views/TitleBar.axaml), so there is none here.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:MusicSpin.App.Controls">
+    <ControlTheme x:Key="CaptionButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Width" Value="{StaticResource CaptionButtonWidth}" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}">
+                    <controls:Icon Data="{TemplateBinding Content}"
+                                   IsStroked="True"
+                                   StrokeThickness="2"
+                                   Width="{StaticResource CaptionIconSize}"
+                                   Height="{StaticResource CaptionIconSize}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="{DynamicResource CaptionHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^.close:pointerover">
+            <Setter Property="Background" Value="{StaticResource CloseHoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource CloseHoverInkBrush}" />
+        </Style>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.3" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="ShellDecorations" TargetType="WindowDrawnDecorations">
+        <Setter Property="DefaultTitleBarHeight" Value="{StaticResource TitleBarHeightValue}" />
+        <Setter Property="DefaultFrameThickness" Value="{StaticResource WindowFrameThickness}" />
+        <Setter Property="DefaultShadowThickness" Value="{StaticResource WindowShadowThickness}" />
+        <Setter Property="Template">
+            <WindowDrawnDecorationsTemplate>
+                <WindowDrawnDecorationsContent>
+                    <WindowDrawnDecorationsContent.Underlay>
+                        <Panel Name="PART_UnderlayWrapper">
+                            <Border Name="PART_WindowBorder"
+                                    BorderThickness="{TemplateBinding FrameThickness}"
+                                    BorderBrush="{DynamicResource LineBrush}"
+                                    IsHitTestVisible="False" />
+                        </Panel>
+                    </WindowDrawnDecorationsContent.Underlay>
+
+                    <WindowDrawnDecorationsContent.Overlay>
+                        <Panel Name="PART_OverlayWrapper">
+                            <StackPanel Name="PART_OverlayPanel"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        Height="{TemplateBinding TitleBarHeight}"
+                                        IsVisible="{TemplateBinding HasTitleBar}">
+                                <Button Name="PART_MinimizeButton"
+                                        Theme="{StaticResource CaptionButton}"
+                                        Content="{StaticResource Icon.Minimize}"
+                                        ToolTip.Tip="Minimize"
+                                        AutomationProperties.Name="Minimize"
+                                        WindowDecorationProperties.ElementRole="MinimizeButton" />
+                                <Button Name="PART_MaximizeButton"
+                                        Theme="{StaticResource CaptionButton}"
+                                        Content="{StaticResource Icon.Maximize}"
+                                        ToolTip.Tip="Maximize"
+                                        AutomationProperties.Name="Maximize"
+                                        WindowDecorationProperties.ElementRole="MaximizeButton" />
+                                <Button Name="PART_CloseButton"
+                                        Classes="close"
+                                        Theme="{StaticResource CaptionButton}"
+                                        Content="{StaticResource Icon.WindowClose}"
+                                        ToolTip.Tip="Close"
+                                        AutomationProperties.Name="Close"
+                                        WindowDecorationProperties.ElementRole="CloseButton" />
+                            </StackPanel>
+                        </Panel>
+                    </WindowDrawnDecorationsContent.Overlay>
+
+                    <!-- In fullscreen (not offered by these buttons, but reachable from the OS): a way back and out. -->
+                    <WindowDrawnDecorationsContent.FullscreenPopover>
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Height="{TemplateBinding DefaultTitleBarHeight}"
+                                    Background="{DynamicResource BgBrush}"
+                                    WindowDecorationProperties.ElementRole="DecorationsElement">
+                            <Button Name="PART_PopoverFullScreenButton"
+                                    Theme="{StaticResource CaptionButton}"
+                                    Content="{StaticResource Icon.Restore}"
+                                    ToolTip.Tip="Exit full screen"
+                                    AutomationProperties.Name="Exit full screen"
+                                    WindowDecorationProperties.ElementRole="FullScreenButton" />
+                            <Button Name="PART_PopoverCloseButton"
+                                    Classes="close"
+                                    Theme="{StaticResource CaptionButton}"
+                                    Content="{StaticResource Icon.WindowClose}"
+                                    ToolTip.Tip="Close"
+                                    AutomationProperties.Name="Close"
+                                    WindowDecorationProperties.ElementRole="CloseButton" />
+                        </StackPanel>
+                    </WindowDrawnDecorationsContent.FullscreenPopover>
+                </WindowDrawnDecorationsContent>
+            </WindowDrawnDecorationsTemplate>
+        </Setter>
+
+        <!-- With a drawn shadow (Linux), the frame and buttons sit inside it. -->
+        <Style Selector="^:has-shadow /template/ Panel#PART_UnderlayWrapper">
+            <Setter Property="Margin" Value="{TemplateBinding ShadowThickness}" />
+        </Style>
+        <Style Selector="^:has-shadow /template/ Border#PART_WindowBorder">
+            <Setter Property="BoxShadow" Value="0 2 10 2 #80000000" />
+        </Style>
+        <Style Selector="^:has-shadow /template/ Panel#PART_OverlayWrapper">
+            <Setter Property="Margin" Value="{TemplateBinding ShadowThickness}" />
+        </Style>
+        <Style Selector="^:has-border /template/ StackPanel#PART_OverlayPanel">
+            <Setter Property="Margin" Value="0,1,1,0" />
+        </Style>
+
+        <Style Selector="^:maximized /template/ Button#PART_MaximizeButton">
+            <Setter Property="Content" Value="{StaticResource Icon.Restore}" />
+            <Setter Property="ToolTip.Tip" Value="Restore" />
+        </Style>
+        <Style Selector="^:not(:has-minimize) /template/ Button#PART_MinimizeButton">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:not(:has-maximize) /template/ Button#PART_MaximizeButton">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:fullscreen /template/ StackPanel#PART_OverlayPanel">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </ControlTheme>
+</ResourceDictionary>

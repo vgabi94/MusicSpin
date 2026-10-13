@@ -17,6 +17,7 @@
             <SolidColorBrush x:Key="PlaceholderBrush" Color="#2A2E37" />
             <SolidColorBrush x:Key="PlaceholderInkBrush" Color="#C9CED8" />
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0DFFFFFF" />
+            <SolidColorBrush x:Key="CaptionHoverBrush" Color="#1AFFFFFF" />
             <Color x:Key="CardShadowColor">#CC000000</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
@@ -30,6 +31,7 @@
             <SolidColorBrush x:Key="PlaceholderBrush" Color="#D3CEC5" />
             <SolidColorBrush x:Key="PlaceholderInkBrush" Color="#4A4C52" />
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0A000000" />
+            <SolidColorBrush x:Key="CaptionHoverBrush" Color="#14000000" />
             <Color x:Key="CardShadowColor">#66000000</Color>
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
@@ -57,4 +59,7 @@
     </LinearGradientBrush>
     <!-- Text and icons on an accent fill (the mockup's black on the accent). -->
     <SolidColorBrush x:Key="OnAccentBrush" Color="#000000" />
+    <!-- The close window button while hovered (the platform convention). -->
+    <SolidColorBrush x:Key="CloseHoverBrush" Color="#E81123" />
+    <SolidColorBrush x:Key="CloseHoverInkBrush" Color="#FFFFFF" />
 </ResourceDictionary>

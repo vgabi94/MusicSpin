@@ -15,6 +15,7 @@
                 <ResourceInclude Source="avares://MusicSpin/Styles/Icons.axaml" />
                 <ResourceInclude Source="avares://MusicSpin/Styles/Fonts.axaml" />
                 <ResourceInclude Source="avares://MusicSpin/Styles/Controls.axaml" />
+                <ResourceInclude Source="avares://MusicSpin/Styles/Window.axaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

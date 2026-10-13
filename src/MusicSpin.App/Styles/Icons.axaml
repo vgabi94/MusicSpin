@@ -14,6 +14,11 @@
     <sys:Boolean x:Key="Icon.Playlist.Stroked">True</sys:Boolean>
     <StreamGeometry x:Key="Icon.Search">M10.5,4 A6.5,6.5 0 1 1 10.5,17 A6.5,6.5 0 1 1 10.5,4 Z M15.5,15.5 L20,20</StreamGeometry>
     <StreamGeometry x:Key="Icon.Close">M6,6 L18,18 M18,6 L6,18</StreamGeometry>
+    <!-- Window buttons, thin like the mockup's .winctl glyphs (drawn stroked). -->
+    <StreamGeometry x:Key="Icon.Minimize">M2,12 H22</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Maximize">M2,2 H22 V22 H2 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Restore">M2,7 H17 V22 H2 Z M7,7 V2 H22 V17 H17</StreamGeometry>
+    <StreamGeometry x:Key="Icon.WindowClose">M2,2 L22,22 M22,2 L2,22</StreamGeometry>
     <StreamGeometry x:Key="Icon.Play">M8,5 L19,12 L8,19 Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Pause">M6.5,5 H10 V19 H6.5 Z M14,5 H17.5 V19 H14 Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Previous">M6,5 H8 V19 H6 Z M19,5 L9,12 L19,19 Z</StreamGeometry>

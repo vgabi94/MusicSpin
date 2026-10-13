@@ -7,6 +7,7 @@
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
     <!-- The window grid: title bar, sidebar | content, player bar. -->
     <GridLength x:Key="TitleBarHeight">44</GridLength>
+    <sys:Double x:Key="TitleBarHeightValue">44</sys:Double>
     <GridLength x:Key="SidebarWidth">220</GridLength>
     <GridLength x:Key="PlayerBarHeight">84</GridLength>
     <sys:Double x:Key="WindowWidth">1440</sys:Double>
@@ -38,6 +39,11 @@
     <!-- Room left for the system window buttons: on the right on Windows and Linux; on macOS they are on the left
          (MacTitleBarPadding). -->
     <sys:Double x:Key="CaptionButtonsWidth">138</sys:Double>
+    <!-- The system buttons we draw (Windows, Linux; mockup: .winctl i): 3 x 46 = CaptionButtonsWidth. -->
+    <sys:Double x:Key="CaptionButtonWidth">46</sys:Double>
+    <sys:Double x:Key="CaptionIconSize">10</sys:Double>
+    <Thickness x:Key="WindowFrameThickness">1</Thickness>
+    <sys:Double x:Key="WindowShadowThickness">8</sys:Double>
 
     <!-- Sidebar -->
     <Thickness x:Key="SidebarPadding">10,12</Thickness>

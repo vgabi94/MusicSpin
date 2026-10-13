@@ -32,6 +32,19 @@ public sealed class ShellTests
     }
 
     [AvaloniaFact]
+    public async Task The_window_draws_only_its_own_title_bar_and_the_system_buttons()
+    {
+        await using var app = await AppHarness.OpenAsync();
+        var window = app.Window;
+
+        // Fluent's drawn decorations add a second title and a fullscreen button over ours (Styles/Window.axaml).
+        Assert.True(window.ExtendClientAreaToDecorationsHint);
+        Assert.Equal(44, window.ExtendClientAreaTitleBarHeightHint);
+        Assert.True(Application.Current!.TryGetResource("ShellDecorations", null, out var theme));
+        Assert.Same(theme, window.WindowDecorationsTheme);
+    }
+
+    [AvaloniaFact]
     public async Task The_window_does_not_go_below_1280_wide()
     {
         await using var app = await AppHarness.OpenAsync(new AppOptions { Width = 1000, Height = 600 });
