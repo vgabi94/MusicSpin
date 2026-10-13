@@ -61,6 +61,7 @@ public sealed record OutputInfo(string Backend, string? Device, bool Exclusive);
 /// <param name="ShuffleSeed">Seed of the latest full shuffle (reproduces it); null when shuffle is off.</param>
 /// <param name="Gapless">Whether same-format tracks follow each other without a gap (settings.json "gapless").</param>
 /// <param name="Underruns">Times the output ran dry and played silence because decoding fell behind (since the player started).</param>
+/// <param name="UpNext">How many entries after the current one are up next (added to play next; see <see cref="QueueEntry.UpNext"/>).</param>
 public sealed record PlayerStatus(
     PlayerState State,
     double PositionSeconds,
@@ -79,7 +80,8 @@ public sealed record PlayerStatus(
     int? ShuffleSeed = null,
     bool? Gapless = null,
     long? Underruns = null,
-    RadioInfo? Radio = null)
+    RadioInfo? Radio = null,
+    int UpNext = 0)
 {
     /// <summary>
     /// "radio" while a radio station plays (see <see cref="Radio"/>), else "queue". (Named so it does not clash with the
@@ -97,7 +99,8 @@ public sealed record RadioState(MusicSpin.Core.Library.RadioFilter Filter, IRead
 /// <summary>A page of the queue.</summary>
 public sealed record QueueListing(int Total, int Offset, int Limit, int? CurrentIndex, IReadOnlyList<QueueEntry> Items);
 
-public sealed record QueueEntry(int Index, bool Current, QueueItem Item);
+/// <param name="UpNext">Added by the user to play after the current entry (see <see cref="Playback.QueuePosition"/>), before the rest of the queue or the radio station.</param>
+public sealed record QueueEntry(int Index, bool Current, QueueItem Item, bool UpNext = false);
 
 /// <summary>Information about the background player process (<c>hello</c> / <c>music-spin player status</c>).</summary>
 public sealed record PlayerProcessInfo(
@@ -113,7 +116,8 @@ public sealed record PlayerProcessInfo(
 
 /// <summary>
 /// The persisted state of a queue (<c>.usrdata/queue.json</c>): entries in play order, their original-order keys (so
-/// shuffle off can restore the original order after a restart), the current index and position, and the modes.
+/// shuffle off can restore the original order after a restart), the current index and position, the modes, and the
+/// indexes of the up-next entries (null: none).
 /// </summary>
 public sealed record QueueSnapshot(
     int Version,
@@ -125,7 +129,8 @@ public sealed record QueueSnapshot(
     bool Shuffle,
     int? Seed,
     DateTimeOffset SavedAt,
-    RadioState? Radio = null)
+    RadioState? Radio = null,
+    IReadOnlyList<int>? UpNext = null)
 {
     /// <summary>The only format read and written. No migrations before the first release: another version is treated like a corrupt file.</summary>
     public const int CurrentVersion = 1;

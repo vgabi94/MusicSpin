@@ -17,7 +17,8 @@ public enum ProtocolAction
 }
 
 /// <summary>One answered request: the JSON line to send back and the follow-up action.</summary>
-public readonly record struct ProtocolReply(string Line, ProtocolAction Action);
+/// <param name="Spectrum">A <c>subscribe</c> that asked for <c>spectrum</c> events too.</param>
+public readonly record struct ProtocolReply(string Line, ProtocolAction Action, bool Spectrum = false);
 
 /// <summary>Wire shapes of the JSON-lines protocol.</summary>
 public static class ProtocolMessages
@@ -47,8 +48,9 @@ public static class ProtocolMessages
 /// Events (no id): <c>{"event":"stateChanged","data":{...}}</c>.
 /// <para>Commands: hello, status, load(path), play(index?), pause, resume, toggle, stop, next, prev,
 /// seek(seconds | delta), volume(value | delta), info(path), queue(offset?, limit?),
-/// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.add(items), queue.clear,
-/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), subscribe, quit.
+/// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.add(items, position? = end|next|upnext),
+/// queue.remove(index), queue.move(from, to), queue.clear(upNext?),
+/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), subscribe(spectrum?), quit.
 /// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle without a mode just return the status.</para>
 /// </summary>
 public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory decoders, Func<object>? hello = null)
@@ -58,7 +60,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
     public static IReadOnlyList<string> Commands { get; } =
     [
         "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "info",
-        "queue", "queue.set", "queue.add", "queue.clear", "repeat", "shuffle", "radio", "subscribe", "quit",
+        "queue", "queue.set", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "subscribe", "quit",
     ];
 
     public QueuePlayer Player { get; } = player ?? throw new ArgumentNullException(nameof(player));
@@ -83,7 +85,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
 
             var cmd = root.TryGetProperty("cmd", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null;
             var (data, action) = Dispatch(cmd, root);
-            return new ProtocolReply(ProtocolMessages.Ok(id, data), action);
+            var spectrum = action == ProtocolAction.Subscribe && OptionalBool(root, "spectrum") == true;
+            return new ProtocolReply(ProtocolMessages.Ok(id, data), action, spectrum);
         }
         catch (JsonException ex)
         {
@@ -156,9 +159,13 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                     OptionalNumber(root, "startSeconds") is { } s ? TimeSpan.FromSeconds(s) : null,
                     OptionalBool(root, "shuffle"), OptionalInt(root, "seed")), ProtocolAction.None);
             case "queue.add":
-                return (Player.Add(Items(root)), ProtocolAction.None);
+                return (Player.Add(Items(root), Position(root)), ProtocolAction.None);
+            case "queue.remove":
+                return (Player.Remove(RequiredInt(root, "index")), ProtocolAction.None);
+            case "queue.move":
+                return (Player.Move(RequiredInt(root, "from"), RequiredInt(root, "to")), ProtocolAction.None);
             case "queue.clear":
-                return (Player.Clear(), ProtocolAction.None);
+                return (OptionalBool(root, "upNext") == true ? Player.ClearUpNext() : Player.Clear(), ProtocolAction.None);
             case "repeat":
                 return (OptionalString(root, "mode") is { } repeat
                     ? Player.SetRepeat(PlaybackModes.TryParseRepeat(repeat, out var mode)
@@ -219,6 +226,19 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
         var filter = ProtocolJson.Deserialize<MusicSpin.Core.Library.RadioFilter>(f) ?? new MusicSpin.Core.Library.RadioFilter();
         return filter.Validate() is { } error ? throw new FormatException(error) : filter;
     }
+
+    /// <summary><c>"position"</c>: end (default), next or upnext.</summary>
+    private static QueuePosition Position(JsonElement root)
+        => OptionalString(root, "position")?.ToLowerInvariant() switch
+        {
+            null or "end" => QueuePosition.End,
+            "next" => QueuePosition.Next,
+            "upnext" => QueuePosition.UpNext,
+            var other => throw new FormatException($"Unknown position '{other}'. Use end|next|upnext."),
+        };
+
+    private static int RequiredInt(JsonElement root, string name)
+        => OptionalInt(root, name) ?? throw new FormatException($"Missing integer \"{name}\".");
 
     private static string? OptionalString(JsonElement root, string name)
     {

@@ -116,6 +116,35 @@ public sealed class PlayerCliTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Queue_editing_up_next_remove_move_and_clear_up_next()
+    {
+        await Ok("play", Long[0], "--backend", "null");
+        var next = await Ok("queue", "add", Long[1], "--next");
+        Assert.Equal(1, next.GetProperty("upNext").GetInt32());
+        var upNext = await Ok("queue", "add", Long[2], "--up-next");
+        Assert.Equal(2, upNext.GetProperty("upNext").GetInt32());
+        await Ok("queue", "add", CliHarness.Song); // the end
+
+        var listing = (await Ok("queue")).GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal([false, true, true, false], listing.Select(e => e.GetProperty("upNext").GetBoolean()));
+        var text = await _cli.RunAsync("queue");
+        Assert.Contains("(+ = up next)", text.Out, StringComparison.Ordinal);
+        Assert.Contains("+    2.", text.Out, StringComparison.Ordinal);
+
+        Assert.Equal(3, (await Ok("queue", "move", "4", "2")).GetProperty("upNext").GetInt32()); // the end entry joins up next
+        Assert.Equal(2, (await Ok("queue", "remove", "2")).GetProperty("upNext").GetInt32());
+        var cleared = await Ok("queue", "clear", "--up-next");
+        Assert.Equal(0, cleared.GetProperty("upNext").GetInt32());
+        Assert.Equal(1, cleared.GetProperty("queueLength").GetInt32());
+        Assert.Equal("playing", State(cleared));
+
+        var current = await _cli.RunAsync("queue", "remove", "1", "--json");
+        Assert.Equal(ExitCodes.InvalidState, current.ExitCode);
+        Assert.Equal(ExitCodes.Usage, (await _cli.RunAsync("queue", "move", "1", "9", "--json")).ExitCode);
+        Assert.Equal(ExitCodes.Usage, (await _cli.RunAsync("queue", "add", Long[1], "--next", "--up-next", "--json")).ExitCode);
+    }
+
+    [Fact]
     public async Task Queue_add_starts_a_stopped_player_when_none_runs()
     {
         var added = await Ok("queue", "add", Long[0], Long[1], "--backend", "null");

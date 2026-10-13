@@ -87,8 +87,9 @@ Notes:
 - After a crash (e.g. `kill -9`), commands exit 13 and mention the stale pid. The next `play` cleans up the leftovers.
 - `player status` is the cheap "is anything running?" check. It exits 0 either way.
 - `repeat off|one|all` and `shuffle on|off|toggle [--seed N]` change the running queue; `status` reports `repeat`, `shuffle` and `shuffleSeed`. Changes are saved as defaults for the next player (see [Playback](playback.md#shuffle-and-repeat)).
+- Queue editing: `queue add --next` / `--up-next` (play next), `queue remove <pos>`, `queue move <from> <to>` (1-based), `queue clear --up-next`. See [Playback → Up next](playback.md#up-next).
 - Playlists: `playlist create/add/show/...` (positions are 1-based), `play --playlist <name>`, `queue add --playlist <name>`, `queue save <name>`, `playlist import/export` for M3U/M3U8/PLS. Missing entries come back as `warnings` when played. See [Music library → Playlists](library.md#playlists).
-- **Radio:** `music-spin radio [--artist ...] [--genre ...] [--years 1990-1999] [--hires] [--exclude-artist ...] [--exclude-genre ...] ... --json` (MCP `radio`) plays the library endlessly at random. It starts the player like `play`. Check `queueMode` (`"radio"` or `"queue"`) and `radio.description`/`radio.poolSize` in any status. `next` never fails in radio mode; `shuffle` is exit 8 there; `play` or `queue clear` end it. Nothing matching is exit 12. Rules: [Playback → Radio](playback.md#radio).
+- **Radio:** `music-spin radio [--artist ...] [--genre ...] [--years 1990-1999] [--hires] [--exclude-artist ...] [--exclude-genre ...] ... --json` (MCP `radio`) plays the library endlessly at random. It starts the player like `play`. Check `queueMode` (`"radio"` or `"queue"`) and `radio.description`/`radio.poolSize` in any status. `next` never fails in radio mode; `shuffle` is exit 8 there; `play` or `queue clear` (without `--up-next`) end it. Nothing matching is exit 12. Rules: [Playback → Radio](playback.md#radio).
 - The queue survives the player: a new player restores it **paused**, and `resume` starts the player again when no player runs but a saved queue exists ([Persistent queue](playback.md#persistent-queue)).
 
 ## `serve`: JSON-lines protocol (v1)
@@ -116,6 +117,8 @@ One request per line on stdin; one response per line on stdout with the same `id
 // queue commands (the same protocol as the background player)
 {"id":10,"cmd":"queue.set","items":["/music/a.flac",{"path":"/music/b.flac","title":"B"}],"start":0,"play":true}
 {"id":11,"cmd":"queue.add","items":["/music/c.flac"]}
+{"id":25,"cmd":"queue.add","items":["/music/d.flac"],"position":"next"}   // end (default) | next | upnext: see Playback → Up next
+{"id":26,"cmd":"queue.remove","index":3}  {"id":27,"cmd":"queue.move","from":4,"to":1}  {"id":28,"cmd":"queue.clear","upNext":true}   // 0-based indexes
 {"id":12,"cmd":"next"}  {"id":13,"cmd":"prev"}  {"id":14,"cmd":"play","index":2}  {"id":15,"cmd":"toggle"}
 {"id":16,"cmd":"seek","delta":-10}             // relative seeks are clamped; absolute ones must be inside the track
 {"id":17,"cmd":"volume","delta":0.1}
@@ -155,7 +158,7 @@ $ printf '%s\n' '{"id":1,"cmd":"hello"}' \
 {"event":"stateChanged","data":{"state":"stopped","previous":"playing"}}
 ```
 
-The background player's socket additionally accepts `subscribe` (an event stream on that connection). Limits: 4 MiB per message, 64 concurrent connections. Malformed or oversized messages get an error response and do not affect the player.
+The background player's socket additionally accepts `subscribe` (an event stream on that connection). `{"cmd":"subscribe","spectrum":true}` also streams `{"event":"spectrum","data":{"levels":[16 values 0..1]}}` about 30 times a second while playing (zeros once on pause or stop): log-spaced bands from 40 Hz to 16 kHz, -60..0 dBFS, measured before the volume, for a visualizer. Analysis only runs while such a subscriber is connected, and a slow client loses old levels, never other events. `serve` always sends its events, but never spectrum levels. Limits: 4 MiB per message, 64 concurrent connections. Malformed or oversized messages get an error response and do not affect the player.
 
 ## MCP
 

@@ -62,6 +62,7 @@ internal sealed class PlaybackBuffer : IPcmSource
     private readonly Marker?[] _markers = new Marker?[MaxMarkers];
     private readonly Func<float> _volume;
     private readonly Action _signal;
+    private readonly SpectrumTap? _tap;
 
     private long _write;      // producer
     private long _read;       // consumer (or a guarded structural change)
@@ -73,7 +74,7 @@ internal sealed class PlaybackBuffer : IPcmSource
     private long _underruns;
     private long _crossed;
 
-    public PlaybackBuffer(PcmFormat format, int capacitySamples, TrackSegment first, Func<float> volume, Action signal)
+    public PlaybackBuffer(PcmFormat format, int capacitySamples, TrackSegment first, Func<float> volume, Action signal, SpectrumTap? tap = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(capacitySamples, format.Channels);
         Format = format;
@@ -81,6 +82,7 @@ internal sealed class PlaybackBuffer : IPcmSource
         _current = first;
         _volume = volume;
         _signal = signal;
+        _tap = tap;
     }
 
     public PcmFormat Format { get; }
@@ -178,6 +180,11 @@ internal sealed class PlaybackBuffer : IPcmSource
                 var target = buffer.Slice(done, count);
                 _ring.AsSpan(at, first).CopyTo(target);
                 _ring.AsSpan(0, count - first).CopyTo(target[first..]);
+                if (_tap is { Enabled: true } tap)
+                {
+                    tap.Write(target, Format); // before volume: a muted player still shows the music
+                }
+
                 var gain = _volume();
                 if (gain < 1f)
                 {

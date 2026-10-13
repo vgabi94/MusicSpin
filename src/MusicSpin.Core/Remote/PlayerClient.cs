@@ -144,9 +144,15 @@ public sealed class PlayerClient : IAsyncDisposable
     }
 
     /// <summary>Subscribes to player events (stateChanged, trackLoaded, ended, queueEnded, trackSkipped, queueChanged, error).</summary>
-    public async IAsyncEnumerable<PlayerEvent> SubscribeAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<PlayerEvent> SubscribeAsync(CancellationToken cancellationToken = default) => SubscribeAsync(spectrum: false, cancellationToken);
+
+    /// <summary>
+    /// Subscribes to player events; with <paramref name="spectrum"/> also to <c>spectrum</c> events (16 levels 0..1, about
+    /// 30 per second while playing; see <see cref="Playback.SpectrumMeter"/>).
+    /// </summary>
+    public async IAsyncEnumerable<PlayerEvent> SubscribeAsync(bool spectrum, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await SendAsync("subscribe", null, cancellationToken).ConfigureAwait(false);
+        await SendAsync("subscribe", spectrum ? new { spectrum = true } : null, cancellationToken).ConfigureAwait(false);
         while (true)
         {
             string? line;

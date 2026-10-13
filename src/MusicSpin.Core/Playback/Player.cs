@@ -118,6 +118,9 @@ public sealed class Player : IPlayer
     /// <summary>The source the output pulls from (tests and diagnostics).</summary>
     internal PlaybackBuffer? Buffer => Volatile.Read(ref _buffer);
 
+    /// <summary>What the output plays, for <see cref="SpectrumMeter"/> (copied only while enabled).</summary>
+    internal SpectrumTap SpectrumTap { get; } = new();
+
     public TrackInfo Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -373,7 +376,7 @@ public sealed class Player : IPlayer
         var channels = Math.Max(format.Channels, 1);
         var old = _buffer;
         _underrunsBefore += old?.Underruns ?? 0;
-        Volatile.Write(ref _buffer, new PlaybackBuffer(format, (int)Math.Min(frames * channels, int.MaxValue / 2), first, () => Volume, _notifier.Signal));
+        Volatile.Write(ref _buffer, new PlaybackBuffer(format, (int)Math.Min(frames * channels, int.MaxValue / 2), first, () => Volume, _notifier.Signal, SpectrumTap));
         _segments.Add(first);
         _writing = first;
         _writingDone = false;

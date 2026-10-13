@@ -3,6 +3,19 @@ using MusicSpin.Core.Remote;
 
 namespace MusicSpin.Core.Playback;
 
+/// <summary>Where <see cref="QueuePlayer.Add"/> puts new entries.</summary>
+public enum QueuePosition
+{
+    /// <summary>At the end of the queue (with shuffle on: mixed into the upcoming entries).</summary>
+    End,
+
+    /// <summary>Up next, right after the current entry (before earlier up-next entries): "Play next".</summary>
+    Next,
+
+    /// <summary>Up next, after the up-next entries already there: "Add to queue" in the app.</summary>
+    UpNext,
+}
+
 /// <summary>A queue entry was skipped because it could not be opened.</summary>
 public sealed class TrackSkippedEventArgs(SkippedItem item) : EventArgs
 {
@@ -159,7 +172,9 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             EnrichCurrent();
-            var items = _items.Skip(offset).Take(limit).Select((slot, i) => new QueueEntry(offset + i, offset + i == _index, slot.Item)).ToList();
+            var upNextEnd = _index >= 0 ? UpNextEnd() : 0;
+            var items = _items.Skip(offset).Take(limit)
+                .Select((slot, i) => new QueueEntry(offset + i, offset + i == _index, slot.Item, offset + i > _index && offset + i < upNextEnd)).ToList();
             return new QueueListing(_items.Count, offset, limit, _index >= 0 ? _index : null, items);
         }
     }
@@ -292,11 +307,21 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
-    /// <summary>Appends entries. On an empty queue the first playable one is loaded (stopped).</summary>
-    public PlayerStatus Add(IReadOnlyList<QueueItem> items)
+    /// <summary>
+    /// Adds entries. <see cref="QueuePosition.End"/> appends them (with shuffle on, mixed into the upcoming entries);
+    /// <see cref="QueuePosition.Next"/> and <see cref="QueuePosition.UpNext"/> insert them as <i>up next</i>, right after the
+    /// current entry or after the up-next entries already there. While radio plays every addition is up next. On an empty
+    /// queue the first playable entry is loaded (stopped), and nothing is up next.
+    /// </summary>
+    public PlayerStatus Add(IReadOnlyList<QueueItem> items, QueuePosition position = QueuePosition.End)
     {
         ArgumentNullException.ThrowIfNull(items);
         ValidateItems(items);
+        if (!Enum.IsDefined(position))
+        {
+            throw Invalid($"Unknown queue position '{position}'.");
+        }
+
         lock (_gate)
         {
             ThrowIfDisposed();
@@ -307,15 +332,17 @@ public sealed class QueuePlayer : IDisposable
 
             var added = items.Select(item => new Slot(item, _nextOrder++)).ToList();
             var first = _items.Count;
-            if (_radio is not null && _index >= 0)
+            if (_index >= 0 && (position != QueuePosition.End || _radio is not null))
             {
-                // Radio: play these next (after earlier additions), then the station continues.
-                var at = _index + 1;
-                while (at < _items.Count && !_items[at].Radio)
+                // Up next: these play after the current entry (and, for UpNext, after earlier additions); then the queue
+                // or the radio station continues.
+                var at = position == QueuePosition.Next ? _index + 1 : UpNextEnd();
+                foreach (var slot in added)
                 {
-                    at++;
+                    slot.UpNext = true;
                 }
 
+                PlaceInOriginalOrder(_items[at - 1], added);
                 _items.InsertRange(at, added);
             }
             else if (_shuffle && _index >= 0)
@@ -352,6 +379,88 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Removes the entry at <paramref name="index"/> (play order). The current entry can't be removed (InvalidState):
+    /// skip it with <see cref="Next"/> first.
+    /// </summary>
+    public PlayerStatus Remove(int index)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            RequireIndex(index);
+            if (index == _index)
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
+                    $"Entry {index + 1} is the current track. Skip it with 'music-spin next' first, or 'music-spin queue clear' to empty the queue.");
+            }
+
+            _items.RemoveAt(index);
+            if (index < _index)
+            {
+                _index--;
+            }
+
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+            return StatusCore();
+        }
+    }
+
+    /// <summary>
+    /// Moves the entry at <paramref name="from"/> so that it ends up at <paramref name="to"/> (both in play order); the
+    /// current entry keeps playing wherever it moves. An entry moved into the up-next entries, or right after them, becomes
+    /// up next; one moved past other upcoming entries, or before the current one, doesn't. With shuffle off this is also the
+    /// new original order; with shuffle on, turning shuffle off restores the original order.
+    /// </summary>
+    public PlayerStatus Move(int from, int to)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            RequireIndex(from);
+            RequireIndex(to);
+            if (from == to)
+            {
+                return StatusCore();
+            }
+
+            var current = _items[_index];
+            var slot = _items[from];
+            _items.RemoveAt(from);
+            _items.Insert(to, slot);
+            _index = _items.IndexOf(current);
+            if (!ReferenceEquals(slot, current))
+            {
+                slot.UpNext = to > _index && _items.Skip(_index + 1).Take(to - _index - 1).All(s => s.UpNext);
+            }
+
+            NormalizeUpNext();
+            if (!_shuffle)
+            {
+                RenumberOrder();
+            }
+
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+            return StatusCore();
+        }
+    }
+
+    /// <summary>Removes the up-next entries; the current track keeps playing and the rest of the queue follows.</summary>
+    public PlayerStatus ClearUpNext()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (_index >= 0 && UpNextEnd() is var end && end > _index + 1)
+            {
+                _items.RemoveRange(_index + 1, end - _index - 1);
+                QueueChanged?.Invoke(this, EventArgs.Empty);
+            }
+
+            return StatusCore();
+        }
+    }
+
     /// <summary>Stops playback and empties the queue.</summary>
     public PlayerStatus Clear()
     {
@@ -373,7 +482,10 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
-    /// <summary>Plays entry <paramref name="index"/>, or resumes/starts the current entry when null.</summary>
+    /// <summary>
+    /// Plays entry <paramref name="index"/>, or resumes/starts the current entry when null. Skipping ahead drops the up-next
+    /// entries it jumps over: they were never played.
+    /// </summary>
     public PlayerStatus Play(int? index = null)
     {
         if (index is null)
@@ -390,7 +502,24 @@ public sealed class QueuePlayer : IDisposable
                 throw Invalid($"index {index} is outside the queue (0-{_items.Count - 1}).");
             }
 
-            return MoveAndPlay(index.Value, +1, wrap: WrapAll);
+            var target = index.Value;
+            var dropped = false;
+            for (var i = target - 1; i > _index; i--)
+            {
+                if (_items[i].UpNext)
+                {
+                    _items.RemoveAt(i);
+                    target--;
+                    dropped = true;
+                }
+            }
+
+            if (dropped)
+            {
+                QueueChanged?.Invoke(this, EventArgs.Empty);
+            }
+
+            return MoveAndPlay(target, +1, wrap: WrapAll);
         }
     }
 
@@ -628,10 +757,13 @@ public sealed class QueuePlayer : IDisposable
                 if (_shuffle)
                 {
                     var current = _index >= 0 && _index < _items.Count ? _items[_index] : null;
+                    var upNext = current is null ? [] : _items.GetRange(_index + 1, UpNextEnd() - _index - 1);
+                    _items.RemoveRange(_index + 1, upNext.Count);
                     _items.Sort(static (a, b) => a.Order.CompareTo(b.Order));
                     if (current is not null)
                     {
                         _index = _items.IndexOf(current);
+                        _items.InsertRange(_index + 1, upNext); // up next stays next
                     }
 
                     _shuffle = false;
@@ -645,7 +777,7 @@ public sealed class QueuePlayer : IDisposable
             _seed = seed ?? NewSeed();
             _random = new Random(_seed.Value);
             _shuffle = true;
-            ShuffleRange(_items, _index >= 0 ? _index + 1 : 0, _random);
+            ShuffleRange(_items, _index >= 0 ? UpNextEnd() : 0, _random);
             QueueChanged?.Invoke(this, EventArgs.Empty);
             return StatusCore();
         }
@@ -666,8 +798,10 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             var has = _index >= 0 && _index < _items.Count;
+            var upNext = has ? Enumerable.Range(_index + 1, UpNextEnd() - _index - 1).ToList() : [];
             return new QueueSnapshot(QueueSnapshot.CurrentVersion, [.. _items.Select(s => s.Item)], [.. _items.Select(s => s.Order)],
-                has ? _index : null, has && !_ended && CurrentLoaded() ? Math.Round(_player.Position.TotalSeconds, 3) : 0, _repeat, _shuffle, _shuffle ? _seed : null, savedAt, _radio?.ToState());
+                has ? _index : null, has && !_ended && CurrentLoaded() ? Math.Round(_player.Position.TotalSeconds, 3) : 0, _repeat, _shuffle, _shuffle ? _seed : null, savedAt, _radio?.ToState(),
+                upNext.Count > 0 ? upNext : null);
         }
     }
 
@@ -700,6 +834,11 @@ public sealed class QueuePlayer : IDisposable
             throw Invalid("Saved queue: invalid repeat mode or position.");
         }
 
+        if (snapshot.UpNext is { } upNext && (upNext.Any(k => k < 0 || k >= snapshot.Items.Count) || upNext.Distinct().Count() != upNext.Count))
+        {
+            throw Invalid("Saved queue: the up-next indexes do not match the items.");
+        }
+
         if (snapshot.Radio is { } radio && (radio.Filter is null || radio.Filter.Validate() is not null))
         {
             throw Invalid($"Saved queue: invalid radio filters ({radio.Filter?.Validate() ?? "missing"}).");
@@ -716,16 +855,13 @@ public sealed class QueuePlayer : IDisposable
                 _items.Add(new Slot(snapshot.Items[k], snapshot.Order[k]));
             }
 
-            _nextOrder = snapshot.Order.Count == 0 ? 0 : snapshot.Order.Max() + 1;
-            _radio = snapshot.Radio is { } state ? RadioSession.From(state, NewRadioRandom()) : null;
-            if (_radio is not null)
+            foreach (var k in snapshot.UpNext ?? [])
             {
-                for (var k = (snapshot.Index ?? 0) + 1; k < _items.Count; k++)
-                {
-                    _items[k].Radio = true; // upcoming picks; the station tops up after them
-                }
+                _items[k].UpNext = true;
             }
 
+            _nextOrder = snapshot.Order.Count == 0 ? 0 : snapshot.Order.Max() + 1;
+            _radio = snapshot.Radio is { } state ? RadioSession.From(state, NewRadioRandom()) : null;
             _repeat = snapshot.Repeat;
             _shuffle = snapshot.Shuffle;
             _seed = snapshot.Shuffle ? snapshot.Seed ?? NewSeed() : null;
@@ -735,6 +871,7 @@ public sealed class QueuePlayer : IDisposable
             _lastError = null;
             ResetRapidLoops();
             _index = _items.Count == 0 ? -1 : snapshot.Index ?? 0;
+            NormalizeUpNext();
             if (_index >= 0 && TryLoad(_items[_index].Item, _index, null))
             {
                 var position = TimeSpan.FromSeconds(snapshot.PositionSeconds);
@@ -953,7 +1090,8 @@ public sealed class QueuePlayer : IDisposable
             _shuffle ? _seed : null,
             diagnostics?.Gapless,
             diagnostics?.Underruns,
-            _radio is null ? null : new RadioInfo(_radio.Filter, _radio.Filter.Describe(), _radio.PoolSize));
+            _radio is null ? null : new RadioInfo(_radio.Filter, _radio.Filter.Describe(), _radio.PoolSize),
+            has ? UpNextEnd() - _index - 1 : 0);
     }
 
     private const int MaxNextTracks = 16;
@@ -1080,7 +1218,7 @@ public sealed class QueuePlayer : IDisposable
                 var first = slots.Count;
                 foreach (var pick in RadioPicker.Pick(pool, RadioLookahead, session.History, session.Random))
                 {
-                    slots.Add(new Slot(ToItem(pick), order++) { Radio = true });
+                    slots.Add(new Slot(ToItem(pick), order++));
                 }
 
                 for (var i = first; i < slots.Count && loaded < 0; i++)
@@ -1168,7 +1306,7 @@ public sealed class QueuePlayer : IDisposable
 
         foreach (var pick in RadioPicker.Pick(pool, RadioLookahead - upcoming, radio.History, radio.Random))
         {
-            _items.Add(new Slot(ToItem(pick), _nextOrder++) { Radio = true });
+            _items.Add(new Slot(ToItem(pick), _nextOrder++));
         }
 
         QueueChanged?.Invoke(this, EventArgs.Empty);
@@ -1202,6 +1340,76 @@ public sealed class QueuePlayer : IDisposable
             throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
                 "The queue is empty. Start something with 'music-spin play <file> | --album <title> | --artist <name>'.");
         }
+    }
+
+    private void RequireIndex(int index)
+    {
+        RequireQueue();
+        if (index < 0 || index >= _items.Count)
+        {
+            throw Invalid($"index {index} is outside the queue (0-{_items.Count - 1}).");
+        }
+    }
+
+    /// <summary>The index after the up-next entries (the run of them right after the current entry). Needs a current entry.</summary>
+    private int UpNextEnd()
+    {
+        var end = _index + 1;
+        while (end < _items.Count && _items[end].UpNext)
+        {
+            end++;
+        }
+
+        return end;
+    }
+
+    /// <summary>
+    /// Keeps "up next" meaning the run right after the current entry: marks on entries already played, or after an entry
+    /// that isn't up next, are cleared (they stay in the queue as ordinary entries).
+    /// </summary>
+    private void NormalizeUpNext()
+    {
+        var end = _index >= 0 ? UpNextEnd() : 0;
+        for (var i = 0; i < _items.Count; i++)
+        {
+            if (i <= _index || i >= end)
+            {
+                _items[i].UpNext = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gives <paramref name="added"/> original-order keys right after <paramref name="after"/>'s, so turning shuffle off later
+    /// keeps them where they were inserted. Shifts the later keys; O(n).
+    /// </summary>
+    private void PlaceInOriginalOrder(Slot after, List<Slot> added)
+    {
+        foreach (var slot in _items)
+        {
+            if (slot.Order > after.Order)
+            {
+                slot.Order += added.Count;
+            }
+        }
+
+        for (var k = 0; k < added.Count; k++)
+        {
+            added[k].Order = after.Order + 1 + k;
+        }
+
+        _nextOrder = _items.Concat(added).Max(s => s.Order) + 1;
+    }
+
+    /// <summary>With shuffle off the play order is the original order: renumbers the keys to match it after a move.</summary>
+    private void RenumberOrder()
+    {
+        for (var i = 0; i < _items.Count; i++)
+        {
+            _items[i].Order = i;
+        }
+
+        _nextOrder = _items.Count;
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
@@ -1241,14 +1449,15 @@ public sealed class QueuePlayer : IDisposable
     }
 
     /// <summary>
-    /// Inserts <paramref name="added"/> (shuffled) at random positions after the current entry, keeping the relative order
+    /// Inserts <paramref name="added"/> (shuffled) at random positions after the current and up-next entries, keeping the relative order
     /// of the upcoming entries: a random interleave, O(n).
     /// </summary>
     private void MixIntoUpcoming(List<Slot> added)
     {
         ShuffleRange(added, 0, _random);
-        var upcoming = _items.GetRange(_index + 1, _items.Count - _index - 1);
-        _items.RemoveRange(_index + 1, upcoming.Count);
+        var from = UpNextEnd(); // up-next entries stay next
+        var upcoming = _items.GetRange(from, _items.Count - from);
+        _items.RemoveRange(from, upcoming.Count);
         int a = 0, b = 0;
         while (a < upcoming.Count || b < added.Count)
         {
@@ -1373,10 +1582,10 @@ public sealed class QueuePlayer : IDisposable
     {
         public QueueItem Item { get; set; } = item;
 
-        public long Order { get; } = order;
+        public long Order { get; set; } = order;
 
-        /// <summary>Picked by the radio station (as opposed to added by the user while radio plays).</summary>
-        public bool Radio { get; set; }
+        /// <summary>Added by the user to play next (only meaningful in the run right after the current entry).</summary>
+        public bool UpNext { get; set; }
     }
 
     /// <summary>A playing radio station: filters, recent picks and its random generator.</summary>

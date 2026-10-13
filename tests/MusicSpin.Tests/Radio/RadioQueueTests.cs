@@ -383,6 +383,50 @@ public sealed class RadioQueueTests : IDisposable
     }
 
     [Fact]
+    public void Additions_during_radio_are_up_next_and_next_goes_first()
+    {
+        var queue = Create(Pool(20, artists: 20));
+        var extra = PlayerTestKit.Tracks(2, 30, "/music/extra");
+        foreach (var p in extra.Paths)
+        {
+            _decoders.Files[p] = extra.Decoders.Files[p];
+        }
+
+        queue.StartRadio(new RadioFilter());
+        queue.Add([new QueueItem(extra.Paths[0])]);
+        var status = queue.Add([new QueueItem(extra.Paths[1])], QueuePosition.Next);
+
+        var listing = queue.List().Items;
+        Assert.Equal([extra.Paths[1], extra.Paths[0]], listing.Skip(1).Take(2).Select(e => e.Item.Path));
+        Assert.All(listing.Skip(1).Take(2), e => Assert.True(e.UpNext));
+        Assert.All(listing.Skip(3), e => Assert.False(e.UpNext)); // the station's picks
+        Assert.Equal(2, status.UpNext);
+
+        queue.ClearUpNext();
+        Assert.DoesNotContain(queue.List().Items, e => extra.Paths.Contains(e.Item.Path));
+        Assert.Equal("radio", queue.Status().QueueMode);
+    }
+
+    [Fact]
+    public void Up_next_entries_survive_a_radio_restore_and_play_before_the_picks()
+    {
+        var queue = Create(Pool(20, artists: 20));
+        var extra = PlayerTestKit.Tracks(1, 30, "/music/extra");
+        _decoders.Files[extra.Paths[0]] = extra.Decoders.Files[extra.Paths[0]];
+        queue.StartRadio(new RadioFilter());
+        queue.Add([new QueueItem(extra.Paths[0])]);
+        var snapshot = queue.Snapshot(DateTimeOffset.UnixEpoch);
+
+        var restored = Create(Pool(20, artists: 20));
+        restored.Restore(snapshot);
+
+        var listing = restored.List().Items;
+        Assert.True(listing[1].UpNext);
+        Assert.Equal(extra.Paths[0], listing[1].Item.Path);
+        Assert.False(listing[2].UpNext);
+    }
+
+    [Fact]
     public async Task Repeat_one_replays_the_radio_track_and_repeat_all_does_not_wrap()
     {
         var queue = Create(Pool(10, artists: 10), seconds: 0.2, outputs: Outputs.Fast());

@@ -198,7 +198,7 @@ internal static class ControlCommands
     {
         var limit = Options.Limit();
         var offset = Options.Offset();
-        var queue = new Command("queue", "List the player's queue (index, current entry, path, tags). Subcommands: add, clear.") { limit, offset };
+        var queue = new Command("queue", "List the player's queue (index, current entry, up-next entries, path, tags). Subcommands: add, remove, move, clear, save.") { limit, offset };
         runner.SetAction(queue, async (parseResult, json, cancellationToken) =>
         {
             await using var client = await PlayerSupport.ConnectAsync(runner, parseResult, cancellationToken).ConfigureAwait(false);
@@ -211,11 +211,12 @@ internal static class ControlCommands
             else
             {
                 var listing = ProtocolJson.Deserialize<QueueListing>(data)!;
-                runner.Env.Out.WriteLine($"Queue: {listing.Total} entr{(listing.Total == 1 ? "y" : "ies")}");
+                var upNext = listing.Items.Count(e => e.UpNext);
+                runner.Env.Out.WriteLine($"Queue: {listing.Total} entr{(listing.Total == 1 ? "y" : "ies")}{(upNext > 0 ? " (+ = up next)" : string.Empty)}");
                 foreach (var e in listing.Items)
                 {
                     var title = e.Item.Title ?? Path.GetFileName(e.Item.Path);
-                    runner.Env.Out.WriteLine($"{(e.Current ? ">" : " ")} {e.Index + 1,4}. {(e.Item.Artist is { } a ? $"{a} - {title}" : title)}");
+                    runner.Env.Out.WriteLine($"{(e.Current ? ">" : e.UpNext ? "+" : " ")} {e.Index + 1,4}. {(e.Item.Artist is { } a ? $"{a} - {title}" : title)}");
                 }
             }
 
@@ -226,12 +227,25 @@ internal static class ControlCommands
         var backend = Options.Backend();
         var device = Options.Device();
         var exclusive = Options.Exclusive();
-        var add = new Command("add", "Append file(s) or library tracks (--album/--artist/--search/--playlist [--shuffle]) to the queue. Starts the player (stopped) if needed.");
+        var next = new Option<bool>("--next") { Description = "Play the added tracks right after the current one (before tracks added earlier with --next/--up-next)." };
+        var upNext = new Option<bool>("--up-next") { Description = "Play the added tracks after the current one and the tracks already added to play next." };
+        var add = new Command("add",
+            "Add file(s) or library tracks (--album/--artist/--search/--playlist [--shuffle]) to the end of the queue, or up next with --next/--up-next. " +
+            "During radio, additions always play next. Starts the player (stopped) if needed.");
         source.AddTo(add);
+        add.Add(next);
+        add.Add(upNext);
         add.Add(backend);
         add.Add(device);
         add.Add(exclusive);
         add.Validators.Add(r => source.Validate(r));
+        add.Validators.Add(r =>
+        {
+            if (Options.Get(r, next) && Options.Get(r, upNext))
+            {
+                r.AddError("Give --next or --up-next, not both.");
+            }
+        });
         runner.SetAction(add, async (parseResult, json, cancellationToken) =>
         {
             var (items, seed, warnings) = source.Resolve(runner, parseResult);
@@ -239,7 +253,8 @@ internal static class ControlCommands
                 parseResult.GetValue(device), parseResult.GetValue(exclusive), cancellationToken).ConfigureAwait(false);
             await using (client.ConfigureAwait(false))
             {
-                var data = await client.SendAsync("queue.add", new { items }, cancellationToken).ConfigureAwait(false);
+                var position = parseResult.GetValue(next) ? "next" : parseResult.GetValue(upNext) ? "upnext" : "end";
+                var data = await client.SendAsync("queue.add", new { items, position }, cancellationToken).ConfigureAwait(false);
                 PlayerSupport.WriteStatus(runner, json, "queue add", data, new Dictionary<string, object?>
                 {
                     ["added"] = items.Count,
@@ -253,9 +268,25 @@ internal static class ControlCommands
         }, "queue add");
         queue.Add(add);
 
-        var clear = new Command("clear", "Stop playback and empty the queue.");
-        PlayerSupport.Control(runner, clear, "queue.clear", name: "queue clear");
+        var clearUpNext = new Option<bool>("--up-next") { Description = "Only remove the tracks added to play next; the current track and the rest keep playing." };
+        var clear = new Command("clear", "Stop playback and empty the queue (or, with --up-next, only remove the up-next tracks).") { clearUpNext };
+        PlayerSupport.Control(runner, clear, "queue.clear", p => p.GetValue(clearUpNext) ? new { upNext = true } : null, name: "queue clear");
         queue.Add(clear);
+
+        var position = new Argument<int>("position") { Description = "1-based position, as listed by 'music-spin queue'." };
+        var remove = new Command("remove", "Remove one queue entry. The current track can't be removed (exit 8): skip it with 'next' first.") { position };
+        PlayerSupport.Control(runner, remove, "queue.remove", p => new { index = p.GetValue(position) - 1 }, name: "queue remove");
+        queue.Add(remove);
+
+        var from = new Argument<int>("from") { Description = "1-based position of the entry to move." };
+        var to = new Argument<int>("to") { Description = "1-based position it should end up at." };
+        var move = new Command("move",
+            "Move a queue entry. An entry moved right after the current track, or among the up-next tracks, becomes up next; the current track keeps playing.")
+        {
+            from, to,
+        };
+        PlayerSupport.Control(runner, move, "queue.move", p => new { from = p.GetValue(from) - 1, to = p.GetValue(to) - 1 }, name: "queue move");
+        queue.Add(move);
         queue.Add(QueueSave(runner));
         return queue;
     }
