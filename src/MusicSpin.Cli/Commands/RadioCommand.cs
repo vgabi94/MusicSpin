@@ -23,6 +23,7 @@ internal static class RadioCommand
         };
         var search = Many("--search", "Search text, same syntax as 'music-spin search' (words, \"phrases\", artist:/album:/title:/genre:/year:). Repeat for several (any).");
         var hires = new Option<bool>("--hires") { Description = "Only hi-res tracks." };
+        var favorites = new Option<bool>("--favorites") { Description = "Only favorite tracks (see 'music-spin favorite add'); narrows the other filters." };
         const string Ex = " Excluded even when an include filter matches; unknown names are ignored.";
         var xArtist = Many("--exclude-artist", "Leave out this track or album artist (exact name). Repeatable." + Ex);
         var xAlbum = Many("--exclude-album", "Leave out this album (exact title or id). Repeatable." + Ex);
@@ -47,7 +48,7 @@ internal static class RadioCommand
             "--exclude-* options leave tracks out (any match excludes; exclude wins over include). " +
             "next/prev/pause/stop/status work as usual; 'play', 'queue clear' or 'load' end radio. Nothing matches: exit 12.")
         {
-            artist, album, genre, year, years, format, search, hires,
+            artist, album, genre, year, years, format, search, hires, favorites,
             xArtist, xAlbum, xGenre, xYear, xYears, xFormat, xSearch, backend, device, exclusive,
         };
         command.Validators.Add(r =>
@@ -87,6 +88,7 @@ internal static class RadioCommand
                 Formats = List(parseResult.GetValue(format)?.SelectMany(f => f.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))),
                 Searches = List(parseResult.GetValue(search)),
                 HiRes = parseResult.GetValue(hires),
+                Favorites = parseResult.GetValue(favorites),
                 ExcludeArtists = List(parseResult.GetValue(xArtist)),
                 ExcludeAlbums = List(parseResult.GetValue(xAlbum)),
                 ExcludeGenres = List(parseResult.GetValue(xGenre)),
@@ -111,15 +113,12 @@ internal static class RadioCommand
         string backend, string? device, bool exclusive, CancellationToken cancellationToken)
     {
         filter.EnsureValid();
-        bool any;
         using (var library = runner.OpenLibraryForRead(parseResult))
         {
-            any = library.HasRadioTracks(filter);
-        }
-
-        if (!any)
-        {
-            throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.EmptyPoolMessage());
+            if (!library.HasRadioTracks(filter))
+            {
+                throw new MusicSpinException(MusicSpinErrorCode.NotFound, library.RadioEmptyPoolMessage(filter));
+            }
         }
 
         var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, cancellationToken).ConfigureAwait(false);

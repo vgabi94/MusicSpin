@@ -148,6 +148,8 @@ public sealed partial class MusicLibrary : IDisposable
         {
             var artistKeys = query.Artist is { } artist ? ArtistKeys(artist) : null;
             var albumIds = query.Album is { } album ? AlbumIds(album) : null;
+            var favorites = query.Favorite is not null ? ResolveFavorites().Ticks : null;
+            var sort = query.Sort == TrackSort.Favorited && query.Favorite != true ? TrackSort.Default : query.Sort;
 
             ILiteQueryable<TrackRecord> Filtered()
             {
@@ -204,6 +206,12 @@ public sealed partial class MusicLibrary : IDisposable
                     q = q.Where(t => t.IsHiRes == hiRes);
                 }
 
+                if (favorites is not null)
+                {
+                    var ids = new BsonArray(favorites.Keys.Select(i => new BsonValue(i)));
+                    q = q.Where(BsonExpression.Create(query.Favorite == true ? "$._id IN @0" : "($._id IN @0) = false", ids));
+                }
+
                 return q;
             }
 
@@ -212,14 +220,14 @@ public sealed partial class MusicLibrary : IDisposable
             {
                 var total = Filtered().Count();
                 List<TrackRecord> items;
-                if (query.Sort is TrackSort.Default or TrackSort.Relevance)
+                if (sort is TrackSort.Default or TrackSort.Relevance)
                 {
                     var ordered = Filtered().OrderBy(t => t.SortKey, query.Descending ? Query.Descending : Query.Ascending);
                     items = ordered.Skip(offset).Limit(limit).ToList();
                 }
                 else
                 {
-                    items = SortTracks(Filtered().ToEnumerable(), query.Sort, query.Descending).Skip(offset).Take(limit).ToList();
+                    items = SortTracks(Filtered().ToEnumerable(), sort, query.Descending, favorites).Skip(offset).Take(limit).ToList();
                 }
 
                 return new Page<TrackRecord>(total, offset, limit, items);
@@ -234,10 +242,10 @@ public sealed partial class MusicLibrary : IDisposable
                 }
             }
 
-            IEnumerable<TrackRecord> sorted = query.Sort == TrackSort.Relevance
+            IEnumerable<TrackRecord> sorted = sort == TrackSort.Relevance
                 ? (query.Descending ? matches.OrderBy(m => m.Score) : matches.OrderByDescending(m => m.Score))
                     .ThenBy(m => m.Track.SortKey, StringComparer.Ordinal).Select(m => m.Track)
-                : SortTracks(matches.Select(m => m.Track), query.Sort, query.Descending);
+                : SortTracks(matches.Select(m => m.Track), sort, query.Descending, favorites);
             return new Page<TrackRecord>(matches.Count, offset, limit, sorted.Skip(offset).Take(limit).ToList());
         });
     }
@@ -533,7 +541,8 @@ public sealed partial class MusicLibrary : IDisposable
     private static IOrderedEnumerable<T> Order<T, TKey>(IEnumerable<T> items, Func<T, TKey> key, bool descending)
         => descending ? items.OrderByDescending(key) : items.OrderBy(key);
 
-    private static IEnumerable<TrackRecord> SortTracks(IEnumerable<TrackRecord> tracks, TrackSort sort, bool descending)
+    /// <param name="favorited">Favorite track id → when it was favorited, for <see cref="TrackSort.Favorited"/>.</param>
+    private static IEnumerable<TrackRecord> SortTracks(IEnumerable<TrackRecord> tracks, TrackSort sort, bool descending, Dictionary<string, long>? favorited = null)
     {
         IOrderedEnumerable<TrackRecord> ordered = sort switch
         {
@@ -547,6 +556,7 @@ public sealed partial class MusicLibrary : IDisposable
             TrackSort.BitDepth => Order(tracks, t => t.BitsPerSample ?? 0, descending),
             TrackSort.Size => Order(tracks, t => t.SizeBytes, descending),
             TrackSort.Path => Order(tracks, t => t.Path, descending),
+            TrackSort.Favorited when favorited is not null => Order(tracks, t => favorited.GetValueOrDefault(t.Id), descending),
             _ => Order(tracks, t => t.SortKey, descending),
         };
         return ordered.ThenBy(t => t.SortKey, StringComparer.Ordinal);

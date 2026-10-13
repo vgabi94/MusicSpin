@@ -25,6 +25,7 @@ internal sealed class LibraryDatabase : IDisposable
         Artists = db.GetCollection<ArtistRecord>("artists");
         Issues = db.GetCollection<ScanIssueRecord>("scan_issues");
         Playlists = db.GetCollection<PlaylistRecord>("playlists");
+        Favorites = db.GetCollection<FavoriteRecord>("favorites");
         CheckVersion(db, readOnly, file);
         if (readOnly)
         {
@@ -40,6 +41,7 @@ internal sealed class LibraryDatabase : IDisposable
         Albums.EnsureIndex(a => a.AlbumArtistKey);
         Artists.EnsureIndex(a => a.Key);
         Playlists.EnsureIndex(p => p.NameKey, unique: true);
+        Favorites.EnsureIndex(f => f.PathKey);
     }
 
     /// <summary>
@@ -56,6 +58,7 @@ internal sealed class LibraryDatabase : IDisposable
     public ILiteCollection<ArtistRecord> Artists { get; }
     public ILiteCollection<ScanIssueRecord> Issues { get; }
     public ILiteCollection<PlaylistRecord> Playlists { get; }
+    public ILiteCollection<FavoriteRecord> Favorites { get; }
 
     internal static BsonMapper Mapper { get; } = CreateMapper();
 
@@ -290,11 +293,12 @@ internal sealed class LibraryDatabase : IDisposable
         mapper.Entity<ArtistRecord>().Id(x => x.Id, autoId: false);
         mapper.Entity<ScanIssueRecord>().Id(x => x.Id, autoId: false);
         mapper.Entity<PlaylistRecord>().Id(x => x.Id, autoId: false);
+        mapper.Entity<FavoriteRecord>().Id(x => x.Id, autoId: false);
 
         // LiteDB 5 builds entity mappers lazily on first use and publishes them before their member lists are complete, so two
         // databases serializing a type for the first time on different threads (MCP tool calls, parallel tests) can see a half-built
         // mapper ("Collection was modified", or members silently skipped). Build every mapper once, here, before the mapper is shared.
-        foreach (var type in new[] { typeof(LibraryFolderRecord), typeof(TrackRecord), typeof(AlbumRecord), typeof(ArtistRecord), typeof(ScanIssueRecord), typeof(PlaylistRecord), typeof(PlaylistEntryRecord) })
+        foreach (var type in new[] { typeof(LibraryFolderRecord), typeof(TrackRecord), typeof(AlbumRecord), typeof(ArtistRecord), typeof(ScanIssueRecord), typeof(PlaylistRecord), typeof(PlaylistEntryRecord), typeof(FavoriteRecord) })
         {
             mapper.ToObject(type, mapper.ToDocument(type, Activator.CreateInstance(type)!));
         }

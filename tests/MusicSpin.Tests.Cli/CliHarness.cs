@@ -54,6 +54,9 @@ internal sealed class CliHarness : IAsyncDisposable
     /// <summary>Most tracks a --search source takes (lowered to test the cut-off warning without 10,000 files).</summary>
     public int SearchSourceLimit { get; set; } = MusicSpin.Core.Library.Paging.MaxLimit;
 
+    /// <summary>The clock commands use (library writes: date added, when favorited).</summary>
+    public TimeProvider Time { get; init; } = TimeProvider.System;
+
     public int Launches => Volatile.Read(ref _launches);
 
     private int _launches;
@@ -122,6 +125,7 @@ internal sealed class CliHarness : IAsyncDisposable
             PlayerRequestTimeout = PlayerRequestTimeout,
             McpStreams = McpStreams,
             SearchSourceLimit = SearchSourceLimit,
+            Time = Time,
         };
 
         var exitCode = await CliApp.RunAsync(args, env, cancellationToken);

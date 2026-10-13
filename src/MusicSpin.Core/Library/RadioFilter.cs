@@ -44,7 +44,7 @@ public sealed record YearRange(int From, int To)
 /// artist; unknown name: NotFound), <see cref="Albums"/> = exact album title or id (unknown: NotFound), <see cref="Genres"/> =
 /// exact genre name ignoring case/diacritics (multi-genre tags split on ; / , |), <see cref="Searches"/> = search syntax
 /// (as <c>music-spin search</c>), <see cref="Formats"/> = format ids, <see cref="Years"/> = inclusive ranges,
-/// <see cref="HiRes"/> = hi-res tracks only.
+/// <see cref="HiRes"/> = hi-res tracks only, <see cref="Favorites"/> = favorites only.
 /// </summary>
 public sealed record RadioFilter
 {
@@ -58,6 +58,9 @@ public sealed record RadioFilter
     public IReadOnlyList<string>? Searches { get; init; }
     public bool HiRes { get; init; }
 
+    /// <summary>Only favorite tracks (narrows the other filters, like <see cref="HiRes"/>).</summary>
+    public bool Favorites { get; init; }
+
     // Excludes: a track matching ANY exclude value is left out, whatever the include filters say (exclude wins). Same
     // matching rules as the includes, except that unknown artist/album names are ignored (excluding something absent is harmless).
     public IReadOnlyList<string>? ExcludeArtists { get; init; }
@@ -69,7 +72,7 @@ public sealed record RadioFilter
 
     /// <summary>No include filter (the excludes may still narrow the whole library).</summary>
     [JsonIgnore]
-    public bool IsEmpty => Count(Artists) + Count(Albums) + Count(Genres) + Count(Years) + Count(Formats) + Count(Searches) == 0 && !HiRes;
+    public bool IsEmpty => Count(Artists) + Count(Albums) + Count(Genres) + Count(Years) + Count(Formats) + Count(Searches) == 0 && !HiRes && !Favorites;
 
     [JsonIgnore]
     public bool HasExcludes => Count(ExcludeArtists) + Count(ExcludeAlbums) + Count(ExcludeGenres) + Count(ExcludeYears) + Count(ExcludeFormats) + Count(ExcludeSearches) > 0;
@@ -125,9 +128,13 @@ public sealed record RadioFilter
         return null;
     }
 
-    /// <summary>Why a station has nothing to play (empty library, nothing matches, or the excludes removed everything).</summary>
+    /// <summary>A favorites station with nothing to play (see <see cref="MusicLibrary.RadioEmptyPoolMessage"/> for the precise reason).</summary>
+    public const string NoFavoritesMessage = "There are no favorites in the library to play. Mark tracks with 'music-spin favorite add' (or the heart in the app).";
+
+    /// <summary>Why a station has nothing to play (empty library, no favorites, nothing matches, or the excludes removed everything).</summary>
     public string EmptyPoolMessage()
         => IsEmpty && !HasExcludes ? "The library is empty. Add music with 'music-spin library add <folder>' and 'music-spin library scan'."
+            : Favorites && !HasExcludes && this with { Favorites = false } is { IsEmpty: true } ? NoFavoritesMessage
             : HasExcludes ? $"No library tracks are left after the excludes ({Describe()})."
             : $"No library tracks match the radio filters ({Describe()}).";
 
@@ -163,6 +170,11 @@ public sealed record RadioFilter
         if (HiRes)
         {
             parts.Add("hi-res");
+        }
+
+        if (Favorites)
+        {
+            parts.Add("favorites");
         }
 
         var excluded = new List<string>();

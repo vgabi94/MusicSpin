@@ -321,6 +321,19 @@ $ music-spin library check --json
 
 Only one process writes the library at a time (`library.lock` in the data folder). A second writer gets exit **11 `library_locked`**. Readers (`tracks`, `search`, ...) can run while a scan is in progress.
 
+## Favorites
+
+A favorite is a library track marked with a heart (`favorite add`, the `favorite_add` MCP tool, the heart in the app). The **Favorites** view is a filter over the library, not a playlist: there is nothing to rename or delete, a track can't be in it twice, and unmarking needs no position.
+
+- **Storage:** the `favorites` collection in `library.db`, one document per favorite: the track id, its path, and when it was favorited. Not a field on the track record, which a rescan rebuilds.
+- **Following the track:** rescans keep the track id, so the favorite stays. Moves found by a scan and `library relocate` keep the id too, and the favorite's stored path is updated with the track's.
+- **When a track leaves the library** (file deleted, folder removed), its favorite is **kept** and counted as missing: `favorites` says how many, `favorites --missing` lists their paths, and `favorite remove <path>` or `favorite remove --missing` removes them. When a file at that path is in the library again (a folder added back gets new track ids), it counts as a favorite again, with its original date.
+- **Listing:** `favorites` (newest first), `tracks --favorites` / `filter --favorites` with the other filters, and `--sort favorited`. The library looks the favorites up by id (`_id IN [...]`), so the view is fast on big libraries.
+- **Playing:** `play --favorites` / `queue add --favorites` queue them newest first (all of them, no 10,000 cap); `radio --favorites` plays them at random ([Playback → Radio](playback.md#radio)).
+- Favorites are library tracks only: files outside the library can't be favorites (exit 12).
+
+Adding a favorite again keeps the original date, and removing one that isn't there changes nothing. Both need a writable library.
+
 ## Playlists
 
 Saved playlists live in `library.db` (collection `playlists`), next to the tracks. Commands: [`playlist`](cli-reference.md#playlist) in the CLI, `playlists`/`playlist_*` tools in the [MCP server](mcp.md#tools).

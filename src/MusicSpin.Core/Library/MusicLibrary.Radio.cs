@@ -26,6 +26,16 @@ public sealed partial class MusicLibrary
         return Guard(() => RadioMatches(filter, searches, genres, Excludes(filter)).Any());
     }
 
+    /// <summary>
+    /// Why <paramref name="filter"/> has nothing to play, more precisely than <see cref="RadioFilter.EmptyPoolMessage"/>:
+    /// a favorites station tells "no favorites yet" from "none of them is in the library".
+    /// </summary>
+    public string RadioEmptyPoolMessage(RadioFilter filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        return filter.Favorites && FavoritesSummary() is { Count: 0 } ? NoFavoritesMessage() : filter.EmptyPoolMessage();
+    }
+
     private static (List<SearchQuery>? Searches, HashSet<string>? Genres) Prepare(RadioFilter filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -97,6 +107,11 @@ public sealed partial class MusicLibrary
         var albumIds = filter.Albums is { Count: > 0 } albums
             ? new BsonArray(albums.SelectMany(AlbumIds).Distinct(StringComparer.Ordinal).Select(i => new BsonValue(i)))
             : null;
+        var favoriteIds = filter.Favorites ? new BsonArray(ResolveFavorites().Ticks.Keys.Select(i => new BsonValue(i))) : null;
+        if (favoriteIds is { Count: 0 })
+        {
+            yield break;
+        }
         bool Keep(int? year, string? genre)
             => (filter.Years is not { Count: > 0 } years || years.Any(y => y.Contains(year)))
                && (genres is null || (genres.Count > 0 && GenreMatches(genre, genres)));
@@ -118,6 +133,11 @@ public sealed partial class MusicLibrary
             if (filter.HiRes)
             {
                 q = q.Where(t => t.IsHiRes);
+            }
+
+            if (favoriteIds is not null)
+            {
+                q = q.Where(BsonExpression.Create("$._id IN @0", favoriteIds));
             }
 
             if (searches is { Count: > 0 } || excludes?.Searches is { Count: > 0 })

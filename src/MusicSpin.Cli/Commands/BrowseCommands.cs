@@ -8,7 +8,7 @@ namespace MusicSpin.Cli.Commands;
 /// <summary>Library queries: artists, albums, tracks, search, filter. All paged (--limit/--offset) with --sort/--desc.</summary>
 internal static class BrowseCommands
 {
-    private static readonly string[] TrackSorts = ["default", "relevance", "title", "artist", "album", "year", "duration", "added", "samplerate", "bitdepth", "size", "path"];
+    internal static readonly string[] TrackSorts = ["default", "relevance", "title", "artist", "album", "year", "duration", "added", "samplerate", "bitdepth", "size", "path", "favorited"];
 
     /// <summary>Per-field "contains" filters and --search for tracks/filter.</summary>
     private sealed class TrackTextOptions
@@ -98,7 +98,8 @@ internal static class BrowseCommands
         var artist = new Option<string?>("--artist") { Description = "Track artist or album artist (exact name, case-insensitive). Unknown: exit 12." };
         var album = new Option<string?>("--album") { Description = "Album title (exact, case-insensitive) or album id (GUID). Unknown: exit 12." };
         var text = new TrackTextOptions();
-        var command = new Command("tracks", "List tracks (default order: album artist, album, disc, track).") { album, artist, sort, desc, limit, offset };
+        var favorites = FavoritesOption();
+        var command = new Command("tracks", "List tracks (default order: album artist, album, disc, track).") { album, artist, favorites, sort, desc, limit, offset };
         foreach (var option in text.All)
         {
             command.Add(option);
@@ -107,14 +108,13 @@ internal static class BrowseCommands
         runner.SetAction(command, (parseResult, json, _) =>
         {
             using var library = runner.OpenLibraryForRead(parseResult);
-            var page = library.Tracks(text.Apply(new TrackQuery(), parseResult) with
+            var page = library.Tracks(WithSort(text.Apply(new TrackQuery(), parseResult) with
             {
                 Artist = parseResult.GetValue(artist),
                 Album = parseResult.GetValue(album),
-                Sort = ParseTrackSort(parseResult.GetValue(sort)!),
-                Descending = parseResult.GetValue(desc),
+                Favorite = parseResult.GetValue(favorites) ? true : null,
                 Paging = new Paging(parseResult.GetValue(offset), parseResult.GetValue(limit)),
-            });
+            }, parseResult.GetValue(sort)!, parseResult.GetValue(desc)));
             return Task.FromResult(Write(runner, json, "tracks", PageDto.From(page, LibraryTrackDto.From), TrackLine));
         });
         return command;
@@ -194,9 +194,10 @@ internal static class BrowseCommands
         var artist = new Option<string?>("--artist") { Description = "Track artist or album artist (exact name). Unknown: exit 12." };
         var album = new Option<string?>("--album") { Description = "Album title (exact) or id. Unknown: exit 12." };
         var text = new TrackTextOptions();
+        var favorites = FavoritesOption();
         var command = new Command("filter", "Filter tracks by audio quality, format, year and text (all criteria must match).")
         {
-            minBits, minRate, format, yearFrom, yearTo, hires, artist, album, sort, desc, limit, offset,
+            minBits, minRate, format, yearFrom, yearTo, hires, artist, album, favorites, sort, desc, limit, offset,
         };
         foreach (var option in text.All)
         {
@@ -216,7 +217,7 @@ internal static class BrowseCommands
             var formats = (parseResult.GetValue(format) ?? [])
                 .SelectMany(f => f.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .ToList();
-            var page = library.Tracks(text.Apply(new TrackQuery(), parseResult) with
+            var page = library.Tracks(WithSort(text.Apply(new TrackQuery(), parseResult) with
             {
                 MinBitDepth = parseResult.GetValue(minBits),
                 MinSampleRate = parseResult.GetValue(minRate),
@@ -226,10 +227,9 @@ internal static class BrowseCommands
                 HiRes = parseResult.GetValue(hires) ? true : null,
                 Artist = parseResult.GetValue(artist),
                 Album = parseResult.GetValue(album),
-                Sort = ParseTrackSort(parseResult.GetValue(sort)!),
-                Descending = parseResult.GetValue(desc),
+                Favorite = parseResult.GetValue(favorites) ? true : null,
                 Paging = new Paging(parseResult.GetValue(offset), parseResult.GetValue(limit)),
-            });
+            }, parseResult.GetValue(sort)!, parseResult.GetValue(desc)));
             return Task.FromResult(Write(runner, json, "filter", PageDto.From(page, LibraryTrackDto.From), TrackLine));
         });
         return command;
@@ -242,7 +242,16 @@ internal static class BrowseCommands
         _ => Enum.Parse<TrackSort>(value, ignoreCase: true),
     };
 
-    private static string TrackLine(LibraryTrackDto t)
+    /// <summary>--sort/--desc on a query. <c>favorited</c> lists the newest favorites first, so --desc gives the oldest first.</summary>
+    internal static TrackQuery WithSort(TrackQuery query, string sort, bool descending)
+    {
+        var parsed = ParseTrackSort(sort);
+        return query with { Sort = parsed, Descending = parsed == TrackSort.Favorited ? !descending : descending };
+    }
+
+    private static Option<bool> FavoritesOption() => new("--favorites") { Description = "Only favorite tracks ('--sort favorited': newest favorites first)." };
+
+    internal static string TrackLine(LibraryTrackDto t)
     {
         var quality = t.Format == "dsd"
             ? $"DSD {t.SampleRate / 1_000_000.0:0.###} MHz"

@@ -19,7 +19,7 @@ Every command accepts these, before or after the subcommand:
 |---|---|
 | Files and environment | [`info`](#info) · [`formats`](#formats) · [`devices`](#devices) · [`doctor`](#doctor) |
 | Playback | [`play`](#play) · [`radio`](#radio) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
-| Library | [`library add/remove/folders/scan/relocate/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) |
+| Library | [`library add/remove/folders/scan/relocate/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) · [`favorite add/remove`](#favorite--favorites) · [`favorites`](#favorite--favorites) |
 | Playlists | [`playlist list/show/create/rename/delete/add/remove/move/clear/import/export`](#playlist) · [`queue save`](#queue) |
 | Integration | [`serve`](#serve) · [`mcp`](#mcp) |
 
@@ -74,7 +74,7 @@ Decoder: FFmpeg n9.0.2-23-g27b46f0fbc-20261008 (LGPL version 3 or later)
 
 ```
 music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--search <query>]
-                [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--playlist <name>]
+                [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--playlist <name>] [--favorites]
                 [--shuffle] [--seed <n>] [--start <seconds>] [--volume <0..1>]
                 [--backend auto|null] [--device <id|name>] [--exclusive]
                 [--foreground|--wait] [--duration <seconds>]
@@ -90,6 +90,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--search <query>` | Library tracks matching the [search syntax](library.md#search-syntax), in **library order** (not by relevance), up to 10,000. If more match, the first 10,000 are used and a warning gives the total (`warnings` in the JSON); this applies to `--title`/`--album-contains`/`--artist-contains` too, and to `queue add` and `playlist add`. No match: exit 12 |
 | `--title`, `--album-contains`, `--artist-contains <words>` | Library tracks whose title / album title / artist contains every word. Combine with each other and with `--search` (AND). No match: exit 12 |
 | `--playlist <name>` | A saved [playlist](#playlist) (name or id, case-insensitive). `missing` entries are left out with a warning (`warnings` in the JSON). Unknown, empty or nothing playable: exit 12. Not with `--foreground` (exit 2) |
+| `--favorites` | The [favorite](#favorite--favorites) tracks, most recently favorited first (all of them: no 10,000 cap). No favorites in the library: exit 12 with a hint |
 | `--shuffle` | Turn the player's shuffle mode on and shuffle the new queue (Fisher-Yates over the whole list). Without `--shuffle` the queue is shuffled anyway when shuffle mode is already on (see [`shuffle`](#shuffle)) |
 | `--seed <n>` | Shuffle seed for a reproducible order. Default: random. The seed is reported in the JSON result. Needs `--shuffle` |
 | `--start <s>` | Start position in seconds (first track only) |
@@ -100,7 +101,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--foreground`, `--wait` | Play in this process and block until done (Ctrl+C: exit 130) |
 | `--duration <s>` | Stop after this many seconds. Implies `--foreground`. For a library queue it applies per track |
 
-Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, a query (`--search` and/or `--title`/`--album-contains`/`--artist-contains`), or `--playlist`. Unknown album or artist: exit 12. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
+Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, a query (`--search` and/or `--title`/`--album-contains`/`--artist-contains`), `--playlist`, or `--favorites`. Unknown album or artist: exit 12. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
 
 ## radio
 
@@ -118,6 +119,7 @@ Endless random playback of the library in the background player (started if need
 | `--format <id>` | Format id(s) (`flac`, `alac`, `dsd`, `mp3`, ...); repeat or comma-separate |
 | `--search <text>` | [Search syntax](library.md#search-syntax), as `music-spin search` |
 | `--hires` | Only hi-res tracks |
+| `--favorites` | Only [favorite](#favorite--favorites) tracks; narrows the other filters (`--favorites --genre jazz` plays favorite jazz tracks). No favorites yet, or none of them in the library: exit 12 with a message saying which |
 | `--exclude-artist <name>` | Leave out tracks whose track **or** album artist is this (same matching as `--artist`) |
 | `--exclude-album <title\|id>` | Leave out this album |
 | `--exclude-genre <name>` | Leave out this genre (same matching as `--genre`; a `Rock; Pop` track is left out by either) |
@@ -125,7 +127,7 @@ Endless random playback of the library in the background player (started if need
 | `--exclude-format <id>` | Leave out these formats; repeat or comma-separate |
 | `--exclude-search <text>` | Leave out tracks matching this search |
 
-Every filter except `--hires` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
+Every filter except `--hires` and `--favorites` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
 
 **Excludes:** every `--exclude-*` option is repeatable, and a track matching **any** exclude value is left out, **even when an include filter matches it** (exclude wins). Excludes alone narrow the whole library: `music-spin radio --exclude-genre Christmas --exclude-artist "Kenny G"`. Unknown names in `--exclude-artist`/`--exclude-album` are **ignored silently** (excluding something the library does not have is harmless, and they are not errors as they are in includes). There is no `--exclude-hires`: use `--exclude-format` or `--hires` instead (a "lossy only" station is `--format mp3 --format aac ...`). The description shows excludes last: `genre jazz · year 1955-1965 · excluding artist Kenny G`.
 
@@ -188,7 +190,7 @@ State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, d
 | Command | Meaning |
 |---|---|
 | `queue [--limit N] [--offset N]` | List the queue (index, current flag, path, tags). Up-next entries are marked `+` (JSON: `upNext: true`) |
-| `queue add [<files>...] \| --album ... \| --artist ... \| --search/--title/--album-contains/--artist-contains ... \| --playlist <name> [--shuffle] [--seed] [--next \| --up-next]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue. `--next` plays them right after the current track, `--up-next` after the tracks already added to play next ([Up next](playback.md#up-next)); not both (exit 2) |
+| `queue add [<files>...] \| --album ... \| --artist ... \| --search/--title/--album-contains/--artist-contains ... \| --playlist <name> \| --favorites [--shuffle] [--seed] [--next \| --up-next]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue. `--next` plays them right after the current track, `--up-next` after the tracks already added to play next ([Up next](playback.md#up-next)); not both (exit 2) |
 | `queue remove <position>` | Remove the entry at a 1-based position (as listed by `queue`). The current track: exit 8 (skip it with `next` first). Out of range: exit 2 |
 | `queue move <from> <to>` | Move an entry between 1-based positions; the current track keeps playing. Moving an entry right after the current track, or among the up-next tracks, makes it up next. Out of range: exit 2 |
 | `queue clear [--up-next]` | Stop playback and empty the queue. With `--up-next`, only remove the up-next tracks; playback goes on |
@@ -238,11 +240,12 @@ Details: [Music library](library.md).
 
 ## tracks
 
-`music-spin tracks [--album <title|id>] [--artist <name>] [--search <query>] [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--sort ...] [--desc] [--limit N] [--offset N]`
+`music-spin tracks [--album <title|id>] [--artist <name>] [--search <query>] [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--favorites] [--sort ...] [--desc] [--limit N] [--offset N]`
 
 - `--album`: album id, or exact album title (case-insensitive). Unknown: **exit 12** (as for `play`). `--artist`: track artist or album artist, exact name. Unknown: exit 12.
 - `--search`: [search syntax](library.md#search-syntax). `--title`, `--album-contains`, `--artist-contains`: every word must appear in that field. All filters combine (AND); no match is an empty page (exit 0).
-- `--sort`: `default` (album artist, album, disc, track), `relevance` (with `--search`/filters: best match first), `title`, `artist`, `album`, `year`, `duration`, `added`, `samplerate`, `bitdepth`, `size`, `path`.
+- `--favorites`: only [favorite](#favorite--favorites) tracks, together with the other filters.
+- `--sort`: `default` (album artist, album, disc, track), `relevance` (with `--search`/filters: best match first), `title`, `artist`, `album`, `year`, `duration`, `added`, `samplerate`, `bitdepth`, `size`, `path`, `favorited` (with `--favorites`: **newest favorites first**, `--desc` gives the oldest first; without `--favorites` it is the default order).
 
 ## search
 
@@ -273,8 +276,24 @@ Exact semantics: [Music library → Search and filter](library.md#search-and-fil
 | `--hires` | Hi-res only (lossless and > 16-bit or > 48 kHz, or DSD) |
 | `--artist <name>` | Track artist or album artist (case-insensitive exact match). Unknown: exit 12 |
 | `--album <title\|id>` | Album title (case-insensitive exact match) or id. Unknown: exit 12 |
+| `--favorites` | Only favorite tracks |
 | `--search <query>`, `--title`, `--album-contains`, `--artist-contains` | Text filters, as for `tracks` |
 | `--sort`, `--desc`, `--limit`, `--offset` | As for `tracks` |
+
+## favorite / favorites
+
+Favorites are library tracks marked with a heart. They are stored in the library and follow their tracks through rescans, moves and `library relocate` (see [Music library → Favorites](library.md#favorites)).
+
+| Command | Meaning |
+|---|---|
+| `favorite add [<files>...] \| --album <a> [--artist <x>] \| --artist <x> \| --search/--title/--album-contains/--artist-contains ... \| --track-id <id>[,<id>...] \| --current` | Mark tracks as favorites. One target kind (exit 2 for none or several), the same as `playlist add` plus `--current`, the track the background player is on now (no player: exit 13; no current track, or it is not a library track: exit 12). Files must be library tracks (exit 12 lists the others; nothing changes). Unknown album/artist/track id or no search match: exit 12; a malformed id: exit 2 |
+| `favorite remove <same targets> \| --missing` | Unmark tracks. Files may also be paths of favorites whose track is no longer in the library (as listed by `favorites --missing`); `--missing` removes all of those |
+| `favorites [--sort ...] [--desc] [--limit N] [--offset N]` | The favorite tracks, like `tracks`. Default `--sort favorited`: **newest favorites first** (`--desc` reverses). The last line says how many favorites are no longer in the library (JSON: `missing`) |
+| `favorites --missing` | The paths of favorites whose track is no longer in the library (JSON: `{count, items}`) |
+
+`add` and `remove` are idempotent: a track that already is (or isn't) a favorite is left alone, and keeps the time it was first favorited. They print what changed, e.g. `Added 1 favorite (2 already were). Favorites: 3.`; the JSON has `requested`, `changed`, `unchanged`, `favorites` (the count now) and `missing`. They need a writable data folder (exit 9 otherwise).
+
+Use favorites with `play --favorites` / `queue add --favorites` (newest first; `--shuffle` as usual), `tracks --favorites` / `filter --favorites`, and `radio --favorites`.
 
 ---
 
