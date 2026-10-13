@@ -143,7 +143,7 @@ OS). `Harness/` has:
 - `ScriptedPlayer`: a fake player on the real transport that answers `status`, records requests, pushes events and
   fails commands on request (player view model tests);
 - `Snapshots`: compares frames with approved baselines in `Snapshots/`, with a tolerance; on a mismatch it writes the
-  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). `MUSICSPIN_UPDATE_SNAPSHOTS=1`
+  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines; `MUSICSPIN_UPDATE_SNAPSHOTS=1`
   rewrites the baselines, which are reviewed against the mockup before they're committed;
 - `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's headless animation clock is real
   time (a render tick only samples it), so this lets real time pass frame by frame.
