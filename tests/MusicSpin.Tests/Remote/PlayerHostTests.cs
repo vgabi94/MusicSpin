@@ -138,8 +138,8 @@ public sealed class PlayerHostTests : PlayerHostTestBase
             return [];
         }, ct);
 
-        await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 2, "subscriptions active");
-        Assert.True(host.Spectrum.Active);
+        // A subscription counts from before its acknowledgement; the meter turns on just after, so wait for both.
+        await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 2 && host.Spectrum.Active, "subscriptions and the spectrum meter active");
         await control.SendAsync("queue.set", QueueSet(Paths), ct);
 
         var got = await levels;
