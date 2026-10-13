@@ -57,6 +57,47 @@ public sealed class PlayerProtocolTests : IDisposable
     private void SetQueue(bool play = true) => Ok(new { id = 1, cmd = "queue.set", items = _paths, play });
 
     [Fact]
+    public void Queue_editing_commands_for_up_next()
+    {
+        Ok(new { cmd = "queue.set", items = _paths[..2], play = false });
+
+        Assert.Equal(1, Ok(new { cmd = "queue.add", items = new[] { _paths[2] }, position = "next" }).GetProperty("upNext").GetInt32());
+        Assert.Equal(2, Ok(new { cmd = "queue.add", items = new[] { _paths[0] }, position = "UpNext" }).GetProperty("upNext").GetInt32());
+        var listing = Ok(new { cmd = "queue" }).GetProperty("items");
+        Assert.Equal([false, true, true, false], listing.EnumerateArray().Select(e => e.GetProperty("upNext").GetBoolean()));
+
+        Assert.Equal(3, Ok(new { cmd = "queue.move", from = 3, to = 1 }).GetProperty("upNext").GetInt32());
+        Assert.Equal(2, Ok(new { cmd = "queue.remove", index = 1 }).GetProperty("upNext").GetInt32());
+        var cleared = Ok(new { cmd = "queue.clear", upNext = true });
+        Assert.Equal(0, cleared.GetProperty("upNext").GetInt32());
+        Assert.Equal(1, cleared.GetProperty("queueLength").GetInt32());
+        Assert.Equal(0, Ok(new { cmd = "queue.clear", upNext = false }).GetProperty("queueLength").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("""{"cmd":"queue.add","items":["/x.flac"],"position":"later"}""", "Unknown position")]
+    [InlineData("""{"cmd":"queue.add","items":["/x.flac"],"position":3}""", "\"position\" must be a string")]
+    [InlineData("""{"cmd":"queue.remove"}""", "Missing integer \"index\"")]
+    [InlineData("""{"cmd":"queue.move","from":1}""", "Missing integer \"to\"")]
+    [InlineData("""{"cmd":"queue.move","from":"1","to":2}""", "\"from\" must be an integer")]
+    [InlineData("""{"cmd":"queue.clear","upNext":"yes"}""", "\"upNext\" must be true or false")]
+    public void Queue_editing_arguments_are_validated(string request, string message)
+    {
+        var (code, exit, text) = Fail(request);
+        Assert.Equal("usage", code);
+        Assert.Equal(2, exit);
+        Assert.Contains(message, text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Removing_the_current_entry_is_invalid_state()
+    {
+        SetQueue();
+        Assert.Equal("invalid_state", Fail(new { cmd = "queue.remove", index = 0 }).Code);
+        Assert.Equal("usage", Fail(new { cmd = "queue.move", from = 0, to = 9 }).Code);
+    }
+
+    [Fact]
     public void Transport_commands_drive_the_queue()
     {
         SetQueue();

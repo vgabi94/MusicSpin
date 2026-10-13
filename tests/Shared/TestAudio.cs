@@ -73,8 +73,8 @@ internal static class TestAudio
         };
 }
 
-/// <summary>Decoder producing a constant 0.5 signal for a fixed duration.</summary>
-internal sealed class FakeDecoder(TrackInfo track) : IAudioDecoder
+/// <summary>A decoder of <paramref name="track"/>: a constant <see cref="Value"/>, or <paramref name="wave"/>(frame, channel) when given.</summary>
+internal sealed class FakeDecoder(TrackInfo track, Func<long, int, float>? wave = null) : IAudioDecoder
 {
     private long _frame;
 
@@ -100,7 +100,21 @@ internal sealed class FakeDecoder(TrackInfo track) : IAudioDecoder
             return 0;
         }
 
-        buffer[..(frames * Format.Channels)].Fill(Value);
+        if (wave is null)
+        {
+            buffer[..(frames * Format.Channels)].Fill(Value);
+        }
+        else
+        {
+            for (var f = 0; f < frames; f++)
+            {
+                for (var c = 0; c < Format.Channels; c++)
+                {
+                    buffer[(f * Format.Channels) + c] = wave(_frame + f, c);
+                }
+            }
+        }
+
         _frame += frames;
         return frames * Format.Channels;
     }
@@ -133,10 +147,17 @@ internal sealed class FakeDecoderFactory : IAudioDecoderFactory
             Thread.Sleep(OpenDelay);
         }
 
-        var decoder = new FakeDecoder(Find(path));
+        var decoder = new FakeDecoder(Find(path), Waves.GetValueOrDefault(path));
         Opened.Add(decoder);
         return decoder;
     }
+
+    /// <summary>Waveforms (frame, channel) → sample for some paths; others decode to a constant.</summary>
+    public Dictionary<string, Func<long, int, float>> Waves { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>A sine of <paramref name="hz"/> at <paramref name="amplitude"/> on every channel.</summary>
+    public static Func<long, int, float> Sine(double hz, int sampleRate, float amplitude = 1f)
+        => (frame, _) => amplitude * (float)Math.Sin(2 * Math.PI * hz * frame / sampleRate);
 
     public IReadOnlyList<AudioFormatSupport> GetSupportedFormats()
         => KnownFormats.All.Select(f => new AudioFormatSupport(f.Id, f.Name, f.Extensions, f.Lossless, f.HiResCapable, IsAvailable, f.Decoders)).ToArray();

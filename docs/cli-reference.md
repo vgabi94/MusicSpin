@@ -133,7 +133,7 @@ Every filter except `--hires` can be repeated. **Values of one filter are ORed, 
 - Bad values (`--years 1999-1990`, `--years nineties`, `--year 10000`, an empty `--artist ""`, the same for the `--exclude-*` options): exit 2.
 - The status has `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text output shows `[radio]` and a `Radio:` line. JSON adds `playerStarted`.
 
-How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` or `load` end radio.
+How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` (without `--up-next`) or `load` end radio.
 
 ## pause, resume, toggle, stop
 
@@ -187,9 +187,11 @@ State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, d
 
 | Command | Meaning |
 |---|---|
-| `queue [--limit N] [--offset N]` | List the queue (index, current flag, path, tags) |
-| `queue add [<files>...] \| --album ... \| --artist ... \| --search/--title/--album-contains/--artist-contains ... \| --playlist <name> [--shuffle] [--seed]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue |
-| `queue clear` | Stop playback and empty the queue |
+| `queue [--limit N] [--offset N]` | List the queue (index, current flag, path, tags). Up-next entries are marked `+` (JSON: `upNext: true`) |
+| `queue add [<files>...] \| --album ... \| --artist ... \| --search/--title/--album-contains/--artist-contains ... \| --playlist <name> [--shuffle] [--seed] [--next \| --up-next]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue. `--next` plays them right after the current track, `--up-next` after the tracks already added to play next ([Up next](playback.md#up-next)); not both (exit 2) |
+| `queue remove <position>` | Remove the entry at a 1-based position (as listed by `queue`). The current track: exit 8 (skip it with `next` first). Out of range: exit 2 |
+| `queue move <from> <to>` | Move an entry between 1-based positions; the current track keeps playing. Moving an entry right after the current track, or among the up-next tracks, makes it up next. Out of range: exit 2 |
+| `queue clear [--up-next]` | Stop playback and empty the queue. With `--up-next`, only remove the up-next tracks; playback goes on |
 | `queue save <name> [--replace]` | Save the queue, in its current play order (shuffled order when shuffle is on), as a playlist. Name taken: exit 8 unless `--replace`. Empty queue: exit 8. No player: exit 13 |
 
 The queue is persisted in `queue.json` in the data folder and restored (paused) by the next player. See [Persistent queue](playback.md#persistent-queue).

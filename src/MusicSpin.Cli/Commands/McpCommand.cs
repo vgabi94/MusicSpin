@@ -30,7 +30,7 @@ internal static class McpCommand
         var exclusive = Options.Exclusive();
         var command = new Command("mcp",
             "Run an MCP (Model Context Protocol) server on stdin/stdout. Tools: play, pause, resume, toggle, stop, next, previous, seek, volume, " +
-            "status, queue, queue_add, queue_clear, queue_save, repeat, shuffle, quit_player, search, tracks, albums, artists, library_stats, playlists, playlist_show, " +
+            "status, queue, queue_add, queue_remove, queue_move, queue_clear, queue_save, repeat, shuffle, quit_player, search, tracks, albums, artists, library_stats, playlists, playlist_show, " +
             "playlist_create, playlist_rename, playlist_add, playlist_remove, playlist_move, playlist_clear, playlist_delete, playlist_import, playlist_export. " +
             "--backend/--device/--exclusive apply " +
             "when a tool has to start the background player.")
@@ -164,17 +164,29 @@ internal static class McpCommand
                 }), readOnly: true);
             yield return Tool("queue", "List the player's queue.",
                 (int offset = 0, int limit = 50, CancellationToken ct = default) => Guard(() => SendAsync("queue", new { offset, limit }, ct)), readOnly: true);
-            yield return Tool("queue_add", "Append files, library tracks or a playlist to the queue (starts the player, stopped, if needed). " +
+            yield return Tool("queue_add", "Add files, library tracks or a playlist to the queue: at the end, or up next with position (starts the player, stopped, if needed). " +
                 "shuffle shuffles only the added tracks.",
                 (string[]? files = null, string? album = null, string? artist = null, string? search = null, string? title = null, string? albumContains = null,
-                 string? artistContains = null, string? playlist = null, bool shuffle = false, int? seed = null, CancellationToken ct = default)
-                    => Guard(() => AddAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains), playlist, shuffle, seed, ct)));
+                 string? artistContains = null, string? playlist = null, bool shuffle = false, int? seed = null,
+                 [Description("end (default): append; next: play right after the current track; upnext: after the tracks already added to play next. Radio: always up next.")] string? position = null,
+                 CancellationToken ct = default)
+                    => Guard(() => AddAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains), playlist, shuffle, seed, Position(position), ct)));
             yield return Tool("queue_save", "Save the player's queue (current play order) as a playlist.",
                 ([Description("Playlist name (unique, case-insensitive).")] string name,
                  [Description("Overwrite an existing playlist with this name.")] bool replace = false,
                  CancellationToken ct = default) => Guard(async () =>
                     ToElement(await PlaylistCommands.SaveQueueAsync(runner, parseResult, name, replace, ct).ConfigureAwait(false))));
-            yield return Simple("queue_clear", "Stop playback and empty the queue.", "queue.clear");
+            yield return Tool("queue_clear", "Stop playback and empty the queue; with upNext, only remove the tracks added to play next (the current track and the rest keep playing).",
+                ([Description("Only remove the up-next tracks.")] bool upNext = false, CancellationToken ct = default)
+                    => Guard(() => SendAsync("queue.clear", upNext ? new { upNext } : null, ct)));
+            yield return Tool("queue_remove", "Remove one queue entry by its 0-based index (as in 'queue'). The current track can't be removed (invalid_state): use next first.",
+                ([Description("0-based index from 'queue'.")] int index, CancellationToken ct = default)
+                    => Guard(() => SendAsync("queue.remove", new { index }, ct)));
+            yield return Tool("queue_move", "Move a queue entry from one 0-based index to another (as in 'queue'). Moving an entry right after the current track, " +
+                "or among the up-next tracks, makes it up next.",
+                ([Description("0-based index of the entry to move.")] int from,
+                 [Description("0-based index it should end up at.")] int to,
+                 CancellationToken ct = default) => Guard(() => SendAsync("queue.move", new { from, to }, ct)));
             yield return Tool("repeat", "Show or set the repeat mode. off: play the queue once; one: a track that ends starts again (next/previous still move); " +
                 "all: loop the queue (next/previous wrap around). Saved as the default for new players.",
                 ([Description("off | one | all. Omit to just read the current mode.")] string? mode = null, CancellationToken ct = default) => Guard(async () =>
@@ -409,7 +421,7 @@ internal static class McpCommand
             }
         }
 
-        private async Task<JsonElement> AddAsync(string[]? files, LibrarySelection selection, string? playlist, bool shuffle, int? seed,
+        private async Task<JsonElement> AddAsync(string[]? files, LibrarySelection selection, string? playlist, bool shuffle, int? seed, string? position,
             CancellationToken ct)
         {
             if (QueueSource.ValidateValues(files, selection, playlist, shuffle, seed) is { } error)
@@ -421,10 +433,19 @@ internal static class McpCommand
             var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, backend, device, exclusive, ct).ConfigureAwait(false);
             await using (client.ConfigureAwait(false))
             {
-                var status = await client.SendAsync("queue.add", new { items = resolved.Items }, ct).ConfigureAwait(false);
+                var status = await client.SendAsync("queue.add", new { items = resolved.Items, position }, ct).ConfigureAwait(false);
                 return WithWarnings(With(status, started, resolved.Seed, resolved.Items.Count), resolved.Warnings);
             }
         }
+
+        /// <summary>The queue_add position (end | next | upnext), checked before anything is resolved.</summary>
+        private static string? Position(string? position)
+            => position?.Trim().ToLowerInvariant() switch
+            {
+                null or "" => null,
+                "end" or "next" or "upnext" => position.Trim().ToLowerInvariant(),
+                _ => throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, $"Unknown position '{position}'. Use end|next|upnext."),
+            };
 
         private static JsonElement WithWarnings(JsonElement status, List<string> warnings)
         {

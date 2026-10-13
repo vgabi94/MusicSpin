@@ -97,6 +97,66 @@ public sealed class PlayerHostTests : PlayerHostTestBase
     }
 
     [Fact]
+    public async Task Spectrum_events_go_only_to_subscribers_that_asked_for_them()
+    {
+        Decoders.Waves[Paths[0]] = FakeDecoderFactory.Sine(1000, 8000);
+        var host = StartHost();
+        var control = await ConnectAsync();
+        var plain = await ConnectAsync();
+        var meter = await ConnectAsync();
+        var ct = TestContext.Current.CancellationToken;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(10_000);
+        var plainEvents = new List<string>();
+        var plainReader = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var e in plain.SubscribeAsync(cts.Token))
+                {
+                    lock (plainEvents)
+                    {
+                        plainEvents.Add(e.Name);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // the test is done listening
+            }
+        }, ct);
+        var levels = Task.Run(async () =>
+        {
+            await foreach (var e in meter.SubscribeAsync(spectrum: true, cts.Token))
+            {
+                if (e.Name == "spectrum" && e.Data.GetProperty("levels").EnumerateArray().Select(l => l.GetSingle()).ToArray() is { } l && l.Any(v => v > 0))
+                {
+                    return l;
+                }
+            }
+
+            return [];
+        }, ct);
+
+        await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 2, "subscriptions active");
+        Assert.True(host.Spectrum.Active);
+        await control.SendAsync("queue.set", QueueSet(Paths), ct);
+
+        var got = await levels;
+        Assert.Equal(SpectrumAnalyzer.Bands, got.Length);
+        var band = Enumerable.Range(0, SpectrumAnalyzer.Bands).Single(b => 1000 >= SpectrumAnalyzer.BandEdges[b] && 1000 < SpectrumAnalyzer.BandEdges[b + 1]);
+        Assert.Equal(band, Array.IndexOf(got, got.Max()));
+
+        await cts.CancelAsync();
+        await plainReader;
+        lock (plainEvents)
+        {
+            Assert.Contains("trackLoaded", plainEvents);
+            Assert.DoesNotContain("spectrum", plainEvents);
+        }
+    }
+
+    [Fact]
     public async Task Quit_while_playing_answers_then_shuts_down_cleanly()
     {
         var host = StartHost();

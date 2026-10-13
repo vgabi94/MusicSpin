@@ -101,6 +101,7 @@ public sealed class PlayerHost : IAsyncDisposable
     private (PlayerState State, int? Index, int Length, RepeatMode Repeat, bool Shuffle, int? Seed, double Position)? _savedSignature;
     private string? _lastSaveError;
     private readonly RadioPoolCache _radioPools;
+    private readonly SpectrumMeter _spectrum;
 
     private PlayerHost(PlayerHostOptions options, PlayerEndpoint endpoint, FileStream lockFile, IPlayerListener listener)
     {
@@ -116,6 +117,7 @@ public sealed class PlayerHost : IAsyncDisposable
             Volume = Math.Clamp(options.InitialVolume, 0f, 1f),
         };
         _queue = new QueuePlayer(_player, output);
+        _spectrum = new SpectrumMeter(_player, options.Time);
         if (options.ResolveFromLibrary)
         {
             _queue.ResolveMissing = ResolveMoved;
@@ -159,6 +161,9 @@ public sealed class PlayerHost : IAsyncDisposable
 
     /// <summary>The player this host serves (an in-process desktop app could drive it directly).</summary>
     public QueuePlayer Player => _queue;
+
+    /// <summary>Spectrum levels of what plays, for an in-process app (clients use <c>subscribe</c> with <c>spectrum</c>).</summary>
+    public SpectrumMeter Spectrum => _spectrum;
 
     /// <summary>Open client connections (diagnostics; lets callers wait for a state instead of sleeping).</summary>
     public int ConnectionCount
@@ -348,6 +353,7 @@ public sealed class PlayerHost : IAsyncDisposable
                 SaveQueue(force: true);
             }
 
+            _spectrum.Dispose();
             _queue.Dispose();
             _player.Dispose();
             (_options.Outputs as IDisposable)?.Dispose();
@@ -418,6 +424,9 @@ public sealed class PlayerHost : IAsyncDisposable
         IDisposable? subscription = null;
         Channel<string>? events = null;
         Task? eventPump = null;
+        IDisposable? spectrumSubscription = null;
+        Channel<string>? spectrumEvents = null;
+        Task? spectrumPump = null;
         var quit = false;
         try
         {
@@ -455,12 +464,23 @@ public sealed class PlayerHost : IAsyncDisposable
                     var writer = events.Writer;
                     subscription = PlayerEvents.Attach(_queue, json => writer.TryWrite(json));
                     Interlocked.Increment(ref _subscribers);
+                    if (reply.Spectrum)
+                    {
+                        // Its own tiny queue: a slow client loses old levels, never the other events.
+                        spectrumEvents = Channel.CreateBounded<string>(new BoundedChannelOptions(2) { FullMode = BoundedChannelFullMode.DropOldest });
+                        var spectrumWriter = spectrumEvents.Writer;
+                        spectrumSubscription = _spectrum.Subscribe(levels => spectrumWriter.TryWrite(SpectrumEvent(levels)));
+                    }
                 }
 
                 await channel.WriteLineAsync(reply.Line, token).ConfigureAwait(false);
                 if (subscribing)
                 {
                     eventPump = PumpEventsAsync(channel, events!.Reader, token);
+                    if (spectrumEvents is not null)
+                    {
+                        spectrumPump = PumpEventsAsync(channel, spectrumEvents.Reader, token);
+                    }
                 }
                 else if (reply.Action == ProtocolAction.Quit)
                 {
@@ -476,6 +496,16 @@ public sealed class PlayerHost : IAsyncDisposable
         }
         finally
         {
+            if (spectrumSubscription is not null)
+            {
+                spectrumSubscription.Dispose();
+                spectrumEvents!.Writer.TryComplete();
+                if (spectrumPump is not null)
+                {
+                    await spectrumPump.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                }
+            }
+
             if (subscription is not null)
             {
                 subscription.Dispose();
@@ -505,6 +535,10 @@ public sealed class PlayerHost : IAsyncDisposable
         await ((Task)StopAsync("quit").WaitAsync(TimeSpan.FromSeconds(15))).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         await channel.DisposeAsync().ConfigureAwait(false);
     }
+
+    /// <summary><c>{"event":"spectrum","data":{"levels":[16 values 0..1]}}</c>, levels rounded to 3 decimals.</summary>
+    private static string SpectrumEvent(float[] levels)
+        => new ProtocolMessages.Event("spectrum", new { levels = levels.Select(l => Math.Round(l, 3)).ToArray() }).ToJson();
 
     private static async Task PumpEventsAsync(LineChannel channel, ChannelReader<string> reader, CancellationToken token)
     {

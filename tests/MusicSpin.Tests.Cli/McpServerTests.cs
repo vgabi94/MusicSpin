@@ -69,7 +69,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var tools = await client.ListToolsAsync(cancellationToken: _cts.Token);
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
-                     "queue_add", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
+                     "queue_add", "queue_remove", "queue_move", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
                      "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio" })
         {
             Assert.Contains(name, names);
@@ -103,6 +103,12 @@ public sealed class McpServerTests : IAsyncDisposable
         var added = await Call("queue_add", new() { ["files"] = new[] { Long[2] } });
         Assert.Equal(1, added.GetProperty("added").GetInt32());
         Assert.Equal(3, (await Call("queue")).GetProperty("total").GetInt32());
+        Assert.Equal(1, (await Call("queue_add", new() { ["files"] = new[] { Long[2] }, ["position"] = "next" })).GetProperty("upNext").GetInt32());
+        Assert.StartsWith("usage:", await CallError("queue_add", new() { ["files"] = new[] { Long[2] }, ["position"] = "soon" }), StringComparison.Ordinal);
+        Assert.Equal(2, (await Call("queue_move", new() { ["from"] = 3, ["to"] = 1 })).GetProperty("upNext").GetInt32());
+        Assert.Equal(1, (await Call("queue_remove", new() { ["index"] = 1 })).GetProperty("upNext").GetInt32());
+        Assert.StartsWith("invalid_state:", await CallError("queue_remove", new() { ["index"] = 0 }), StringComparison.Ordinal);
+        Assert.Equal(0, (await Call("queue_clear", new() { ["upNext"] = true })).GetProperty("upNext").GetInt32());
         Assert.Equal("stopped", (await Call("stop")).GetProperty("state").GetString());
         Assert.Equal(0, (await Call("queue_clear")).GetProperty("queueLength").GetInt32());
         Assert.True((await Call("quit_player")).GetProperty("stopped").GetBoolean());

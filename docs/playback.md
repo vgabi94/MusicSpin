@@ -93,7 +93,11 @@ How it works internally: [Architecture → Background player and IPC](architectu
 |---|---|
 | `play ...` | Replaces the queue and starts at the first entry (or `--start` seconds into it) |
 | `queue add ...` | Appends; playback state is unchanged. On an empty queue, the first playable new entry is loaded (stopped). Start it with `resume` |
+| `queue add --next ...` / `--up-next ...` | Inserts the new entries [up next](#up-next): `--next` right after the current track (before earlier up-next entries), `--up-next` after the up-next entries already there |
+| `queue remove <position>` | Removes one entry (1-based, as listed by `queue`). The current track can't be removed (exit 8): skip it with `next` first |
+| `queue move <from> <to>` | Moves one entry (1-based). The current track keeps playing wherever it moves |
 | `queue clear` | Stops and empties the queue |
+| `queue clear --up-next` | Removes only the up-next entries; the current track keeps playing and the rest of the queue follows |
 | `next` / `prev` | Move and start playing. Unplayable entries are skipped (listed under `skipped`). Exit 8 at the end / on the first entry, unless `repeat all` wraps around (see [Shuffle and repeat](#shuffle-and-repeat)) |
 | End of the last track | The player stops, `ended: true`, and a `queueEnded` event is sent. With `repeat all` it starts over; with `repeat one` the track itself starts again |
 | `resume` after the end | Continues with entries added since, otherwise restarts from the first entry |
@@ -104,9 +108,22 @@ Library queues (`--album`, `--artist`, `--search`, `--playlist`) carry the tags 
 
 `play --playlist <name>` / `queue add --playlist <name>` queue a saved playlist; its `missing` entries are left out with a warning. `queue save <name>` stores the queue as a playlist (see [Music library → Playlists](library.md#playlists)).
 
+### Up next
+
+Entries added with `queue add --next` or `--up-next` (MCP `queue_add` with `position`, protocol `queue.add` with `"position"`) are **up next**: a run of entries right after the current track that plays before the rest of the queue. This is "Play next" and "Add to queue" in the app.
+
+- `--next` puts the new entries first in the run, `--up-next` last. Either way the batch keeps its own order (shuffled when `--shuffle` is given). On an empty queue they are simply appended.
+- An up-next entry that starts playing is an ordinary entry from then on. `prev` goes back to it like to any other.
+- **Shuffle** never moves up-next entries: turning shuffle on shuffles only what comes after them, and turning it off restores the original order after them. Up-next entries keep the place they were added at in the original order.
+- **Skipping ahead** (`play` with an index, the app's "play this track") over up-next entries drops them: they were never played. `next` plays them in turn.
+- `queue move` into the run, or right after it, makes an entry up next; moving an up-next entry past other entries, or before the current track, makes it ordinary. With shuffle off a move also changes the original order; with shuffle on, turning shuffle off restores the original order.
+- `queue clear --up-next` removes the run.
+- `queue` marks up-next entries with `+` (JSON: `"upNext": true` on the entry); `status` has `upNext`, the number of up-next entries.
+- **Radio:** every `queue add` while radio plays is up next, so the added tracks play before the next pick (see [Radio](#radio)).
+
 ## Persistent queue
 
-The background player saves its queue to **`queue.json`** in the data folder: the entries in play order, the original order (to undo shuffle), the current index and position, the repeat and shuffle modes and the shuffle seed.
+The background player saves its queue to **`queue.json`** in the data folder: the entries in play order, the original order (to undo shuffle), the current index and position, the repeat and shuffle modes and the shuffle seed, and which entries are [up next](#up-next) (`upNext`, their indexes).
 
 - **When:** about once a second after the queue, the current entry or the modes change; the position alone is saved when it has moved by 10 s or more; and once more when the player shuts down (quit, idle timeout). The file is written to a temporary file and renamed into place, so a crash leaves the previous version.
 - **Restore:** a new player loads the saved queue and **cues** the current track at the saved position, **paused**. It never starts playing on its own and does not open the audio device until you `resume`. A position past the end of the file restores at 0. If the current file has gone, the player starts stopped and reports it under `skipped`.
@@ -163,11 +180,12 @@ Details:
 | `prev` | Back through the **last 100** played tracks (older ones are dropped from the queue); exit 8 before the oldest |
 | `pause` / `resume` / `toggle` / `stop` / `seek` / `volume` | As usual. `stop` keeps radio mode; `resume` continues the station |
 | `queue` | Shows the history, the current track and the lookahead |
-| `queue add` | The added tracks play **next** (after earlier additions), then the station continues |
+| `queue add` | The added tracks are [up next](#up-next): they play **next** (after earlier additions; with `--next`, before them), then the station continues. `queue clear --up-next` removes them and keeps radio going |
+| `queue remove` / `queue move` | As usual; history and lookahead are ordinary entries |
 | `repeat one` | Replays the current track when it ends (`next`/`prev` still move) |
 | `repeat all` | Accepted (it is a global mode) but has no effect: radio never ends, and `next`/`prev` do not wrap |
 | `shuffle on/off/toggle` | Exit 8 `invalid_state`: radio is already random. The shuffle setting is kept and applies again to the next normal queue |
-| `play`, `queue clear`, `load` (serve) | End radio mode |
+| `play`, `queue clear` (without `--up-next`), `load` (serve) | End radio mode |
 | `status` | `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text shows `[radio]` instead of the queue position and a `Radio: <filters> (<N> tracks) · Repeat: ...` line |
 
 - **Gapless:** the lookahead is the queue, so same-format radio tracks play back to back exactly like a normal queue ([Gapless](#gapless)).
