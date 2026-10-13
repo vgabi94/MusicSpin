@@ -1,0 +1,44 @@
+<!-- Album and track rows (mockup: .tlist, .tr). -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <Style Selector="Button.row">
+        <Setter Property="Padding" Value="{StaticResource RowPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RowRadius}" />
+        <Setter Property="MinHeight" Value="{StaticResource RowHeight}" />
+        <Setter Property="Margin" Value="{StaticResource RowListGapMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.row:pointerover">
+        <Setter Property="Background" Value="{DynamicResource RowHoverBrush}" />
+    </Style>
+    <Style Selector="Button.row > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource RowGap}" />
+    </Style>
+    <Style Selector="Button.row TextBlock">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+    <Style Selector="Button.row TextBlock.rowTitle">
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+    </Style>
+    <Style Selector="Button.row TextBlock.rowSub">
+        <Setter Property="FontSize" Value="{StaticResource RowSecondaryFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.row TextBlock.rowCell">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.row TextBlock.rowDuration">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="FontFeatures" Value="+tnum" />
+    </Style>
+    <!-- The playing album or track takes the album colour. -->
+    <Style Selector="Button.row.playing TextBlock.rowTitle">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+</Styles>

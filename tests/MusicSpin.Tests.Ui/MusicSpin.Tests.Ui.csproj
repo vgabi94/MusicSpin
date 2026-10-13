@@ -1,7 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Headless Avalonia smoke test. Kept minimal until the UI design is decided. -->
+  <!--
+    App tests: view models and services as unit tests, and the views headless (Avalonia.Headless with Skia, so frames
+    can be captured and compared with the approved snapshots in Snapshots/). Helpers are in Harness/.
+  -->
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="Avalonia.Skia" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <!--
       Avalonia.Headless.XUnit 12.1.x is compiled against xunit.v3 3.2.x extensibility APIs that changed in
       xunit.v3 4.0 (MissingMethodException during discovery). Pin this project to 3.2.2 until Avalonia ships
@@ -12,5 +17,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MusicSpin.App\MusicSpin.App.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+    <None Include="..\MusicSpin.Tests\Fixtures\**\*" LinkBase="Fixtures" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

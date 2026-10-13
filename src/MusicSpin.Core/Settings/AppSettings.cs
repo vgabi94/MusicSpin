@@ -42,4 +42,24 @@ public sealed record AppSettings
 
     /// <summary>Play consecutive tracks with the same sample rate, channels and bit depth without a gap.</summary>
     public bool Gapless { get; init; } = true;
+
+    // ---- Desktop app (Settings in the app; the CLI ignores them) ----
+
+    /// <summary>The app's colour theme: "dark" | "light".</summary>
+    public string Theme { get; init; } = "dark";
+
+    /// <summary>
+    /// How the app animates: "smooth" (full durations), "fast" (half) or "none" (instant). The record keeps spinning in
+    /// every mode.
+    /// </summary>
+    public string Motion { get; init; } = "smooth";
+
+    /// <summary>How fast the records in the app turn: 33.333, 45 or 16.667 rpm.</summary>
+    public double RecordSpeedRpm { get; init; } = 33.333;
+
+    /// <summary>The album shelf's tilt in degrees (20..80).</summary>
+    public double ShelfTilt { get; init; } = 58;
+
+    /// <summary>The album shelf's perspective depth (0 = flat .. 100).</summary>
+    public double ShelfDepth { get; init; } = 40;
 }

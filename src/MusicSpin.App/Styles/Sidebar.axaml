@@ -1,0 +1,48 @@
+<!-- The sidebar (mockup: .sidebar, .nav-h, .sidebar a). -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <Style Selector="Border.sidebar">
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource HairlineRight}" />
+        <Setter Property="Padding" Value="{StaticResource SidebarPadding}" />
+    </Style>
+    <Style Selector="Border.sidebar TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource NavFontSize}" />
+    </Style>
+    <Style Selector="Border.sidebar TextBlock.navHeader">
+        <Setter Property="FontSize" Value="{StaticResource NavHeaderFontSize}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource NavHeaderLetterSpacing}" />
+        <Setter Property="Margin" Value="{StaticResource NavHeaderMargin}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+
+    <Style Selector="Button.nav">
+        <Setter Property="Padding" Value="{StaticResource NavItemPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource NavItemRadius}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.nav:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.nav.active">
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.nav StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource NavIconGap}" />
+    </Style>
+    <Style Selector="Button.nav controls|Icon">
+        <Setter Property="Width" Value="{StaticResource NavIconSize}" />
+        <Setter Property="Height" Value="{StaticResource NavIconSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.nav TextBlock">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+</Styles>

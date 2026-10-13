@@ -15,11 +15,11 @@ MusicSpin.slnx
 │   │   ├── Hosting/     AppPaths: resolves the data folder (default .usrdata)
 │   │   ├── Settings/    AppSettings + SettingsStore (settings.json)
 │   │   └── Library/     MusicLibrary facade, LiteDB store, scanner, tag reader, queries, watcher
-│   ├── MusicSpin.App    Avalonia 12 desktop app (empty shell; executable `MusicSpin`)
+│   ├── MusicSpin.App    Avalonia 12 desktop app, executable `MusicSpin` (see Desktop app below)
 │   └── MusicSpin.Cli    `music-spin` command line (System.CommandLine)
 └── tests/
     ├── MusicSpin.Tests      Core unit + FFmpeg integration tests (xUnit v3)
-    ├── MusicSpin.Tests.Ui   Avalonia headless smoke test
+    ├── MusicSpin.Tests.Ui   App tests: view models, services, headless views and snapshots
     └── MusicSpin.Tests.Cli  CLI tests: in-process (parsing, --json, exit codes, serve, library, player, MCP) and
                              end-to-end with the real music-spin executable and detached background players
 eng/                         get-ffmpeg.sh/.ps1, publish.sh/.ps1, Publish.props
@@ -28,11 +28,11 @@ eng/                         get-ffmpeg.sh/.ps1, publish.sh/.ps1, Publish.props
 | Project | Kind | Depends on |
 |---|---|---|
 | `MusicSpin.Core` | class library, **no UI dependencies** | FFmpeg.AutoGen, SoundFlow (miniaudio), LiteDB, TagLib# |
-| `MusicSpin.App` | Avalonia 12 desktop app, executable `MusicSpin` | Core |
+| `MusicSpin.App` | Avalonia 12 desktop app, executable `MusicSpin` | Core, CommunityToolkit.Mvvm, Avalonia.Fonts.Inter |
 | `MusicSpin.Cli` | console app, executable `music-spin` | Core, System.CommandLine, ModelContextProtocol.Core |
 | `MusicSpin.Tests` | xUnit v3: Core unit tests, FFmpeg integration tests, player/IPC tests | Core |
 | `MusicSpin.Tests.Cli` | xUnit v3: in-process CLI tests (parsing, `--json`, exit codes, serve, library, player, MCP) and end-to-end tests with the real `music-spin` executable and detached players | Cli |
-| `MusicSpin.Tests.Ui` | Avalonia headless smoke test | App |
+| `MusicSpin.Tests.Ui` | xUnit v3 + Avalonia.Headless (Skia): view models, services, headless views, snapshots | App |
 
 Shared build settings: `Directory.Build.props` (net10.0, nullable, `TreatWarningsAsErrors`, analyzers), `Directory.Packages.props` (central package versions), `eng/Publish.props` (single-file publishing), `global.json` (SDK 10.0.100+, Microsoft.Testing.Platform).
 
@@ -80,7 +80,7 @@ The background player lives in Core (`MusicSpin.Core.Remote`), so the CLI and, l
 - **Local IPC only, no network listener.** Linux/macOS: a Unix domain socket `player.sock` in the data folder with mode **0600** (set before it starts listening). If the path is too long for a socket (over ~100 bytes), it moves to `$TMPDIR/musicspin-<user>/<hash>.sock` inside a 0700 folder. Windows: a named pipe `musicspin-<hash of the data folder>` created with `PipeOptions.CurrentUserOnly` (only the current user can connect). One pipe instance always waits for the next client, and the client checks for the pipe by listing `\\.\pipe\` without opening it. `player.json` (0600) records the pid, endpoint, version and output.
 - **Stale endpoints.** A socket nobody listens on (connection refused) or a missing endpoint means "not running" (exit 13). A new player takes the lock first, then deletes the stale socket and info file.
 - **Protocol.** The same JSON-lines protocol as `serve` (v1), plus `hello`, `subscribe` (event stream; with `"spectrum": true` also spectrum levels, on their own small queue so they never crowd out other events) and `quit`. Requests are limited to 4 MiB per line and 64 connections; malformed or oversized messages get an error and do not affect the player. A client that disconnects mid-command does not affect other clients.
-- **Desktop app (later).** `MusicSpin.Core.Remote` is front-end neutral: `PlayerConnector.ConnectOrStartAsync` + `PlayerClient` (`SendAsync`, `StatusAsync`, `SubscribeAsync` for live events) let the app attach to the same player the CLI uses, or `PlayerHost.TryStart` lets it host the player in its own process for the same data folder.
+- **Desktop app.** `MusicSpin.Core.Remote` is front-end neutral: `PlayerConnector.ConnectOrStartAsync` + `PlayerClient` (`SendAsync`, `StatusAsync`, `SubscribeAsync` for live events) let the app attach to the same player the CLI uses, or `PlayerHost.TryStart` lets it host the player in its own process for the same data folder. The app attaches (see [Desktop app](#desktop-app)).
 
 ### Data folder
 
@@ -88,4 +88,62 @@ All state is in the data folder (by default `.usrdata` next to the executable; s
 
 ## Desktop app
 
-`MusicSpin.App` is an empty Avalonia window (`MainWindow`). `AppHost` resolves the same portable data folder and settings as the CLI, and collects startup problems for the UI to show later. **Planned:** the UI design, and attaching to the background player through `PlayerClient` + `subscribe`, or hosting it in-process with `PlayerHost`.
+`MusicSpin.App` (executable `MusicSpin`) is an Avalonia 12 app built from the [mockup](design/README.md) with MVVM
+(CommunityToolkit.Mvvm). It doesn't play audio itself: it attaches to the same background player as the CLI and MCP,
+so what any of them does shows up in the others.
+
+```
+src/MusicSpin.App/
+├── App.axaml              merges Styles/ (resources first, then one styles file per area)
+├── AppHost.cs             data folder, settings and startup warning (shared rules with the CLI)
+├── Composition/           AppServices + AppComposition: the one place that builds services and view models
+├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers, notices
+├── ViewModels/            MainWindow (shell), Sidebar, Player, pages (Albums, Tracks, playlists, Radio)
+├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, Pages/ — structure and bindings only
+├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection)
+├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), converters
+└── Styles/                Tokens (colours per theme), Metrics, Motion, Icons, Fonts, Controls (control themes),
+                           Base, TitleBar, Sidebar, Content, Lists, PlayerBar, Artwork
+```
+
+- **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
+  a theme switch applies to what is on screen. Sizes, spacing, radii and font sizes are in `Metrics.axaml`; durations
+  in `Motion.axaml`. Views outside `Styles/` contain no literal colours, sizes, opacity or durations; a UI test
+  (`CodeOrganisationTests`) enforces it, with its exceptions listed in the test.
+- **Motion.** Settings › Motion multiplies every duration (Smooth 1, Fast 0.5, None 0). Views write
+  `Duration="{theming:Motion HoverDuration}"`; the extension binds the base duration to the current multiplier.
+- **Accent colour.** The playing album's colour (the most saturated prominent colour of its cover, mixed 80% with white)
+  replaces `AccentBrush`, and `AccentInkBrush` (mixed 55% with black on the light theme) for text. Each album is
+  computed once per session.
+- **View models don't know controls.** Services come in through constructors from `AppComposition`. The window
+  reports one thing back: whether a text box has focus, so the Space key binding (play/pause) declines and the text
+  box gets the space. Esc closes the topmost open layer registered with `LayerRegistry` (menu, Settings, queue drawer,
+  Now Playing, in that order).
+- **Player.** `PlayerViewModel` uses two connections: one for requests and polling, one for the `subscribe` event
+  stream. Every event triggers a `status` refresh, so the state follows the player whoever changed it. While playing,
+  `status` is polled 4 times a second and the position is interpolated between polls. If the player goes away it
+  reconnects every second. Closing the window pauses the music; a player the app started is also shut down (`quit`).
+  Published builds are self-contained: `MusicSpin` starts the `music-spin` executable next to it. In a development
+  build the CLI is in its own output folder, so `MUSICSPIN_CLI` names its `music-spin` executable.
+- **Library.** Each read opens the library briefly on a worker thread (it holds a cross-process lock while open).
+  The app checks `library.db` (and its log) every 2 seconds and reloads the playlists and the current page when it
+  changed, whoever changed it (a scan from the CLI, a playlist from MCP).
+- **Covers.** `CoverService` reads covers through Core's cover cache and keeps decoded bitmaps for the session; a row
+  asks for its cover only when it is first shown, and lists are virtualized.
+- **Spin clock.** One `SpinClock` drives every visible record of the playing album, at Settings › Speed (33⅓, 45 or
+  16⅔ rpm), spinning up and down like a platter. It runs in every Motion mode; None only skips the ramp.
+
+### UI tests
+
+`tests/MusicSpin.Tests.Ui` runs the real app headless with Skia (Inter as the font, so text renders alike on every
+OS). `Harness/` has:
+
+- `AppHarness`: the main window through `AppComposition` over a temporary data folder, a library scanned from fixture
+  files, an in-process background player (`InProcessPlayer`, fake decoders, silent output) and a `FakeTimeProvider`;
+- `ScriptedPlayer`: a fake player on the real transport that answers `status`, records requests, pushes events and
+  fails commands on request (player view model tests);
+- `Snapshots`: compares frames with approved baselines in `Snapshots/`, with a tolerance; on a mismatch it writes the
+  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). `MUSICSPIN_UPDATE_SNAPSHOTS=1`
+  rewrites the baselines, which are reviewed against the mockup before they're committed;
+- `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's headless animation clock is real
+  time (a render tick only samples it), so this lets real time pass frame by frame.

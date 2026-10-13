@@ -1,0 +1,80 @@
+<!-- The content area (mockup: .content, .toolbar, .view, .empty, .btn) and the notice banner. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <Style Selector="Border.banner">
+        <Setter Property="Background" Value="{DynamicResource BannerBrush}" />
+        <Setter Property="Padding" Value="{StaticResource BannerPadding}" />
+    </Style>
+    <Style Selector="Border.banner > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource BannerGap}" />
+    </Style>
+    <Style Selector="Border.banner TextBlock">
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.banner controls|Icon">
+        <Setter Property="Width" Value="{StaticResource BannerIconSize}" />
+        <Setter Property="Height" Value="{StaticResource BannerIconSize}" />
+    </Style>
+    <Style Selector="Border.banner Button">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.banner Button:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+
+    <Style Selector="Grid.toolbar">
+        <Setter Property="Margin" Value="{StaticResource ToolbarPadding}" />
+        <Setter Property="ColumnSpacing" Value="{StaticResource ToolbarGap}" />
+    </Style>
+    <Style Selector="StackPanel.pageHeading">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.pageTitle">
+        <Setter Property="FontSize" Value="{StaticResource PageTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource TitleFontWeight}" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+    </Style>
+    <Style Selector="TextBlock.pageCount">
+        <Setter Property="FontSize" Value="{StaticResource PageCountFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource MediumFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Margin" Value="{StaticResource PageCountMargin}" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+    </Style>
+
+    <Style Selector="ScrollViewer.view">
+        <Setter Property="Padding" Value="{StaticResource ViewPadding}" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+    </Style>
+    <Style Selector="TextBlock.empty">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="FontSize" Value="{StaticResource EmptyFontSize}" />
+        <Setter Property="Margin" Value="{StaticResource EmptyMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- The accent button (mockup: .btn): black text on the album colour. -->
+    <Style Selector="Button.accent">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+        <Setter Property="Padding" Value="{StaticResource ButtonPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ButtonRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource ButtonFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="StackPanel.radio">
+        <Setter Property="Spacing" Value="{StaticResource RadioGap}" />
+        <Setter Property="Margin" Value="{StaticResource ViewPadding}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+</Styles>

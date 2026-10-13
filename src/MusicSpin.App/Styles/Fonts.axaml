@@ -1,0 +1,9 @@
+<!-- Bundled fonts (Avalonia.Fonts.Inter, OFL-1.1; see THIRD-PARTY-NOTICES.md). -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <FontFamily x:Key="AppFontFamily">fonts:Inter#Inter, $Default</FontFamily>
+    <FontWeight x:Key="BrandFontWeight">SemiBold</FontWeight>
+    <FontWeight x:Key="TitleFontWeight">Bold</FontWeight>
+    <FontWeight x:Key="StrongFontWeight">SemiBold</FontWeight>
+    <FontWeight x:Key="MediumFontWeight">Medium</FontWeight>
+</ResourceDictionary>

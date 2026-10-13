@@ -1,0 +1,114 @@
+<!--
+  Sleeves and records (mockup: "Generated cover art", "Vinyl"): the CoverView template, the VinylView's colours and
+  proportions, and Panel.sleeve, a cover with its record behind it that slides out while the album plays.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <Styles.Resources>
+        <ControlTheme x:Key="{x:Type controls:CoverView}" TargetType="controls:CoverView">
+            <Setter Property="CornerRadius" Value="{StaticResource CoverRadius}" />
+            <Setter Property="TitleScale" Value="{StaticResource PlaceholderTitleScale}" />
+            <Setter Property="MinTitleFontSize" Value="{StaticResource PlaceholderMinFontSize}" />
+            <Setter Property="MaxTitleFontSize" Value="{StaticResource PlaceholderMaxFontSize}" />
+            <Setter Property="Background" Value="{DynamicResource PlaceholderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource PlaceholderInkBrush}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <!-- The shadow sits outside the clip, so it has its own border. -->
+                    <Border Name="PART_Shadow" CornerRadius="{TemplateBinding CornerRadius}">
+                        <Border Name="PART_Sleeve"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                ClipToBounds="True">
+                            <Panel>
+                                <Image Name="PART_Art"
+                                       Source="{TemplateBinding Source}"
+                                       Stretch="UniformToFill"
+                                       IsVisible="{TemplateBinding HasArt}" />
+                                <StackPanel Name="PART_Placeholder"
+                                            Margin="{TemplateBinding TextMargin}"
+                                            VerticalAlignment="Bottom"
+                                            IsVisible="{Binding !HasArt, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <TextBlock Name="PART_Title"
+                                               Text="{Binding Title, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static theming:TextConverters.Upper}}"
+                                               FontSize="{TemplateBinding TitleFontSize}" />
+                                    <TextBlock Name="PART_Artist"
+                                               Text="{Binding Artist, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static theming:TextConverters.Upper}}"
+                                               FontSize="{TemplateBinding ArtistFontSize}" />
+                                </StackPanel>
+                                <Border Name="PART_Sheen" Background="{StaticResource CoverSheenBrush}" IsHitTestVisible="False" />
+                            </Panel>
+                        </Border>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <!-- mockup: box-shadow: 0 1px 0 #ffffff14 inset, 0 10px 24px -8px #000c -->
+            <Style Selector="^ /template/ Border#PART_Shadow">
+                <Setter Property="BoxShadow" Value="0 10 24 -8 #CC000000" />
+            </Style>
+            <Style Selector="^ /template/ TextBlock">
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="LetterSpacing" Value="0.4" />
+            </Style>
+            <Style Selector="^ /template/ TextBlock#PART_Title">
+                <Setter Property="FontWeight" Value="{StaticResource TitleFontWeight}" />
+            </Style>
+            <Style Selector="^ /template/ TextBlock#PART_Artist">
+                <Setter Property="Opacity" Value="0.8" />
+            </Style>
+            <!-- Small sleeves in lists: no shadow, no sheen (mockup: .tr .lead .cover). -->
+            <Style Selector="^.flat /template/ Border#PART_Shadow">
+                <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+            </Style>
+            <Style Selector="^.flat /template/ Border#PART_Sheen">
+                <Setter Property="IsVisible" Value="False" />
+            </Style>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <Style Selector="controls|VinylView">
+        <Setter Property="DiscBrush" Value="{StaticResource VinylBrush}" />
+        <Setter Property="GrooveBrush" Value="{StaticResource VinylGrooveBrush}" />
+        <Setter Property="EdgeBrush" Value="{StaticResource VinylEdgeBrush}" />
+        <Setter Property="LabelFallbackBrush" Value="{DynamicResource PlaceholderBrush}" />
+        <Setter Property="LabelRimBrush" Value="{StaticResource VinylLabelRimBrush}" />
+        <Setter Property="HoleBrush" Value="{StaticResource VinylHoleBrush}" />
+        <Setter Property="HoleRimBrush" Value="{StaticResource VinylHoleRimBrush}" />
+        <Setter Property="SheenColor" Value="{StaticResource VinylSheenColor}" />
+        <Setter Property="LabelScale" Value="{StaticResource VinylLabelScale}" />
+        <Setter Property="HoleScale" Value="{StaticResource VinylHoleScale}" />
+        <Setter Property="GroovePitch" Value="{StaticResource VinylGroovePitch}" />
+    </Style>
+
+    <!-- A sleeve with its record behind it: the record sits at the left edge and slides out while playing. -->
+    <Style Selector="Panel.sleeve > controls|CoverView">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="Panel.sleeve > controls|VinylView">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="RenderTransform" Value="translateX(0px)" />
+        <Setter Property="theming:Animate.Transitions" Value="RenderTransform MiniVinylDuration EaseOut" />
+    </Style>
+
+    <!-- In album rows. -->
+    <Style Selector="Panel.rowSleeve">
+        <Setter Property="Width" Value="{StaticResource RowSleeveWidth}" />
+        <Setter Property="Height" Value="{StaticResource RowThumbSize}" />
+    </Style>
+    <Style Selector="Panel.rowSleeve > controls|CoverView">
+        <Setter Property="Width" Value="{StaticResource RowThumbSize}" />
+        <Setter Property="Height" Value="{StaticResource RowThumbSize}" />
+    </Style>
+    <Style Selector="Panel.rowSleeve > controls|VinylView">
+        <Setter Property="Width" Value="{StaticResource RowVinylSize}" />
+        <Setter Property="Height" Value="{StaticResource RowVinylSize}" />
+        <Setter Property="Margin" Value="{StaticResource RowVinylMargin}" />
+    </Style>
+    <Style Selector="Panel.rowSleeve.playing > controls|VinylView">
+        <Setter Property="RenderTransform" Value="translateX(16px)" />
+    </Style>
+</Styles>

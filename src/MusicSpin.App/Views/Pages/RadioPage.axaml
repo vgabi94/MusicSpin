@@ -1,0 +1,14 @@
+<!-- Radio: start a station over the whole library. The full page (stations, filters) comes with its own issue. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             x:Class="MusicSpin.App.Views.Pages.RadioPage"
+             x:DataType="vm:RadioPageViewModel">
+    <StackPanel Classes="radio">
+        <TextBlock Classes="secondary" Text="Endless random play from your library." />
+        <TextBlock Name="OnAir"
+                   Text="{Binding OnAir, StringFormat='On air: {0}'}"
+                   IsVisible="{Binding OnAir, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <Button Name="StartRadio" Classes="accent" Content="Start radio" Command="{Binding StartRadioCommand}" />
+    </StackPanel>
+</UserControl>

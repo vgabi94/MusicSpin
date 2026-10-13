@@ -1,0 +1,60 @@
+<!--
+  Colour tokens, from the mockup's CSS variables (docs/design/mockup/styles.css, "Theme").
+  Theme-dependent brushes live in the Dark and Light dictionaries: use them with DynamicResource so a theme switch
+  applies live. AccentBrush / AccentInkBrush are defaults; the app replaces them per playing album (Theming/Appearance.cs).
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="BgBrush" Color="#0E0F12" />
+            <SolidColorBrush x:Key="Bg2Brush" Color="#15171C" />
+            <SolidColorBrush x:Key="Bg3Brush" Color="#1D2027" />
+            <SolidColorBrush x:Key="LineBrush" Color="#12FFFFFF" />
+            <SolidColorBrush x:Key="FgBrush" Color="#EEF0F4" />
+            <SolidColorBrush x:Key="Fg2Brush" Color="#9AA1AD" />
+            <SolidColorBrush x:Key="BannerBrush" Color="#33E8A03C" />
+            <SolidColorBrush x:Key="PlaceholderBrush" Color="#2A2E37" />
+            <SolidColorBrush x:Key="PlaceholderInkBrush" Color="#C9CED8" />
+            <SolidColorBrush x:Key="RowHoverBrush" Color="#0DFFFFFF" />
+            <Color x:Key="CardShadowColor">#CC000000</Color>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="BgBrush" Color="#F4F2EE" />
+            <SolidColorBrush x:Key="Bg2Brush" Color="#EBE8E2" />
+            <SolidColorBrush x:Key="Bg3Brush" Color="#DFDBD3" />
+            <SolidColorBrush x:Key="LineBrush" Color="#14000000" />
+            <SolidColorBrush x:Key="FgBrush" Color="#1B1C1F" />
+            <SolidColorBrush x:Key="Fg2Brush" Color="#6C6F76" />
+            <SolidColorBrush x:Key="BannerBrush" Color="#33C0782A" />
+            <SolidColorBrush x:Key="PlaceholderBrush" Color="#D3CEC5" />
+            <SolidColorBrush x:Key="PlaceholderInkBrush" Color="#4A4C52" />
+            <SolidColorBrush x:Key="RowHoverBrush" Color="#0A000000" />
+            <Color x:Key="CardShadowColor">#66000000</Color>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- The playing album's colour (80% with white) and its ink for text; replaced at runtime. -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#E86A3C" />
+    <SolidColorBrush x:Key="AccentInkBrush" Color="#E86A3C" />
+
+    <!-- Records and sleeves look the same in both themes. -->
+    <SolidColorBrush x:Key="VinylBrush" Color="#111111" />
+    <SolidColorBrush x:Key="VinylGrooveBrush" Color="#1B1B1B" />
+    <SolidColorBrush x:Key="VinylEdgeBrush" Color="#000000" />
+    <SolidColorBrush x:Key="VinylHoleBrush" Color="#050505" />
+    <SolidColorBrush x:Key="VinylHoleRimBrush" Color="#30FFFFFF" />
+    <SolidColorBrush x:Key="VinylLabelRimBrush" Color="#88000000" />
+    <SolidColorBrush x:Key="BrandDiscBrush" Color="#0A0A0A" />
+    <SolidColorBrush x:Key="BrandDiscGrooveBrush" Color="#222222" />
+    <Color x:Key="VinylSheenColor">#26FFFFFF</Color>
+    <!-- The sleeve's paper sheen (mockup: .cover::after, linear-gradient(125deg, …)). -->
+    <LinearGradientBrush x:Key="CoverSheenBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Color="#22FFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="0.35" />
+        <GradientStop Color="#00000000" Offset="0.7" />
+        <GradientStop Color="#30000000" Offset="1" />
+    </LinearGradientBrush>
+    <!-- Text and icons on an accent fill (the mockup's black on the accent). -->
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#000000" />
+</ResourceDictionary>

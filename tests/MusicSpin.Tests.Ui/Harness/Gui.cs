@@ -1,0 +1,140 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+
+namespace MusicSpin.Tests.Ui.Harness;
+
+/// <summary>Waiting, finding and clicking in a headless window.</summary>
+internal static class Gui
+{
+    /// <summary>Runs queued UI work and lays out (no time passes).</summary>
+    public static void Settle()
+    {
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// Lets running transitions finish (Avalonia's animation clock is real time; see <see cref="UiTime"/>) without moving
+    /// the app's fake clock. The longest transition is 0.5 s at Motion Smooth.
+    /// </summary>
+    public static void FinishAnimations()
+    {
+        var real = System.Diagnostics.Stopwatch.StartNew();
+        while (real.Elapsed < TimeSpan.FromMilliseconds(600))
+        {
+            Settle();
+            Thread.Sleep(UiTime.Frame);
+        }
+
+        Settle();
+    }
+
+    /// <summary>
+    /// Waits (in real time: the player and the library work on their own threads) until <paramref name="condition"/>
+    /// holds, running UI work meanwhile.
+    /// </summary>
+    public static async Task UntilAsync(Func<bool> condition, string what, int timeoutMs = 10_000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (true)
+        {
+            Settle();
+            if (condition())
+            {
+                return;
+            }
+
+            if (Environment.TickCount64 > deadline)
+            {
+                throw new TimeoutException($"Timed out waiting for {what}.");
+            }
+
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+    }
+
+    /// <summary>The control named <paramref name="name"/> anywhere under <paramref name="root"/> (user controls have their own name scopes).</summary>
+    public static T Find<T>(Visual root, string name)
+        where T : Control
+        => root.GetVisualDescendants().OfType<T>().FirstOrDefault(c => c.Name == name)
+           ?? throw new InvalidOperationException($"No {typeof(T).Name} named '{name}'.");
+
+    public static IEnumerable<T> All<T>(Visual root) => root.GetVisualDescendants().OfType<T>();
+
+    /// <summary>Clicks the middle of <paramref name="control"/>.</summary>
+    public static void Click(Window window, Control control)
+    {
+        var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)
+                    ?? throw new InvalidOperationException($"{control} is not in the window.");
+        if (window.InputHitTest(point) is not Visual hit || (hit != control && !control.IsVisualAncestorOf(hit)))
+        {
+            throw new InvalidOperationException($"Clicking {control} at {point} would hit {window.InputHitTest(point)} instead.");
+        }
+
+        var clicked = false;
+        void OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => clicked = true;
+        if (control is Button target)
+        {
+            target.Click += OnClick;
+        }
+
+        window.MouseMove(point);
+        window.MouseDown(point, MouseButton.Left);
+        window.MouseUp(point, MouseButton.Left);
+        Settle();
+        if (control is Button button)
+        {
+            button.Click -= OnClick;
+            if (!clicked)
+            {
+                throw new InvalidOperationException($"{control} got the mouse but did not click (enabled: {button.IsEffectivelyEnabled}).");
+            }
+        }
+    }
+
+    public static void Press(Window window, Key key, PhysicalKey physical, string? text = null)
+    {
+        window.KeyPress(key, RawInputModifiers.None, physical, text);
+        if (text is not null)
+        {
+            window.KeyTextInput(text);
+        }
+
+        window.KeyRelease(key, RawInputModifiers.None, physical, text);
+        Settle();
+    }
+
+    /// <summary>The control's position and size in window coordinates.</summary>
+    public static Rect BoundsIn(Window window, Control control)
+    {
+        var topLeft = control.TranslatePoint(default, window) ?? throw new InvalidOperationException($"{control} is not in the window.");
+        return new Rect(topLeft, control.Bounds.Size);
+    }
+}
+
+/// <summary>
+/// Keeps one tiny window open for the whole test session. When the last headless window closes, the render timer
+/// stops, and the next window restarts it with a new stopwatch: Avalonia's animation clock jumps back to zero and
+/// transitions started after that stall. A window that stays open keeps the clock running, as in the real app.
+/// </summary>
+internal static class RenderClock
+{
+    private static Window? s_keepAlive;
+
+    public static void KeepRunning()
+    {
+        if (s_keepAlive is not null)
+        {
+            return;
+        }
+
+        s_keepAlive = new Window { Width = 1, Height = 1, ShowActivated = false };
+        s_keepAlive.Show();
+        Gui.Settle();
+    }
+}

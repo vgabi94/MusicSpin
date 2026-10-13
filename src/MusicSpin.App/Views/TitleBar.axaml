@@ -1,0 +1,42 @@
+<!--
+  The title bar (mockup: .titlebar). The bar drags the window; the search box takes input. The system window buttons
+  are drawn by the platform over the room kept for them (Panel.captionButtons).
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:chrome="using:Avalonia.Controls.Chrome"
+             x:Class="MusicSpin.App.Views.TitleBar"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="titleBar" chrome:WindowDecorationProperties.ElementRole="TitleBar">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MaxWidth="{StaticResource SearchMaxWidth}" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Classes="brand">
+                <Panel Classes="brandDisc">
+                    <Ellipse Classes="brandRecord" />
+                    <Ellipse Classes="brandRing" />
+                    <Ellipse Classes="brandLabel" />
+                </Panel>
+                <TextBlock Classes="brandName" Text="Music Spin" />
+            </StackPanel>
+            <Border Grid.Column="1" Classes="search" chrome:WindowDecorationProperties.ElementRole="User">
+                <Grid ColumnDefinitions="Auto,*">
+                    <controls:Icon Classes="stroke" Data="{StaticResource Icon.Search}" />
+                    <TextBox Name="SearchBox"
+                             Grid.Column="1"
+                             Classes="search"
+                             PlaceholderText="Search"
+                             AutomationProperties.Name="Search"
+                             Text="{Binding SearchText}" />
+                </Grid>
+            </Border>
+            <Panel Grid.Column="3" Classes="captionButtons" />
+        </Grid>
+    </Border>
+</UserControl>

@@ -11,7 +11,7 @@
 ```bash
 ./eng/get-ffmpeg.sh                     # once; installs to ~/.local/share/MusicSpin/ffmpeg
 dotnet build MusicSpin.slnx
-dotnet run --project src/MusicSpin.App  # empty desktop window
+MUSICSPIN_CLI="$PWD/src/MusicSpin.Cli/bin/Debug/net10.0/music-spin" dotnet run --project src/MusicSpin.App  # the app starts the player with the CLI
 dotnet run --project src/MusicSpin.Cli -- info ~/Music/track.flac
 dotnet run --project src/MusicSpin.Cli -- doctor
 ```

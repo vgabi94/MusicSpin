@@ -101,6 +101,14 @@ public sealed partial class MusicLibrary
             .ToList());
     }
 
+    /// <summary>The library tracks with these ids (an indexed lookup; unknown ids are left out), in no particular order.</summary>
+    public IReadOnlyList<TrackRecord> TracksById(IEnumerable<string> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var wanted = ids.Where(i => !string.IsNullOrWhiteSpace(i)).Select(i => i.Trim().ToLowerInvariant()).Distinct(StringComparer.Ordinal).ToList();
+        return wanted.Count == 0 ? [] : Guard(() => (IReadOnlyList<TrackRecord>)_db.Tracks.Find(IdIn(wanted)).ToList());
+    }
+
     /// <summary>Why there are no favorites to play: none yet, or none of them is in the library now.</summary>
     public string NoFavoritesMessage() => FavoritesSummary() is { Missing: > 0 } summary
         ? $"None of your {summary.Missing} favorite{(summary.Missing == 1 ? " is" : "s are")} in the library now. See 'music-spin favorites --missing'."

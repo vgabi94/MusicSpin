@@ -1,0 +1,85 @@
+<!--
+  The title bar (mockup: .titlebar): brand, search box, and room for the system window buttons.
+  On macOS (Window.mac) the system buttons sit on the left, so the brand moves right and no room is kept on the right.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls">
+    <Style Selector="Border.titleBar">
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource HairlineBottom}" />
+        <Setter Property="Padding" Value="{StaticResource TitleBarPadding}" />
+    </Style>
+    <Style Selector="Window.mac Border.titleBar">
+        <Setter Property="Padding" Value="{StaticResource MacTitleBarPadding}" />
+    </Style>
+    <Style Selector="Border.titleBar > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource TitleBarGap}" />
+    </Style>
+    <Style Selector="Panel.captionButtons">
+        <Setter Property="Width" Value="{StaticResource CaptionButtonsWidth}" />
+    </Style>
+    <Style Selector="Window.mac Panel.captionButtons">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="StackPanel.brand">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource BrandGap}" />
+        <Setter Property="Width" Value="{StaticResource BrandWidth}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- The little record: a dark disc, a black ring, the accent label. -->
+    <Style Selector="Panel.brandDisc">
+        <Setter Property="Width" Value="{StaticResource BrandDiscSize}" />
+        <Setter Property="Height" Value="{StaticResource BrandDiscSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Panel.brandDisc > Ellipse">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Ellipse.brandRecord">
+        <Setter Property="Width" Value="{StaticResource BrandDiscSize}" />
+        <Setter Property="Height" Value="{StaticResource BrandDiscSize}" />
+        <Setter Property="Fill" Value="{StaticResource BrandDiscGrooveBrush}" />
+    </Style>
+    <Style Selector="Ellipse.brandRing">
+        <Setter Property="Width" Value="{StaticResource BrandLabelSize}" />
+        <Setter Property="Height" Value="{StaticResource BrandLabelSize}" />
+        <Setter Property="Fill" Value="{StaticResource BrandDiscBrush}" />
+    </Style>
+    <Style Selector="Ellipse.brandLabel">
+        <Setter Property="Width" Value="{StaticResource BrandLabelInnerSize}" />
+        <Setter Property="Height" Value="{StaticResource BrandLabelInnerSize}" />
+        <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.brandName">
+        <Setter Property="FontSize" Value="{StaticResource BrandFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource BrandFontWeight}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.search">
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="CornerRadius" Value="{StaticResource SearchRadius}" />
+        <Setter Property="Padding" Value="{StaticResource SearchPadding}" />
+        <Setter Property="MaxWidth" Value="{StaticResource SearchMaxWidth}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.search > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource SearchGap}" />
+    </Style>
+    <Style Selector="Border.search controls|Icon">
+        <Setter Property="Width" Value="{StaticResource SearchIconSize}" />
+        <Setter Property="Height" Value="{StaticResource SearchIconSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="TextBox.search">
+        <Setter Property="Theme" Value="{StaticResource SearchBox}" />
+        <Setter Property="FontSize" Value="{StaticResource SearchFontSize}" />
+    </Style>
+</Styles>
