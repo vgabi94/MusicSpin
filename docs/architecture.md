@@ -100,9 +100,10 @@ src/MusicSpin.App/
 ├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers, notices
 ├── ViewModels/            MainWindow (shell), Sidebar, Player, pages (Albums, Tracks, playlists, Radio)
 ├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, Pages/ — structure and bindings only
+├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection)
 ├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), converters
-└── Styles/                Tokens (colours per theme), Metrics, Motion, Icons, Fonts, Controls (control themes),
+└── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes), Window,
                            Base, TitleBar, Sidebar, Content, Lists, PlayerBar, Artwork
 ```
 

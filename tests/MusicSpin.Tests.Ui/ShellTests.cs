@@ -58,7 +58,20 @@ public sealed class ShellTests
         Assert.Equal(44, decorations.DefaultTitleBarHeight);
         Assert.Equal(new Thickness(1), decorations.DefaultFrameThickness);
         Assert.Equal(new Thickness(8), decorations.DefaultShadowThickness);
-        Assert.NotNull(content);
+
+        // The buttons draw their icons (once they showed the geometry's type name as text).
+        var overlay = Assert.IsAssignableFrom<Control>(content.Result.Overlay);
+        var window = new Window { Width = 400, Height = 100, Content = overlay };
+        window.Show();
+        Gui.Settle();
+        var buttons = Gui.All<Button>(window).ToList();
+        Assert.Equal(["PART_MinimizeButton", "PART_MaximizeButton", "PART_CloseButton"], buttons.Select(b => b.Name));
+        Assert.All(buttons, b =>
+        {
+            Assert.NotNull(Assert.Single(Gui.All<MusicSpin.App.Controls.Icon>(b)).Data);
+            Assert.Empty(Gui.All<TextBlock>(b));
+        });
+        window.Close();
     }
 
     [AvaloniaFact]

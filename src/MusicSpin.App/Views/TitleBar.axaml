@@ -27,7 +27,7 @@
             </StackPanel>
             <Border Grid.Column="1" Classes="search" chrome:WindowDecorationProperties.ElementRole="User">
                 <Grid ColumnDefinitions="Auto,*">
-                    <controls:Icon Classes="stroke" Data="{StaticResource Icon.Search}" />
+                    <controls:Icon Data="{StaticResource MagnifyingGlassLight}" />
                     <TextBox Name="SearchBox"
                              Grid.Column="1"
                              Classes="search"

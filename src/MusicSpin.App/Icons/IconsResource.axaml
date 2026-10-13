@@ -1,0 +1,39 @@
+<!--
+  Icons as path geometries, in any coordinate space: controls:Icon fits each path to its bounds (like PathIcon), so
+  icons can be pasted in as they come. Filled by default; an icon drawn as lines has a "<Key>.Stroked" flag (sidebar
+  entries look it up at runtime) or the "stroke" class where it is used.
+  Close and MagnifyingGlassLight come from the VVO icon set.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="using:System">
+
+    <!-- BEGIN General -->
+    <StreamGeometry x:Key="Close">M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z</StreamGeometry>
+    <StreamGeometry x:Key="MagnifyingGlassLight">M228.24,219.76l-51.38-51.38a86.15,86.15,0,1,0-8.48,8.48l51.38,51.38a6,6,0,0,0,8.48-8.48ZM38,112a74,74,0,1,1,74,74A74.09,74.09,0,0,1,38,112Z</StreamGeometry>
+    <!-- END General -->
+
+    <!-- BEGIN Library (sidebar) -->
+    <StreamGeometry x:Key="Albums">F0 M12,3 A9,9 0 1 1 11.99,3 Z M12,9.6 A2.4,2.4 0 1 0 12.01,9.6 Z</StreamGeometry>
+    <StreamGeometry x:Key="Tracks">M9,17.5 A3,3 0 1 1 7,14.67 V5.2 L18,3 V14.5 A3,3 0 1 1 16,11.67 V6.2 L9,7.6 Z</StreamGeometry>
+    <!-- The mockup's radio icon (index.html, sidebar): a dot and two pairs of waves. -->
+    <StreamGeometry x:Key="Radio">M14.2,12 A2.2,2.2 0 1 1 9.8,12 A2.2,2.2 0 1 1 14.2,12 Z M8.5,8.5 A5,5 0 0 0 8.5,15.5 M15.5,8.5 A5,5 0 0 1 15.5,15.5 M5.6,5.6 A9,9 0 0 0 5.6,18.4 M18.4,5.6 A9,9 0 0 1 18.4,18.4</StreamGeometry>
+    <sys:Boolean x:Key="Radio.Stroked">True</sys:Boolean>
+    <StreamGeometry x:Key="Playlist">M4,6 H16 M4,11 H16 M4,16 H11 M17,14 V20 M14,17 H20</StreamGeometry>
+    <sys:Boolean x:Key="Playlist.Stroked">True</sys:Boolean>
+    <!-- END Library (sidebar) -->
+
+    <!-- BEGIN Transport -->
+    <StreamGeometry x:Key="Play">M8,5 L19,12 L8,19 Z</StreamGeometry>
+    <StreamGeometry x:Key="Pause">M6.5,5 H10 V19 H6.5 Z M14,5 H17.5 V19 H14 Z</StreamGeometry>
+    <StreamGeometry x:Key="Previous">M6,5 H8 V19 H6 Z M19,5 L9,12 L19,19 Z</StreamGeometry>
+    <StreamGeometry x:Key="Next">M16,5 H18 V19 H16 Z M5,5 L15,12 L5,19 Z</StreamGeometry>
+    <!-- END Transport -->
+
+    <!-- BEGIN Window buttons (thin lines, like the mockup's .winctl) -->
+    <StreamGeometry x:Key="WindowMinimize">M0,10 H20</StreamGeometry>
+    <StreamGeometry x:Key="WindowMaximize">M0,0 H20 V20 H0 Z</StreamGeometry>
+    <StreamGeometry x:Key="WindowRestore">M0,5 H15 V20 H0 Z M5,5 V0 H20 V15 H15</StreamGeometry>
+    <StreamGeometry x:Key="WindowClose">M0,0 L20,20 M20,0 L0,20</StreamGeometry>
+    <!-- END Window buttons -->
+</ResourceDictionary>

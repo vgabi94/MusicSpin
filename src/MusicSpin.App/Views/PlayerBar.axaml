@@ -20,16 +20,16 @@
             </StackPanel>
             <StackPanel Grid.Column="2" Classes="transport">
                 <Button Name="Previous" Command="{Binding Player.PreviousCommand}" ToolTip.Tip="Previous" AutomationProperties.Name="Previous">
-                    <controls:Icon Data="{StaticResource Icon.Previous}" />
+                    <controls:Icon Data="{StaticResource Previous}" />
                 </Button>
                 <Button Name="PlayPause" Classes="play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play/pause (Space)" AutomationProperties.Name="Play or pause">
                     <Panel>
-                        <controls:Icon Data="{StaticResource Icon.Play}" IsVisible="{Binding !Player.IsPlaying}" />
-                        <controls:Icon Data="{StaticResource Icon.Pause}" IsVisible="{Binding Player.IsPlaying}" />
+                        <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !Player.IsPlaying}" />
+                        <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
                     </Panel>
                 </Button>
                 <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next" AutomationProperties.Name="Next">
-                    <controls:Icon Data="{StaticResource Icon.Next}" />
+                    <controls:Icon Data="{StaticResource Next}" />
                 </Button>
             </StackPanel>
         </Grid>

@@ -13,7 +13,7 @@ public enum PageKind
     Playlist,
 }
 
-/// <summary>A sidebar entry. <see cref="Icon"/> names a geometry in Styles/Icons.axaml ("Icon.Albums").</summary>
+/// <summary>A sidebar entry. <see cref="Icon"/> names a geometry in Icons/IconsResource.axaml ("Albums").</summary>
 public sealed partial class NavItemViewModel(string title, string icon, PageKind kind, PlaylistSummaryItem? playlist = null) : ObservableObject
 {
     public string Title { get; } = title;
@@ -33,9 +33,9 @@ public sealed partial class SidebarViewModel : ObservableObject
 {
     public SidebarViewModel()
     {
-        Albums = new NavItemViewModel("Albums", "Icon.Albums", PageKind.Albums);
-        Tracks = new NavItemViewModel("Tracks", "Icon.Tracks", PageKind.Tracks);
-        Radio = new NavItemViewModel("Radio", "Icon.Radio", PageKind.Radio);
+        Albums = new NavItemViewModel("Albums", "Albums", PageKind.Albums);
+        Tracks = new NavItemViewModel("Tracks", "Tracks", PageKind.Tracks);
+        Radio = new NavItemViewModel("Radio", "Radio", PageKind.Radio);
         Library = [Albums, Tracks, Radio];
     }
 
@@ -78,7 +78,7 @@ public sealed partial class SidebarViewModel : ObservableObject
         Playlists.Clear();
         foreach (var playlist in playlists)
         {
-            var item = new NavItemViewModel(playlist.Name, "Icon.Playlist", PageKind.Playlist, playlist);
+            var item = new NavItemViewModel(playlist.Name, "Playlist", PageKind.Playlist, playlist);
             Playlists.Add(item);
             if (playlist.Id == activeId)
             {

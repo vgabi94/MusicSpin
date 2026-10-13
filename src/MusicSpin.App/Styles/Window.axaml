@@ -17,7 +17,7 @@
                 <Border Background="{TemplateBinding Background}">
                     <controls:Icon Data="{TemplateBinding Content}"
                                    IsStroked="True"
-                                   StrokeThickness="2"
+                                   StrokeThickness="1"
                                    Width="{StaticResource CaptionIconSize}"
                                    Height="{StaticResource CaptionIconSize}"
                                    HorizontalAlignment="Center"
@@ -64,20 +64,20 @@
                                         IsVisible="{TemplateBinding HasTitleBar}">
                                 <Button Name="PART_MinimizeButton"
                                         Theme="{StaticResource CaptionButton}"
-                                        Content="{StaticResource Icon.Minimize}"
+                                        Content="{StaticResource WindowMinimize}"
                                         ToolTip.Tip="Minimize"
                                         AutomationProperties.Name="Minimize"
                                         WindowDecorationProperties.ElementRole="MinimizeButton" />
                                 <Button Name="PART_MaximizeButton"
                                         Theme="{StaticResource CaptionButton}"
-                                        Content="{StaticResource Icon.Maximize}"
+                                        Content="{StaticResource WindowMaximize}"
                                         ToolTip.Tip="Maximize"
                                         AutomationProperties.Name="Maximize"
                                         WindowDecorationProperties.ElementRole="MaximizeButton" />
                                 <Button Name="PART_CloseButton"
                                         Classes="close"
                                         Theme="{StaticResource CaptionButton}"
-                                        Content="{StaticResource Icon.WindowClose}"
+                                        Content="{StaticResource WindowClose}"
                                         ToolTip.Tip="Close"
                                         AutomationProperties.Name="Close"
                                         WindowDecorationProperties.ElementRole="CloseButton" />
@@ -95,14 +95,14 @@
                                     WindowDecorationProperties.ElementRole="DecorationsElement">
                             <Button Name="PART_PopoverFullScreenButton"
                                     Theme="{StaticResource CaptionButton}"
-                                    Content="{StaticResource Icon.Restore}"
+                                    Content="{StaticResource WindowRestore}"
                                     ToolTip.Tip="Exit full screen"
                                     AutomationProperties.Name="Exit full screen"
                                     WindowDecorationProperties.ElementRole="FullScreenButton" />
                             <Button Name="PART_PopoverCloseButton"
                                     Classes="close"
                                     Theme="{StaticResource CaptionButton}"
-                                    Content="{StaticResource Icon.WindowClose}"
+                                    Content="{StaticResource WindowClose}"
                                     ToolTip.Tip="Close"
                                     AutomationProperties.Name="Close"
                                     WindowDecorationProperties.ElementRole="CloseButton" />
@@ -127,7 +127,7 @@
         </Style>
 
         <Style Selector="^:maximized /template/ Button#PART_MaximizeButton">
-            <Setter Property="Content" Value="{StaticResource Icon.Restore}" />
+            <Setter Property="Content" Value="{StaticResource WindowRestore}" />
             <Setter Property="ToolTip.Tip" Value="Restore" />
         </Style>
         <Style Selector="^:not(:has-minimize) /template/ Button#PART_MinimizeButton">

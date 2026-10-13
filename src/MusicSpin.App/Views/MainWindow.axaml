@@ -56,7 +56,7 @@
                             Command="{Binding DismissBannerCommand}"
                             ToolTip.Tip="Dismiss"
                             AutomationProperties.Name="Dismiss">
-                        <controls:Icon Classes="stroke" Data="{StaticResource Icon.Close}" />
+                        <controls:Icon Data="{StaticResource Close}" />
                     </Button>
                 </Grid>
             </Border>

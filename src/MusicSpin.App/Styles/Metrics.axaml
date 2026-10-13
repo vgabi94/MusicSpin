@@ -53,7 +53,7 @@
     <Thickness x:Key="NavHeaderMargin">10,14,10,6</Thickness>
     <Thickness x:Key="NavItemPadding">10,7</Thickness>
     <CornerRadius x:Key="NavItemRadius">7</CornerRadius>
-    <sys:Double x:Key="NavIconSize">15</sys:Double>
+    <sys:Double x:Key="NavIconSize">14</sys:Double>
     <sys:Double x:Key="NavIconGap">8</sys:Double>
 
     <!-- Content -->
@@ -100,9 +100,9 @@
     <sys:Double x:Key="PlayerTitleFontSize">14</sys:Double>
     <sys:Double x:Key="PlayerArtistFontSize">12.5</sys:Double>
     <sys:Double x:Key="TransportGap">14</sys:Double>
-    <sys:Double x:Key="TransportIconSize">16</sys:Double>
+    <sys:Double x:Key="TransportIconSize">13</sys:Double>
     <sys:Double x:Key="PlayButtonSize">38</sys:Double>
-    <sys:Double x:Key="PlayIconSize">14</sys:Double>
+    <sys:Double x:Key="PlayIconSize">12</sys:Double>
     <CornerRadius x:Key="PlayButtonRadius">19</CornerRadius>
     <sys:Double x:Key="BannerIconSize">12</sys:Double>
     <sys:Double x:Key="RadioGap">14</sys:Double>

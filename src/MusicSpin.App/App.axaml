@@ -12,7 +12,7 @@
                 <ResourceInclude Source="avares://MusicSpin/Styles/Tokens.axaml" />
                 <ResourceInclude Source="avares://MusicSpin/Styles/Metrics.axaml" />
                 <ResourceInclude Source="avares://MusicSpin/Styles/Motion.axaml" />
-                <ResourceInclude Source="avares://MusicSpin/Styles/Icons.axaml" />
+                <ResourceInclude Source="avares://MusicSpin/Icons/IconsResource.axaml" />
                 <ResourceInclude Source="avares://MusicSpin/Styles/Fonts.axaml" />
                 <ResourceInclude Source="avares://MusicSpin/Styles/Controls.axaml" />
                 <ResourceInclude Source="avares://MusicSpin/Styles/Window.axaml" />

@@ -20,11 +20,6 @@
         <Setter Property="WindowDecorationsTheme" Value="{StaticResource ShellDecorations}" />
     </Style>
 
-    <!-- Every button in the app starts plain; areas give it a look with classes. -->
-    <Style Selector="Window.shell Button">
-        <Setter Property="Theme" Value="{StaticResource PlainButton}" />
-    </Style>
-
     <Style Selector="controls|Icon.stroke">
         <Setter Property="IsStroked" Value="True" />
     </Style>

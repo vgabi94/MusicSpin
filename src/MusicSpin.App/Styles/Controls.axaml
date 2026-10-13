@@ -4,7 +4,9 @@
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ControlTheme x:Key="PlainButton" TargetType="Button">
+    <!-- The default look of every Button (no Fluent chrome); areas style it with classes. Being the implicit theme, it
+         never overrides a theme set on purpose, like the window buttons in Window.axaml. -->
+    <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
         <Setter Property="BorderThickness" Value="0" />
