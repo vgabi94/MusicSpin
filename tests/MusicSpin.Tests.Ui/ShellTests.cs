@@ -45,6 +45,23 @@ public sealed class ShellTests
     }
 
     [AvaloniaFact]
+    public void The_window_decorations_theme_applies_and_builds()
+    {
+        // Headless windows don't draw platform decorations, so apply the theme by hand: a setter of the wrong type
+        // only fails when Windows or Linux draws them (it crashed the published app once).
+        Assert.True(Application.Current!.TryGetResource("ShellDecorations", null, out var theme));
+        var decorations = new Avalonia.Controls.Chrome.WindowDrawnDecorations { Theme = (Avalonia.Styling.ControlTheme)theme! };
+
+        decorations.ApplyStyling();
+        var content = Assert.IsAssignableFrom<Avalonia.Controls.Chrome.IWindowDrawnDecorationsTemplate>(decorations.Template).Build();
+
+        Assert.Equal(44, decorations.DefaultTitleBarHeight);
+        Assert.Equal(new Thickness(1), decorations.DefaultFrameThickness);
+        Assert.Equal(new Thickness(8), decorations.DefaultShadowThickness);
+        Assert.NotNull(content);
+    }
+
+    [AvaloniaFact]
     public async Task The_window_does_not_go_below_1280_wide()
     {
         await using var app = await AppHarness.OpenAsync(new AppOptions { Width = 1000, Height = 600 });

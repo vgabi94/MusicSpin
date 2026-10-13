@@ -43,7 +43,7 @@
     <sys:Double x:Key="CaptionButtonWidth">46</sys:Double>
     <sys:Double x:Key="CaptionIconSize">10</sys:Double>
     <Thickness x:Key="WindowFrameThickness">1</Thickness>
-    <sys:Double x:Key="WindowShadowThickness">8</sys:Double>
+    <Thickness x:Key="WindowShadowThickness">8</Thickness>
 
     <!-- Sidebar -->
     <Thickness x:Key="SidebarPadding">10,12</Thickness>
