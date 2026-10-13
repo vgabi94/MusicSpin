@@ -70,7 +70,8 @@ public sealed class McpServerTests : IAsyncDisposable
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
                      "queue_add", "queue_remove", "queue_move", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
-                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio" })
+                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio",
+                     "favorites", "favorite_add", "favorite_remove" })
         {
             Assert.Contains(name, names);
         }
@@ -470,6 +471,42 @@ public sealed class McpServerTests : IAsyncDisposable
 
         Assert.Equal("all", repeat.GetProperty("repeat").GetString());
         Assert.StartsWith("Not saved", repeat.GetProperty("warnings")[0].GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Favorite_tools_mark_list_and_play_favorites()
+    {
+        await WithLibraryAsync();
+        await StartAsync();
+        Assert.StartsWith("not_found: You have no favorites yet", await CallError("play", new() { ["favorites"] = true }), StringComparison.Ordinal);
+        Assert.StartsWith("usage: Nothing to add", await CallError("favorite_add"), StringComparison.Ordinal);
+        Assert.StartsWith("usage: Give one of", await CallError("favorite_add", new() { ["album"] = "Kind of Blue", ["current"] = true }), StringComparison.Ordinal);
+        Assert.StartsWith("usage: missing only applies", await CallError("favorite_add", new() { ["missing"] = true }), StringComparison.Ordinal);
+        Assert.StartsWith("player_not_running:", await CallError("favorite_add", new() { ["current"] = true }), StringComparison.Ordinal);
+
+        var added = await Call("favorite_add", new() { ["album"] = "Kind of Blue" });
+        Assert.Equal((2, 2, 2), (added.GetProperty("requested").GetInt32(), added.GetProperty("changed").GetInt32(), added.GetProperty("favorites").GetInt32()));
+        var lossy = (await Call("tracks", new() { ["search"] = "lossy" })).GetProperty("items")[0];
+        await Call("favorite_add", new() { ["trackIds"] = new[] { lossy.GetProperty("id").GetString() } });
+
+        var favorites = await Call("favorites");
+        Assert.Equal((3, 0), (favorites.GetProperty("total").GetInt32(), favorites.GetProperty("missing").GetInt32()));
+        Assert.Equal("Lossy Song", Titles(favorites)[0]);
+        Assert.Equal(0, (await Call("favorites", new() { ["missing"] = true })).GetProperty("count").GetInt32());
+        Assert.Equal(["So What", "Freddie Freeloader"], Titles(await Call("tracks", new() { ["favorites"] = true, ["album"] = "Kind of Blue" })));
+        Assert.Equal("Lossy Song", Titles(await Call("tracks", new() { ["favorites"] = true, ["sort"] = "favorited" }))[0]);
+
+        var play = await Call("play", new() { ["favorites"] = true });
+        Assert.Equal(("Lossy Song", 3), (play.GetProperty("item").GetProperty("title").GetString(), play.GetProperty("queueLength").GetInt32()));
+        await Call("queue_add", new() { ["favorites"] = true, ["position"] = "next" });
+        Assert.Equal(6, (await Call("status")).GetProperty("queueLength").GetInt32());
+        var removed = await Call("favorite_remove", new() { ["current"] = true });
+        Assert.Equal((1, 2), (removed.GetProperty("changed").GetInt32(), removed.GetProperty("favorites").GetInt32()));
+
+        var radio = await Call("radio", new() { ["favorites"] = true, ["genres"] = new[] { "jazz" } });
+        Assert.Equal(("genre jazz · favorites", 2), (radio.GetProperty("radio").GetProperty("description").GetString(), radio.GetProperty("radio").GetProperty("poolSize").GetInt32()));
+        await Call("favorite_remove", new() { ["files"] = new[] { radio.GetProperty("item").GetProperty("path").GetString() } });
+        await Call("quit_player");
     }
 
     [Fact]

@@ -10,17 +10,17 @@ namespace MusicSpin.Cli.Commands;
 internal sealed record ResolvedQueue(List<QueueItem> Items, int? Seed, List<string> Warnings);
 
 /// <summary>
-/// Library tracks to play or add: an exact album/artist (<see cref="IsExact"/>), or a query (<see cref="IsQuery"/>: search syntax
-/// and/or per-field "contains" filters, combined with AND, in library order).
+/// Library tracks to play or add: an exact album/artist (<see cref="IsExact"/>), a query (<see cref="IsQuery"/>: search syntax
+/// and/or per-field "contains" filters, combined with AND, in library order), or the favorites (newest first).
 /// </summary>
 internal sealed record LibrarySelection(string? Album = null, string? Artist = null, string? Search = null, string? Title = null,
-    string? AlbumContains = null, string? ArtistContains = null)
+    string? AlbumContains = null, string? ArtistContains = null, bool Favorites = false)
 {
     public bool IsExact => Album is not null || Artist is not null;
 
     public bool IsQuery => Search is not null || Title is not null || AlbumContains is not null || ArtistContains is not null;
 
-    public int Kinds => (IsExact ? 1 : 0) + (IsQuery ? 1 : 0);
+    public int Kinds => (IsExact ? 1 : 0) + (IsQuery ? 1 : 0) + (Favorites ? 1 : 0);
 
     public string Describe() => string.Join(", ", new[]
     {
@@ -73,6 +73,11 @@ internal sealed class QueueSource
         Description = "A saved playlist (name, case-insensitive). Missing entries are left out with a warning.",
     };
 
+    public Option<bool> Favorites { get; } = new("--favorites")
+    {
+        Description = "The favorite tracks, most recently favorited first (no 10000 cap). No favorites: exit 12.",
+    };
+
     public Option<bool> Shuffle { get; } = new("--shuffle")
     {
         Description = "Shuffle. With play: turns the player's shuffle mode on (turn it off later to get the original order). With queue add: shuffles the added tracks.",
@@ -93,6 +98,7 @@ internal sealed class QueueSource
         command.Add(AlbumContains);
         command.Add(ArtistContains);
         command.Add(Playlist);
+        command.Add(Favorites);
         command.Add(Shuffle);
         command.Add(Seed);
     }
@@ -102,7 +108,7 @@ internal sealed class QueueSource
     {
         var hasFiles = Options.Get(r, Files) is { Length: > 0 } files && files.Any(f => !string.IsNullOrWhiteSpace(f));
         var selection = new LibrarySelection(Options.Get(r, Album), Options.Get(r, Artist), Options.Get(r, Search), Options.Get(r, Title),
-            Options.Get(r, AlbumContains), Options.Get(r, ArtistContains));
+            Options.Get(r, AlbumContains), Options.Get(r, ArtistContains), Options.Get(r, Favorites));
         var hasPlaylist = Options.Get(r, Playlist) is not null;
         var kinds = (hasFiles ? 1 : 0) + selection.Kinds + (hasPlaylist ? 1 : 0);
         if (kinds > 1)
@@ -111,7 +117,7 @@ internal sealed class QueueSource
         }
         else if (kinds == 0 && required)
         {
-            r.AddError("Nothing to play: give a file, --album <title>, --artist <name>, --search <text>, --title/--album-contains/--artist-contains <words> or --playlist <name>.");
+            r.AddError("Nothing to play: give a file, --album <title>, --artist <name>, --search <text>, --title/--album-contains/--artist-contains <words>, --playlist <name> or --favorites.");
         }
         else if (Options.Get(r, Seed) is not null && !Options.Get(r, Shuffle))
         {
@@ -121,10 +127,10 @@ internal sealed class QueueSource
 
     public bool HasFiles(ParseResult parseResult) => parseResult.GetValue(Files) is { Length: > 0 };
 
-    public const string SourceConflict = "Give either file(s), --album/--artist, --search/--title/--album-contains/--artist-contains, or --playlist, not several.";
+    public const string SourceConflict = "Give either file(s), --album/--artist, --search/--title/--album-contains/--artist-contains, --playlist, or --favorites, not several.";
 
     public LibrarySelection Selection(ParseResult parseResult) => new(parseResult.GetValue(Album), parseResult.GetValue(Artist), parseResult.GetValue(Search),
-        parseResult.GetValue(Title), parseResult.GetValue(AlbumContains), parseResult.GetValue(ArtistContains));
+        parseResult.GetValue(Title), parseResult.GetValue(AlbumContains), parseResult.GetValue(ArtistContains), parseResult.GetValue(Favorites));
 
     /// <summary>Library tracks for --album/--artist, or for --search and the contains filters (null for files). Releases the library before returning.</summary>
     public IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult, List<string> warnings)
@@ -140,6 +146,13 @@ internal sealed class QueueSource
         }
 
         using var library = runner.OpenLibraryForRead(parseResult);
+        if (selection.Favorites)
+        {
+            var favorites = library.FavoritesQueue();
+            return favorites.Count > 0 ? favorites
+                : throw new MusicSpinException(MusicSpinErrorCode.NotFound, library.NoFavoritesMessage());
+        }
+
         if (selection.IsQuery)
         {
             var page = library.Tracks(new TrackQuery
@@ -234,8 +247,8 @@ internal sealed class QueueSource
     {
         var hasFiles = files is { Count: > 0 } && files.Any(f => !string.IsNullOrWhiteSpace(f));
         var kinds = (hasFiles ? 1 : 0) + selection.Kinds + (playlist is not null ? 1 : 0);
-        return kinds > 1 ? "Give either files, album/artist, search/title/albumContains/artistContains, or playlist, not several."
-            : kinds == 0 ? "Nothing to play: give files, an album, an artist, a search text, title/albumContains/artistContains words or a playlist."
+        return kinds > 1 ? "Give either files, album/artist, search/title/albumContains/artistContains, playlist, or favorites, not several."
+            : kinds == 0 ? "Nothing to play: give files, an album, an artist, a search text, title/albumContains/artistContains words, a playlist or favorites."
             : seed is not null && !shuffle ? "seed only applies together with shuffle."
             : null;
     }

@@ -170,7 +170,9 @@ Details:
 - **A pool of one track** replays that track (radio does not stop; use `stop`, `play` or `queue clear`). An **empty pool** is exit 12 before anything starts.
 - Picks use a random generator per station; there is no seed yet (see the roadmap in the README).
 
-**Library changes** are picked up at the next top-up: the pool is re-read when `library.db` changed (a scan, `library relocate`) and otherwise cached in the player. Tracks added to the library can be picked, removed tracks are no longer picked, and a queued pick whose file is gone is skipped like any missing queue entry (or played from its new path when the library knows it moved). If no track matches any more, the queued picks play out, `lastError` says so and radio ends like a queue. If the library cannot be read at a top-up (a scan holds its lock), radio keeps playing what is queued and retries at the next one.
+**Favorites radio:** `radio --favorites` (MCP `favorites: true`, protocol `"favorites": true` in the filter) plays only [favorite](library.md#favorites) tracks. Like `--hires` it narrows the other filters (`--favorites --genre jazz` plays favorite jazz tracks), and the description says `favorites`. With no favorites yet, or none of them in the library, it is exit 12 with a message saying which.
+
+**Library changes** are picked up at the next top-up: the pool is re-read when `library.db` changed (a scan, `library relocate`, a favorite added or removed) and otherwise cached in the player. Tracks added to the library can be picked, removed tracks are no longer picked, and a queued pick whose file is gone is skipped like any missing queue entry (or played from its new path when the library knows it moved). If no track matches any more, the queued picks play out, `lastError` says so and radio ends like a queue. If the library cannot be read at a top-up (a scan holds its lock), radio keeps playing what is queued and retries at the next one.
 
 **Other commands while radio plays**
 

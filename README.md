@@ -13,6 +13,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 - **Music library:** LiteDB database, TagLib# tags with FFmpeg fallback, fast parallel incremental scanning, album grouping including compilations/Various Artists, ranked case- and diacritic-insensitive search (per-word, phrases, `artist:`/`album:`/`title:`/`genre:`/`year:`), per-field filters, quality filters (hi-res, sample rate, bit depth, format, year), stable GUID track ids (UUIDv7, independent of the path), rename/move detection by content fingerprint (id, date added, playlist and queue entries follow), `library relocate` for moved folders or remounted drives, health check, folder watching.
 - **Background player:** `music-spin play` returns at once. Quick commands (`pause`, `next`, `seek`, `volume`, `status`, `queue`, ...) control it. Playback survives the terminal or agent that started it.
 - **Playlists:** saved in the library (case-insensitive unique names, entries keep track id + path, missing files kept and flagged), M3U/M3U8/PLS import (encodings, relative/Windows/`file://` paths) and export, `play --playlist`, `queue save`. The player's queue persists across restarts (restored paused).
+- **Favorites:** heart library tracks (`favorite add`, `--current` for the one playing), list them newest first (`favorites`), filter with `tracks --favorites`, play them (`play --favorites`) or run a favorites radio. Favorites follow their tracks through rescans, moves and `library relocate`.
 - **Radio:** `music-spin radio` plays the whole library (or the part you filter by artist, album, genre, year/range, format, hi-res or search, minus anything you `--exclude-*`) endlessly in random order. No track repeats within the last 100, the same artist or album is not played twice in a row when there is a choice, `prev` goes back through what played, gapless between same-format tracks, and the station survives a player restart. See [Playback → Radio](docs/playback.md#radio).
 - **Repeat and shuffle:** repeat off/one/all and a shuffle toggle on the running queue (the current track keeps playing; `off` restores the original order; reproducible with `--seed`), saved as defaults.
 - **Agent-friendly:** `--json` on every command (one JSON object per line, errors included), stable exit codes, an **MCP server** (`music-spin mcp`), and a JSON-lines `serve` mode.
@@ -64,6 +65,9 @@ $ music-spin seek 1:30 && music-spin volume 80%
 $ music-spin repeat all && music-spin shuffle on
 $ music-spin radio --genre jazz --years 1955-1965   # endless random jazz from those years
 $ music-spin radio --exclude-genre Christmas --exclude-artist "Kenny G"   # whole library minus those
+$ music-spin favorite add --current               # heart the track that is playing
+$ music-spin favorites                             # newest favorites first
+$ music-spin radio --favorites --genre jazz        # endless random favorite jazz
 
 $ music-spin status --json
 {"ok":true,"command":"status","data":{"state":"playing","positionSeconds":1.78,"durationSeconds":240,"volume":1,"track":{"codec":"flac","sampleRate":96000,"bitsPerSample":24,"lossless":true,"hiRes":true,"title":"An Aborted Beginning",...},"queueIndex":0,"queueLength":3,...}}
@@ -85,7 +89,7 @@ Every command and option, with the exit code table, is in the [CLI reference](do
 }
 ```
 
-34 tools (`play`, `pause`, `next`, `seek`, `volume`, `status`, `queue_add`, `repeat`, `shuffle`, `search`, `tracks`, `albums`, `playlist_*`, `library_relocate`, ...) drive the same background player and library as the CLI. Setup for Claude Desktop, Cursor, Claude Code and Grok CLI: [MCP server](docs/mcp.md).
+40 tools (`play`, `pause`, `next`, `seek`, `volume`, `status`, `queue_add`, `repeat`, `shuffle`, `search`, `tracks`, `albums`, `favorite_add`, `favorites`, `playlist_*`, `library_relocate`, ...) drive the same background player and library as the CLI. Setup for Claude Desktop, Cursor, Claude Code and Grok CLI: [MCP server](docs/mcp.md).
 
 ## Build and test
 

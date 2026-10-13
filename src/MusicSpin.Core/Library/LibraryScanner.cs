@@ -328,7 +328,9 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             }
 
             db.Tracks.Update(moves.Select(m => m.New));
-            playlistEntries = PlaylistMaintenance.Retarget(db, [.. moves.Select(m => (m.Old.Path, m.New))], null);
+            var movedTracks = moves.Select(m => (m.Old.Path, m.New)).ToList();
+            playlistEntries = PlaylistMaintenance.Retarget(db, movedTracks, null);
+            FavoriteMaintenance.Retarget(db, movedTracks, null);
         }
 
         foreach (var id in removedIds)

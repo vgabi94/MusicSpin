@@ -174,6 +174,7 @@ public sealed partial class MusicLibrary
                     }
 
                     playlistEntries = PlaylistMaintenance.Retarget(_db, moved, MapIfUnder);
+                    FavoriteMaintenance.Retarget(_db, moved, MapIfUnder);
                     LibraryIndexer.Rebuild(_db);
                     foreach (var folder in _db.Folders.FindAll().ToList())
                     {

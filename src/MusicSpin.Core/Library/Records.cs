@@ -175,3 +175,21 @@ public sealed class PlaylistEntryRecord
     public string? Artist { get; set; }
     public double? DurationSeconds { get; set; }
 }
+
+/// <summary>
+/// A favorite track. Kept apart from <see cref="TrackRecord"/> (a rescan rebuilds track records) and kept when its track
+/// leaves the library: it is found again by <see cref="Id"/> (the track id), else by <see cref="PathKey"/> (the same file
+/// added back under a new id).
+/// </summary>
+public sealed class FavoriteRecord
+{
+    /// <summary>The favorite track's id.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>The track's path, kept current on moves and <c>library relocate</c>.</summary>
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary><see cref="LibraryKeys.PathKey"/> of <see cref="Path"/>.</summary>
+    public string PathKey { get; set; } = string.Empty;
+    public long FavoritedUtcTicks { get; set; }
+}

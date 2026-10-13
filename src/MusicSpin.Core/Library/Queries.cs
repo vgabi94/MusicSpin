@@ -17,6 +17,9 @@ public enum TrackSort
 
     /// <summary>Best match first (exact field > prefix > word start > anywhere), then the default order. Only with a search text.</summary>
     Relevance,
+
+    /// <summary>When the track was favorited (<see cref="TrackQuery.Descending"/>: newest first). Only with <see cref="TrackQuery.Favorite"/> = true.</summary>
+    Favorited,
 }
 
 public enum AlbumSort
@@ -87,6 +90,9 @@ public sealed record TrackQuery
     public int? YearFrom { get; init; }
     public int? YearTo { get; init; }
     public bool? HiRes { get; init; }
+
+    /// <summary>True: only favorites (the Favorites view); false: only the other tracks.</summary>
+    public bool? Favorite { get; init; }
     public TrackSort Sort { get; init; }
     public bool Descending { get; init; }
     public Paging Paging { get; init; } = new();

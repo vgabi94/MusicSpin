@@ -21,7 +21,8 @@ internal static class McpCommand
     public const string Instructions =
         "MusicSpin controls a local hi-res music player. play/queue_add start the background player when needed and return at once; " +
         "the other playback tools need a running player (error 'player_not_running' otherwise). Use search/tracks/albums/artists to find music, " +
-        "then play with album/artist/search/title/albumContains/artistContains/playlist or file paths. Tool errors start with a stable code such as 'not_found', 'invalid_state' or 'usage'.";
+        "then play with album/artist/search/title/albumContains/artistContains/playlist or file paths. favorite_add marks favorites (current: true for the track playing now); " +
+        "play, tracks and radio take favorites: true. Tool errors start with a stable code such as 'not_found', 'invalid_state' or 'usage'.";
 
     public static Command Create(CommandRunner runner)
     {
@@ -30,7 +31,7 @@ internal static class McpCommand
         var exclusive = Options.Exclusive();
         var command = new Command("mcp",
             "Run an MCP (Model Context Protocol) server on stdin/stdout. Tools: play, pause, resume, toggle, stop, next, previous, seek, volume, " +
-            "status, queue, queue_add, queue_remove, queue_move, queue_clear, queue_save, repeat, shuffle, quit_player, search, tracks, albums, artists, library_stats, playlists, playlist_show, " +
+            "status, queue, queue_add, queue_remove, queue_move, queue_clear, queue_save, repeat, shuffle, quit_player, search, tracks, albums, artists, library_stats, favorites, favorite_add, favorite_remove, playlists, playlist_show, " +
             "playlist_create, playlist_rename, playlist_add, playlist_remove, playlist_move, playlist_clear, playlist_delete, playlist_import, playlist_export. " +
             "--backend/--device/--exclusive apply " +
             "when a tool has to start the background player.")
@@ -72,7 +73,7 @@ internal static class McpCommand
         public IEnumerable<McpServerTool> Create()
         {
             yield return Tool("play", "Play files or library music in the background player (starts it if needed) and return its status. " +
-                "Give one source: files, album (optionally with artist), artist, playlist, or a query (search and/or title/albumContains/artistContains, combined).",
+                "Give one source: files, album (optionally with artist), artist, playlist, favorites, or a query (search and/or title/albumContains/artistContains, combined).",
                 ([Description("Absolute paths of audio files, played in order.")] string[]? files = null,
                  [Description("Album title (exact, case-insensitive) or id from 'albums'.")] string? album = null,
                  [Description("Artist name (exact; all their tracks), or the album artist when album is given.")] string? artist = null,
@@ -81,9 +82,10 @@ internal static class McpCommand
                  [Description("Library tracks whose album title contains these words.")] string? albumContains = null,
                  [Description("Library tracks whose artist contains these words.")] string? artistContains = null,
                  [Description("A saved playlist name (see 'playlists'). Missing entries are left out with a warning.")] string? playlist = null,
+                 [Description("Play the favorite tracks, most recently favorited first.")] bool favorites = false,
                  [Description("Turn the player's shuffle mode on for this queue.")] bool shuffle = false,
                  [Description("Shuffle seed for a reproducible order.")] int? seed = null,
-                 CancellationToken ct = default) => Guard(() => SetQueueAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains),
+                 CancellationToken ct = default) => Guard(() => SetQueueAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains, favorites),
                     playlist, shuffle, seed, ct)));
             yield return Tool("radio", "Endless random playback of the library (or the tracks the filters select) in the background player; returns its status " +
                 "(queueMode 'radio', radio.description, radio.poolSize). Each list is ORed, different filters are ANDed; exclude* lists leave matching tracks out (exclude wins). No track repeats within the last 100 " +
@@ -96,6 +98,7 @@ internal static class McpCommand
                  [Description("Format ids, e.g. flac, dsd, mp3.")] string[]? formats = null,
                  [Description("Search texts (syntax as the search tool); a track matching any of them qualifies.")] string[]? searches = null,
                  [Description("Only hi-res tracks.")] bool hires = false,
+                 [Description("Only favorite tracks; narrows the other filters.")] bool favorites = false,
              [Description("Leave out these artists (track or album artist). Excludes win over includes; unknown names are ignored.")] string[]? excludeArtists = null,
              [Description("Leave out these albums (titles or ids; unknown ignored).")] string[]? excludeAlbums = null,
              [Description("Leave out these genres.")] string[]? excludeGenres = null,
@@ -107,7 +110,7 @@ internal static class McpCommand
                     var filter = new RadioFilter
                     {
                         Artists = RadioCommand.List(artists), Albums = RadioCommand.List(albums), Genres = RadioCommand.List(genres),
-                        Years = RadioCommand.Years(null, years), Formats = RadioCommand.List(formats), Searches = RadioCommand.List(searches), HiRes = hires,
+                        Years = RadioCommand.Years(null, years), Formats = RadioCommand.List(formats), Searches = RadioCommand.List(searches), HiRes = hires, Favorites = favorites,
                     ExcludeArtists = RadioCommand.List(excludeArtists), ExcludeAlbums = RadioCommand.List(excludeAlbums), ExcludeGenres = RadioCommand.List(excludeGenres),
                     ExcludeYears = RadioCommand.Years(null, excludeYears), ExcludeFormats = RadioCommand.List(excludeFormats), ExcludeSearches = RadioCommand.List(excludeSearches),
                     };
@@ -167,10 +170,10 @@ internal static class McpCommand
             yield return Tool("queue_add", "Add files, library tracks or a playlist to the queue: at the end, or up next with position (starts the player, stopped, if needed). " +
                 "shuffle shuffles only the added tracks.",
                 (string[]? files = null, string? album = null, string? artist = null, string? search = null, string? title = null, string? albumContains = null,
-                 string? artistContains = null, string? playlist = null, bool shuffle = false, int? seed = null,
+                 string? artistContains = null, string? playlist = null, bool favorites = false, bool shuffle = false, int? seed = null,
                  [Description("end (default): append; next: play right after the current track; upnext: after the tracks already added to play next. Radio: always up next.")] string? position = null,
                  CancellationToken ct = default)
-                    => Guard(() => AddAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains), playlist, shuffle, seed, Position(position), ct)));
+                    => Guard(() => AddAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains, favorites), playlist, shuffle, seed, Position(position), ct)));
             yield return Tool("queue_save", "Save the player's queue (current play order) as a playlist.",
                 ([Description("Playlist name (unique, case-insensitive).")] string name,
                  [Description("Overwrite an existing playlist with this name.")] bool replace = false,
@@ -244,7 +247,8 @@ internal static class McpCommand
                  [Description("Artist contains these words.")] string? artistContains = null,
                  [Description("Format ids, e.g. flac, dsd, mp3.")] string[]? formats = null,
                  int? minSampleRate = null, int? minBitDepth = null, int? yearFrom = null, int? yearTo = null, bool hiresOnly = false,
-                 [Description("default, relevance (with search), title, artist, album, year, duration, added, samplerate, bitdepth, size, path.")] string sort = "default",
+                 [Description("Only favorite tracks.")] bool favorites = false,
+                 [Description("default, relevance (with search), title, artist, album, year, duration, added, samplerate, bitdepth, size, path, favorited (with favorites: newest first; descending reverses).")] string sort = "default",
                  bool descending = false, int offset = 0, int limit = 50) => Guard(() =>
                 {
                     var parsedSort = sort.ToLowerInvariant() switch
@@ -259,7 +263,8 @@ internal static class McpCommand
                     {
                         Artist = artist, Album = album, Text = search, Title = title, AlbumContains = albumContains, ArtistContains = artistContains,
                         Formats = formats is { Length: > 0 } ? formats : null, MinSampleRate = minSampleRate, MinBitDepth = minBitDepth,
-                        YearFrom = yearFrom, YearTo = yearTo, HiRes = hiresOnly ? true : null, Sort = parsedSort, Descending = descending,
+                        YearFrom = yearFrom, YearTo = yearTo, HiRes = hiresOnly ? true : null, Favorite = favorites ? true : null,
+                        Sort = parsedSort, Descending = parsedSort == TrackSort.Favorited ? !descending : descending,
                         Paging = Paging(offset, limit),
                     });
                     return Task.FromResult(ToElement(PageDto.From(page, LibraryTrackDto.From)));
@@ -288,6 +293,46 @@ internal static class McpCommand
                 using var library = runner.OpenLibraryForRead(parseResult);
                 return Task.FromResult(ToElement(library.Stats()));
             }), readOnly: true);
+            yield return Tool("favorites", "List the favorite tracks, most recently favorited first, with how many favorites are no longer in the library (missing). " +
+                "With missing: true, the paths of those instead.",
+                ([Description("List the paths of favorites that are no longer in the library instead.")] bool missing = false,
+                 int offset = 0, int limit = 50) => Guard(() =>
+                {
+                    using var library = runner.OpenLibraryForRead(parseResult);
+                    var summary = library.FavoritesSummary();
+                    if (missing)
+                    {
+                        return Task.FromResult(ToElement(new { count = summary.Missing, items = summary.MissingPaths }));
+                    }
+
+                    var page = PageDto.From(library.Tracks(new TrackQuery { Favorite = true, Sort = TrackSort.Favorited, Descending = true, Paging = Paging(offset, limit) }),
+                        LibraryTrackDto.From);
+                    return Task.FromResult(ToElement(new { page.Total, page.Offset, page.Limit, page.Count, page.Items, missing = summary.Missing }));
+                }), readOnly: true);
+            foreach (var add in new[] { true, false })
+            {
+                yield return Tool(add ? "favorite_add" : "favorite_remove", (add
+                        ? "Mark library tracks as favorites (tracks that already are stay as they are; files outside the library: not_found)."
+                        : "Unmark favorite tracks (others are left alone). Files may also be paths of favorites no longer in the library.") +
+                    " Give one of: current (the track playing now), trackIds, files, album (optionally with artist), artist, or a query (search and/or title/albumContains/artistContains)" +
+                    (add ? "." : ", or missing (every favorite no longer in the library).") + " Returns requested, changed, unchanged and the favorite count.",
+                    ([Description("The track the background player is on now (player_not_running without a player; not_found when there is no current track).")] bool current = false,
+                     [Description("Library track ids (GUIDs from search/tracks results).")] string[]? trackIds = null,
+                     [Description("Absolute paths of library tracks.")] string[]? files = null,
+                     string? album = null, string? artist = null, string? search = null, string? title = null, string? albumContains = null, string? artistContains = null,
+                     [Description("favorite_remove only: remove every favorite that is no longer in the library.")] bool missing = false,
+                     CancellationToken ct = default) => Guard(async () =>
+                    {
+                        var targets = new FavoriteTargets(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains),
+                            FavoriteCommands.SplitIds(trackIds), current, missing);
+                        if ((missing && add ? "missing only applies to favorite_remove." : FavoriteCommands.Validate(targets, add, cli: false)) is { } error)
+                        {
+                            throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, error);
+                        }
+
+                        return ToElement(await FavoriteCommands.EditAsync(runner, parseResult, add, targets, ct).ConfigureAwait(false));
+                    }));
+            }
             yield return Tool("library_relocate",
                 "After a music folder was moved or renamed on disk (or a drive is mounted elsewhere), point the library tracks under 'from' at 'to' " +
                 "without rescanning; date added and playlist entries follow. Use dryRun first. 'file_not_found' if 'to' does not exist, 'not_found' if nothing " +
