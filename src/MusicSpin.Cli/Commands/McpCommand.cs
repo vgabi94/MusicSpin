@@ -133,7 +133,7 @@ internal static class McpCommand
                 ([Description("Seconds (90), mm:ss (1:30), h:mm:ss, or relative: +10, -10, +0:30.")] string position, CancellationToken ct = default)
                     => Guard(() =>
                     {
-                        if (!PlayerSupport.TryParseSeek(position, out var seconds, out var relative, out var error))
+                        if (!SeekSyntax.TryParse(position, out var seconds, out var relative, out var error))
                         {
                             throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, error!);
                         }

@@ -72,14 +72,14 @@ internal static class ControlCommands
         };
         command.Validators.Add(r =>
         {
-            if (Options.Get(r, position) is { } text && !PlayerSupport.TryParseSeek(text, out _, out _, out var error))
+            if (Options.Get(r, position) is { } text && !SeekSyntax.TryParse(text, out _, out _, out var error))
             {
                 r.AddError(error!);
             }
         });
         PlayerSupport.Control(runner, command, "seek", p =>
         {
-            if (!PlayerSupport.TryParseSeek(p.GetValue(position)!, out var seconds, out var relative, out var error))
+            if (!SeekSyntax.TryParse(p.GetValue(position)!, out var seconds, out var relative, out var error))
             {
                 throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, error!);
             }
