@@ -106,6 +106,84 @@
     <CornerRadius x:Key="PlayButtonRadius">19</CornerRadius>
     <sys:Double x:Key="BannerIconSize">12</sys:Double>
     <sys:Double x:Key="RadioGap">14</sys:Double>
+    <!-- The song name, then the analyzer and the volume at this gap (mockup: .meta). -->
+    <sys:Double x:Key="PlayerMetaGap">24</sys:Double>
+    <!-- Shuffle and Repeat (stroked), and Repeat one's small "1". -->
+    <sys:Double x:Key="ModeIconSize">15</sys:Double>
+    <sys:Double x:Key="RepeatOneFontSize">8</sys:Double>
+    <Thickness x:Key="RepeatOneMargin">0,0,-5,-4</Thickness>
+    <sys:Double x:Key="TransportDisabledOpacity">0.3</sys:Double>
+    <!-- The buttons above the position (mockup: .transport, gap 6). -->
+    <sys:Double x:Key="TransportRowGap">6</sys:Double>
+    <sys:Double x:Key="ProgressMaxWidth">560</sys:Double>
+    <sys:Double x:Key="ProgressGap">8</sys:Double>
+    <sys:Double x:Key="ProgressFontSize">11.5</sys:Double>
+    <!-- The elapsed time box (mockup: .tnum) and the duration after the bar. -->
+    <sys:Double x:Key="TimeBoxWidth">46</sys:Double>
+    <Thickness x:Key="TimeBoxPadding">4,2</Thickness>
+    <CornerRadius x:Key="TimeBoxRadius">5</CornerRadius>
+    <Thickness x:Key="DurationPadding">5,0,0,0</Thickness>
+    <!-- The right-hand side: the format, then the queue and settings buttons (mockup: .right, .tech, .badge, .qbtn). -->
+    <sys:Double x:Key="PlayerRightGap">18</sys:Double>
+    <sys:Double x:Key="PlayerRightFontSize">12</sys:Double>
+    <sys:Double x:Key="TechGap">8</sys:Double>
+    <Thickness x:Key="BadgePadding">7,2</Thickness>
+    <CornerRadius x:Key="BadgeRadius">4</CornerRadius>
+    <sys:Double x:Key="HiResFontSize">9.5</sys:Double>
+    <Thickness x:Key="HiResPadding">4,1</Thickness>
+    <CornerRadius x:Key="HiResRadius">3</CornerRadius>
+    <sys:Double x:Key="HiResLetterSpacing">0.4</sys:Double>
+    <sys:Double x:Key="PlayerButtonsGap">6</sys:Double>
+    <sys:Double x:Key="RoundButtonSize">30</sys:Double>
+    <CornerRadius x:Key="RoundButtonRadius">15</CornerRadius>
+    <sys:Double x:Key="QueueIconSize">14</sys:Double>
+    <sys:Double x:Key="CogIconSize">18</sys:Double>
+    <sys:Double x:Key="CogStrokeThickness">1.6</sys:Double>
+    <sys:Double x:Key="CountBadgeSize">17</sys:Double>
+    <Thickness x:Key="CountBadgePadding">4,0</Thickness>
+    <CornerRadius x:Key="CountBadgeRadius">9</CornerRadius>
+    <sys:Double x:Key="CountBadgeFontSize">10</sys:Double>
+    <Thickness x:Key="CountBadgeMargin">0,-4,-6,0</Thickness>
+
+    <!-- Bars you drag (mockup: .bar, .vbar): a 4 px line in a 20 px hit area, a 14 px handle. -->
+    <sys:Double x:Key="ScrubBarHeight">20</sys:Double>
+    <sys:Double x:Key="ScrubLineHeight">4</sys:Double>
+    <CornerRadius x:Key="ScrubLineRadius">2</CornerRadius>
+    <sys:Double x:Key="ScrubHandleSize">14</sys:Double>
+    <CornerRadius x:Key="ScrubHandleRadius">7</CornerRadius>
+    <!-- Centred on the end of the fill: half the handle left, (20 - 14) / 2 down. -->
+    <Thickness x:Key="ScrubHandleMargin">-7,3,0,0</Thickness>
+    <!-- The keyboard focus outline: 2 px, 4 px outside the bar. -->
+    <Thickness x:Key="FocusRingThickness">2</Thickness>
+    <Thickness x:Key="FocusRingMargin">-4</Thickness>
+    <CornerRadius x:Key="FocusRingRadius">3</CornerRadius>
+    <!-- The position bar: its first pixels are exactly 0:00; the tip over the pointer. -->
+    <sys:Double x:Key="PositionSnapWidth">6</sys:Double>
+    <sys:Double x:Key="PositionTipBottom">20</sys:Double>
+    <Thickness x:Key="PositionTipPadding">6,1</Thickness>
+    <CornerRadius x:Key="PositionTipRadius">5</CornerRadius>
+    <sys:Double x:Key="PositionTipFontSize">11</sys:Double>
+
+    <!-- The volume (mockup: .vol, .vbar, .vnum). -->
+    <sys:Double x:Key="VolumeGap">8</sys:Double>
+    <sys:Double x:Key="SpeakerIconSize">21</sys:Double>
+    <sys:Double x:Key="SpeakerStrokeThickness">1.7</sys:Double>
+    <sys:Double x:Key="VolumeBarWidth">90</sys:Double>
+    <sys:Double x:Key="VolumeBoxWidth">46</sys:Double>
+    <Thickness x:Key="VolumeBoxMargin">2,0,0,0</Thickness>
+    <Thickness x:Key="VolumeBoxPadding">5,3</Thickness>
+    <CornerRadius x:Key="VolumeBoxRadius">6</CornerRadius>
+    <sys:Double x:Key="VolumeFontSize">12.5</sys:Double>
+    <sys:Double x:Key="MutedOpacity">0.45</sys:Double>
+    <sys:Double x:Key="MutedFillOpacity">0.35</sys:Double>
+
+    <!-- The spectrum analyzer: 16 bars x 16 rows, 4 px bars 1 px apart (79 x 32), fading to 0.4 at the bottom. -->
+    <sys:Double x:Key="AnalyzerWidth">79</sys:Double>
+    <sys:Double x:Key="AnalyzerHeight">32</sys:Double>
+    <sys:Double x:Key="AnalyzerBarWidth">4</sys:Double>
+    <sys:Double x:Key="AnalyzerBarGap">1</sys:Double>
+    <sys:Int32 x:Key="AnalyzerRows">16</sys:Int32>
+    <sys:Double x:Key="AnalyzerBottomOpacity">0.4</sys:Double>
 
     <!-- Covers and records -->
     <CornerRadius x:Key="CoverRadius">4</CornerRadius>

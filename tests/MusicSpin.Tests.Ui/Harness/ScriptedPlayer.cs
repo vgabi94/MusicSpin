@@ -39,6 +39,9 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 
     public bool AllowStart { get; set; } = true;
 
+    /// <summary>Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would.</summary>
+    public bool FollowsCommands { get; set; }
+
     /// <summary>Open subscriptions (the app's event stream).</summary>
     public int Subscribers => _connections.Keys.Count(c => c.Subscribed);
 
@@ -171,6 +174,11 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                         _ = Task.Run(StopAsync, CancellationToken.None);
                         return;
                     default:
+                        if (FollowsCommands)
+                        {
+                            Follow(cmd, request);
+                        }
+
                         await connection.WriteAsync(ProtocolMessages.Ok(id, Status));
                         break;
                 }
@@ -184,6 +192,18 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         {
             _connections.TryRemove(connection, out _);
             await connection.DisposeAsync();
+        }
+    }
+
+    private void Follow(string cmd, JsonElement request)
+    {
+        if (cmd == "seek" && request.TryGetProperty("seconds", out var seconds))
+        {
+            Status = Status with { PositionSeconds = seconds.GetDouble() };
+        }
+        else if (cmd == "volume" && request.TryGetProperty("value", out var value))
+        {
+            Status = Status with { Volume = value.GetSingle() };
         }
     }
 

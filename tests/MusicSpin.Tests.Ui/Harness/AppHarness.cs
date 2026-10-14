@@ -39,6 +39,9 @@ internal sealed record AppOptions
     /// <summary>A player is already running when the app starts (as if the CLI started it).</summary>
     public bool PlayerRunning { get; init; }
 
+    /// <summary>The app talks to a <see cref="ScriptedPlayer"/> (exact statuses and events) instead of a real one.</summary>
+    public bool Scripted { get; init; }
+
     /// <summary>Call <see cref="MainWindowViewModel.InitializeAsync"/> (connects the player, loads the first page).</summary>
     public bool Initialize { get; init; } = true;
 }
@@ -56,6 +59,7 @@ internal sealed class AppHarness : IAsyncDisposable
         Data = new DataDirectory(Path.Combine(root, "data"), DataDirectorySource.Override);
         Options = options;
         Player = new InProcessPlayer(Data);
+        Scripted = options.Scripted ? new ScriptedPlayer(Data) { FollowsCommands = true } : null;
     }
 
     public string Root { get; }
@@ -67,6 +71,9 @@ internal sealed class AppHarness : IAsyncDisposable
     public AppOptions Options { get; }
 
     public InProcessPlayer Player { get; }
+
+    /// <summary>The player the app talks to with <see cref="AppOptions.Scripted"/>.</summary>
+    public ScriptedPlayer? Scripted { get; }
 
     public FakeTimeProvider Time { get; } = new(new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero));
 
@@ -115,7 +122,7 @@ internal sealed class AppHarness : IAsyncDisposable
             new SettingsService(Data),
             Options.Library ?? new LibraryService(Data, Time),
             Options.Covers ?? new CoverService(Data, new SkiaCoverResizer()),
-            Player,
+            (IPlayerConnector?)Scripted ?? Player,
             new Appearance(Application.Current!),
             Time,
             new AvaloniaUiDispatcher(),
@@ -166,6 +173,10 @@ internal sealed class AppHarness : IAsyncDisposable
 
         (Services?.Library as IDisposable)?.Dispose();
         await Player.DisposeAsync();
+        if (Scripted is not null)
+        {
+            await Scripted.DisposeAsync();
+        }
         Dispatcher.UIThread.RunJobs();
         TempDir.TryDelete(Root);
     }

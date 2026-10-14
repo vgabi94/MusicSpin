@@ -1,10 +1,11 @@
 <!--
-  The player bar (mockup: .player, .mini, .meta, .buttons, .playbtn). The rest of its contents (progress, volume,
-  analyzer, badges) comes with the player bar issue.
+  The player bar (mockup: "Player bar": .player, .mini, .meta, .vis, .vol, .transport, .buttons, .playbtn, .progress,
+  .bar, .tnum, .right, .tech, .badge, .hires, .qbtn).
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="using:MusicSpin.App.Controls">
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:vm="using:MusicSpin.App.ViewModels">
     <Style Selector="Border.playerBar">
         <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
@@ -16,10 +17,12 @@
     </Style>
 
     <!-- The playing album's sleeve; its record slides out while playing (Styles/Artwork.axaml, Panel.sleeve). -->
+    <Style Selector="Button.mini">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <Style Selector="Panel.mini">
         <Setter Property="Width" Value="{StaticResource MiniWidth}" />
         <Setter Property="Height" Value="{StaticResource MiniHeight}" />
-        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Panel.mini > controls|CoverView">
         <Setter Property="Width" Value="{StaticResource MiniCoverSize}" />
@@ -35,7 +38,12 @@
         <Setter Property="RenderTransform" Value="translateX(22px)" />
     </Style>
 
-    <Style Selector="StackPanel.meta">
+    <!-- The song name; the analyzer and the volume follow it. -->
+    <Style Selector="controls|FollowPanel.meta">
+        <Setter Property="Spacing" Value="{StaticResource PlayerMetaGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.metaText">
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBlock.playerTitle">
@@ -47,24 +55,140 @@
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
     </Style>
 
+    <!-- The analyzer: the album's accent (darker on the light theme), peaks in fg-2. -->
+    <Style Selector="controls|SpectrumView">
+        <Setter Property="Width" Value="{StaticResource AnalyzerWidth}" />
+        <Setter Property="Height" Value="{StaticResource AnalyzerHeight}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="BarWidth" Value="{StaticResource AnalyzerBarWidth}" />
+        <Setter Property="BarGap" Value="{StaticResource AnalyzerBarGap}" />
+        <Setter Property="Rows" Value="{StaticResource AnalyzerRows}" />
+        <Setter Property="BottomOpacity" Value="{StaticResource AnalyzerBottomOpacity}" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+        <Setter Property="PeakBrush" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+
+    <!-- Round icon buttons: the speaker, the queue and the cog. -->
+    <Style Selector="Button.round">
+        <Setter Property="Width" Value="{StaticResource RoundButtonSize}" />
+        <Setter Property="Height" Value="{StaticResource RoundButtonSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RoundButtonRadius}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.round:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+    </Style>
+    <Style Selector="Button.round.on">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+    </Style>
+
+    <!-- The volume: speaker, bar, number. -->
+    <Style Selector="StackPanel.volume">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource VolumeGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Panel.speaker controls|Icon">
+        <Setter Property="Width" Value="{StaticResource SpeakerIconSize}" />
+        <Setter Property="Height" Value="{StaticResource SpeakerIconSize}" />
+        <Setter Property="ViewBox" Value="{StaticResource SpeakerViewBox}" />
+    </Style>
+    <Style Selector="Panel.speaker controls|Icon.wave">
+        <Setter Property="IsStroked" Value="True" />
+        <Setter Property="StrokeThickness" Value="{StaticResource SpeakerStrokeThickness}" />
+    </Style>
+    <Style Selector="controls|ScrubBar.volume">
+        <Setter Property="Width" Value="{StaticResource VolumeBarWidth}" />
+        <Setter Property="Maximum" Value="100" />
+        <Setter Property="SmallChange" Value="{x:Static vm:VolumeViewModel.KeyStep}" />
+        <Setter Property="LargeChange" Value="{x:Static vm:VolumeViewModel.LargeKeyStep}" />
+        <Setter Property="PointerStep" Value="{x:Static vm:VolumeViewModel.KeyStep}" />
+        <Setter Property="WheelStep" Value="{x:Static vm:VolumeViewModel.WheelStep}" />
+        <Setter Property="LargeWheelStep" Value="{x:Static vm:VolumeViewModel.LargeWheelStep}" />
+        <Setter Property="StepsToMultiples" Value="True" />
+        <Setter Property="CommitsWhileDragging" Value="True" />
+        <Setter Property="EndKey" Value="True" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <!-- The fill takes the accent while the volume is hovered, dragged or focused (mockup: .vol:hover .vbar b). -->
+    <Style Selector="StackPanel.volume:pointerover > controls|ScrubBar.volume">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="controls|ScrubBar.volume:dragging">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="controls|ScrubBar.volume:focus-visible">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="StackPanel.volume:pointerover > controls|ScrubBar.volume /template/ Border#PART_Handle">
+        <Setter Property="RenderTransform" Value="scale(1)" />
+    </Style>
+    <!-- Muted (or at 0%): the fill and the number are dimmed. Later than the hover styles, so it wins. -->
+    <Style Selector="StackPanel.volume.silent > controls|ScrubBar.volume">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="StackPanel.volume.silent > controls|ScrubBar.volume /template/ Border#PART_Fill">
+        <Setter Property="Opacity" Value="{StaticResource MutedFillOpacity}" />
+    </Style>
+    <Style Selector="StackPanel.volume.silent > TextBox.volume:not(:focus)">
+        <Setter Property="Opacity" Value="{StaticResource MutedOpacity}" />
+    </Style>
+    <Style Selector="TextBox.volume">
+        <Setter Property="Theme" Value="{StaticResource TypedBox}" />
+        <Setter Property="Width" Value="{StaticResource VolumeBoxWidth}" />
+        <Setter Property="Margin" Value="{StaticResource VolumeBoxMargin}" />
+        <Setter Property="Padding" Value="{StaticResource VolumeBoxPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource VolumeBoxRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource VolumeFontSize}" />
+    </Style>
+
+    <!-- The transport: buttons over the position. -->
     <Style Selector="StackPanel.transport">
+        <Setter Property="Spacing" Value="{StaticResource TransportRowGap}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.transportButtons">
         <Setter Property="Orientation" Value="Horizontal" />
         <Setter Property="Spacing" Value="{StaticResource TransportGap}" />
         <Setter Property="HorizontalAlignment" Value="Center" />
-        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="StackPanel.transport > Button">
+    <Style Selector="StackPanel.transportButtons > Button">
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
     </Style>
-    <Style Selector="StackPanel.transport > Button:pointerover">
+    <Style Selector="StackPanel.transportButtons > Button:pointerover">
         <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
     </Style>
-    <Style Selector="StackPanel.transport controls|Icon">
+    <Style Selector="StackPanel.transportButtons > Button:disabled">
+        <Setter Property="Opacity" Value="{StaticResource TransportDisabledOpacity}" />
+    </Style>
+    <Style Selector="StackPanel.transportButtons controls|Icon">
         <Setter Property="Width" Value="{StaticResource TransportIconSize}" />
         <Setter Property="Height" Value="{StaticResource TransportIconSize}" />
     </Style>
-    <Style Selector="StackPanel.transport > Button.play">
+    <!-- Shuffle and Repeat: lines; in the accent while on, Repeat one with a small "1". -->
+    <Style Selector="StackPanel.transportButtons > Button.mode controls|Icon">
+        <Setter Property="Width" Value="{StaticResource ModeIconSize}" />
+        <Setter Property="Height" Value="{StaticResource ModeIconSize}" />
+        <Setter Property="IsStroked" Value="True" />
+    </Style>
+    <Style Selector="StackPanel.transportButtons > Button.mode.on">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="TextBlock.repeatOne">
+        <Setter Property="FontSize" Value="{StaticResource RepeatOneFontSize}" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="Margin" Value="{StaticResource RepeatOneMargin}" />
+    </Style>
+    <Style Selector="StackPanel.transportButtons > Button.play">
         <Setter Property="Width" Value="{StaticResource PlayButtonSize}" />
         <Setter Property="Height" Value="{StaticResource PlayButtonSize}" />
         <Setter Property="CornerRadius" Value="{StaticResource PlayButtonRadius}" />
@@ -72,11 +196,126 @@
         <Setter Property="Foreground" Value="{DynamicResource BgBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
     </Style>
-    <Style Selector="StackPanel.transport > Button.play:pointerover">
+    <Style Selector="StackPanel.transportButtons > Button.play:pointerover">
         <Setter Property="Foreground" Value="{DynamicResource BgBrush}" />
     </Style>
-    <Style Selector="StackPanel.transport > Button.play controls|Icon">
+    <Style Selector="StackPanel.transportButtons > Button.play controls|Icon">
         <Setter Property="Width" Value="{StaticResource PlayIconSize}" />
         <Setter Property="Height" Value="{StaticResource PlayIconSize}" />
+    </Style>
+
+    <!-- The position: the elapsed time (a box you can type into), the bar, the duration. -->
+    <Style Selector="Grid.progress">
+        <Setter Property="ColumnSpacing" Value="{StaticResource ProgressGap}" />
+        <Setter Property="MaxWidth" Value="{StaticResource ProgressMaxWidth}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Grid.progress TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource ProgressFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontFeatures" Value="+tnum" />
+    </Style>
+    <Style Selector="TextBlock.duration">
+        <Setter Property="Padding" Value="{StaticResource DurationPadding}" />
+    </Style>
+    <Style Selector="TextBox.elapsed">
+        <Setter Property="Theme" Value="{StaticResource TypedBox}" />
+        <Setter Property="Width" Value="{StaticResource TimeBoxWidth}" />
+        <Setter Property="Padding" Value="{StaticResource TimeBoxPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource TimeBoxRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource ProgressFontSize}" />
+        <Setter Property="FontFeatures" Value="+tnum" />
+        <Setter Property="TextAlignment" Value="Right" />
+    </Style>
+    <Style Selector="TextBox.elapsed:focus">
+        <Setter Property="TextAlignment" Value="Left" />
+    </Style>
+    <Style Selector="controls|ScrubBar.position">
+        <Setter Property="SnapWidth" Value="{StaticResource PositionSnapWidth}" />
+        <Setter Property="SmallChange" Value="{x:Static vm:PositionViewModel.KeyStep}" />
+        <Setter Property="LargeChange" Value="{x:Static vm:PositionViewModel.LargeKeyStep}" />
+    </Style>
+    <!-- On hover, the time a click would go to (not while dragging: the elapsed time shows it then). -->
+    <Style Selector="controls|ScrubBar.position:pointerover:not(:dragging) /template/ Border#PART_Tip">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <!-- The right-hand side: the format, then the queue and settings buttons. -->
+    <Style Selector="Grid.right">
+        <Setter Property="ColumnSpacing" Value="{StaticResource PlayerRightGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="DockPanel.tech">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalSpacing" Value="{StaticResource TechGap}" />
+    </Style>
+    <Style Selector="Border.hiRes">
+        <Setter Property="Padding" Value="{StaticResource HiResPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource HiResRadius}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="BorderBrush" Value="{StaticResource HiResBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.hiRes > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource HiResFontSize}" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="{StaticResource HiResLetterSpacing}" />
+        <Setter Property="Foreground" Value="{StaticResource HiResBrush}" />
+    </Style>
+    <Style Selector="Border.badge">
+        <Setter Property="Padding" Value="{StaticResource BadgePadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource BadgeRadius}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.badge > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource PlayerRightFontSize}" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Run.formatName">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="StackPanel.playerButtons">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource PlayerButtonsGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="controls|Icon.queue">
+        <Setter Property="Width" Value="{StaticResource QueueIconSize}" />
+        <Setter Property="Height" Value="{StaticResource QueueIconSize}" />
+        <Setter Property="IsStroked" Value="True" />
+    </Style>
+    <Style Selector="controls|Icon.cog">
+        <Setter Property="Width" Value="{StaticResource CogIconSize}" />
+        <Setter Property="Height" Value="{StaticResource CogIconSize}" />
+        <Setter Property="IsStroked" Value="True" />
+        <Setter Property="StrokeThickness" Value="{StaticResource CogStrokeThickness}" />
+    </Style>
+    <!-- The queue's count (mockup: .qbtn b), over the button's top right corner; clicks go through to the button. -->
+    <Style Selector="Panel.counted > Border.count">
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.count">
+        <Setter Property="MinWidth" Value="{StaticResource CountBadgeSize}" />
+        <Setter Property="Height" Value="{StaticResource CountBadgeSize}" />
+        <Setter Property="Padding" Value="{StaticResource CountBadgePadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource CountBadgeRadius}" />
+        <Setter Property="Margin" Value="{StaticResource CountBadgeMargin}" />
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="Border.count > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource CountBadgeFontSize}" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 </Styles>

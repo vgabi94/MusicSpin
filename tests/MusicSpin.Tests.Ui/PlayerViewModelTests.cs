@@ -153,7 +153,7 @@ public sealed class PlayerViewModelTests : IAsyncDisposable
         for (var i = 1; i <= 4; i++)
         {
             Advance(PlayerViewModel.PollInterval);
-            await _ui.UntilAsync(() => _player.Count("status") == before + i, $"poll {i}");
+            await _ui.UntilAsync(() => _player.Count("status") == before + i && !_vm.IsRefreshing, $"poll {i} answered");
         }
 
         Advance(PlayerViewModel.PollInterval - TimeSpan.FromMilliseconds(20));

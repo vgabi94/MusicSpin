@@ -1,6 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using MusicSpin.App.ViewModels;
 
 namespace MusicSpin.App.Views;
@@ -20,6 +22,18 @@ public partial class MainWindow : Window
         // Space is a key binding to play/pause; it declines while a text box has focus, so the text box gets the space.
         AddHandler(GotFocusEvent, (_, _) => UpdateTextInputFocus(), RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(LostFocusEvent, (_, _) => UpdateTextInputFocus(), RoutingStrategies.Bubble, handledEventsToo: true);
+
+        // Clicking anywhere outside a focused text box leaves it, as on a web page (Avalonia keeps the focus when the
+        // click lands on something that can't take it). The player bar's boxes apply or drop their value then.
+        AddHandler(PointerPressedEvent, OnPointerPressedAnywhere, RoutingStrategies.Tunnel, handledEventsToo: true);
+    }
+
+    private void OnPointerPressedAnywhere(object? sender, PointerPressedEventArgs e)
+    {
+        if (FocusManager?.GetFocusedElement() is TextBox box && e.Source is Visual source && !box.IsVisualAncestorOf(source) && source != box)
+        {
+            FocusManager.Focus(null);
+        }
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)

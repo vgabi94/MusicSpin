@@ -38,6 +38,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     private double _statusPosition;
     private long _statusTimestamp;
     private int _refreshing;
+
+    /// <summary>A <c>status</c> request is on its way (a poll meanwhile is skipped).</summary>
+    internal bool IsRefreshing => Volatile.Read(ref _refreshing) == 1;
     private bool _disposed;
 
     public PlayerViewModel(IPlayerConnector connector, TimeProvider time, IUiDispatcher ui)
@@ -52,6 +55,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>A problem the user should see (player unavailable, unplayable file); never thrown.</summary>
     public event EventHandler<string>? Notice;
+
+    /// <summary>A <c>status</c> was taken over (on the UI thread), after every property has its new value.</summary>
+    public event EventHandler? StatusApplied;
+
+    /// <summary>Spectrum levels from the player (16 bands, 0..1), about 30 times a second while playing (on the UI thread).</summary>
+    public event EventHandler<float[]>? SpectrumReceived;
 
     [ObservableProperty]
     public partial bool IsConnected { get; private set; }
@@ -150,7 +159,15 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     private Task Previous() => SendAsync("prev");
 
     [RelayCommand]
-    private Task Seek(double seconds) => SendAsync("seek", new { seconds = Math.Max(0, seconds) });
+    private Task Seek(double seconds)
+    {
+        // Show the new position now: the bar would otherwise jump back until the player answers.
+        seconds = Math.Max(0, Duration > 0 ? Math.Min(seconds, Duration) : seconds);
+        _statusPosition = seconds;
+        _statusTimestamp = _time.GetTimestamp();
+        Position = seconds;
+        return SendAsync("seek", new { seconds });
+    }
 
     [RelayCommand]
     private Task SetVolume(double value) => SendAsync("volume", new { value = Math.Clamp(value, 0, 1) });
@@ -314,6 +331,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         Position = Math.Min(status.PositionSeconds, Duration > 0 ? Duration : double.MaxValue);
         State = status.State;
         UpdateTimers();
+        StatusApplied?.Invoke(this, EventArgs.Empty);
     }
 
     private void UpdateTimers()
@@ -403,18 +421,31 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    /// <summary>Reads the event stream; every event triggers a status refresh. The stream ending means the player is gone.</summary>
+    /// <summary>
+    /// Reads the event stream (with spectrum levels for the analyzer); every other event triggers a status refresh. The
+    /// stream ending means the player is gone.
+    /// </summary>
     private async Task ListenAsync(PlayerClient events, TaskCompletionSource subscribed)
     {
         try
         {
-            var stream = events.SubscribeAsync(_life.Token).GetAsyncEnumerator(_life.Token);
+            var stream = events.SubscribeAsync(spectrum: true, _life.Token).GetAsyncEnumerator(_life.Token);
             await using (stream.ConfigureAwait(false))
             {
                 var first = stream.MoveNextAsync();
                 subscribed.TrySetResult(); // the subscribe request was sent with the first MoveNext
                 for (var more = await first.ConfigureAwait(false); more; more = await stream.MoveNextAsync().ConfigureAwait(false))
                 {
+                    if (stream.Current.Name == "spectrum")
+                    {
+                        if (Levels(stream.Current.Data) is { } levels)
+                        {
+                            _ui.Post(() => SpectrumReceived?.Invoke(this, levels));
+                        }
+
+                        continue;
+                    }
+
                     if (stream.Current.Name == "error" && stream.Current.Data.ValueKind == JsonValueKind.Object
                         && stream.Current.Data.TryGetProperty("message", out var message) && message.GetString() is { } text)
                     {
@@ -500,6 +531,29 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     }
 
     private void Raise(string message) => _ui.Post(() => Notice?.Invoke(this, message));
+
+    /// <summary><c>{"levels":[16 values 0..1]}</c>; null when malformed.</summary>
+    private static float[]? Levels(JsonElement data)
+    {
+        if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty("levels", out var levels) || levels.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var result = new float[levels.GetArrayLength()];
+        var i = 0;
+        foreach (var level in levels.EnumerateArray())
+        {
+            if (level.ValueKind != JsonValueKind.Number)
+            {
+                return null;
+            }
+
+            result[i++] = level.GetSingle();
+        }
+
+        return result;
+    }
 
     private static QueueItem ToItem(TrackSummary t) => new(t.Path, t.Title, t.Artist, t.Album, null, t.TrackNumber, t.DurationSeconds, t.Id);
 }

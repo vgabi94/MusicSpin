@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using SkiaSharp;
@@ -63,6 +64,30 @@ internal static class Snapshots
         frame.Save(png, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         using var actual = SKBitmap.Decode(png.ToArray());
         Match(actual, name);
+    }
+
+    /// <summary>Captures <paramref name="top"/> and compares the part <paramref name="region"/> covers with the baseline.</summary>
+    public static void Match(TopLevel top, Control region, string name)
+    {
+        ArgumentNullException.ThrowIfNull(top);
+        ArgumentNullException.ThrowIfNull(region);
+        Gui.FinishAnimations();
+        using var frame = top.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
+        using var png = new MemoryStream();
+        frame.Save(png, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        using var whole = SKBitmap.Decode(png.ToArray());
+        var origin = region.TranslatePoint(default, top) ?? throw new InvalidOperationException($"{region} is not in the window.");
+        var scale = whole.Width / top.Bounds.Width;
+        var area = SKRectI.Round(new SKRect((float)(origin.X * scale), (float)(origin.Y * scale),
+            (float)((origin.X + region.Bounds.Width) * scale), (float)((origin.Y + region.Bounds.Height) * scale)));
+        using var part = new SKBitmap();
+        if (!whole.ExtractSubset(part, area))
+        {
+            throw new InvalidOperationException($"{area} is outside the captured frame.");
+        }
+
+        using var copy = part.Copy();
+        Match(copy, name);
     }
 
     public static void Match(SKBitmap actual, string name)

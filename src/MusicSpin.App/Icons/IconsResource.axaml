@@ -28,7 +28,21 @@
     <StreamGeometry x:Key="Pause">M6.5,5 H10 V19 H6.5 Z M14,5 H17.5 V19 H14 Z</StreamGeometry>
     <StreamGeometry x:Key="Previous">M6,5 H8 V19 H6 Z M19,5 L9,12 L19,19 Z</StreamGeometry>
     <StreamGeometry x:Key="Next">M16,5 H18 V19 H16 Z M5,5 L15,12 L5,19 Z</StreamGeometry>
+    <StreamGeometry x:Key="Shuffle">M3,7 H7 C11,7 13,17 17,17 H21 M3,17 H7 C11,17 13,7 17,7 H21 M18,4 L21,7 L18,10 M18,14 L21,17 L18,20</StreamGeometry>
+    <StreamGeometry x:Key="Repeat">M4,12 V10 A3,3 0 0 1 7,7 H20 M17,4 L20,7 L17,10 M20,12 V14 A3,3 0 0 1 17,17 H4 M7,14 L4,17 L7,20</StreamGeometry>
     <!-- END Transport -->
+
+    <!-- BEGIN Player bar. The volume icon is layers in one 24 x 24 box (Icon.ViewBox): a filled speaker, and stroked
+         waves or a cross (mockup: #volIco). -->
+    <StreamGeometry x:Key="Speaker">M4,9.5 H7.2 L12,5.5 V18.5 L7.2,14.5 H4 Z</StreamGeometry>
+    <StreamGeometry x:Key="SpeakerWaveNear">M15.2,9.3 A3.8,3.8 0 0 1 15.2,14.7</StreamGeometry>
+    <StreamGeometry x:Key="SpeakerWaveFar">M17.9,6.6 A7.6,7.6 0 0 1 17.9,17.4</StreamGeometry>
+    <StreamGeometry x:Key="SpeakerMuted">M15.5,9.5 L20.5,14.5 M20.5,9.5 L15.5,14.5</StreamGeometry>
+    <Rect x:Key="SpeakerViewBox">0,0,24,24</Rect>
+    <StreamGeometry x:Key="Queue">M4,6 H20 M4,12 H20 M4,18 H20</StreamGeometry>
+    <!-- The mockup's cog (lucide "settings"): the outline and the hub. -->
+    <StreamGeometry x:Key="Settings">M12.22,2 H11.78 A2,2 0 0 0 9.78,4 V4.18 A2,2 0 0 1 8.78,5.91 L8.35,6.16 A2,2 0 0 1 6.35,6.16 L6.2,6.08 A2,2 0 0 0 3.47,6.81 L3.25,7.19 A2,2 0 0 0 3.98,9.92 L4.13,10.02 A2,2 0 0 1 5.13,11.74 V12.25 A2,2 0 0 1 4.13,13.99 L3.98,14.08 A2,2 0 0 0 3.25,16.81 L3.47,17.19 A2,2 0 0 0 6.2,17.92 L6.35,17.84 A2,2 0 0 1 8.35,17.84 L8.78,18.09 A2,2 0 0 1 9.78,19.82 V20 A2,2 0 0 0 11.78,22 H12.22 A2,2 0 0 0 14.22,20 V19.82 A2,2 0 0 1 15.22,18.09 L15.65,17.84 A2,2 0 0 1 17.65,17.84 L17.8,17.92 A2,2 0 0 0 20.53,17.19 L20.75,16.8 A2,2 0 0 0 20.02,14.07 L19.87,13.99 A2,2 0 0 1 18.87,12.25 V11.75 A2,2 0 0 1 19.87,10.01 L20.02,9.92 A2,2 0 0 0 20.75,7.19 L20.53,6.81 A2,2 0 0 0 17.8,6.08 L17.65,6.16 A2,2 0 0 1 15.65,6.16 L15.22,5.91 A2,2 0 0 1 14.22,4.18 V4 A2,2 0 0 0 12.22,2 Z M15,12 A3,3 0 1 1 9,12 A3,3 0 1 1 15,12 Z</StreamGeometry>
+    <!-- END Player bar -->
 
     <!-- BEGIN Window buttons (thin lines, like the mockup's .winctl) -->
     <StreamGeometry x:Key="WindowMinimize">M0,10 H20</StreamGeometry>

@@ -20,7 +20,9 @@ public sealed class Icon : Control
 
     public static readonly StyledProperty<double> StrokeThicknessProperty = AvaloniaProperty.Register<Icon, double>(nameof(StrokeThickness), 1.5);
 
-    static Icon() => AffectsRender<Icon>(DataProperty, ForegroundProperty, IsStrokedProperty, StrokeThicknessProperty);
+    public static readonly StyledProperty<Rect?> ViewBoxProperty = AvaloniaProperty.Register<Icon, Rect?>(nameof(ViewBox));
+
+    static Icon() => AffectsRender<Icon>(DataProperty, ForegroundProperty, IsStrokedProperty, StrokeThicknessProperty, ViewBoxProperty);
 
     public Geometry? Data
     {
@@ -40,6 +42,16 @@ public sealed class Icon : Control
         set => SetValue(IsStrokedProperty, value);
     }
 
+    /// <summary>
+    /// The area of the path's coordinate space to fit (null: the path's own bounds). Icons drawn in layers (a filled
+    /// speaker and stroked waves) share one, so they line up.
+    /// </summary>
+    public Rect? ViewBox
+    {
+        get => GetValue(ViewBoxProperty);
+        set => SetValue(ViewBoxProperty, value);
+    }
+
     /// <summary>Line width in pixels (not scaled with the icon).</summary>
     public double StrokeThickness
     {
@@ -57,7 +69,7 @@ public sealed class Icon : Control
 
         // Lines are centred on the path, so leave half a line around it.
         var inset = IsStroked ? StrokeThickness : 0;
-        var bounds = data.Bounds;
+        var bounds = ViewBox ?? data.Bounds;
         var room = new Size(Math.Max(0, Bounds.Width - inset), Math.Max(0, Bounds.Height - inset));
         var scale = Scale(bounds.Width, room.Width, bounds.Height, room.Height);
         if (scale <= 0)

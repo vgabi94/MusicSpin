@@ -1,9 +1,11 @@
 <!--
-  Control themes shared by every area: a plain button (no Fluent chrome; areas style it with classes) and the search
-  text box. Merged into the application resources.
+  Control themes shared by every area: a plain button (no Fluent chrome; areas style it with classes), the bar you drag,
+  the box you type a value into, and the search text box. Merged into the application resources.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:MusicSpin.App.Controls"
+                    xmlns:theming="using:MusicSpin.App.Theming">
     <!-- The default look of every Button (no Fluent chrome); areas style it with classes. Being the implicit theme, it
          never overrides a theme set on purpose, like the window buttons in Window.axaml. -->
     <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
@@ -34,6 +36,130 @@
         <Style Selector="^:disabled">
             <Setter Property="Opacity" Value="0.45" />
             <Setter Property="Cursor" Value="Arrow" />
+        </Style>
+    </ControlTheme>
+
+    <!-- A bar you drag (mockup: .bar, .vbar): the line, its fill in Foreground, a handle on hover, drag and keyboard
+         focus, and a focus outline. PART_Tip, the time over the pointer, shows only where a style turns it on. -->
+    <ControlTheme x:Key="{x:Type controls:ScrubBar}" TargetType="controls:ScrubBar">
+        <Setter Property="Height" Value="{StaticResource ScrubBarHeight}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel Background="{TemplateBinding Background}">
+                    <Border Name="PART_FocusRing"
+                            Margin="{StaticResource FocusRingMargin}"
+                            BorderThickness="{StaticResource FocusRingThickness}"
+                            BorderBrush="{DynamicResource AccentBrush}"
+                            CornerRadius="{StaticResource FocusRingRadius}"
+                            IsVisible="False" />
+                    <Border Name="PART_Line"
+                            Height="{StaticResource ScrubLineHeight}"
+                            CornerRadius="{StaticResource ScrubLineRadius}"
+                            Background="{DynamicResource Bg3Brush}"
+                            VerticalAlignment="Center" />
+                    <Border Name="PART_Fill"
+                            Width="{TemplateBinding FillWidth}"
+                            Height="{StaticResource ScrubLineHeight}"
+                            CornerRadius="{StaticResource ScrubLineRadius}"
+                            Background="{TemplateBinding Foreground}"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center" />
+                    <Canvas>
+                        <Border Name="PART_Handle"
+                                Canvas.Left="{TemplateBinding FillWidth}"
+                                Width="{StaticResource ScrubHandleSize}"
+                                Height="{StaticResource ScrubHandleSize}"
+                                Margin="{StaticResource ScrubHandleMargin}"
+                                CornerRadius="{StaticResource ScrubHandleRadius}"
+                                Background="{DynamicResource FgBrush}"
+                                BoxShadow="0 1 3 0 #88000000"
+                                RenderTransform="scale(0)"
+                                theming:Animate.Transitions="RenderTransform HandleDuration" />
+                        <Border Name="PART_Tip"
+                                Canvas.Left="{TemplateBinding TipLeft}"
+                                Canvas.Bottom="{StaticResource PositionTipBottom}"
+                                Padding="{StaticResource PositionTipPadding}"
+                                CornerRadius="{StaticResource PositionTipRadius}"
+                                Background="{DynamicResource FgBrush}"
+                                IsHitTestVisible="False"
+                                IsVisible="False">
+                            <TextBlock Name="PART_TipText"
+                                       Foreground="{DynamicResource BgBrush}"
+                                       FontSize="{StaticResource PositionTipFontSize}"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding HoverValue, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static theming:TextConverters.Clock}}" />
+                        </Border>
+                    </Canvas>
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#PART_Handle">
+            <Setter Property="RenderTransform" Value="scale(1)" />
+        </Style>
+        <Style Selector="^:dragging /template/ Border#PART_Handle">
+            <Setter Property="RenderTransform" Value="scale(1)" />
+        </Style>
+        <Style Selector="^:focus-visible /template/ Border#PART_Handle">
+            <Setter Property="RenderTransform" Value="scale(1)" />
+        </Style>
+        <Style Selector="^:focus-visible /template/ Border#PART_FocusRing">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+    </ControlTheme>
+
+    <!-- A value you can type into (mockup: .tnum, .vnum): plain text until hovered, an accent outline while editing, a
+         red one when a value is refused. -->
+    <ControlTheme x:Key="TypedBox" TargetType="TextBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource FgBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="IBeam" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Border"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        Padding="{TemplateBinding Padding}">
+                    <ScrollViewer Name="PART_ScrollViewer"
+                                  HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <TextPresenter Name="PART_TextPresenter"
+                                       Text="{TemplateBinding Text, Mode=TwoWay}"
+                                       CaretBrush="{TemplateBinding CaretBrush}"
+                                       CaretIndex="{TemplateBinding CaretIndex}"
+                                       SelectionStart="{TemplateBinding SelectionStart}"
+                                       SelectionEnd="{TemplateBinding SelectionEnd}"
+                                       SelectionBrush="{TemplateBinding SelectionBrush}"
+                                       SelectionForegroundBrush="{TemplateBinding Foreground}"
+                                       TextAlignment="{TemplateBinding TextAlignment}"
+                                       TextWrapping="NoWrap"
+                                       VerticalAlignment="Center" />
+                    </ScrollViewer>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^:focus">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^.invalid">
+            <Setter Property="BorderBrush" Value="{StaticResource InvalidBrush}" />
         </Style>
     </ControlTheme>
 

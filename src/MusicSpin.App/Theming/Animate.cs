@@ -22,7 +22,76 @@ public static class Animate
     public static readonly AttachedProperty<string?> TransitionsProperty =
         AvaloniaProperty.RegisterAttached<Animatable, string?>("Transitions", typeof(Animate));
 
-    static Animate() => TransitionsProperty.Changed.AddClassHandler<Animatable>((target, e) => Apply(target, e.NewValue as string));
+    /// <summary>
+    /// An animation from Styles/Motion.axaml to play on the control each time <see cref="TriggerProperty"/> changes:
+    /// <c>theming:Animate.Play="ShakeAnimation" theming:Animate.Trigger="{Binding Number.Rejections}"</c>. Its duration
+    /// follows the Motion setting; at None it doesn't play.
+    /// </summary>
+    public static readonly AttachedProperty<string?> PlayProperty =
+        AvaloniaProperty.RegisterAttached<Animatable, string?>("Play", typeof(Animate));
+
+    public static readonly AttachedProperty<object?> TriggerProperty =
+        AvaloniaProperty.RegisterAttached<Animatable, object?>("Trigger", typeof(Animate));
+
+    static Animate()
+    {
+        TransitionsProperty.Changed.AddClassHandler<Animatable>((target, e) => Apply(target, e.NewValue as string));
+        TriggerProperty.Changed.AddClassHandler<Animatable>((target, e) =>
+        {
+            if (e.OldValue is not null && target is Visual visual)
+            {
+                _ = PlayAsync(visual);
+            }
+        });
+    }
+
+    /// <summary>How many times <see cref="PlayProperty"/> played on the control (tests count it).</summary>
+    public static readonly AttachedProperty<int> PlayedProperty =
+        AvaloniaProperty.RegisterAttached<Animatable, int>("Played", typeof(Animate));
+
+    public static int GetPlayed(Animatable target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return target.GetValue(PlayedProperty);
+    }
+
+    public static string? GetPlay(Animatable target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return target.GetValue(PlayProperty);
+    }
+
+    public static void SetPlay(Animatable target, string? value)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        target.SetValue(PlayProperty, value);
+    }
+
+    public static object? GetTrigger(Animatable target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return target.GetValue(TriggerProperty);
+    }
+
+    public static void SetTrigger(Animatable target, object? value)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        target.SetValue(TriggerProperty, value);
+    }
+
+    private static async Task PlayAsync(Visual target)
+    {
+        if (GetPlay(target) is not { } key || MotionScale.Current.Multiplier <= 0)
+        {
+            return;
+        }
+
+        var animation = Resource<Animation>(key);
+        var duration = Resource<TimeSpan>(key + ".Duration");
+        animation.Duration = MotionScale.Current.Scale(duration);
+        target.SetValue(PlayedProperty, target.GetValue(PlayedProperty) + 1);
+        await animation.RunAsync(target).ConfigureAwait(true);
+    }
 
     public static string? GetTransitions(Animatable target)
     {
