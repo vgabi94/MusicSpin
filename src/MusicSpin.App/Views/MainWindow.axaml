@@ -15,6 +15,10 @@
     <Window.KeyBindings>
         <KeyBinding Gesture="Escape" Command="{Binding EscapeCommand}" />
         <KeyBinding Gesture="Space" Command="{Binding SpaceCommand}" />
+        <KeyBinding Gesture="Ctrl+Right" Command="{Binding SeekForwardCommand}" />
+        <KeyBinding Gesture="Ctrl+Left" Command="{Binding SeekBackCommand}" />
+        <KeyBinding Gesture="Ctrl+Up" Command="{Binding VolumeUpCommand}" />
+        <KeyBinding Gesture="Ctrl+Down" Command="{Binding VolumeDownCommand}" />
     </Window.KeyBindings>
 
     <Window.DataTemplates>

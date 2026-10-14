@@ -240,46 +240,6 @@ internal static class PlayerSupport
         }
     }
 
-    /// <summary>Parses a seek target: seconds ("90", "12.5"), [h:]mm:ss ("1:30", "1:02:03"), or relative with +/-.</summary>
-    public static bool TryParseSeek(string text, out double seconds, out bool relative, out string? error)
-    {
-        seconds = 0;
-        relative = false;
-        error = null;
-        var t = text.Trim();
-        var sign = 1;
-        if (t.StartsWith('+') || t.StartsWith('-'))
-        {
-            relative = true;
-            sign = t[0] == '-' ? -1 : 1;
-            t = t[1..];
-        }
-
-        var parts = t.Split(':');
-        if (parts.Length > 3 || parts.Any(p => p.Length == 0))
-        {
-            error = $"Invalid position '{text}'. Use seconds (90), mm:ss (1:30), h:mm:ss, or +/- for relative (+10, -0:30).";
-            return false;
-        }
-
-        double total = 0;
-        for (var i = 0; i < parts.Length; i++)
-        {
-            var isLast = i == parts.Length - 1;
-            if (!double.TryParse(parts[i], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var v)
-                || (!isLast && v != Math.Floor(v)) || (i > 0 && v >= 60))
-            {
-                error = $"Invalid position '{text}'. Use seconds (90), mm:ss (1:30), h:mm:ss, or +/- for relative (+10, -0:30).";
-                return false;
-            }
-
-            total = total * 60 + v;
-        }
-
-        seconds = sign * total;
-        return true;
-    }
-
     /// <summary>Parses a volume: 0..1 ("0.5"), percent ("50%"), or relative ("+0.1", "-10%").</summary>
     public static bool TryParseVolume(string text, out double value, out bool relative, out string? error)
     {

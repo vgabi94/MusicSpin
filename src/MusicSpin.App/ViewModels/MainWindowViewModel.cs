@@ -26,6 +26,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _services = services;
         Player = new PlayerViewModel(services.Player, services.Time, services.Ui);
         SpinClock = new SpinClock(services.Time, services.Ui);
+        PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
+        Layers.Register(NowPlaying);
+        Layers.Register(QueueDrawer);
         AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, Notices);
         TracksPage = new TracksPageViewModel(services.Library, Player, Notices);
         RadioPage = new RadioPageViewModel(Player, Notices);
@@ -52,6 +55,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public PlayerViewModel Player { get; }
 
     public SpinClock SpinClock { get; }
+
+    public PlayerBarViewModel PlayerBar { get; }
+
+    public NowPlayingViewModel NowPlaying { get; } = new();
+
+    public QueueDrawerViewModel QueueDrawer { get; } = new();
 
     /// <summary>What Esc closes, topmost first. Menus, Settings, the queue drawer and Now Playing register here.</summary>
     public LayerRegistry Layers { get; } = new();
@@ -86,14 +95,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// <summary>"—" when nothing is loaded.</summary>
     public string PlayerTitle => Player.Title ?? "—";
 
-    public string? PlayerArtist => Player.Artist;
+    /// <summary>"Artist · Album" (whichever is known).</summary>
+    public string? PlayerArtist => string.Join(" · ", new[] { Player.Artist, Player.Album }.Where(s => !string.IsNullOrWhiteSpace(s))) is { Length: > 0 } text ? text : null;
 
     /// <summary>
     /// True while a text box has focus (the window reports it): Space then types instead of toggling play. Key bindings
     /// run before the focused control sees the key, so the binding's command has to decline it.
     /// </summary>
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SpaceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SpaceCommand), nameof(SeekForwardCommand), nameof(SeekBackCommand), nameof(VolumeUpCommand), nameof(VolumeDownCommand))]
     public partial bool IsTextInputFocused { get; set; }
 
     [ObservableProperty]
@@ -118,10 +128,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private void Escape() => Layers.CloseTopmost();
 
     /// <summary>Space: play/pause, unless a text box has focus (then Space types; see <see cref="IsTextInputFocused"/>).</summary>
-    [RelayCommand(CanExecute = nameof(CanUseSpace))]
+    [RelayCommand(CanExecute = nameof(CanUseShortcuts))]
     private Task Space() => Player.TogglePlayCommand.ExecuteAsync(null);
 
-    private bool CanUseSpace() => !IsTextInputFocused;
+    private bool CanUseShortcuts() => !IsTextInputFocused;
+
+    /// <summary>Ctrl+→: seeks forward, unless a text box has focus (Ctrl+arrows move its caret by words then).</summary>
+    [RelayCommand(CanExecute = nameof(CanUseShortcuts), AllowConcurrentExecutions = true)]
+    private Task SeekForward() => PlayerBar.Position.SeekByCommand.ExecuteAsync(PositionViewModel.KeyStep);
+
+    /// <summary>Ctrl+←.</summary>
+    [RelayCommand(CanExecute = nameof(CanUseShortcuts), AllowConcurrentExecutions = true)]
+    private Task SeekBack() => PlayerBar.Position.SeekByCommand.ExecuteAsync(-PositionViewModel.KeyStep);
+
+    /// <summary>Ctrl+↑: the volume up one step, unless a text box has focus.</summary>
+    [RelayCommand(CanExecute = nameof(CanUseShortcuts), AllowConcurrentExecutions = true)]
+    private Task VolumeUp() => PlayerBar.Volume.StepCommand.ExecuteAsync(VolumeViewModel.KeyStep);
+
+    /// <summary>Ctrl+↓.</summary>
+    [RelayCommand(CanExecute = nameof(CanUseShortcuts), AllowConcurrentExecutions = true)]
+    private Task VolumeDown() => PlayerBar.Volume.StepCommand.ExecuteAsync(-VolumeViewModel.KeyStep);
 
     /// <summary>The play/pause button.</summary>
     [RelayCommand]
@@ -163,6 +189,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _albumLookup?.Cancel();
         _albumLookup?.Dispose();
         SpinClock.Dispose();
+        PlayerBar.Dispose();
         await Player.DisposeAsync().ConfigureAwait(false);
     }
 
@@ -213,6 +240,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 OnPropertyChanged(nameof(PlayerTitle));
                 break;
             case nameof(PlayerViewModel.Artist):
+            case nameof(PlayerViewModel.Album):
                 OnPropertyChanged(nameof(PlayerArtist));
                 break;
             case nameof(PlayerViewModel.IsPlaying):

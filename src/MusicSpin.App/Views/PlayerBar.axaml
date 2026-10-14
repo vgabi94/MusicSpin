@@ -1,37 +1,180 @@
 <!--
-  The player bar (mockup: .player): the playing album's sleeve with its record, the title and artist, and the transport.
-  Progress, volume, the analyzer and the badges come with the player bar issue.
+  The player bar (mockup: .player), left to right: the playing album's sleeve with its record (opens Now Playing); the
+  title and "artist · album", followed by the spectrum analyzer and the volume; the transport over the position; the
+  format, the queue button and the settings button.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MusicSpin.App.ViewModels"
              xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:theming="using:MusicSpin.App.Theming"
              x:Class="MusicSpin.App.Views.PlayerBar"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="playerBar">
         <Grid ColumnDefinitions="Auto,1.2*,0.85*,1.2*">
-            <Panel Name="Mini" Classes="sleeve mini" Classes.playing="{Binding Player.IsPlaying}">
-                <controls:VinylView Name="MiniVinyl" Label="{Binding PlayingCover}" Angle="{Binding SpinClock.Angle}" />
-                <controls:CoverView Name="MiniCover" Source="{Binding PlayingCover}" Title="{Binding Player.Album}" Artist="{Binding PlayerArtist}" />
-            </Panel>
-            <StackPanel Grid.Column="1" Classes="meta">
-                <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" />
-                <TextBlock Name="PlayerArtist" Classes="playerArtist trim" Text="{Binding PlayerArtist}" />
-            </StackPanel>
+            <Button Name="MiniButton"
+                    Classes="mini"
+                    Command="{Binding PlayerBar.OpenNowPlayingCommand}"
+                    ToolTip.Tip="Open Now Playing"
+                    AutomationProperties.Name="Open Now Playing">
+                <Panel Name="Mini" Classes="sleeve mini" Classes.playing="{Binding Player.IsPlaying}">
+                    <controls:VinylView Name="MiniVinyl" Label="{Binding PlayingCover}" Angle="{Binding SpinClock.Angle}" />
+                    <controls:CoverView Name="MiniCover" Source="{Binding PlayingCover}" Title="{Binding Player.Album}" Artist="{Binding Player.Artist}" />
+                </Panel>
+            </Button>
+
+            <controls:FollowPanel Name="Meta" Grid.Column="1" Classes="meta">
+                <StackPanel Classes="metaText">
+                    <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" />
+                    <TextBlock Name="PlayerArtist" Classes="playerArtist trim" Text="{Binding PlayerArtist}" />
+                </StackPanel>
+                <controls:SpectrumView Name="Analyzer" Frame="{Binding PlayerBar.Spectrum.Frame}" />
+                <StackPanel Name="Volume" Classes="volume" Classes.silent="{Binding PlayerBar.Volume.IsSilent}">
+                    <Button Name="MuteButton"
+                            Classes="round"
+                            Command="{Binding PlayerBar.Volume.ToggleMuteCommand}"
+                            ToolTip.Tip="{Binding PlayerBar.Volume.MuteTip}"
+                            AutomationProperties.Name="{Binding PlayerBar.Volume.MuteTip}">
+                        <Panel Classes="speaker">
+                            <controls:Icon Data="{StaticResource Speaker}" />
+                            <controls:Icon Name="WaveNear" Classes="wave" Data="{StaticResource SpeakerWaveNear}" IsVisible="{Binding !PlayerBar.Volume.IsSilent}" />
+                            <controls:Icon Name="WaveFar" Classes="wave" Data="{StaticResource SpeakerWaveFar}" IsVisible="{Binding PlayerBar.Volume.IsFull}" />
+                            <controls:Icon Name="MutedCross" Classes="wave" Data="{StaticResource SpeakerMuted}" IsVisible="{Binding PlayerBar.Volume.IsSilent}" />
+                        </Panel>
+                    </Button>
+                    <controls:ScrubBar Name="VolumeBar"
+                                       Classes="volume"
+                                       Value="{Binding PlayerBar.Volume.Level, Mode=OneWay}"
+                                       CommitCommand="{Binding PlayerBar.Volume.SetLevelCommand}"
+                                       ValueText="{Binding PlayerBar.Volume.ValueText}"
+                                       AutomationProperties.Name="Volume" />
+                    <TextBox Name="VolumeBox"
+                             Classes="volume"
+                             Classes.invalid="{Binding PlayerBar.Volume.Number.IsInvalid}"
+                             Text="{Binding PlayerBar.Volume.Number.Text}"
+                             ToolTip.Tip="{Binding PlayerBar.Volume.NumberTip}"
+                             AutomationProperties.Name="Volume, type a value"
+                             controls:TypedBox.Field="{Binding PlayerBar.Volume.Number}"
+                             theming:Animate.Play="ShakeAnimation"
+                             theming:Animate.Trigger="{Binding PlayerBar.Volume.Number.Rejections}">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding PlayerBar.Volume.Number.CommitCommand}" />
+                            <KeyBinding Gesture="Escape" Command="{Binding PlayerBar.Volume.Number.CancelCommand}" />
+                            <KeyBinding Gesture="Up" Command="{Binding PlayerBar.Volume.StepInBoxCommand}" CommandParameter="{x:Static vm:VolumeViewModel.KeyStep}" />
+                            <KeyBinding Gesture="Down" Command="{Binding PlayerBar.Volume.StepInBoxCommand}" CommandParameter="{x:Static vm:VolumeViewModel.KeyStepDown}" />
+                            <KeyBinding Gesture="Shift+Up" Command="{Binding PlayerBar.Volume.StepInBoxCommand}" CommandParameter="{x:Static vm:VolumeViewModel.LargeKeyStep}" />
+                            <KeyBinding Gesture="Shift+Down" Command="{Binding PlayerBar.Volume.StepInBoxCommand}" CommandParameter="{x:Static vm:VolumeViewModel.LargeKeyStepDown}" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                </StackPanel>
+            </controls:FollowPanel>
+
             <StackPanel Grid.Column="2" Classes="transport">
-                <Button Name="Previous" Command="{Binding Player.PreviousCommand}" ToolTip.Tip="Previous" AutomationProperties.Name="Previous">
-                    <controls:Icon Data="{StaticResource Previous}" />
-                </Button>
-                <Button Name="PlayPause" Classes="play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play/pause (Space)" AutomationProperties.Name="Play or pause">
-                    <Panel>
-                        <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !Player.IsPlaying}" />
-                        <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
-                    </Panel>
-                </Button>
-                <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next" AutomationProperties.Name="Next">
-                    <controls:Icon Data="{StaticResource Next}" />
-                </Button>
+                <StackPanel Classes="transportButtons">
+                    <Button Name="Shuffle"
+                            Classes="mode"
+                            Classes.on="{Binding Player.Shuffle}"
+                            Command="{Binding PlayerBar.ToggleShuffleCommand}"
+                            ToolTip.Tip="{Binding PlayerBar.ShuffleToolTip}"
+                            AutomationProperties.Name="Shuffle">
+                        <controls:Icon Data="{StaticResource Shuffle}" />
+                    </Button>
+                    <Button Name="Previous"
+                            Command="{Binding PlayerBar.PreviousCommand}"
+                            ToolTip.Tip="{Binding PlayerBar.PreviousToolTip}"
+                            AutomationProperties.Name="{Binding PlayerBar.PreviousToolTip}">
+                        <controls:Icon Data="{StaticResource Previous}" />
+                    </Button>
+                    <Button Name="PlayPause" Classes="play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play/pause (Space)" AutomationProperties.Name="Play or pause">
+                        <Panel>
+                            <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !Player.IsPlaying}" />
+                            <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
+                        </Panel>
+                    </Button>
+                    <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next track" AutomationProperties.Name="Next track">
+                        <controls:Icon Data="{StaticResource Next}" />
+                    </Button>
+                    <Button Name="Repeat"
+                            Classes="mode"
+                            Classes.on="{Binding PlayerBar.IsRepeatOn}"
+                            Command="{Binding PlayerBar.CycleRepeatCommand}"
+                            ToolTip.Tip="{Binding PlayerBar.RepeatToolTip}"
+                            AutomationProperties.Name="{Binding PlayerBar.RepeatToolTip}">
+                        <Panel>
+                            <controls:Icon Data="{StaticResource Repeat}" />
+                            <TextBlock Name="RepeatOne" Classes="repeatOne" Text="1" IsVisible="{Binding PlayerBar.IsRepeatOne}" />
+                        </Panel>
+                    </Button>
+                </StackPanel>
+
+                <Grid Name="Progress" Classes="progress" ColumnDefinitions="Auto,*,Auto">
+                    <TextBox Name="ElapsedBox"
+                             Classes="elapsed"
+                             Classes.invalid="{Binding PlayerBar.Position.Elapsed.IsInvalid}"
+                             Text="{Binding PlayerBar.Position.Elapsed.Text}"
+                             ToolTip.Tip="Type a time: 90, 1:30, +10, -0:30"
+                             AutomationProperties.Name="Position, type a time"
+                             controls:TypedBox.Field="{Binding PlayerBar.Position.Elapsed}"
+                             theming:Animate.Play="ShakeAnimation"
+                             theming:Animate.Trigger="{Binding PlayerBar.Position.Elapsed.Rejections}">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding PlayerBar.Position.Elapsed.CommitCommand}" />
+                            <KeyBinding Gesture="Escape" Command="{Binding PlayerBar.Position.Elapsed.CancelCommand}" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <controls:ScrubBar Name="PositionBar"
+                                       Grid.Column="1"
+                                       Classes="position"
+                                       Maximum="{Binding PlayerBar.Position.Duration}"
+                                       Value="{Binding PlayerBar.Position.Position, Mode=OneWay}"
+                                       Scrub="{Binding PlayerBar.Position.Scrub}"
+                                       CommitCommand="{Binding PlayerBar.Position.SeekToCommand}"
+                                       ValueText="{Binding PlayerBar.Position.ValueText}"
+                                       IsEnabled="{Binding PlayerBar.Position.CanSeek}"
+                                       AutomationProperties.Name="Position" />
+                    <TextBlock Name="DurationText" Grid.Column="2" Classes="duration" Text="{Binding PlayerBar.Position.DurationText}" />
+                </Grid>
             </StackPanel>
+
+            <Grid Name="Right" Grid.Column="3" Classes="right" ColumnDefinitions="*,Auto">
+                <DockPanel Name="Tech" Classes="tech">
+                    <Border Name="HiRes" Classes="hiRes" DockPanel.Dock="Left" IsVisible="{Binding PlayerBar.IsHiRes}">
+                        <TextBlock Text="HI-RES" />
+                    </Border>
+                    <Border Name="FormatBadge" Classes="badge">
+                        <TextBlock Name="FormatText" Classes="trim">
+                            <Run Classes="formatName" Text="{Binding PlayerBar.FormatName}" /><Run Text="{Binding PlayerBar.FormatDetails}" />
+                        </TextBlock>
+                    </Border>
+                </DockPanel>
+                <StackPanel Grid.Column="1" Classes="playerButtons">
+                    <!-- The count sits on the button's corner, outside its round clip. -->
+                    <Panel Classes="counted">
+                        <Button Name="QueueButton"
+                                Classes="round"
+                                Classes.on="{Binding QueueDrawer.IsOpen}"
+                                Command="{Binding PlayerBar.ToggleQueueCommand}"
+                                ToolTip.Tip="Queue"
+                                AutomationProperties.Name="Queue">
+                            <controls:Icon Classes="queue" Data="{StaticResource Queue}" />
+                        </Button>
+                        <Border Name="QueueCount"
+                                Classes="count"
+                                IsVisible="{Binding PlayerBar.QueueCountText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                theming:Animate.Play="PulseAnimation"
+                                theming:Animate.Trigger="{Binding PlayerBar.QueuePulses}">
+                            <TextBlock Text="{Binding PlayerBar.QueueCountText}" />
+                        </Border>
+                    </Panel>
+                    <Button Name="SettingsButton"
+                            Classes="round"
+                            Command="{Binding PlayerBar.OpenSettingsCommand}"
+                            ToolTip.Tip="Settings"
+                            AutomationProperties.Name="Settings">
+                        <controls:Icon Classes="cog" Data="{StaticResource Settings}" />
+                    </Button>
+                </StackPanel>
+            </Grid>
         </Grid>
     </Border>
 </UserControl>

@@ -59,6 +59,9 @@
     </LinearGradientBrush>
     <!-- Text and icons on an accent fill (the mockup's black on the accent). -->
     <SolidColorBrush x:Key="OnAccentBrush" Color="#000000" />
+    <!-- The HI-RES badge (mockup: .hires) and a refused typed value (mockup: .bad). -->
+    <SolidColorBrush x:Key="HiResBrush" Color="#D4B25A" />
+    <SolidColorBrush x:Key="InvalidBrush" Color="#E5484D" />
     <!-- The close window button while hovered (the platform convention). -->
     <SolidColorBrush x:Key="CloseHoverBrush" Color="#E81123" />
     <SolidColorBrush x:Key="CloseHoverInkBrush" Color="#FFFFFF" />

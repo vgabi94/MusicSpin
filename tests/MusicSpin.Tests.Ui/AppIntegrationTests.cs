@@ -33,7 +33,7 @@ public sealed class AppIntegrationTests
             "the app showing the track", timeoutMs: 1000);
 
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"took {clock.Elapsed}");
-        Assert.Equal("Miles Davis", Gui.Find<TextBlock>(app.Window, "PlayerArtist").Text);
+        Assert.Equal("Miles Davis · Kind of Blue", Gui.Find<TextBlock>(app.Window, "PlayerArtist").Text);
         await Gui.UntilAsync(() => app.ViewModel.PlayingAlbumId is not null, "the playing album found");
     }
 

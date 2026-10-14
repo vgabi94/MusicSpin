@@ -12,6 +12,40 @@
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 
+    <!-- A drag handle growing in on hover (mockup: scale .12s). -->
+    <sys:TimeSpan x:Key="HandleDuration">0:0:0.12</sys:TimeSpan>
+
+    <!-- Played by theming:Animate.Play; "<Key>.Duration" is the base duration (Motion scales it). -->
+    <!-- A refused typed value (mockup: @keyframes vbad, .3s). -->
+    <sys:TimeSpan x:Key="ShakeAnimation.Duration">0:0:0.3</sys:TimeSpan>
+    <Animation x:Key="ShakeAnimation" x:SetterTargetType="Visual" Duration="0:0:0.3">
+        <KeyFrame Cue="0%">
+            <Setter Property="RenderTransform" Value="translateX(0px)" />
+        </KeyFrame>
+        <KeyFrame Cue="25%">
+            <Setter Property="RenderTransform" Value="translateX(-3px)" />
+        </KeyFrame>
+        <KeyFrame Cue="75%">
+            <Setter Property="RenderTransform" Value="translateX(3px)" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+            <Setter Property="RenderTransform" Value="translateX(0px)" />
+        </KeyFrame>
+    </Animation>
+    <!-- The queue's count badge when something was added while the drawer is closed. -->
+    <sys:TimeSpan x:Key="PulseAnimation.Duration">0:0:0.4</sys:TimeSpan>
+    <Animation x:Key="PulseAnimation" x:SetterTargetType="Visual" Duration="0:0:0.4">
+        <KeyFrame Cue="0%">
+            <Setter Property="RenderTransform" Value="scale(1)" />
+        </KeyFrame>
+        <KeyFrame Cue="35%">
+            <Setter Property="RenderTransform" Value="scale(1.35)" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+            <Setter Property="RenderTransform" Value="scale(1)" />
+        </KeyFrame>
+    </Animation>
+
     <!-- cubic-bezier(.2,.8,.2,1): quick start, gentle settle. -->
     <SplineEasing x:Key="EaseOut" X1="0.2" Y1="0.8" X2="0.2" Y2="1" />
     <!-- cubic-bezier(.22,1,.36,1): ease-out quint, long gentle settle, no overshoot. -->

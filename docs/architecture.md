@@ -97,12 +97,16 @@ src/MusicSpin.App/
 ├── App.axaml              merges Styles/ (resources first, then one styles file per area)
 ├── AppHost.cs             data folder, settings and startup warning (shared rules with the CLI)
 ├── Composition/           AppServices + AppComposition: the one place that builds services and view models
-├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers, notices
-├── ViewModels/            MainWindow (shell), Sidebar, Player, pages (Albums, Tracks, playlists, Radio)
+├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers,
+│                          notices, the format label, typed values (seek and volume syntax)
+├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
+│                          layers (Now Playing, queue drawer), pages (Albums, Tracks, playlists, Radio)
 ├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, Pages/ — structure and bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
-├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection)
-├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), converters
+├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
+│                          ScrubBar (position and volume bars), SpectrumView, FollowPanel, TypedBox
+├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), Animate
+│                          (per-control transitions, animations played on a trigger), converters
 └── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes), Window,
                            Base, TitleBar, Sidebar, Content, Lists, PlayerBar, Artwork
 ```
@@ -121,7 +125,8 @@ src/MusicSpin.App/
   box gets the space. Esc closes the topmost open layer registered with `LayerRegistry` (menu, Settings, queue drawer,
   Now Playing, in that order).
 - **Player.** `PlayerViewModel` uses two connections: one for requests and polling, one for the `subscribe` event
-  stream. Every event triggers a `status` refresh, so the state follows the player whoever changed it. While playing,
+  stream (with `spectrum` levels for the analyzer). Every other event triggers a `status` refresh, so the state follows
+  the player whoever changed it. While playing,
   `status` is polled 4 times a second and the position is interpolated between polls. If the player goes away it
   reconnects every second. Closing the window pauses the music; a player the app started is also shut down (`quit`).
   Published builds are self-contained: `MusicSpin` starts the `music-spin` executable next to it. In a development
@@ -133,6 +138,15 @@ src/MusicSpin.App/
   asks for its cover only when it is first shown, and lists are virtualized.
 - **Spin clock.** One `SpinClock` drives every visible record of the playing album, at Settings › Speed (33⅓, 45 or
   16⅔ rpm), spinning up and down like a platter. It runs in every Motion mode; None only skips the ramp.
+- **Player bar.** `PlayerBarViewModel` holds the transport (⏮ restarts after 3 seconds), the format label and the
+  queue count; `PositionViewModel` and `VolumeViewModel` hold the bars and their text boxes. A `TypedField` is the
+  logic of a box you type a value into (the elapsed time takes `seek`'s syntax, shared with the CLI as Core's
+  `SeekSyntax`; the volume takes percents and the CLI's fractions); `TypedBox` connects it to a text box. `ScrubBar`
+  doesn't set its own value: it runs a command with the new one, so the player stays the only source of truth. Its
+  keys are its own key bindings, so on the focused bar they win over window shortcuts on the same keys. Mute is the
+  app's: the player plays at 0 and the app keeps the level.
+- **Analyzer.** `SpectrumViewModel` moves 16 bars and their peak dots on the app's clock while anything shows, and
+  stops the clock once everything has fallen, so an idle analyzer neither ticks nor draws.
 
 ### UI tests
 
@@ -142,9 +156,10 @@ OS). `Harness/` has:
 - `AppHarness`: the main window through `AppComposition` over a temporary data folder, a library scanned from fixture
   files, an in-process background player (`InProcessPlayer`, fake decoders, silent output) and a `FakeTimeProvider`;
 - `ScriptedPlayer`: a fake player on the real transport that answers `status`, records requests, pushes events and
-  fails commands on request (player view model tests);
+  fails commands on request (player view model tests, and the window with `AppOptions.Scripted`, where it also takes
+  over seeks and volume changes like a real player);
 - `Snapshots`: compares frames with approved baselines in `Snapshots/`, with a tolerance; on a mismatch it writes the
-  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines; `MUSICSPIN_UPDATE_SNAPSHOTS=1`
+  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines, and Linux has `name.linux.png` where its text smoothing shows (the player bar); `MUSICSPIN_UPDATE_SNAPSHOTS=1`
   rewrites the baselines, which are reviewed against the mockup before they're committed;
 - `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's headless animation clock is real
   time (a render tick only samples it), so this lets real time pass frame by frame.
