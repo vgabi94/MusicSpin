@@ -212,13 +212,6 @@ public sealed class PlayerBarTests
         Assert.False(app.ViewModel.NowPlaying.IsOpen);
     }
 
-    [AvaloniaFact]
-    public async Task Settings_is_not_there_yet()
-    {
-        await using var app = await OpenAsync();
-        Assert.False(Find<Button>(app, "SettingsButton").IsEffectivelyEnabled);
-    }
-
     // ---- position (#17) --------------------------------------------------------------------------------------
 
     [AvaloniaFact]
@@ -620,7 +613,7 @@ public sealed class PlayerBarTests
     public async Task The_analyzer_keeps_moving_at_Motion_None()
     {
         await using var app = await OpenAsync(Status(state: PlayerState.Playing));
-        app.ViewModel.SetMotion(MotionMode.None);
+        app.ViewModel.Settings.SetMotion(MotionMode.None);
         try
         {
             var analyzer = Find<SpectrumView>(app, "Analyzer");
@@ -632,7 +625,7 @@ public sealed class PlayerBarTests
         }
         finally
         {
-            app.ViewModel.SetMotion(MotionMode.Smooth);
+            app.ViewModel.Settings.SetMotion(MotionMode.Smooth);
         }
     }
 

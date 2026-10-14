@@ -19,6 +19,11 @@
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0DFFFFFF" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#1AFFFFFF" />
             <Color x:Key="CardShadowColor">#CC000000</Color>
+            <!-- The Classic deck's plinth (mockup: .deck, linear-gradient(160deg, …)). -->
+            <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
+                <GradientStop Color="#2A2C31" Offset="0" />
+                <GradientStop Color="#17181B" Offset="1" />
+            </LinearGradientBrush>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="BgBrush" Color="#F4F2EE" />
@@ -33,6 +38,10 @@
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0A000000" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#14000000" />
             <Color x:Key="CardShadowColor">#66000000</Color>
+            <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
+                <GradientStop Color="#F7F5F1" Offset="0" />
+                <GradientStop Color="#DCD8D0" Offset="1" />
+            </LinearGradientBrush>
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
@@ -65,4 +74,24 @@
     <!-- The close window button while hovered (the platform convention). -->
     <SolidColorBrush x:Key="CloseHoverBrush" Color="#E81123" />
     <SolidColorBrush x:Key="CloseHoverInkBrush" Color="#FFFFFF" />
+    <!-- Behind a dialog: a light dim, so what it changes stays visible (mockup: .dlg-back, #0006). -->
+    <SolidColorBrush x:Key="DialogBackdropBrush" Color="#66000000" />
+    <!-- The Classic deck's platter, its rim and the arm (mockup: .platter, .arm-base, .arm, .headshell). -->
+    <SolidColorBrush x:Key="DeckPlatterBrush" Color="#33363C" />
+    <SolidColorBrush x:Key="DeckPlatterRingBrush" Color="#66000000" />
+    <RadialGradientBrush x:Key="DeckArmBaseBrush">
+        <GradientStop Color="#D8D8D8" Offset="0.22" />
+        <GradientStop Color="#888888" Offset="0.24" />
+        <GradientStop Color="#888888" Offset="0.40" />
+        <GradientStop Color="#444444" Offset="0.42" />
+    </RadialGradientBrush>
+    <LinearGradientBrush x:Key="DeckArmBrush" StartPoint="0%,50%" EndPoint="100%,50%">
+        <GradientStop Color="#8D8D8D" Offset="0" />
+        <GradientStop Color="#EEEEEE" Offset="0.5" />
+        <GradientStop Color="#8D8D8D" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="DeckHeadshellBrush" StartPoint="0%,50%" EndPoint="100%,50%">
+        <GradientStop Color="#555555" Offset="0" />
+        <GradientStop Color="#AAAAAA" Offset="1" />
+    </LinearGradientBrush>
 </ResourceDictionary>

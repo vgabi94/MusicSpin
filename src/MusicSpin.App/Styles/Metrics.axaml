@@ -197,4 +197,74 @@
     <sys:Double x:Key="VinylLabelScale">0.35</sys:Double>
     <sys:Double x:Key="VinylHoleScale">0.032</sys:Double>
     <sys:Double x:Key="VinylGroovePitch">2.4</sys:Double>
+
+    <!-- Dialogs (mockup: .dlg, .dlg header, .qclose): 440 wide, 40 px from the window's top and bottom at most. -->
+    <sys:Double x:Key="DialogWidth">440</sys:Double>
+    <Thickness x:Key="DialogMargin">0,40</Thickness>
+    <Thickness x:Key="DialogPadding">22,8,22,22</Thickness>
+    <CornerRadius x:Key="DialogRadius">14</CornerRadius>
+    <Thickness x:Key="DialogBorderThickness">1</Thickness>
+    <Thickness x:Key="DialogHeaderMargin">0,0,-8,4</Thickness>
+    <Thickness x:Key="DialogTitleMargin">0,10</Thickness>
+    <sys:Double x:Key="DialogTitleFontSize">18</sys:Double>
+    <sys:Double x:Key="DialogCloseSize">28</sys:Double>
+    <CornerRadius x:Key="DialogCloseRadius">14</CornerRadius>
+    <sys:Double x:Key="DialogCloseIconSize">14</sys:Double>
+    <!-- The dialog rising in (mockup: @keyframes dlg-in: from 8 px lower, at 98%). -->
+    <sys:Double x:Key="DialogInOffset">8</sys:Double>
+
+    <!-- Settings (mockup: .dlg h3, .set-row, .seg, .range, output). -->
+    <Thickness x:Key="SettingsSectionMargin">0,18,0,4</Thickness>
+    <sys:Double x:Key="SettingsSectionFontSize">11</sys:Double>
+    <sys:Double x:Key="SettingsSectionLetterSpacing">0.9</sys:Double>
+    <sys:Double x:Key="SettingRowMinHeight">44</sys:Double>
+    <sys:Double x:Key="SettingRowGap">16</sys:Double>
+    <Thickness x:Key="SettingRowDivider">0,1,0,0</Thickness>
+    <Thickness x:Key="SettingRowTallPadding">0,10</Thickness>
+    <sys:Double x:Key="SettingNoteFontSize">11.5</sys:Double>
+    <Thickness x:Key="SettingNoteMargin">0,1,0,0</Thickness>
+    <sys:Double x:Key="SettingSliderWidth">170</sys:Double>
+    <sys:Double x:Key="SettingSliderGap">10</sys:Double>
+    <sys:Double x:Key="SettingOutputWidth">30</sys:Double>
+    <Thickness x:Key="SegmentedBorderThickness">1</Thickness>
+    <Thickness x:Key="SegmentedPadding">3</Thickness>
+    <CornerRadius x:Key="SegmentedRadius">9</CornerRadius>
+    <!-- 12,5 in the mockup, less the 1 px border that shows keyboard focus. -->
+    <Thickness x:Key="SegmentPadding">11,4</Thickness>
+    <Thickness x:Key="SegmentBorderThickness">1</Thickness>
+    <CornerRadius x:Key="SegmentRadius">6</CornerRadius>
+    <sys:Double x:Key="SegmentFontSize">13</sys:Double>
+    <!-- Settings › Turntable › Design: a card per design, its preview over its name. -->
+    <sys:Double x:Key="DesignCardGap">8</sys:Double>
+    <Thickness x:Key="DesignCardPadding">6,6,6,5</Thickness>
+    <CornerRadius x:Key="DesignCardRadius">10</CornerRadius>
+    <Thickness x:Key="DesignCardBorderThickness">1</Thickness>
+    <Thickness x:Key="DesignCardSelectedThickness">2</Thickness>
+    <sys:Double x:Key="DesignCardSpacing">5</sys:Double>
+    <sys:Double x:Key="DesignNameFontSize">12</sys:Double>
+
+    <!--
+      The Classic deck's preview (mockup: .deck, .platter, .vinyl, .tonearm) at 88 x 72: the deck is 1.32 s x 1.08 s with
+      s = 66.7; the platter s at .04 s, the record .98 s at .05 s; the arm .14 s wide and .8 s long, .07 s from the
+      top right, parked at -4°.
+    -->
+    <sys:Double x:Key="DeckPreviewWidth">88</sys:Double>
+    <sys:Double x:Key="DeckPreviewHeight">72</sys:Double>
+    <CornerRadius x:Key="DeckPreviewRadius">6</CornerRadius>
+    <sys:Double x:Key="DeckPreviewPlatterSize">66.7</sys:Double>
+    <Thickness x:Key="DeckPreviewPlatterMargin">2.7,2.7,0,0</Thickness>
+    <sys:Double x:Key="DeckPreviewPlatterRing">1</sys:Double>
+    <sys:Double x:Key="DeckPreviewRecordSize">65.3</sys:Double>
+    <Thickness x:Key="DeckPreviewRecordMargin">3.3,3.3,0,0</Thickness>
+    <sys:Double x:Key="DeckPreviewGroovePitch">1.2</sys:Double>
+    <sys:Double x:Key="DeckPreviewArmWidth">9.3</sys:Double>
+    <sys:Double x:Key="DeckPreviewArmHeight">53.3</sys:Double>
+    <Thickness x:Key="DeckPreviewArmMargin">0,4.7,4.7,0</Thickness>
+    <sys:Double x:Key="DeckPreviewArmBaseSize">9.3</sys:Double>
+    <sys:Double x:Key="DeckPreviewTubeWidth">1.6</sys:Double>
+    <sys:Double x:Key="DeckPreviewTubeHeight">44</sys:Double>
+    <Thickness x:Key="DeckPreviewTubeMargin">0,4.7,0,0</Thickness>
+    <sys:Double x:Key="DeckPreviewHeadshellWidth">3.5</sys:Double>
+    <sys:Double x:Key="DeckPreviewHeadshellHeight">6.7</sys:Double>
+    <Thickness x:Key="DeckPreviewHeadshellMargin">1,0,0,0</Thickness>
 </ResourceDictionary>

@@ -168,7 +168,8 @@
                     </Panel>
                     <Button Name="SettingsButton"
                             Classes="round"
-                            Command="{Binding PlayerBar.OpenSettingsCommand}"
+                            Classes.on="{Binding Settings.IsOpen}"
+                            Command="{Binding Settings.OpenCommand}"
                             ToolTip.Tip="Settings"
                             AutomationProperties.Name="Settings">
                         <controls:Icon Classes="cog" Data="{StaticResource Settings}" />

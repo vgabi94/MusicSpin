@@ -12,6 +12,10 @@ public abstract partial class LayerViewModel : ObservableObject, ILayer
     [ObservableProperty]
     public partial bool IsOpen { get; private set; }
 
+    /// <summary>How many times it opened (views play their opening animation on each).</summary>
+    [ObservableProperty]
+    public partial int Opens { get; private set; }
+
     [RelayCommand]
     public void Open() => IsOpen = true;
 
@@ -20,6 +24,14 @@ public abstract partial class LayerViewModel : ObservableObject, ILayer
 
     [RelayCommand]
     public void Toggle() => IsOpen = !IsOpen;
+
+    partial void OnIsOpenChanged(bool value)
+    {
+        if (value)
+        {
+            Opens++;
+        }
+    }
 }
 
 /// <summary>The Now Playing overlay (opened from the player bar's cover; the overlay itself comes with Now Playing).</summary>
