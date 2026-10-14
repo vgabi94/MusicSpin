@@ -1,0 +1,122 @@
+<!--
+  Sizes, spacing, radii and font sizes, named by role (docs/design/mockup/styles.css). They don't change with the theme,
+  so views may use StaticResource.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!-- The window grid: title bar, sidebar | content, player bar. -->
+    <GridLength x:Key="TitleBarHeight">44</GridLength>
+    <sys:Double x:Key="TitleBarHeightValue">44</sys:Double>
+    <GridLength x:Key="SidebarWidth">220</GridLength>
+    <GridLength x:Key="PlayerBarHeight">84</GridLength>
+    <sys:Double x:Key="WindowWidth">1440</sys:Double>
+    <sys:Double x:Key="WindowHeight">880</sys:Double>
+    <sys:Double x:Key="WindowMinWidth">1280</sys:Double>
+    <sys:Double x:Key="WindowMinHeight">720</sys:Double>
+    <Thickness x:Key="HairlineBottom">0,0,0,1</Thickness>
+    <Thickness x:Key="HairlineRight">0,0,1,0</Thickness>
+    <Thickness x:Key="HairlineTop">0,1,0,0</Thickness>
+    <Thickness x:Key="Hairline">1</Thickness>
+
+    <!-- Title bar -->
+    <Thickness x:Key="TitleBarPadding">16,0,0,0</Thickness>
+    <Thickness x:Key="MacTitleBarPadding">78,0,0,0</Thickness>
+    <sys:Double x:Key="TitleBarGap">16</sys:Double>
+    <sys:Double x:Key="BrandWidth">188</sys:Double>
+    <sys:Double x:Key="BrandGap">8</sys:Double>
+    <sys:Double x:Key="BrandDiscSize">18</sys:Double>
+    <!-- The accent centre of the brand disc: the inner 28% of its radius, plus the dark ring around it. -->
+    <sys:Double x:Key="BrandLabelSize">9</sys:Double>
+    <sys:Double x:Key="BrandLabelInnerSize">7</sys:Double>
+    <sys:Double x:Key="BrandFontSize">14</sys:Double>
+    <sys:Double x:Key="SearchMaxWidth">420</sys:Double>
+    <Thickness x:Key="SearchPadding">10,5</Thickness>
+    <CornerRadius x:Key="SearchRadius">8</CornerRadius>
+    <sys:Double x:Key="SearchFontSize">13</sys:Double>
+    <sys:Double x:Key="SearchIconSize">14</sys:Double>
+    <sys:Double x:Key="SearchGap">8</sys:Double>
+    <!-- Room left for the system window buttons: on the right on Windows and Linux; on macOS they are on the left
+         (MacTitleBarPadding). -->
+    <sys:Double x:Key="CaptionButtonsWidth">138</sys:Double>
+    <!-- The system buttons we draw (Windows, Linux; mockup: .winctl i): 3 x 46 = CaptionButtonsWidth. -->
+    <sys:Double x:Key="CaptionButtonWidth">46</sys:Double>
+    <sys:Double x:Key="CaptionIconSize">10</sys:Double>
+    <Thickness x:Key="WindowFrameThickness">1</Thickness>
+    <Thickness x:Key="WindowShadowThickness">8</Thickness>
+
+    <!-- Sidebar -->
+    <Thickness x:Key="SidebarPadding">10,12</Thickness>
+    <sys:Double x:Key="NavFontSize">13.5</sys:Double>
+    <sys:Double x:Key="NavHeaderFontSize">11</sys:Double>
+    <sys:Double x:Key="NavHeaderLetterSpacing">0.9</sys:Double>
+    <Thickness x:Key="NavHeaderMargin">10,14,10,6</Thickness>
+    <Thickness x:Key="NavItemPadding">10,7</Thickness>
+    <CornerRadius x:Key="NavItemRadius">7</CornerRadius>
+    <sys:Double x:Key="NavIconSize">14</sys:Double>
+    <sys:Double x:Key="NavIconGap">8</sys:Double>
+
+    <!-- Content -->
+    <Thickness x:Key="ToolbarPadding">28,18,28,10</Thickness>
+    <sys:Double x:Key="ToolbarGap">18</sys:Double>
+    <sys:Double x:Key="PageTitleFontSize">22</sys:Double>
+    <sys:Double x:Key="PageCountFontSize">13</sys:Double>
+    <Thickness x:Key="PageCountMargin">6,0,0,3</Thickness>
+    <Thickness x:Key="ViewPadding">28,8,28,40</Thickness>
+    <sys:Double x:Key="BodyFontSize">13.5</sys:Double>
+    <sys:Double x:Key="SmallFontSize">12.5</sys:Double>
+    <sys:Double x:Key="EmptyFontSize">14</sys:Double>
+    <Thickness x:Key="EmptyMargin">0,40</Thickness>
+    <Thickness x:Key="BannerPadding">28,8</Thickness>
+    <sys:Double x:Key="BannerGap">12</sys:Double>
+    <CornerRadius x:Key="ButtonRadius">7</CornerRadius>
+    <Thickness x:Key="ButtonPadding">12,6</Thickness>
+    <sys:Double x:Key="ButtonFontSize">13</sys:Double>
+
+    <!-- Rows in lists (albums and tracks) -->
+    <sys:Double x:Key="RowHeight">48</sys:Double>
+    <sys:Double x:Key="RowThumbSize">36</sys:Double>
+    <Thickness x:Key="RowPadding">10,5</Thickness>
+    <CornerRadius x:Key="RowRadius">7</CornerRadius>
+    <sys:Double x:Key="RowGap">14</sys:Double>
+    <GridLength x:Key="RowThumbColumn">36</GridLength>
+    <GridLength x:Key="RowNumberColumn">36</GridLength>
+    <GridLength x:Key="RowDurationColumn">52</GridLength>
+    <GridLength x:Key="RowSleeveColumn">52</GridLength>
+    <sys:Double x:Key="RowSleeveWidth">52</sys:Double>
+    <sys:Double x:Key="RowVinylSize">32</sys:Double>
+    <Thickness x:Key="RowVinylMargin">2,2,0,0</Thickness>
+    <sys:Double x:Key="RowSecondaryFontSize">12</sys:Double>
+    <Thickness x:Key="RowListGapMargin">0,0,0,1</Thickness>
+
+    <!-- Player bar -->
+    <Thickness x:Key="PlayerBarPadding">18,0</Thickness>
+    <sys:Double x:Key="PlayerBarGap">16</sys:Double>
+    <sys:Double x:Key="MiniWidth">84</sys:Double>
+    <sys:Double x:Key="MiniHeight">58</sys:Double>
+    <sys:Double x:Key="MiniCoverSize">58</sys:Double>
+    <sys:Double x:Key="MiniVinylSize">52</sys:Double>
+    <Thickness x:Key="MiniVinylMargin">4,3,0,0</Thickness>
+    <sys:Double x:Key="PlayerTitleFontSize">14</sys:Double>
+    <sys:Double x:Key="PlayerArtistFontSize">12.5</sys:Double>
+    <sys:Double x:Key="TransportGap">14</sys:Double>
+    <sys:Double x:Key="TransportIconSize">13</sys:Double>
+    <sys:Double x:Key="PlayButtonSize">38</sys:Double>
+    <sys:Double x:Key="PlayIconSize">12</sys:Double>
+    <CornerRadius x:Key="PlayButtonRadius">19</CornerRadius>
+    <sys:Double x:Key="BannerIconSize">12</sys:Double>
+    <sys:Double x:Key="RadioGap">14</sys:Double>
+
+    <!-- Covers and records -->
+    <CornerRadius x:Key="CoverRadius">4</CornerRadius>
+    <sys:Double x:Key="CoverShadowBlur">24</sys:Double>
+    <sys:Double x:Key="CoverShadowOffsetY">10</sys:Double>
+    <!-- Placeholder title as a share of the cover's width (the mockup's 9cqw), and its smallest size. -->
+    <sys:Double x:Key="PlaceholderTitleScale">0.09</sys:Double>
+    <sys:Double x:Key="PlaceholderMinFontSize">6</sys:Double>
+    <sys:Double x:Key="PlaceholderMaxFontSize">15</sys:Double>
+    <!-- The record: label = inner 35%, hole = 3.2%, grooves every 2.4 px. -->
+    <sys:Double x:Key="VinylLabelScale">0.35</sys:Double>
+    <sys:Double x:Key="VinylHoleScale">0.032</sys:Double>
+    <sys:Double x:Key="VinylGroovePitch">2.4</sys:Double>
+</ResourceDictionary>

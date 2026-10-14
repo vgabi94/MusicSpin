@@ -1,9 +1,33 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MusicSpin.App.App"
-             RequestedThemeVariant="Default">
-    <!-- Avalonia's default theme, required to render anything. Real styling comes with the UI design. -->
+             RequestedThemeVariant="Dark">
+    <!--
+      Every value a view uses comes from Styles/: tokens (colours per theme), metrics, motion, icons, fonts, and one
+      styles file per area. See docs/architecture.md, "Desktop app".
+    -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://MusicSpin/Styles/Tokens.axaml" />
+                <ResourceInclude Source="avares://MusicSpin/Styles/Metrics.axaml" />
+                <ResourceInclude Source="avares://MusicSpin/Styles/Motion.axaml" />
+                <ResourceInclude Source="avares://MusicSpin/Icons/IconsResource.axaml" />
+                <ResourceInclude Source="avares://MusicSpin/Styles/Fonts.axaml" />
+                <ResourceInclude Source="avares://MusicSpin/Styles/Controls.axaml" />
+                <ResourceInclude Source="avares://MusicSpin/Styles/Window.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://MusicSpin/Styles/Base.axaml" />
+        <StyleInclude Source="avares://MusicSpin/Styles/TitleBar.axaml" />
+        <StyleInclude Source="avares://MusicSpin/Styles/Sidebar.axaml" />
+        <!-- Later styles win (Avalonia has no selector specificity): shared looks first, then the areas that adjust them. -->
+        <StyleInclude Source="avares://MusicSpin/Styles/Artwork.axaml" />
+        <StyleInclude Source="avares://MusicSpin/Styles/Content.axaml" />
+        <StyleInclude Source="avares://MusicSpin/Styles/Lists.axaml" />
+        <StyleInclude Source="avares://MusicSpin/Styles/PlayerBar.axaml" />
     </Application.Styles>
 </Application>

@@ -1,0 +1,37 @@
+<!-- The sidebar (mockup: .sidebar): Library (Albums, Tracks, Radio), then the saved playlists. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:theming="using:MusicSpin.App.Theming"
+             x:Class="MusicSpin.App.Views.SidebarView"
+             x:DataType="vm:SidebarViewModel">
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="vm:NavItemViewModel">
+            <Button Classes="nav"
+                    Classes.active="{Binding IsActive}"
+                    Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).NavigateCommand}"
+                    CommandParameter="{Binding}"
+                    AutomationProperties.Name="{Binding Title}">
+                <StackPanel>
+                    <controls:Icon Data="{Binding Icon, Converter={x:Static theming:IconConverters.Geometry}}"
+                                   IsStroked="{Binding Icon, Converter={x:Static theming:IconConverters.IsStroked}}" />
+                    <TextBlock Text="{Binding Title}" />
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Border Classes="sidebar">
+        <ScrollViewer>
+            <StackPanel>
+                <TextBlock Classes="navHeader" Text="LIBRARY" />
+                <ItemsControl Name="LibraryItems" ItemsSource="{Binding Library}" />
+                <TextBlock Classes="navHeader"
+                           Text="PLAYLISTS"
+                           IsVisible="{Binding !!Playlists.Count}" />
+                <ItemsControl Name="PlaylistItems" ItemsSource="{Binding Playlists}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>

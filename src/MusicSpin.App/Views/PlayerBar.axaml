@@ -1,0 +1,37 @@
+<!--
+  The player bar (mockup: .player): the playing album's sleeve with its record, the title and artist, and the transport.
+  Progress, volume, the analyzer and the badges come with the player bar issue.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             x:Class="MusicSpin.App.Views.PlayerBar"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="playerBar">
+        <Grid ColumnDefinitions="Auto,1.2*,0.85*,1.2*">
+            <Panel Name="Mini" Classes="sleeve mini" Classes.playing="{Binding Player.IsPlaying}">
+                <controls:VinylView Name="MiniVinyl" Label="{Binding PlayingCover}" Angle="{Binding SpinClock.Angle}" />
+                <controls:CoverView Name="MiniCover" Source="{Binding PlayingCover}" Title="{Binding Player.Album}" Artist="{Binding PlayerArtist}" />
+            </Panel>
+            <StackPanel Grid.Column="1" Classes="meta">
+                <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" />
+                <TextBlock Name="PlayerArtist" Classes="playerArtist trim" Text="{Binding PlayerArtist}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Classes="transport">
+                <Button Name="Previous" Command="{Binding Player.PreviousCommand}" ToolTip.Tip="Previous" AutomationProperties.Name="Previous">
+                    <controls:Icon Data="{StaticResource Previous}" />
+                </Button>
+                <Button Name="PlayPause" Classes="play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play/pause (Space)" AutomationProperties.Name="Play or pause">
+                    <Panel>
+                        <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !Player.IsPlaying}" />
+                        <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
+                    </Panel>
+                </Button>
+                <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next" AutomationProperties.Name="Next">
+                    <controls:Icon Data="{StaticResource Next}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

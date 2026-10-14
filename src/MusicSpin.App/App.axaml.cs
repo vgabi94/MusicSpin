@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using MusicSpin.App.Composition;
+using MusicSpin.App.ViewModels;
 
 namespace MusicSpin.App;
 
@@ -12,7 +14,10 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow();
+            var services = AppComposition.CreateServices(this, AppHost.DataDirectory, AppHost.StartupWarning);
+            var window = AppComposition.CreateMainWindow(services);
+            desktop.MainWindow = window;
+            _ = ((MainWindowViewModel)window.DataContext!).InitializeAsync();
         }
 
         base.OnFrameworkInitializationCompleted();

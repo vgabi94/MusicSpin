@@ -73,6 +73,14 @@ jobs:
           path: coverage/*.cobertura.xml
           if-no-files-found: warn
 
+      # UI snapshot mismatches: the actual image and a diff per failed snapshot (tests/MusicSpin.Tests.Ui, Harness/Snapshots.cs).
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: ui-snapshot-failures-${{ matrix.os }}
+          path: tests/MusicSpin.Tests.Ui/bin/Release/*/SnapshotFailures/
+          if-no-files-found: ignore
+
       # Exit 6 = FFmpeg missing: the FFmpeg-backed tests above were skipped, so the job fails here.
       - name: CLI smoke test (FFmpeg found)
         shell: bash

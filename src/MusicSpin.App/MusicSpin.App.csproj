@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Bare Avalonia 12 shell. The UI design is intentionally not decided yet:
-    no controls, view models or styling beyond the default Fluent theme Avalonia needs to render.
+    The Music Spin desktop app (Avalonia 12). Structure: docs/architecture.md, "Desktop app".
+    Styles/ holds every value a view uses; ViewModels/ hold the state and logic; Services/ talk to Core.
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -15,7 +15,9 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
   </ItemGroup>
 
   <ItemGroup>

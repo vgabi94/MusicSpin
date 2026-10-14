@@ -17,5 +17,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="MusicSpin.Tests" />
     <InternalsVisibleTo Include="MusicSpin.Tests.Cli" />
+    <InternalsVisibleTo Include="MusicSpin.Tests.Ui" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,82 @@
+<!--
+  The player bar (mockup: .player, .mini, .meta, .buttons, .playbtn). The rest of its contents (progress, volume,
+  analyzer, badges) comes with the player bar issue.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls">
+    <Style Selector="Border.playerBar">
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource HairlineTop}" />
+        <Setter Property="Padding" Value="{StaticResource PlayerBarPadding}" />
+    </Style>
+    <Style Selector="Border.playerBar > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource PlayerBarGap}" />
+    </Style>
+
+    <!-- The playing album's sleeve; its record slides out while playing (Styles/Artwork.axaml, Panel.sleeve). -->
+    <Style Selector="Panel.mini">
+        <Setter Property="Width" Value="{StaticResource MiniWidth}" />
+        <Setter Property="Height" Value="{StaticResource MiniHeight}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Panel.mini > controls|CoverView">
+        <Setter Property="Width" Value="{StaticResource MiniCoverSize}" />
+        <Setter Property="Height" Value="{StaticResource MiniCoverSize}" />
+    </Style>
+    <Style Selector="Panel.mini > controls|VinylView">
+        <Setter Property="Width" Value="{StaticResource MiniVinylSize}" />
+        <Setter Property="Height" Value="{StaticResource MiniVinylSize}" />
+        <Setter Property="Margin" Value="{StaticResource MiniVinylMargin}" />
+    </Style>
+    <!-- mockup: .playing-state .mini-vinyl { translate: 22px 0 } -->
+    <Style Selector="Panel.mini.playing > controls|VinylView">
+        <Setter Property="RenderTransform" Value="translateX(22px)" />
+    </Style>
+
+    <Style Selector="StackPanel.meta">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.playerTitle">
+        <Setter Property="FontSize" Value="{StaticResource PlayerTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+    </Style>
+    <Style Selector="TextBlock.playerArtist">
+        <Setter Property="FontSize" Value="{StaticResource PlayerArtistFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+
+    <Style Selector="StackPanel.transport">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource TransportGap}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.transport > Button">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.transport > Button:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="StackPanel.transport controls|Icon">
+        <Setter Property="Width" Value="{StaticResource TransportIconSize}" />
+        <Setter Property="Height" Value="{StaticResource TransportIconSize}" />
+    </Style>
+    <Style Selector="StackPanel.transport > Button.play">
+        <Setter Property="Width" Value="{StaticResource PlayButtonSize}" />
+        <Setter Property="Height" Value="{StaticResource PlayButtonSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource PlayButtonRadius}" />
+        <Setter Property="Background" Value="{DynamicResource FgBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource BgBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.transport > Button.play:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource BgBrush}" />
+    </Style>
+    <Style Selector="StackPanel.transport > Button.play controls|Icon">
+        <Setter Property="Width" Value="{StaticResource PlayIconSize}" />
+        <Setter Property="Height" Value="{StaticResource PlayIconSize}" />
+    </Style>
+</Styles>

@@ -1,0 +1,93 @@
+<!--
+  The window (mockup: .window): title bar, sidebar | content, player bar. Sizes and looks are in Styles/; this file is
+  structure and bindings only (tests/MusicSpin.Tests.Ui guards that).
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MusicSpin.App.ViewModels"
+        xmlns:views="using:MusicSpin.App.Views"
+        xmlns:pages="using:MusicSpin.App.Views.Pages"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        x:Class="MusicSpin.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Classes="shell"
+        Title="Music Spin">
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding EscapeCommand}" />
+        <KeyBinding Gesture="Space" Command="{Binding SpaceCommand}" />
+    </Window.KeyBindings>
+
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:AlbumsPageViewModel">
+            <pages:AlbumsPage />
+        </DataTemplate>
+        <DataTemplate DataType="vm:TrackListPageViewModel">
+            <pages:TracksPage />
+        </DataTemplate>
+        <DataTemplate DataType="vm:RadioPageViewModel">
+            <pages:RadioPage />
+        </DataTemplate>
+    </Window.DataTemplates>
+
+    <Grid Name="ShellGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="{StaticResource TitleBarHeight}" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="{StaticResource PlayerBarHeight}" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="{StaticResource SidebarWidth}" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <views:TitleBar Name="TitleBarView" Grid.ColumnSpan="2" />
+
+        <views:SidebarView Name="SidebarView" Grid.Row="1" DataContext="{Binding Sidebar}" />
+
+        <DockPanel Name="ContentArea" Grid.Row="1" Grid.Column="1">
+            <Border Name="Banner"
+                    Classes="banner"
+                    DockPanel.Dock="Top"
+                    IsVisible="{Binding Banner, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Name="BannerText" Text="{Binding Banner}" />
+                    <Button Name="DismissBanner"
+                            Grid.Column="1"
+                            Command="{Binding DismissBannerCommand}"
+                            ToolTip.Tip="Dismiss"
+                            AutomationProperties.Name="Dismiss">
+                        <controls:Icon Data="{StaticResource Close}" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Grid Name="Toolbar" Classes="toolbar" DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+                <StackPanel Classes="pageHeading">
+                    <TextBlock Name="PageTitle" Classes="pageTitle" Text="{Binding CurrentPage.Title}" />
+                    <TextBlock Name="PageCount" Classes="pageCount" Text="{Binding CurrentPage.CountText}" />
+                </StackPanel>
+                <!-- Page-specific controls: the first template that fits the page; others show nothing. -->
+                <ContentControl Name="PageActions" Grid.Column="1" Content="{Binding CurrentPage}">
+                    <ContentControl.DataTemplates>
+                        <DataTemplate DataType="vm:TrackListPageViewModel">
+                            <Button Name="PlayAll" Classes="accent" Content="Play all" Command="{Binding PlayAllCommand}" />
+                        </DataTemplate>
+                        <DataTemplate DataType="vm:PageViewModel">
+                            <Panel />
+                        </DataTemplate>
+                    </ContentControl.DataTemplates>
+                </ContentControl>
+            </Grid>
+
+            <Panel>
+                <ContentControl Name="Page" Content="{Binding CurrentPage}" />
+                <TextBlock Name="EmptyText"
+                           Classes="empty"
+                           Text="{Binding CurrentPage.EmptyText}"
+                           IsVisible="{Binding CurrentPage.EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </Panel>
+        </DockPanel>
+
+        <views:PlayerBar Name="PlayerBarView" Grid.Row="2" Grid.ColumnSpan="2" />
+    </Grid>
+</Window>

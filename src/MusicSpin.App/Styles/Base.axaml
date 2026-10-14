@@ -1,0 +1,34 @@
+<!--
+  The window and the defaults every area shares: colours, font, the plain button theme, icons, text helpers.
+  Values come from Tokens, Metrics, Motion and Fonts; areas have their own styles files.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls">
+    <Style Selector="Window.shell">
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="Width" Value="{StaticResource WindowWidth}" />
+        <Setter Property="Height" Value="{StaticResource WindowHeight}" />
+        <Setter Property="MinWidth" Value="{StaticResource WindowMinWidth}" />
+        <Setter Property="MinHeight" Value="{StaticResource WindowMinHeight}" />
+        <Setter Property="ExtendClientAreaToDecorationsHint" Value="True" />
+        <Setter Property="ExtendClientAreaTitleBarHeightHint" Value="{StaticResource TitleBarHeightValue}" />
+        <!-- Our own system buttons, without the default title text and fullscreen button (Styles/Window.axaml). -->
+        <Setter Property="WindowDecorationsTheme" Value="{StaticResource ShellDecorations}" />
+    </Style>
+
+    <Style Selector="controls|Icon.stroke">
+        <Setter Property="IsStroked" Value="True" />
+    </Style>
+
+    <Style Selector="TextBlock.secondary">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="TextBlock.trim">
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+</Styles>

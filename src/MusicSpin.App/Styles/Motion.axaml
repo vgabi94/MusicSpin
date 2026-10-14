@@ -1,0 +1,19 @@
+<!--
+  Base animation durations (at Settings › Motion › Smooth) and easings. Views never use these directly: they go through
+  the {theming:Motion KeyName} markup extension, which multiplies them by the Motion setting (Theming/Motion.cs).
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!-- Hover feedback on navigation and list rows. -->
+    <sys:TimeSpan x:Key="HoverDuration">0:0:0.2</sys:TimeSpan>
+    <!-- The mini record sliding out of its sleeve in the player bar (mockup: .mini-vinyl, 0.5s). -->
+    <sys:TimeSpan x:Key="MiniVinylDuration">0:0:0.5</sys:TimeSpan>
+    <!-- A notice fading in. -->
+    <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
+
+    <!-- cubic-bezier(.2,.8,.2,1): quick start, gentle settle. -->
+    <SplineEasing x:Key="EaseOut" X1="0.2" Y1="0.8" X2="0.2" Y2="1" />
+    <!-- cubic-bezier(.22,1,.36,1): ease-out quint, long gentle settle, no overshoot. -->
+    <SplineEasing x:Key="EaseSoft" X1="0.22" Y1="1" X2="0.36" Y2="1" />
+</ResourceDictionary>
