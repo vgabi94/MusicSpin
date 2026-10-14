@@ -57,6 +57,9 @@ public sealed record AppSettings
     /// <summary>How fast the records in the app turn: 33.333, 45 or 16.667 rpm.</summary>
     public double RecordSpeedRpm { get; init; } = 33.333;
 
+    /// <summary>The turntable design in Now Playing: "classic" (the default) or another design's id.</summary>
+    public string TurntableDesign { get; init; } = "classic";
+
     /// <summary>The album shelf's tilt in degrees (20..80).</summary>
     public double ShelfTilt { get; init; } = 58;
 
