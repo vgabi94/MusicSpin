@@ -167,7 +167,7 @@ OS). `Harness/` has:
   fails commands on request (player view model tests, and the window with `AppOptions.Scripted`, where it also takes
   over seeks and volume changes like a real player);
 - `Snapshots`: compares frames with approved baselines in `Snapshots/`, with a tolerance; on a mismatch it writes the
-  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines, and Linux has `name.linux.png` where its text smoothing shows (the player bar); `MUSICSPIN_UPDATE_SNAPSHOTS=1`
+  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines, and Linux has `name.linux.png` where its text smoothing shows (the player bar, Settings in dark); `MUSICSPIN_UPDATE_SNAPSHOTS=1`
   rewrites the baselines, which are reviewed against the mockup before they're committed;
 - `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's headless animation clock is real
   time (a render tick only samples it), so this lets real time pass frame by frame.
