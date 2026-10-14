@@ -1,11 +1,13 @@
 <!--
   Control themes shared by every area: a plain button (no Fluent chrome; areas style it with classes), the bar you drag,
-  the box you type a value into, and the search text box. Merged into the application resources.
+  the box you type a value into, the search text box, a segmented control and a list of cards. Merged into the
+  application resources.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="using:MusicSpin.App.Controls"
-                    xmlns:theming="using:MusicSpin.App.Theming">
+                    xmlns:theming="using:MusicSpin.App.Theming"
+                    xmlns:vm="using:MusicSpin.App.ViewModels">
     <!-- The default look of every Button (no Fluent chrome); areas style it with classes. Being the implicit theme, it
          never overrides a theme set on purpose, like the window buttons in Window.axaml. -->
     <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
@@ -161,6 +163,148 @@
         <Style Selector="^.invalid">
             <Setter Property="BorderBrush" Value="{StaticResource InvalidBrush}" />
         </Style>
+    </ControlTheme>
+
+    <!-- One option of a segmented control (mockup: .seg button): Fg2, or raised on Bg3 when chosen. -->
+    <ControlTheme x:Key="SegmentedItem" TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="{StaticResource SegmentBorderThickness}" />
+        <Setter Property="CornerRadius" Value="{StaticResource SegmentRadius}" />
+        <Setter Property="Padding" Value="{StaticResource SegmentPadding}" />
+        <Setter Property="FontSize" Value="{StaticResource SegmentFontSize}" />
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="AutomationProperties.Name" Value="{ReflectionBinding Label}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Segment"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Name="PART_ContentPresenter"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:selected">
+            <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^:selected /template/ Border#PART_Segment">
+            <Setter Property="BoxShadow" Value="0 1 2 0 #55000000" />
+        </Style>
+        <Style Selector="^:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </ControlTheme>
+
+    <!-- A segmented control (mockup: .seg): a ListBox of Choice records, one always chosen; arrows move the choice. -->
+    <ControlTheme x:Key="Segmented" TargetType="ListBox">
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource SegmentedBorderThickness}" />
+        <Setter Property="CornerRadius" Value="{StaticResource SegmentedRadius}" />
+        <Setter Property="Padding" Value="{StaticResource SegmentedPadding}" />
+        <Setter Property="SelectionMode" Value="Single,AlwaysSelected" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="ItemContainerTheme" Value="{StaticResource SegmentedItem}" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="ItemTemplate">
+            <DataTemplate x:DataType="vm:Choice">
+                <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        Padding="{TemplateBinding Padding}">
+                    <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!-- A card in a row of pictures to choose from (Settings › Turntable › Design): an accent ring when chosen. -->
+    <ControlTheme x:Key="CardItem" TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource DesignCardBorderThickness}" />
+        <Setter Property="CornerRadius" Value="{StaticResource DesignCardRadius}" />
+        <Setter Property="Padding" Value="{StaticResource DesignCardPadding}" />
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="AutomationProperties.Name" Value="{ReflectionBinding Name}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel>
+                    <Border Name="PART_FocusRing"
+                            Margin="{StaticResource FocusRingMargin}"
+                            BorderThickness="{StaticResource FocusRingThickness}"
+                            BorderBrush="{DynamicResource AccentBrush}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            IsVisible="False" />
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </Border>
+                    <Border Name="PART_Chosen"
+                            BorderThickness="{StaticResource DesignCardSelectedThickness}"
+                            BorderBrush="{DynamicResource AccentBrush}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            IsVisible="False" />
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="{DynamicResource RowHoverBrush}" />
+        </Style>
+        <Style Selector="^:selected">
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^:selected /template/ Border#PART_Chosen">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="^:focus-visible /template/ Border#PART_FocusRing">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+    </ControlTheme>
+
+    <!-- Cards in a row that wraps, one always chosen. -->
+    <ControlTheme x:Key="Cards" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="SelectionMode" Value="Single,AlwaysSelected" />
+        <Setter Property="ItemContainerTheme" Value="{StaticResource CardItem}" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <WrapPanel ItemSpacing="{StaticResource DesignCardGap}" LineSpacing="{StaticResource DesignCardGap}" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}">
+                    <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
     </ControlTheme>
 
     <ControlTheme x:Key="SearchBox" TargetType="TextBox">

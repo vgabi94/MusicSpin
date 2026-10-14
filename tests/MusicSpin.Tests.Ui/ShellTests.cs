@@ -195,14 +195,14 @@ public sealed class ShellTests
         var sidebar = Gui.All<Border>(window).Single(b => b.Classes.Contains("sidebar")); // no transitions on these brushes
         var dark = (Color(window.Background), Color(sidebar.BorderBrush), Color(Gui.Find<TextBlock>(window, "PageTitle").Foreground));
 
-        app.ViewModel.SetTheme(AppTheme.Light);
+        app.ViewModel.Settings.SetTheme(AppTheme.Light);
         Gui.Settle();
 
         Assert.Equal((Rgb(0x0E0F12), Argb(0x12FFFFFF), Rgb(0xEEF0F4)), dark);
         Assert.Equal((Rgb(0xF4F2EE), Argb(0x14000000), Rgb(0x1B1C1F)),
             (Color(window.Background), Color(sidebar.BorderBrush), Color(Gui.Find<TextBlock>(window, "PageTitle").Foreground)));
 
-        app.ViewModel.SetTheme(AppTheme.Dark);
+        app.ViewModel.Settings.SetTheme(AppTheme.Dark);
         Gui.Settle();
         Assert.Equal(dark, (Color(window.Background), Color(sidebar.BorderBrush), Color(Gui.Find<TextBlock>(window, "PageTitle").Foreground)));
     }
@@ -214,7 +214,7 @@ public sealed class ShellTests
     public async Task The_motion_setting_scales_animations(MotionMode motion, double seconds)
     {
         await using var app = await AppHarness.OpenAsync();
-        app.ViewModel.SetMotion(motion);
+        app.ViewModel.Settings.SetMotion(motion);
         var transition = new DoubleTransition { Property = Visual.OpacityProperty };
         transition.Bind(TransitionBase.DurationProperty, (Avalonia.Data.BindingBase)new MotionExtension("HoverDuration").ProvideValue(null!));
         var sample = new Border { Transitions = [transition] };
@@ -244,15 +244,15 @@ public sealed class ShellTests
         });
         var vm = app.ViewModel;
 
-        Assert.Equal(AppTheme.Light, vm.Theme);
+        Assert.Equal(AppTheme.Light, vm.Settings.Theme);
         Assert.Equal(Avalonia.Styling.ThemeVariant.Light, Application.Current!.RequestedThemeVariant);
-        Assert.Equal(MotionMode.Fast, vm.Motion);
+        Assert.Equal(MotionMode.Fast, vm.Settings.Motion);
         Assert.Equal(0.5, MotionScale.Current.Multiplier);
         Assert.Equal(45, vm.SpinClock.Rpm);
 
-        vm.SetTheme(AppTheme.Dark);
-        vm.SetMotion(MotionMode.None);
-        vm.SetRecordSpeed(16.667);
+        vm.Settings.SetTheme(AppTheme.Dark);
+        vm.Settings.SetMotion(MotionMode.None);
+        vm.Settings.SetRecordSpeed(16.667);
 
         var saved = new SettingsStore(app.Data).Load();
         Assert.Equal(("dark", "none", 16.667, 0.7), (saved.Theme, saved.Motion, saved.RecordSpeedRpm, saved.Volume));

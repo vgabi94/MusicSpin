@@ -143,14 +143,6 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ToggleQueue() => _queue.Toggle();
 
-    /// <summary>The cog. Settings is not there yet, so the button is disabled.</summary>
-    [RelayCommand(CanExecute = nameof(CanOpenSettings))]
-    private static void OpenSettings()
-    {
-    }
-
-    private static bool CanOpenSettings() => false;
-
     public void Dispose() => Spectrum.Dispose();
 
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)

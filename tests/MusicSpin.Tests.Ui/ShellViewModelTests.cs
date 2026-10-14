@@ -162,9 +162,9 @@ public sealed class ShellViewModelTests : IAsyncDisposable
         Assert.Equal((AppTheme.Light, MotionMode.None), (_appearance.Theme, _appearance.Motion));
         Assert.Equal((45.0, 0.0), (vm.SpinClock.Rpm, vm.SpinClock.MotionMultiplier));
 
-        vm.SetThemeCommand.Execute(AppTheme.Dark);
-        vm.SetMotionCommand.Execute(MotionMode.Fast);
-        vm.SetRecordSpeedCommand.Execute(16.667);
+        vm.Settings.SetThemeCommand.Execute(AppTheme.Dark);
+        vm.Settings.SetMotionCommand.Execute(MotionMode.Fast);
+        vm.Settings.SetRecordSpeedCommand.Execute(16.667);
 
         Assert.Equal((AppTheme.Dark, MotionMode.Fast), (_appearance.Theme, _appearance.Motion));
         Assert.Equal((16.667, 0.5), (vm.SpinClock.Rpm, vm.SpinClock.MotionMultiplier));
@@ -177,7 +177,7 @@ public sealed class ShellViewModelTests : IAsyncDisposable
     {
         var vm = await CreateAsync(new AppSettings { RecordSpeedRpm = 78 });
 
-        Assert.Equal(33.333, vm.RecordSpeed);
+        Assert.Equal(33.333, vm.Settings.RecordSpeed);
     }
 
     [Fact]

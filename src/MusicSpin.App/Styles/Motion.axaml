@@ -46,6 +46,19 @@
         </KeyFrame>
     </Animation>
 
+    <!-- A dialog opening (mockup: @keyframes dlg-in, .18s ease-out: from transparent, 8 px lower, at 98%). -->
+    <sys:TimeSpan x:Key="DialogInAnimation.Duration">0:0:0.18</sys:TimeSpan>
+    <Animation x:Key="DialogInAnimation" x:SetterTargetType="Visual" Duration="0:0:0.18" Easing="0,0,0.58,1">
+        <KeyFrame Cue="0%">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="RenderTransform" Value="translate(0px, 8px) scale(0.98)" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="RenderTransform" Value="translate(0px, 0px) scale(1)" />
+        </KeyFrame>
+    </Animation>
+
     <!-- cubic-bezier(.2,.8,.2,1): quick start, gentle settle. -->
     <SplineEasing x:Key="EaseOut" X1="0.2" Y1="0.8" X2="0.2" Y2="1" />
     <!-- cubic-bezier(.22,1,.36,1): ease-out quint, long gentle settle, no overshoot. -->

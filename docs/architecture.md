@@ -98,17 +98,19 @@ src/MusicSpin.App/
 ├── AppHost.cs             data folder, settings and startup warning (shared rules with the CLI)
 ├── Composition/           AppServices + AppComposition: the one place that builds services and view models
 ├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers,
-│                          notices, the format label, typed values (seek and volume syntax)
+│                          notices, the format label, typed values (seek and volume syntax), turntable designs
 ├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
-│                          layers (Now Playing, queue drawer), pages (Albums, Tracks, playlists, Radio)
-├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, Pages/ — structure and bindings only
+│                          layers (Settings, Now Playing, queue drawer), pages (Albums, Tracks, playlists, Radio)
+├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, Pages/ — structure and
+│                          bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
-│                          ScrubBar (position and volume bars), SpectrumView, FollowPanel, TypedBox
+│                          ScrubBar (the position, volume and Settings sliders), SpectrumView, FollowPanel, TypedBox
 ├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), Animate
 │                          (per-control transitions, animations played on a trigger), converters
-└── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes), Window,
-                           Base, TitleBar, Sidebar, Content, Lists, PlayerBar, Artwork
+└── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes: plain
+                           button, ScrubBar, TypedBox, segmented control, cards), Window,
+                           Base, TitleBar, Sidebar, Content, Lists, PlayerBar, Dialogs (and Settings), Artwork
 ```
 
 - **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
@@ -147,6 +149,12 @@ src/MusicSpin.App/
   app's: the player plays at 0 and the app keeps the level.
 - **Analyzer.** `SpectrumViewModel` moves 16 bars and their peak dots on the app's clock while anything shows, and
   stops the clock once everything has fallen, so an idle analyzer neither ticks nor draws.
+- **Settings.** `SettingsViewModel` is a layer: the cog opens it over a light dim, and ✕, Esc or a click on the dim
+  closes it. The window's shortcuts (Space, Ctrl+arrows) are off while it's open; Tab stays inside it, and closing it
+  gives the focus back. Every setting applies at once and is saved to `settings.json` (no Save button): the theme and
+  Motion through `IAppearance`, the speed and Motion to the spin clock; the turntable design, the shelf's tilt and depth
+  are properties Now Playing and the shelf read. Each design is a `DeckDesign` type (`DeckDesigns.All`), so its preview
+  in Settings, and later its deck, is picked by data template.
 
 ### UI tests
 
@@ -159,7 +167,7 @@ OS). `Harness/` has:
   fails commands on request (player view model tests, and the window with `AppOptions.Scripted`, where it also takes
   over seeks and volume changes like a real player);
 - `Snapshots`: compares frames with approved baselines in `Snapshots/`, with a tolerance; on a mismatch it writes the
-  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines, and Linux has `name.linux.png` where its text smoothing shows (the player bar); `MUSICSPIN_UPDATE_SNAPSHOTS=1`
+  actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines, and Linux has `name.linux.png` where its text smoothing shows (the player bar, Settings in dark); `MUSICSPIN_UPDATE_SNAPSHOTS=1`
   rewrites the baselines, which are reviewed against the mockup before they're committed;
 - `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's headless animation clock is real
   time (a render tick only samples it), so this lets real time pass frame by frame.

@@ -12,7 +12,7 @@ namespace MusicSpin.App.ViewModels;
 
 /// <summary>
 /// The window: sidebar navigation, the current page, the search box, the notice banner, the player, and the app
-/// settings that apply live (theme, motion, record speed). Esc and Space are key bindings to its commands.
+/// Settings dialog. Esc, Space and the Ctrl+arrow shortcuts are key bindings to its commands.
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDisposable
 {
@@ -40,14 +40,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         services.Library.Changed += (_, _) => services.Ui.Post(() => _ = ReloadAsync());
         Banner = services.StartupWarning;
 
-        var settings = services.Settings.Current;
-        Theme = Appearance.ParseTheme(settings.Theme);
-        Motion = MotionModes.Parse(settings.Motion);
-        RecordSpeed = settings.RecordSpeedRpm is 45 or 16.667 ? settings.RecordSpeedRpm : 33.333;
-        services.Appearance.SetTheme(Theme);
-        services.Appearance.SetMotion(Motion);
-        SpinClock.Rpm = RecordSpeed;
-        SpinClock.MotionMultiplier = MotionModes.Multiplier(Motion);
+        Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
+        Layers.Register(Settings);
+        Settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SettingsViewModel.IsOpen))
+            {
+                NotifyShortcutsChanged();
+            }
+        };
     }
 
     public SidebarViewModel Sidebar { get; } = new();
@@ -103,18 +104,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// run before the focused control sees the key, so the binding's command has to decline it.
     /// </summary>
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SpaceCommand), nameof(SeekForwardCommand), nameof(SeekBackCommand), nameof(VolumeUpCommand), nameof(VolumeDownCommand))]
     public partial bool IsTextInputFocused { get; set; }
 
-    [ObservableProperty]
-    public partial AppTheme Theme { get; private set; }
-
-    [ObservableProperty]
-    public partial MotionMode Motion { get; private set; }
-
-    /// <summary>Settings › Turntable › Speed: 33.333, 45 or 16.667 rpm.</summary>
-    [ObservableProperty]
-    public partial double RecordSpeed { get; private set; }
+    /// <summary>The cog's dialog: the theme, Motion, the record speed and design, the shelf's tilt and depth.</summary>
+    public SettingsViewModel Settings { get; }
 
     /// <summary>Connects to the player and loads the library.</summary>
     public async Task InitializeAsync()
@@ -131,7 +124,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     [RelayCommand(CanExecute = nameof(CanUseShortcuts))]
     private Task Space() => Player.TogglePlayCommand.ExecuteAsync(null);
 
-    private bool CanUseShortcuts() => !IsTextInputFocused;
+    /// <summary>Shortcuts work unless a text box has focus or Settings is open over the window.</summary>
+    private bool CanUseShortcuts() => !IsTextInputFocused && !Settings.IsOpen;
 
     /// <summary>Ctrl+→: seeks forward, unless a text box has focus (Ctrl+arrows move its caret by words then).</summary>
     [RelayCommand(CanExecute = nameof(CanUseShortcuts), AllowConcurrentExecutions = true)]
@@ -156,31 +150,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     [RelayCommand]
     private void DismissBanner() => Banner = null;
 
-    [RelayCommand]
-    public void SetTheme(AppTheme theme)
-    {
-        Theme = theme;
-        _services.Appearance.SetTheme(theme);
-        Save(s => s with { Theme = theme == AppTheme.Light ? "light" : "dark" });
-    }
-
-    [RelayCommand]
-    public void SetMotion(MotionMode motion)
-    {
-        Motion = motion;
-        _services.Appearance.SetMotion(motion);
-        SpinClock.MotionMultiplier = MotionModes.Multiplier(motion);
-        Save(s => s with { Motion = MotionModes.ToSetting(motion) });
-    }
-
-    [RelayCommand]
-    public void SetRecordSpeed(double rpm)
-    {
-        RecordSpeed = rpm;
-        SpinClock.Rpm = rpm;
-        Save(s => s with { RecordSpeedRpm = rpm });
-    }
-
     /// <summary>Closing the window: the music stops; a player the app started is shut down.</summary>
     public Task ShutdownAsync() => Player.ShutdownAsync();
 
@@ -194,6 +163,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     }
 
     partial void OnSearchTextChanged(string value) => CurrentPage.SearchText = value;
+
+    partial void OnIsTextInputFocusedChanged(bool value) => NotifyShortcutsChanged();
+
+    private void NotifyShortcutsChanged()
+    {
+        foreach (var command in new[] { SpaceCommand, SeekForwardCommand, SeekBackCommand, VolumeUpCommand, VolumeDownCommand })
+        {
+            command.NotifyCanExecuteChanged();
+        }
+    }
 
     private async Task ShowAsync(NavItemViewModel item)
     {
@@ -286,17 +265,5 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             PlayingCover = albumId is null ? null : await _services.Covers.CoverAsync(albumId, CoverSize.Small).ConfigureAwait(true);
             _services.Appearance.SetAccent(albumId is null ? null : await _services.Covers.AccentAsync(albumId).ConfigureAwait(true));
         }).ConfigureAwait(true);
-    }
-
-    private void Save(Func<Core.Settings.AppSettings, Core.Settings.AppSettings> change)
-    {
-        try
-        {
-            _services.Settings.Update(change);
-        }
-        catch (MusicSpinException ex)
-        {
-            Notices.Post($"The setting applies now but wasn't saved: {ex.Message}");
-        }
     }
 }

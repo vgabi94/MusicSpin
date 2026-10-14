@@ -93,5 +93,14 @@
         </DockPanel>
 
         <views:PlayerBar Name="PlayerBarView" Grid.Row="2" Grid.ColumnSpan="2" />
+
+        <!-- Settings over the whole window; a click on the dim around it closes it. -->
+        <Panel Name="SettingsLayer" Grid.RowSpan="3" Grid.ColumnSpan="2" IsVisible="{Binding Settings.IsOpen}">
+            <Button Name="SettingsBackdrop"
+                    Classes="backdrop"
+                    Command="{Binding Settings.CloseCommand}"
+                    AutomationProperties.Name="Close Settings" />
+            <views:SettingsDialog Name="SettingsView" DataContext="{Binding Settings}" />
+        </Panel>
     </Grid>
 </Window>

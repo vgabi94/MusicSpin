@@ -1,0 +1,206 @@
+<!--
+  Dialogs and Settings (mockup: "Settings": .dlg-back, .dlg, .dlg header, .qclose, .dlg h3, .set-row, .seg, .range,
+  output) and the Classic deck's preview (mockup: .deck, .platter, .vinyl, .tonearm).
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:views="using:MusicSpin.App.Views"
+        xmlns:vm="using:MusicSpin.App.ViewModels">
+    <!-- Over the whole window: a light dim that closes the dialog when clicked. -->
+    <Style Selector="Button.backdrop">
+        <Setter Property="Background" Value="{StaticResource DialogBackdropBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Arrow" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+    </Style>
+
+    <Style Selector="views|SettingsDialog">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="{StaticResource DialogMargin}" />
+        <!-- A user control clips to its bounds, which would cut the dialog's shadow off. -->
+        <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="Border.dialog">
+        <Setter Property="Width" Value="{StaticResource DialogWidth}" />
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource DialogBorderThickness}" />
+        <Setter Property="CornerRadius" Value="{StaticResource DialogRadius}" />
+        <Setter Property="BoxShadow" Value="0 24 60 0 #AA000000" />
+        <!-- A user control clips to its bounds, which would cut the dialog's shadow off. -->
+        <Setter Property="ClipToBounds" Value="False" />
+        <Setter Property="KeyboardNavigation.TabNavigation" Value="Cycle" />
+    </Style>
+    <Style Selector="Border.dialog > ScrollViewer > StackPanel">
+        <Setter Property="Margin" Value="{StaticResource DialogPadding}" />
+    </Style>
+    <Style Selector="Grid.dialogHeader">
+        <Setter Property="Margin" Value="{StaticResource DialogHeaderMargin}" />
+    </Style>
+    <Style Selector="TextBlock.dialogTitle">
+        <Setter Property="Margin" Value="{StaticResource DialogTitleMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource DialogTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.dialogClose">
+        <Setter Property="Width" Value="{StaticResource DialogCloseSize}" />
+        <Setter Property="Height" Value="{StaticResource DialogCloseSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource DialogCloseRadius}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.dialogClose:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.dialogClose:focus-visible">
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.dialogClose controls|Icon">
+        <Setter Property="Width" Value="{StaticResource DialogCloseIconSize}" />
+        <Setter Property="Height" Value="{StaticResource DialogCloseIconSize}" />
+    </Style>
+
+    <!-- A section heading, in capitals. -->
+    <Style Selector="TextBlock.settingsSection">
+        <Setter Property="Margin" Value="{StaticResource SettingsSectionMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingsSectionFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource SettingsSectionLetterSpacing}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <!-- A setting: its name (and a note) on the left, its control on the right; a line between rows. -->
+    <Style Selector="Border.settingRow">
+        <Setter Property="MinHeight" Value="{StaticResource SettingRowMinHeight}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+    </Style>
+    <Style Selector="Border.settingRow.next">
+        <Setter Property="BorderThickness" Value="{StaticResource SettingRowDivider}" />
+    </Style>
+    <Style Selector="Border.settingRow.tall">
+        <Setter Property="Padding" Value="{StaticResource SettingRowTallPadding}" />
+    </Style>
+    <Style Selector="Border.settingRow > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource SettingRowGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.settingRow > Grid > TextBlock, Border.settingRow > Grid > StackPanel > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Border.settingRow > Grid > TextBlock, Border.settingRow > Grid > StackPanel">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.settingRow TextBlock.settingNote">
+        <Setter Property="Margin" Value="{StaticResource SettingNoteMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+
+    <!-- A slider and its value (mockup: .range, input[type=range] in the accent, output). -->
+    <Style Selector="StackPanel.range">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource SettingSliderGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="controls|ScrubBar.setting">
+        <Setter Property="Width" Value="{StaticResource SettingSliderWidth}" />
+        <Setter Property="CommitsWhileDragging" Value="True" />
+        <Setter Property="EndKey" Value="True" />
+        <Setter Property="PointerStep" Value="{x:Static vm:SettingsViewModel.SliderStep}" />
+        <Setter Property="SmallChange" Value="{x:Static vm:SettingsViewModel.SliderStep}" />
+        <Setter Property="LargeChange" Value="{x:Static vm:SettingsViewModel.LargeSliderStep}" />
+        <Setter Property="WheelStep" Value="{x:Static vm:SettingsViewModel.SliderStep}" />
+        <Setter Property="LargeWheelStep" Value="{x:Static vm:SettingsViewModel.LargeSliderStep}" />
+    </Style>
+    <Style Selector="controls|ScrubBar.setting /template/ Border#PART_Handle">
+        <Setter Property="RenderTransform" Value="scale(1)" />
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="StackPanel.range > TextBlock">
+        <Setter Property="Width" Value="{StaticResource SettingOutputWidth}" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{StaticResource SmallFontSize}" />
+        <Setter Property="FontFeatures" Value="+tnum" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+
+    <!-- Settings › Turntable › Design: a card per design. -->
+    <Style Selector="StackPanel.designCard">
+        <Setter Property="Spacing" Value="{StaticResource DesignCardSpacing}" />
+    </Style>
+    <Style Selector="StackPanel.designCard > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource DesignNameFontSize}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The Classic deck, small (Metrics: DeckPreview*). -->
+    <Style Selector="Panel.deckPreview">
+        <Setter Property="Width" Value="{StaticResource DeckPreviewWidth}" />
+        <Setter Property="Height" Value="{StaticResource DeckPreviewHeight}" />
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Panel.classic > Border.plinth">
+        <Setter Property="CornerRadius" Value="{StaticResource DeckPreviewRadius}" />
+        <Setter Property="Background" Value="{DynamicResource DeckPlinthBrush}" />
+    </Style>
+    <Style Selector="Panel.classic > Ellipse.platter">
+        <Setter Property="Width" Value="{StaticResource DeckPreviewPlatterSize}" />
+        <Setter Property="Height" Value="{StaticResource DeckPreviewPlatterSize}" />
+        <Setter Property="Margin" Value="{StaticResource DeckPreviewPlatterMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Fill" Value="{StaticResource DeckPlatterBrush}" />
+        <Setter Property="Stroke" Value="{StaticResource DeckPlatterRingBrush}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource DeckPreviewPlatterRing}" />
+    </Style>
+    <Style Selector="Panel.classic > controls|VinylView.record">
+        <Setter Property="Width" Value="{StaticResource DeckPreviewRecordSize}" />
+        <Setter Property="Height" Value="{StaticResource DeckPreviewRecordSize}" />
+        <Setter Property="Margin" Value="{StaticResource DeckPreviewRecordMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="GroovePitch" Value="{StaticResource DeckPreviewGroovePitch}" />
+        <Setter Property="LabelFallbackBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <!-- The arm, parked: turned -4° about its pivot (the base's centre). -->
+    <Style Selector="Panel.classic > Panel.tonearm">
+        <Setter Property="Width" Value="{StaticResource DeckPreviewArmWidth}" />
+        <Setter Property="Height" Value="{StaticResource DeckPreviewArmHeight}" />
+        <Setter Property="Margin" Value="{StaticResource DeckPreviewArmMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="RenderTransformOrigin" Value="50%,9%" />
+        <Setter Property="RenderTransform" Value="rotate(-4deg)" />
+    </Style>
+    <Style Selector="Panel.tonearm > Ellipse.armBase">
+        <Setter Property="Width" Value="{StaticResource DeckPreviewArmBaseSize}" />
+        <Setter Property="Height" Value="{StaticResource DeckPreviewArmBaseSize}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Fill" Value="{StaticResource DeckArmBaseBrush}" />
+    </Style>
+    <Style Selector="Panel.tonearm > Border.arm">
+        <Setter Property="Width" Value="{StaticResource DeckPreviewTubeWidth}" />
+        <Setter Property="Height" Value="{StaticResource DeckPreviewTubeHeight}" />
+        <Setter Property="Margin" Value="{StaticResource DeckPreviewTubeMargin}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Background" Value="{StaticResource DeckArmBrush}" />
+    </Style>
+    <Style Selector="Panel.tonearm > Border.headshell">
+        <Setter Property="Width" Value="{StaticResource DeckPreviewHeadshellWidth}" />
+        <Setter Property="Height" Value="{StaticResource DeckPreviewHeadshellHeight}" />
+        <Setter Property="Margin" Value="{StaticResource DeckPreviewHeadshellMargin}" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="Background" Value="{StaticResource DeckHeadshellBrush}" />
+        <Setter Property="RenderTransform" Value="rotate(18deg)" />
+    </Style>
+</Styles>

@@ -1,0 +1,147 @@
+<!--
+  Settings (mockup: #setBack .dlg): Appearance (theme, Motion), Turntable (speed, design), Shelf (tilt, depth). Every
+  change applies at once and is saved; there is no Save button. The window shows it over a dim (MainWindow.axaml).
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:services="using:MusicSpin.App.Services"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:theming="using:MusicSpin.App.Theming"
+             x:Class="MusicSpin.App.Views.SettingsDialog"
+             x:DataType="vm:SettingsViewModel">
+    <UserControl.DataTemplates>
+        <!-- Each design's preview; each deck adds its own. -->
+        <DataTemplate DataType="services:ClassicDeck">
+            <Panel Classes="deckPreview classic">
+                <Border Classes="plinth" />
+                <Ellipse Classes="platter" />
+                <controls:VinylView Classes="record" />
+                <Panel Classes="tonearm">
+                    <Border Classes="arm" />
+                    <Border Classes="headshell" />
+                    <Ellipse Classes="armBase" />
+                </Panel>
+            </Panel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Border Name="Dialog"
+            Classes="dialog"
+            AutomationProperties.Name="Settings"
+            theming:Animate.Play="DialogInAnimation"
+            theming:Animate.Trigger="{Binding Opens}">
+        <ScrollViewer>
+            <StackPanel>
+                <Grid Classes="dialogHeader" ColumnDefinitions="*,Auto">
+                    <TextBlock Name="SettingsTitle" Classes="dialogTitle" Text="Settings" />
+                    <Button Name="CloseSettings"
+                            Grid.Column="1"
+                            Classes="dialogClose"
+                            Command="{Binding CloseCommand}"
+                            ToolTip.Tip="Close (Esc)"
+                            AutomationProperties.Name="Close Settings">
+                        <controls:Icon Data="{StaticResource Close}" />
+                    </Button>
+                </Grid>
+
+                <TextBlock Classes="settingsSection" Text="APPEARANCE" />
+                <Border Classes="settingRow">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Theme" />
+                        <ListBox Name="ThemeChoice"
+                                 Grid.Column="1"
+                                 Theme="{StaticResource Segmented}"
+                                 ItemsSource="{Binding Themes}"
+                                 SelectedItem="{Binding ThemeChoice}"
+                                 AutomationProperties.Name="Theme" />
+                    </Grid>
+                </Border>
+                <Border Classes="settingRow next">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Text="Motion" />
+                            <TextBlock Classes="settingNote" Text="The record spins in every mode" />
+                        </StackPanel>
+                        <ListBox Name="MotionChoice"
+                                 Grid.Column="1"
+                                 Theme="{StaticResource Segmented}"
+                                 ItemsSource="{Binding Motions}"
+                                 SelectedItem="{Binding MotionChoice}"
+                                 AutomationProperties.Name="Motion" />
+                    </Grid>
+                </Border>
+
+                <TextBlock Classes="settingsSection" Text="TURNTABLE" />
+                <Border Classes="settingRow">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Speed" />
+                        <ListBox Name="SpeedChoice"
+                                 Grid.Column="1"
+                                 Theme="{StaticResource Segmented}"
+                                 ItemsSource="{Binding Speeds}"
+                                 SelectedItem="{Binding SpeedChoice}"
+                                 AutomationProperties.Name="Record speed" />
+                    </Grid>
+                </Border>
+                <Border Classes="settingRow next tall">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Design" />
+                        <ListBox Name="DesignChoice"
+                                 Grid.Column="1"
+                                 Theme="{StaticResource Cards}"
+                                 ItemsSource="{Binding Designs}"
+                                 SelectedItem="{Binding Design}"
+                                 AutomationProperties.Name="Turntable design">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="services:DeckDesign">
+                                    <StackPanel Classes="designCard">
+                                        <ContentControl Content="{Binding}" />
+                                        <TextBlock Text="{Binding Name}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+
+                <TextBlock Classes="settingsSection" Text="SHELF" />
+                <Border Classes="settingRow">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Tilt" />
+                        <StackPanel Grid.Column="1" Classes="range">
+                            <controls:ScrubBar Name="TiltBar"
+                                               Classes="setting"
+                                               Minimum="{x:Static vm:SettingsViewModel.MinTilt}"
+                                               Maximum="{x:Static vm:SettingsViewModel.MaxTilt}"
+                                               Value="{Binding ShelfTilt, Mode=OneWay}"
+                                               CommitCommand="{Binding SetShelfTiltCommand}"
+                                               ValueText="{Binding ShelfTiltText}"
+                                               AutomationProperties.Name="Shelf tilt" />
+                            <TextBlock Name="TiltText" Text="{Binding ShelfTiltText}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Classes="settingRow next">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Text="Depth" />
+                            <TextBlock Classes="settingNote" Text="0 is flat, higher looks deeper" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Classes="range">
+                            <controls:ScrubBar Name="DepthBar"
+                                               Classes="setting"
+                                               Minimum="{x:Static vm:SettingsViewModel.MinDepth}"
+                                               Maximum="{x:Static vm:SettingsViewModel.MaxDepth}"
+                                               Value="{Binding ShelfDepth, Mode=OneWay}"
+                                               CommitCommand="{Binding SetShelfDepthCommand}"
+                                               ValueText="{Binding ShelfDepthText}"
+                                               AutomationProperties.Name="Shelf depth" />
+                            <TextBlock Name="DepthText" Text="{Binding ShelfDepthText}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>
