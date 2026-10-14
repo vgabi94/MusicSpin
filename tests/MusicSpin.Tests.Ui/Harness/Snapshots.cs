@@ -14,7 +14,7 @@ internal sealed record SnapshotComparison(bool Matches, int DifferentPixels, int
 /// <summary>
 /// Compares rendered frames with approved baselines in <c>tests/MusicSpin.Tests.Ui/Snapshots</c>.
 /// <list type="bullet">
-/// <item>macOS has its own baselines (<see cref="PlatformVariant"/>).</item>
+/// <item>macOS has its own baselines, and Linux where it needs them (<see cref="PlatformVariant"/>).</item>
 /// <item>A pixel differs when a channel is off by more than <see cref="ChannelTolerance"/>; a snapshot matches while at
 /// most <see cref="PixelTolerance"/> of its pixels differ (text antialiasing varies a little between OSes).</item>
 /// <item>On a mismatch, the actual image and a diff (differing pixels in red over a faded baseline) are written to
@@ -37,9 +37,11 @@ internal static class Snapshots
 
     /// <summary>
     /// Text renders a little differently on macOS (its font smoothing), beyond any useful tolerance, so macOS has its own
-    /// baselines, <c>name.macos.png</c>, approved from the CI artifacts. Windows and Linux share <c>name.png</c>.
+    /// baselines, <c>name.macos.png</c>, approved from the CI artifacts. Linux smooths light text on dark a little
+    /// differently too, which shows in small text-dense snapshots (the player bar): those have <c>name.linux.png</c>.
+    /// Otherwise Windows and Linux share <c>name.png</c>.
     /// </summary>
-    public static string? PlatformVariant => OperatingSystem.IsMacOS() ? "macos" : null;
+    public static string? PlatformVariant => OperatingSystem.IsMacOS() ? "macos" : OperatingSystem.IsLinux() ? "linux" : null;
 
     /// <summary>The baseline for <paramref name="name"/> on this OS: the platform variant when there is one (or when updating it).</summary>
     public static string Baseline(string name)
