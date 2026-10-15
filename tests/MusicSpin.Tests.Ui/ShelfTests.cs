@@ -306,4 +306,16 @@ public sealed class ShelfTests
 
         Snapshots.Match(app.Window, $"albums-shelf-{theme.ToString().ToLowerInvariant()}");
     }
+
+    [AvaloniaTheory]
+    [InlineData(AppTheme.Dark)]
+    [InlineData(AppTheme.Light)]
+    public async Task Snapshot_of_the_shelf_ungrouped_with_the_sleeves_tilted(AppTheme theme)
+    {
+        await using var app = await OpenAsync(theme);
+        await PlayingAsync(app, 2);
+        Gui.FinishAnimations(Settled);
+
+        Snapshots.Match(app.Window, $"albums-shelf-tilted-{theme.ToString().ToLowerInvariant()}");
+    }
 }
