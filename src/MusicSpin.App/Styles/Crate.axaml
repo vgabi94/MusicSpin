@@ -1,0 +1,192 @@
+<!--
+  Crates (mockup: "Crate (records stacked front-to-back, flip through)"): records standing in a wooden box, front to
+  back, and the side panel for the active crate's front record. A crate is laid out at full size; grouped, each one is
+  scaled down whole (Panel.crateCell's Viewbox), which is what the mockup's k variable does. controls:CrateRecord works out each
+  record's 3D from its place; this file gives it its parts, colours and timing.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:vm="using:MusicSpin.App.ViewModels"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <Styles.Resources>
+        <ControlTheme x:Key="{x:Type controls:CrateRecord}" TargetType="controls:CrateRecord">
+            <Setter Property="ClipToBounds" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="theming:Animate.Transitions" Value="Position CrateFlipDuration EaseSoft" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Name="PART_Record">
+                        <controls:CoverView Classes="crate"
+                                            Source="{TemplateBinding Source}"
+                                            Title="{TemplateBinding Title}"
+                                            Artist="{TemplateBinding Artist}" />
+                        <Border Name="PART_Shade" IsHitTestVisible="False" />
+                        <Border Name="PART_Light" IsHitTestVisible="False" />
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Border">
+                <Setter Property="CornerRadius" Value="{StaticResource CrateCoverRadius}" />
+            </Style>
+            <Style Selector="^ /template/ Border#PART_Shade">
+                <Setter Property="Background" Value="{StaticResource CrateShadeBrush}" />
+            </Style>
+            <!-- Hover only lightens: moving a thin strip would slide it out from under the pointer (mockup: .rec::after). -->
+            <Style Selector="^ /template/ Border#PART_Light">
+                <Setter Property="Background" Value="{StaticResource CrateRecordHoverBrush}" />
+                <Setter Property="Opacity" Value="0" />
+                <Setter Property="theming:Animate.Transitions" Value="Opacity CrateHoverDuration" />
+            </Style>
+            <Style Selector="^:pointerover /template/ Border#PART_Light">
+                <Setter Property="Opacity" Value="{StaticResource CrateRecordHoverOpacity}" />
+            </Style>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <Style Selector="controls|CoverView.crate">
+        <Setter Property="CornerRadius" Value="{StaticResource CrateCoverRadius}" />
+    </Style>
+
+    <!-- The crates and the side panel (mockup: .crate-wrap): the panel is 280 wide, 30 right of the crates. -->
+    <Style Selector="Grid.crateWrap">
+        <Setter Property="ColumnSpacing" Value="{StaticResource CrateSideGap}" />
+    </Style>
+    <Style Selector="Grid.crateWrap > ScrollViewer">
+        <Setter Property="Padding" Value="{StaticResource CrateScrollPadding}" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+    </Style>
+    <!-- Nothing on the way clips: the box's shadow reaches below the crate, the records above its cell. -->
+    <Style Selector="ContentControl.crateHost, ItemsControl.crateGrid">
+        <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="ContentControl.soleCrate">
+        <Setter Property="MinHeight" Value="{StaticResource CrateMinHeight}" />
+        <Setter Property="Margin" Value="{StaticResource SoleCrateMargin}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="UniformGrid.crateGrid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource CrateCellColumnGap}" />
+        <Setter Property="RowSpacing" Value="{StaticResource CrateCellRowGap}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <!-- A grouped crate: the full-size layout scaled into a cell 450 × .62 high (mockup: .crate-wrap.multi .crate). -->
+    <Style Selector="Viewbox.crateCell">
+        <Setter Property="Height" Value="{StaticResource CrateCellHeight}" />
+        <Setter Property="Stretch" Value="Uniform" />
+    </Style>
+    <Style Selector="Viewbox.crateCell Panel.crate">
+        <Setter Property="Width" Value="{StaticResource CrateGroupedWidth}" />
+        <Setter Property="Height" Value="{StaticResource CrateGroupedHeight}" />
+    </Style>
+
+    <!-- A crate: it takes the wheel over its whole area. -->
+    <Style Selector="Panel.crate">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ItemsControl.crateStage">
+        <Setter Property="Width" Value="{StaticResource CrateRecordSize}" />
+        <Setter Property="Height" Value="{StaticResource CrateRecordSize}" />
+        <Setter Property="Margin" Value="{StaticResource CrateRecordMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <!-- Front to back: the front record over the ones behind, flipped ones over all. -->
+    <Style Selector="ItemsControl.crateStage > ContentPresenter" x:DataType="vm:CrateRecordViewModel">
+        <Setter Property="ZIndex" Value="{Binding ZIndex}" />
+    </Style>
+    <!-- A record is a button with no face of its own: only the record, where it is drawn, takes the click. -->
+    <Style Selector="Button.crateRecord">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="ClipToBounds" Value="False" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <!--
+      The box (mockup: .crate-box): in front of the records, 60 nearer the eye, so it looks 1000 / 940 its size, grown
+      from the eye's point (820 above the crate's bottom: 680% of its height above its top).
+    -->
+    <Style Selector="Border.crateBox">
+        <Setter Property="Width" Value="{StaticResource CrateBoxWidth}" />
+        <Setter Property="Height" Value="{StaticResource CrateBoxHeight}" />
+        <Setter Property="Margin" Value="{StaticResource CrateBoxMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="CornerRadius" Value="{StaticResource CrateBoxRadius}" />
+        <Setter Property="Background" Value="{StaticResource CrateBoxBrush}" />
+        <Setter Property="BoxShadow" Value="inset 0 1 0 0 #25FFFFFF, 0 20 30 -10 #FF000000" />
+        <Setter Property="RenderTransformOrigin" Value="50%,-680%" />
+        <Setter Property="RenderTransform" Value="scale(1.0638)" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.crateBox TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource CrateLabelFontSize}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource CrateLabelLetterSpacing}" />
+        <Setter Property="Foreground" Value="{StaticResource CrateLabelBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.crateBox > StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- Grouped: the shadow stays the full crate's size, as in the mockup (its box-shadow isn't scaled by k): ÷ .62. -->
+    <Style Selector="Viewbox.crateCell Border.crateBox">
+        <Setter Property="BoxShadow" Value="inset 0 1.6 0 0 #25FFFFFF, 0 32 48 -16 #FF000000" />
+    </Style>
+    <!-- Grouped: the group's name and count, left, with room on the right for its Play and Radio icons (#41, #23). -->
+    <Style Selector="Viewbox.crateCell Border.crateBox > StackPanel">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Margin" Value="{StaticResource CrateGroupLabelPadding}" />
+    </Style>
+    <Style Selector="Viewbox.crateCell Border.crateBox TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource CrateGroupLabelFontSize}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource CrateGroupLabelLetterSpacing}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="Foreground" Value="{StaticResource CrateGroupLabelBrush}" />
+        <Setter Property="theming:Animate.Transitions" Value="Foreground CrateLabelDuration" />
+    </Style>
+    <Style Selector="Viewbox.crateCell Border.crateBox TextBlock.name">
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="MaxWidth" Value="{StaticResource CrateGroupNameMaxWidth}" />
+    </Style>
+    <Style Selector="Viewbox.crateCell Panel.crate.active Border.crateBox TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource CrateActiveLabelBrush}" />
+    </Style>
+
+    <!-- The side panel (mockup: .crate-side): the active crate's front record. -->
+    <Style Selector="StackPanel.crateSide">
+        <Setter Property="Width" Value="{StaticResource CrateSideWidth}" />
+        <Setter Property="Margin" Value="{StaticResource CrateSideMargin}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Grid.crateWrap.grouped StackPanel.crateSide">
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Margin" Value="{StaticResource CrateSideGroupedMargin}" />
+    </Style>
+    <Style Selector="StackPanel.crateSide > TextBlock.title">
+        <Setter Property="FontSize" Value="{StaticResource CrateTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource TitleFontWeight}" />
+        <Setter Property="Margin" Value="{StaticResource CrateTitleMargin}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="StackPanel.crateSide > TextBlock.artist">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Margin" Value="{StaticResource CrateArtistMargin}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="StackPanel.crateSide > ItemsControl.chips">
+        <Setter Property="Margin" Value="{StaticResource CrateChipsMargin}" />
+    </Style>
+    <Style Selector="StackPanel.crateSide > StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource CrateButtonsGap}" />
+    </Style>
+</Styles>

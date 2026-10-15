@@ -31,7 +31,7 @@ internal static class UiTime
             var step = by - done < Frame ? by - done : Frame;
             done += step;
             time.Advance(step);
-            Dispatcher.UIThread.RunJobs();
+            Gui.RunJobs();
             var wait = done - real.Elapsed;
             if (wait > TimeSpan.Zero)
             {
@@ -39,7 +39,7 @@ internal static class UiTime
             }
 
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            Gui.RunJobs();
         }
     }
 }

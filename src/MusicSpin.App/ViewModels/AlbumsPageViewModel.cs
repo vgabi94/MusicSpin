@@ -1,18 +1,24 @@
 using System.ComponentModel;
 using System.Globalization;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Services;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
+using MusicSpin.Core.Playback;
 
 namespace MusicSpin.App.ViewModels;
 
-/// <summary>An album's cover at one size, read on first use (only shown items ask), then kept by <see cref="ICoverService"/>.</summary>
+/// <summary>
+/// An album's cover at one size, and its colour, each read on first use (only shown items ask), then kept by
+/// <see cref="ICoverService"/>.
+/// </summary>
 public sealed class AlbumArt(string albumId, CoverSize size, ICoverService covers) : ObservableObject
 {
     private bool _requested;
+    private bool _accentRequested;
 
     public Bitmap? Cover
     {
@@ -30,6 +36,23 @@ public sealed class AlbumArt(string albumId, CoverSize size, ICoverService cover
         private set => SetProperty(ref field, value);
     }
 
+    /// <summary>The album's colour (a shelf sleeve's spine); null without a cover.</summary>
+    public Color? Accent
+    {
+        get
+        {
+            if (!_accentRequested)
+            {
+                _accentRequested = true;
+                _ = LoadAccentAsync();
+            }
+
+            return field;
+        }
+
+        private set => SetProperty(ref field, value);
+    }
+
     private async Task LoadAsync()
     {
         try
@@ -39,6 +62,18 @@ public sealed class AlbumArt(string albumId, CoverSize size, ICoverService cover
         catch (Exception ex) when (ex is MusicSpinException or IOException or UnauthorizedAccessException)
         {
             // no cover: the placeholder stays
+        }
+    }
+
+    private async Task LoadAccentAsync()
+    {
+        try
+        {
+            Accent = await covers.AccentAsync(albumId).ConfigureAwait(true) is { } c ? Color.FromRgb(c.R, c.G, c.B) : null;
+        }
+        catch (Exception ex) when (ex is MusicSpinException or IOException or UnauthorizedAccessException)
+        {
+            // no colour: the plain spine stays
         }
     }
 }
@@ -62,7 +97,18 @@ public sealed partial class AlbumItemViewModel(AlbumSummary album, AlbumArt art)
     /// <summary>"Ana Cruz Quintet · 2017 · FLAC 24/96" (mockup: .talbum .sub).</summary>
     public string Details => Join(Album.Artist, Year, Join(Album.Format, Album.Resolution, separator: " "));
 
+    /// <summary>"Jazz · 2023" above the title in the crate's side panel (mockup: .np-kicker).</summary>
+    public string Kicker => Join(Album.Genre?.Trim(), Year);
+
+    /// <summary>The format chips: "FLAC", "24/192", "8 tracks" (mockup: .np-tech).</summary>
+    public IReadOnlyList<string> Chips =>
+        [.. new[] { Album.Format, Album.Resolution }.Where(s => !string.IsNullOrWhiteSpace(s)),
+            string.Create(CultureInfo.CurrentCulture, $"{Album.TrackCount:N0} {(Album.TrackCount == 1 ? "track" : "tracks")}")];
+
     public bool HiRes => Album.HiRes;
+
+    /// <summary>"Copper Sun — Delta Ruth": a shelf sleeve's name for screen readers (its title isn't readable sideways).</summary>
+    public string Name => $"{Album.Title} — {Album.Artist}";
 
     /// <summary>The album loaded in the player, playing or paused (mockup: .card.playing): its record is out and spins.</summary>
     [ObservableProperty]
@@ -104,12 +150,36 @@ public sealed class AlbumCardRowViewModel(IReadOnlyList<AlbumItemViewModel> albu
     public bool IsFirst { get; } = isFirst;
 }
 
+/// <summary>One board of the shelf and the sleeves standing on it (mockup: .shelf-row + .board).</summary>
+public sealed class ShelfBoardViewModel(IReadOnlyList<AlbumItemViewModel> albums, bool isFirst, bool isLast)
+{
+    public IReadOnlyList<AlbumItemViewModel> Albums { get; } = albums;
+
+    /// <summary>The group's first board sits right under its header; later ones stand a little below the board above.</summary>
+    public bool IsFirst { get; } = isFirst;
+
+    /// <summary>The group's last board: the next group starts further down (mockup: .shelf margin-bottom).</summary>
+    public bool IsLast { get; } = isLast;
+}
+
 /// <summary>
-/// Albums: the library's albums, sorted, grouped and filtered by the search box. A card plays its album; the playing
-/// album's card opens Now Playing; its Play button plays or pauses that album.
+/// Albums: the library's albums, sorted, grouped and filtered by the search box, as Cards, a Shelf or Crates. A card or a
+/// sleeve plays its album; the playing album's opens Now Playing; a card's Play button plays or pauses that album. In a
+/// crate, the wheel, the arrow keys and clicks flip the records; the front record plays, and the side panel shows it.
 /// </summary>
 public sealed partial class AlbumsPageViewModel : PageViewModel
 {
+    /// <summary>
+    /// The wheel flips a crate once its turns add up to half a notch (mockup: 50 px of a 100 px notch), at most once per
+    /// <see cref="FlipInterval"/>; what adds up is capped at <see cref="WheelBank"/> notches, so a fast burst flips one
+    /// record at a time instead of racing on (mockup: crateWheel).
+    /// </summary>
+    public const double WheelNotch = 0.5;
+
+    public const double WheelBank = 1.2;
+
+    public static readonly TimeSpan FlipInterval = TimeSpan.FromMilliseconds(180);
+
     private readonly ILibraryService _library;
     private readonly ICoverService _covers;
     private readonly PlayerViewModel _player;
@@ -117,11 +187,17 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private readonly LayerViewModel _nowPlaying;
     private readonly MenuViewModel _menu;
     private readonly Notices _notices;
+    private readonly TimeProvider _time;
+    private readonly Dictionary<string, string> _crateFronts = new(StringComparer.Ordinal);
     private List<AlbumItemViewModel> _all = [];
     private AlbumItemViewModel? _playing;
+    private string? _activeCrateKey;
+    private CrateViewModel? _wheelCrate;
+    private double _wheelSum;
+    private long? _lastFlip;
 
     public AlbumsPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, SpinClock clock,
-        LayerViewModel nowPlaying, MenuViewModel menu, Notices notices)
+        LayerViewModel nowPlaying, MenuViewModel menu, Notices notices, SettingsViewModel settings, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(clock);
@@ -132,6 +208,8 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         _nowPlaying = nowPlaying;
         _menu = menu;
         _notices = notices;
+        _time = time;
+        Settings = settings;
         ViewChoice = Views[0];
         _clock.PropertyChanged += (_, e) =>
         {
@@ -145,29 +223,67 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
 
     public override string Title => "Albums";
 
-    /// <summary>Cards, Shelf, Crate (mockup: #viewSeg). Shelf and Crate come with their own issues (#10, #11).</summary>
+    /// <summary>Settings › Shelf: the sleeves' tilt and depth.</summary>
+    public SettingsViewModel Settings { get; }
+
+    /// <summary>Cards, Shelf, Crate (mockup: #viewSeg).</summary>
     public IReadOnlyList<Choice<AlbumsView>> Views { get; } = [new("Cards", AlbumsView.Cards), new("Shelf", AlbumsView.Shelf), new("Crate", AlbumsView.Crate)];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShelf), nameof(IsCrate))]
     public partial Choice<AlbumsView> ViewChoice { get; set; }
+
+    public bool IsShelf => ViewChoice.Value == AlbumsView.Shelf;
+
+    public bool IsCrate => ViewChoice.Value == AlbumsView.Crate;
 
     [ObservableProperty]
     public partial LibrarySort Sort { get; set; } = LibrarySort.Artist;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsGrouped))]
     public partial AlbumGrouping Grouping { get; set; } = AlbumGrouping.Genre;
+
+    public bool IsGrouped => Grouping != AlbumGrouping.None;
 
     /// <summary>How many cards fit across (the view reports it from its width); the rows follow it.</summary>
     [ObservableProperty]
     public partial int Columns { get; set; } = 1;
 
+    /// <summary>How many sleeves a shelf board holds (the view reports it from its width and the tilt); the boards follow it.</summary>
+    [ObservableProperty]
+    public partial int PerBoard { get; set; } = 1;
+
     /// <summary>The albums shown, in order.</summary>
     [ObservableProperty]
     public partial IReadOnlyList<AlbumItemViewModel> Albums { get; private set; } = [];
 
-    /// <summary>What the grid shows: <see cref="GroupHeaderViewModel"/>s and <see cref="AlbumCardRowViewModel"/>s.</summary>
+    /// <summary>
+    /// What Cards and Shelf show: <see cref="GroupHeaderViewModel"/>s, and <see cref="AlbumCardRowViewModel"/>s or
+    /// <see cref="ShelfBoardViewModel"/>s.
+    /// </summary>
     [ObservableProperty]
     public partial IReadOnlyList<object> Rows { get; private set; } = [];
+
+    /// <summary>What Crate shows: one crate, or one per group.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SoleCrate), nameof(GroupedCrates))]
+    public partial IReadOnlyList<CrateViewModel> Crates { get; private set; } = [];
+
+    /// <summary>The one crate, when ungrouped: it fills the view.</summary>
+    public CrateViewModel? SoleCrate => IsGrouped || Crates.Count == 0 ? null : Crates[0];
+
+    /// <summary>The crates, when grouped: smaller ones in a grid.</summary>
+    public IReadOnlyList<CrateViewModel> GroupedCrates => IsGrouped ? Crates : [];
+
+    /// <summary>How many grouped crates fit across (the view reports it from its width).</summary>
+    [ObservableProperty]
+    public partial int CrateColumns { get; set; } = 1;
+
+    /// <summary>The crate the arrow keys flip and the side panel shows.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PlayFrontCommand), nameof(QueueFrontCommand))]
+    public partial CrateViewModel? ActiveCrate { get; private set; }
 
     /// <summary>The groups shown (empty when ungrouped).</summary>
     public IReadOnlyList<string> GroupNames { get; private set; } = [];
@@ -187,7 +303,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private void OpenGroupMenu()
         => _menu.Show(Enum.GetValues<AlbumGrouping>().Select(g => MenuEntryViewModel.Of(g.ToString(), () => Grouping = g, g == Grouping)));
 
-    /// <summary>A click on a card: plays the album from its first track; the album playing opens Now Playing instead.</summary>
+    /// <summary>A click on a card or a sleeve: plays the album from its first track; the album playing opens Now Playing instead.</summary>
     [RelayCommand]
     private Task OpenAlbum(AlbumItemViewModel album)
     {
@@ -209,17 +325,108 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         return album.IsPlaying ? _player.TogglePlayCommand.ExecuteAsync(null) : PlayAsync(album);
     }
 
+    /// <summary>A click on a crate record: the front one plays (as a card does); one behind comes to the front.</summary>
+    [RelayCommand]
+    private Task OpenRecord(CrateRecordViewModel record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        if (record.IsFront)
+        {
+            Activate(record.Crate);
+            return OpenAlbum(record.Album);
+        }
+
+        Show(record.Crate, record.Index);
+        return Task.CompletedTask;
+    }
+
+    private bool HasFront() => ActiveCrate?.Front is not null;
+
+    /// <summary>The side panel's Play/Pause: the active crate's front record.</summary>
+    [RelayCommand(CanExecute = nameof(HasFront))]
+    private Task PlayFront() => ActiveCrate?.Front is { } front ? TogglePlayAlbum(front) : Task.CompletedTask;
+
+    /// <summary>The side panel's ＋ Queue: the queue menu for the front record's album (mockup: data-act="menu").</summary>
+    [RelayCommand(CanExecute = nameof(HasFront))]
+    private Task QueueFront() => ActiveCrate?.Front is { } front ? _notices.GuardAsync(async () =>
+    {
+        var tracks = await _library.AlbumTracksAsync(front.Album.Id).ConfigureAwait(true);
+        _menu.Show(
+        [
+            new MenuEntryViewModel("Play next", () => _notices.GuardAsync(() => _player.AddToQueueAsync(tracks, QueuePosition.Next))),
+            new MenuEntryViewModel("Add to queue", () => _notices.GuardAsync(() => _player.AddToQueueAsync(tracks, QueuePosition.UpNext))),
+        ]);
+    }) : Task.CompletedTask;
+
+    /// <summary>
+    /// The wheel over <paramref name="crate"/>, in notches (positive: on, toward the back). Returns false when the crate
+    /// can't flip that way (past either end), so the page scrolls instead.
+    /// </summary>
+    public bool WheelCrate(CrateViewModel crate, double notches)
+    {
+        ArgumentNullException.ThrowIfNull(crate);
+        if (!crate.CanFlip(Math.Sign(notches)))
+        {
+            return false;
+        }
+
+        if (_wheelCrate != crate)
+        {
+            _wheelCrate = crate;
+            _wheelSum = 0;
+        }
+
+        _wheelSum = Math.Clamp(_wheelSum + notches, -WheelBank, WheelBank);
+        var now = _time.GetTimestamp();
+        if (Math.Abs(_wheelSum) >= WheelNotch && (_lastFlip is not { } last || _time.GetElapsedTime(last, now) > FlipInterval))
+        {
+            Show(crate, crate.FrontIndex + Math.Sign(_wheelSum));
+            _wheelSum = 0;
+            _lastFlip = now;
+        }
+
+        return true;
+    }
+
+    /// <summary>← → ↑ ↓: flips the active crate one record; false when it can't (no crate shown, or at its end).</summary>
+    public bool FlipActiveCrate(int step)
+    {
+        if (!IsCrate || ActiveCrate is not { } crate || !crate.CanFlip(step))
+        {
+            return false;
+        }
+
+        Show(crate, crate.FrontIndex + step);
+        return true;
+    }
+
     private Task PlayAsync(AlbumItemViewModel album) => _notices.GuardAsync(async () =>
     {
         var tracks = await _library.AlbumTracksAsync(album.Album.Id).ConfigureAwait(true);
         await _player.PlayTracksAsync(tracks).ConfigureAwait(true);
     });
 
+    partial void OnViewChoiceChanged(Choice<AlbumsView> value) => LayOut();
+
     partial void OnSortChanged(LibrarySort value) => Filter();
 
     partial void OnGroupingChanged(AlbumGrouping value) => Filter();
 
-    partial void OnColumnsChanged(int value) => LayOut();
+    partial void OnColumnsChanged(int value)
+    {
+        if (ViewChoice.Value == AlbumsView.Cards)
+        {
+            LayOut();
+        }
+    }
+
+    partial void OnPerBoardChanged(int value)
+    {
+        if (IsShelf)
+        {
+            LayOut();
+        }
+    }
 
     protected override void Filter()
     {
@@ -240,7 +447,15 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
             _ => [new Group<AlbumItemViewModel>(string.Empty, Albums)],
         };
         GroupNames = Grouping == AlbumGrouping.None ? [] : [.. groups.Select(g => g.Key)];
-        var columns = Math.Max(1, Columns);
+        if (IsCrate)
+        {
+            Rows = [];
+            LayOutCrates(groups);
+            return;
+        }
+
+        Crates = [];
+        ActiveCrate = null;
         var rows = new List<object>();
         foreach (var group in groups)
         {
@@ -249,10 +464,93 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
                 rows.Add(new GroupHeaderViewModel(group.Key, group.Items.Count, string.Empty, rows.Count == 0));
             }
 
-            rows.AddRange(group.Items.Chunk(columns).Select((cards, i) => new AlbumCardRowViewModel(cards, columns, i == 0)));
+            if (IsShelf)
+            {
+                var boards = group.Items.Chunk(Math.Max(1, PerBoard)).ToList();
+                rows.AddRange(boards.Select((sleeves, i) => new ShelfBoardViewModel(sleeves, i == 0, i == boards.Count - 1)));
+            }
+            else
+            {
+                var columns = Math.Max(1, Columns);
+                rows.AddRange(group.Items.Chunk(columns).Select((cards, i) => new AlbumCardRowViewModel(cards, columns, i == 0)));
+            }
         }
 
         Rows = rows;
+    }
+
+    /// <summary>
+    /// One crate per group (one in all when ungrouped), each with the record it showed last at the front, or else the
+    /// album playing (mockup: renderCrate). The active crate stays active while it is shown.
+    /// </summary>
+    private void LayOutCrates(IReadOnlyList<Group<AlbumItemViewModel>> groups)
+    {
+        var crates = groups.Where(g => g.Items.Count > 0).Select(g => new CrateViewModel(g.Key,
+            IsGrouped ? g.Key : null, IsGrouped ? CrateViewModel.GroupLabel(g.Items.Count) : CrateLabel(g.Items), g.Items,
+            FrontOf(g.Key, g.Items))).ToList();
+        Crates = crates;
+        foreach (var crate in crates)
+        {
+            crate.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(CrateViewModel.FrontIndex) && crate.Front is { } front)
+                {
+                    _crateFronts[crate.Key] = front.Album.Id;
+                }
+            };
+        }
+
+        Activate(crates.FirstOrDefault(c => c.Key == _activeCrateKey)
+                 ?? crates.FirstOrDefault(c => c.Albums.Contains(_playing))
+                 ?? crates.FirstOrDefault());
+    }
+
+    private int FrontOf(string key, IReadOnlyList<AlbumItemViewModel> albums)
+    {
+        var shown = _crateFronts.TryGetValue(key, out var id) ? IndexOf(albums, a => a.Album.Id == id) : -1;
+        return shown >= 0 ? shown : Math.Max(0, IndexOf(albums, a => a == _playing));
+    }
+
+    private static int IndexOf(IReadOnlyList<AlbumItemViewModel> albums, Func<AlbumItemViewModel, bool> match)
+    {
+        for (var i = 0; i < albums.Count; i++)
+        {
+            if (match(albums[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>"A — Z", or the years when sorted by year (mockup: .crate-box .lbl).</summary>
+    private string CrateLabel(IReadOnlyList<AlbumItemViewModel> albums)
+    {
+        var years = albums.Select(a => a.Album.Year).OfType<int>().ToList();
+        return Sort == LibrarySort.Year && years.Count > 0
+            ? string.Create(CultureInfo.InvariantCulture, $"{years[0]} — {years[^1]}")
+            : "A — Z";
+    }
+
+    private void Show(CrateViewModel crate, int index)
+    {
+        crate.Show(index);
+        Activate(crate);
+    }
+
+    private void Activate(CrateViewModel? crate)
+    {
+        foreach (var other in Crates)
+        {
+            other.IsActive = other == crate;
+        }
+
+        ActiveCrate = crate;
+        if (crate is not null)
+        {
+            _activeCrateKey = crate.Key;
+        }
     }
 
     protected override void MarkPlaying()

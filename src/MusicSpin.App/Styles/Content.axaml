@@ -51,10 +51,6 @@
     <Style Selector="Grid.toolbar ListBox.viewSwitch">
         <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
-    <!-- Shelf and Crate are off until their views come (#10, #11). -->
-    <Style Selector="ListBox.viewSwitch ListBoxItem:nth-child(n+2)">
-        <Setter Property="IsEnabled" Value="False" />
-    </Style>
     <Style Selector="StackPanel.sort">
         <Setter Property="Orientation" Value="Horizontal" />
         <Setter Property="Spacing" Value="{StaticResource DropdownGap}" />
@@ -153,6 +149,49 @@
         <Setter Property="FontSize" Value="{StaticResource ButtonFontSize}" />
         <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Big round-ended buttons (mockup: .btn, .btn.ghost): Play on the album colour, ＋ Queue on the panel colour. -->
+    <Style Selector="Button.pill">
+        <Setter Property="Padding" Value="{StaticResource PillButtonPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource PillButtonRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource PillButtonFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+    </Style>
+    <Style Selector="Button.pill > StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource PillIconGap}" />
+    </Style>
+    <Style Selector="Button.pill controls|Icon">
+        <Setter Property="Width" Value="{StaticResource PillIconSize}" />
+        <Setter Property="Height" Value="{StaticResource PillIconSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+
+    <!-- A kicker above a title (mockup: .np-kicker): "JAZZ · 2023". -->
+    <Style Selector="TextBlock.kicker">
+        <Setter Property="FontSize" Value="{StaticResource KickerFontSize}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource KickerLetterSpacing}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <!-- Format chips (mockup: .np-tech span): "FLAC", "24/192", "8 tracks". -->
+    <Style Selector="WrapPanel.chips">
+        <Setter Property="ItemSpacing" Value="{StaticResource ChipGap}" />
+        <Setter Property="LineSpacing" Value="{StaticResource ChipGap}" />
+    </Style>
+    <Style Selector="Border.chip">
+        <Setter Property="Padding" Value="{StaticResource ChipPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ChipRadius}" />
+        <Setter Property="Background" Value="{StaticResource ChipBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource ChipBorderThickness}" />
+    </Style>
+    <Style Selector="Border.chip > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource ChipFontSize}" />
     </Style>
 
     <Style Selector="StackPanel.radio">

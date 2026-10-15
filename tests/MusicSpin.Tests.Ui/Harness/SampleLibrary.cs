@@ -50,10 +50,14 @@ internal static class SampleLibrary
         return library;
     }
 
-    /// <summary>Covers in two colours per album (a diagonal split), except for albums 2, 5 and 10, which show their placeholder.</summary>
-    public static StubCovers Covers()
+    /// <summary>
+    /// Covers in two colours per album (a diagonal split), except for albums 2, 5 and 10, which show their placeholder;
+    /// with <paramref name="accents"/>, each cover's first colour is its album's colour.
+    /// </summary>
+    public static StubCovers Covers(bool accents = false)
     {
         var bitmaps = new Dictionary<string, Bitmap>(StringComparer.Ordinal);
+        var colours = new Dictionary<string, Rgb>(StringComparer.Ordinal);
         for (var i = 1; i <= Albums.Length; i++)
         {
             if (i is 2 or 5 or 10)
@@ -63,9 +67,11 @@ internal static class SampleLibrary
 
             var (a, b) = (Hue(i * 37), Hue((i * 37) + 150));
             bitmaps[AlbumId(i)] = TestImages.Bitmap(TestImages.Png(64, 64, (x, y) => x + y < 64 ? a : b));
+            colours[AlbumId(i)] = new Rgb(a.Red, a.Green, a.Blue);
         }
 
-        return new StubCovers(id => bitmaps.GetValueOrDefault(id));
+        Rgb? Accent(string id) => colours.TryGetValue(id, out var c) ? c : null;
+        return new StubCovers(id => bitmaps.GetValueOrDefault(id), accents ? Accent : null);
     }
 
     private static SKColor Hue(int degrees) => SKColor.FromHsv(degrees % 360, 55, 70);

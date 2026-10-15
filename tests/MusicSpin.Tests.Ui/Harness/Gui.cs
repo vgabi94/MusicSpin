@@ -13,19 +13,31 @@ internal static class Gui
     /// <summary>Runs queued UI work and lays out (no time passes).</summary>
     public static void Settle()
     {
-        Dispatcher.UIThread.RunJobs();
+        RunJobs();
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        RunJobs();
+    }
+
+    /// <summary>
+    /// Runs queued UI work and the dispatcher timers that are due. Avalonia fires due timers only after it runs a job, and
+    /// the animation clock keeps going between frames on a timer: a transition that holds still (in its delay) changes
+    /// nothing to render, so without this it would wait forever in a test.
+    /// </summary>
+    public static void RunJobs()
+    {
+        Dispatcher.UIThread.Post(static () => { });
         Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>
     /// Lets running transitions finish (Avalonia's animation clock is real time; see <see cref="UiTime"/>) without moving
-    /// the app's fake clock. The longest transition is 0.5 s at Motion Smooth.
+    /// the app's fake clock. Most transitions take at most 0.5 s at Motion Smooth; the shelf's and the crate's take up to
+    /// 1.1 s, so their tests pass a longer <paramref name="longest"/>.
     /// </summary>
-    public static void FinishAnimations()
+    public static void FinishAnimations(int longest = 600)
     {
         var real = System.Diagnostics.Stopwatch.StartNew();
-        while (real.Elapsed < TimeSpan.FromMilliseconds(600))
+        while (real.Elapsed < TimeSpan.FromMilliseconds(longest))
         {
             Settle();
             Thread.Sleep(UiTime.Frame);

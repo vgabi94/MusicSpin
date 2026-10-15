@@ -118,6 +118,84 @@
     <Thickness x:Key="CardDetailsMargin">0,2,0,0</Thickness>
     <sys:Double x:Key="CardDetailsGap">6</sys:Double>
 
+    <!--
+      The shelf (mockup: .shelf, .shelf-row, .slot, .board): sleeves 170 square on rows 214 high, padded 24 left and 30
+      right; a 16 high board under each row, the next row 10 below it, and 34 after a group's last board. The shelf's
+      group headers sit right on the first row. The sleeve's thickness (its spine) is 6; its contact shadow 14 high.
+    -->
+    <sys:Double x:Key="ShelfSleeveSize">170</sys:Double>
+    <CornerRadius x:Key="ShelfCoverRadius">2</CornerRadius>
+    <!-- The record in a sleeve, inset 4% on each side (mockup: .sleeve3d .vinyl, inset 4%). -->
+    <sys:Double x:Key="ShelfRecordSize">156.4</sys:Double>
+    <sys:Double x:Key="ShelfRowHeight">214</sys:Double>
+    <Thickness x:Key="ShelfRowPadding">24,10,30,0</Thickness>
+    <sys:Double x:Key="ShelfBoardHeight">16</sys:Double>
+    <CornerRadius x:Key="ShelfBoardRadius">3</CornerRadius>
+    <Thickness x:Key="ShelfBoardGapMargin">0,10,0,0</Thickness>
+    <Thickness x:Key="ShelfGroupGapMargin">0,0,0,34</Thickness>
+    <Thickness x:Key="ShelfGroupHeaderMargin">0</Thickness>
+    <sys:Double x:Key="ShelfSpineWidth">6</sys:Double>
+    <sys:Double x:Key="ShelfShadowHeight">14</sys:Double>
+    <!-- The spine is in shadow (mockup: .edge filter: brightness(.55)). -->
+    <sys:Double x:Key="ShelfSpineShade">0.55</sys:Double>
+
+    <!--
+      The crate (mockup: .crate-wrap, .crate, .crate-stage, .crate-box, .crate-side). One crate is laid out at full
+      size: records 300 square standing 70 above the crate's bottom, in a box 380 x 100 that is 40 above it; it fills
+      the view, at least 470 high. Grouped, each crate is that same layout (CrateGroupedWidth x CrateGroupedHeight)
+      scaled by .62 into a cell at least 250 wide and 279 high (450 x .62); its label's 11 px and the 72 px left for
+      the group's icons are divided by .62 to stay that size. The side panel is 280 wide, 30 from the crates.
+    -->
+    <sys:Double x:Key="CrateRecordSize">300</sys:Double>
+    <Thickness x:Key="CrateRecordMargin">0,0,0,70</Thickness>
+    <sys:Double x:Key="CrateBoxWidth">380</sys:Double>
+    <sys:Double x:Key="CrateBoxHeight">100</sys:Double>
+    <Thickness x:Key="CrateBoxMargin">0,0,0,40</Thickness>
+    <CornerRadius x:Key="CrateBoxRadius">6</CornerRadius>
+    <sys:Double x:Key="CrateMinHeight">470</sys:Double>
+    <sys:Double x:Key="CrateLabelFontSize">11</sys:Double>
+    <sys:Double x:Key="CrateLabelLetterSpacing">4.4</sys:Double>
+    <sys:Double x:Key="CrateGroupedWidth">404</sys:Double>
+    <sys:Double x:Key="CrateGroupedHeight">450</sys:Double>
+    <sys:Double x:Key="CrateCellMinWidth">250</sys:Double>
+    <sys:Double x:Key="CrateCellHeight">279</sys:Double>
+    <sys:Double x:Key="CrateCellColumnGap">12</sys:Double>
+    <sys:Double x:Key="CrateCellRowGap">4</sys:Double>
+    <sys:Double x:Key="CrateGroupLabelFontSize">17.7</sys:Double>
+    <sys:Double x:Key="CrateGroupLabelLetterSpacing">2.1</sys:Double>
+    <Thickness x:Key="CrateGroupLabelPadding">24,0,116,0</Thickness>
+    <sys:Double x:Key="CrateSideWidth">280</sys:Double>
+    <sys:Double x:Key="CrateSideGap">30</sys:Double>
+    <Thickness x:Key="CrateSideMargin">0,8,28,40</Thickness>
+    <Thickness x:Key="CrateSideGroupedMargin">0,48,28,40</Thickness>
+    <!-- The crates take the view's padding (ViewPadding) on their side; the side panel on its own. -->
+    <Thickness x:Key="SoleCrateMargin">28,8,0,40</Thickness>
+    <Thickness x:Key="CrateScrollPadding">28,8,0,40</Thickness>
+    <sys:Double x:Key="CrateGroupNameMaxWidth">200</sys:Double>
+    <CornerRadius x:Key="CrateCoverRadius">3</CornerRadius>
+    <!-- A record's hover light (mockup: .crate .rec:hover::after, opacity .07). -->
+    <sys:Double x:Key="CrateRecordHoverOpacity">0.07</sys:Double>
+    <sys:Double x:Key="CrateTitleFontSize">26</sys:Double>
+    <Thickness x:Key="CrateTitleMargin">0,0,0,4</Thickness>
+    <Thickness x:Key="CrateArtistMargin">0,0,0,16</Thickness>
+    <Thickness x:Key="CrateChipsMargin">0,0,0,18</Thickness>
+    <sys:Double x:Key="CrateButtonsGap">6</sys:Double>
+
+    <!-- The kicker above a title (mockup: .np-kicker) and the format chips (.np-tech span). -->
+    <sys:Double x:Key="KickerFontSize">11</sys:Double>
+    <sys:Double x:Key="KickerLetterSpacing">1.1</sys:Double>
+    <sys:Double x:Key="ChipGap">8</sys:Double>
+    <sys:Double x:Key="ChipFontSize">11.5</sys:Double>
+    <Thickness x:Key="ChipPadding">8,3</Thickness>
+    <CornerRadius x:Key="ChipRadius">999</CornerRadius>
+    <Thickness x:Key="ChipBorderThickness">1</Thickness>
+    <!-- A big round-ended button (mockup: .btn, padding 9px 18px, radius 999px). -->
+    <Thickness x:Key="PillButtonPadding">18,9</Thickness>
+    <CornerRadius x:Key="PillButtonRadius">999</CornerRadius>
+    <sys:Double x:Key="PillButtonFontSize">14</sys:Double>
+    <sys:Double x:Key="PillIconSize">12</sys:Double>
+    <sys:Double x:Key="PillIconGap">6</sys:Double>
+
     <!-- Track rows (mockup: .tlist, .tr) and album headers (.talbum). -->
     <Thickness x:Key="RowPadding">10,5</Thickness>
     <CornerRadius x:Key="RowRadius">7</CornerRadius>
