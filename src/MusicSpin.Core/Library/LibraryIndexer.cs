@@ -67,6 +67,7 @@ internal static class LibraryIndexer
                 AlbumArtistKey = first.AlbumArtistKey,
                 TitleKey = LibraryKeys.NameKey(first.Album ?? LibraryKeys.UnknownAlbum),
                 Year = g.Select(t => t.Year).Where(y => y is > 0).Min(),
+                Genre = LibraryKeys.DisplayName(g.Select(t => t.Genre), string.Empty) is { Length: > 0 } genre ? genre : null,
                 TrackCount = g.Count(),
                 DiscCount = Math.Max(1, g.Select(t => t.DiscNumber ?? 1).Distinct().Count()),
                 DurationSeconds = g.Sum(t => t.DurationSeconds),
