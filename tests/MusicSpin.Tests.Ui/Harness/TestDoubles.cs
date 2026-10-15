@@ -89,7 +89,7 @@ internal sealed class StubLibrary : ILibraryService
 }
 
 /// <summary>Covers from a function, counting requests per album.</summary>
-internal sealed class StubCovers(Func<string, Bitmap?>? cover = null) : ICoverService
+internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<string, Rgb?>? accent = null) : ICoverService
 {
     public ConcurrentDictionary<string, int> Requests { get; } = new(StringComparer.Ordinal);
 
@@ -99,7 +99,7 @@ internal sealed class StubCovers(Func<string, Bitmap?>? cover = null) : ICoverSe
         return Task.FromResult(cover?.Invoke(albumId));
     }
 
-    public Task<Rgb?> AccentAsync(string albumId) => Task.FromResult<Rgb?>(null);
+    public Task<Rgb?> AccentAsync(string albumId) => Task.FromResult(accent?.Invoke(albumId));
 }
 
 /// <summary>Records what the view models ask of the appearance (no Application needed).</summary>

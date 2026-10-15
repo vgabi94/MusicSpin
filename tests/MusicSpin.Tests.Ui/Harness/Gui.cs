@@ -10,29 +10,30 @@ namespace MusicSpin.Tests.Ui.Harness;
 /// <summary>Waiting, finding and clicking in a headless window.</summary>
 internal static class Gui
 {
-    /// <summary>Runs queued UI work and lays out (no time passes).</summary>
+    /// <summary>Runs queued UI work, the dispatcher timers due, and lays out and renders (no time passes).</summary>
     public static void Settle()
     {
-        Dispatcher.UIThread.RunJobs();
+        RunJobs();
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        RunJobs();
+    }
+
+    /// <summary>
+    /// Runs queued UI work and the dispatcher timers that are due. Avalonia fires due timers only after it runs a job, and
+    /// keeps animations rendering between frames on a timer, so this posts a job first.
+    /// </summary>
+    public static void RunJobs()
+    {
+        Dispatcher.UIThread.Post(static () => { });
         Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>
-    /// Lets running transitions finish (Avalonia's animation clock is real time; see <see cref="UiTime"/>) without moving
-    /// the app's fake clock. The longest transition is 0.5 s at Motion Smooth.
+    /// Lets running transitions finish without moving the app's fake clock (the animation clock only moves when a test
+    /// moves it; see <see cref="UiTime"/>). Most transitions take at most 0.5 s at Motion Smooth; the shelf's and the
+    /// crate's take up to 1.1 s, so their tests pass a longer <paramref name="longest"/>.
     /// </summary>
-    public static void FinishAnimations()
-    {
-        var real = System.Diagnostics.Stopwatch.StartNew();
-        while (real.Elapsed < TimeSpan.FromMilliseconds(600))
-        {
-            Settle();
-            Thread.Sleep(UiTime.Frame);
-        }
-
-        Settle();
-    }
+    public static void FinishAnimations(int longest = 600) => UiTime.AdvanceAnimations(TimeSpan.FromMilliseconds(longest));
 
     /// <summary>
     /// Waits (in real time: the player and the library work on their own threads) until <paramref name="condition"/>

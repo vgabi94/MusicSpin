@@ -25,6 +25,12 @@
                 <GradientStop Color="#2A2C31" Offset="0" />
                 <GradientStop Color="#17181B" Offset="1" />
             </LinearGradientBrush>
+            <!-- A shelf board (mockup: .board, linear-gradient(#3a2c22, #2a1f18 40%, #1a130e)). -->
+            <LinearGradientBrush x:Key="ShelfBoardBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+                <GradientStop Color="#3A2C22" Offset="0" />
+                <GradientStop Color="#2A1F18" Offset="0.4" />
+                <GradientStop Color="#1A130E" Offset="1" />
+            </LinearGradientBrush>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="BgBrush" Color="#F4F2EE" />
@@ -44,12 +50,40 @@
                 <GradientStop Color="#F7F5F1" Offset="0" />
                 <GradientStop Color="#DCD8D0" Offset="1" />
             </LinearGradientBrush>
+            <!-- mockup: :root.light .board, linear-gradient(#c9a77f, #b48f66 40%, #8f6d4b). -->
+            <LinearGradientBrush x:Key="ShelfBoardBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+                <GradientStop Color="#C9A77F" Offset="0" />
+                <GradientStop Color="#B48F66" Offset="0.4" />
+                <GradientStop Color="#8F6D4B" Offset="1" />
+            </LinearGradientBrush>
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
     <!-- The playing album's colour (80% with white) and its ink for text; replaced at runtime. -->
     <SolidColorBrush x:Key="AccentBrush" Color="#E86A3C" />
     <SolidColorBrush x:Key="AccentInkBrush" Color="#E86A3C" />
+
+    <!-- A sleeve's spine when the album has no colour (mockup: .edge, background #333 by default). -->
+    <SolidColorBrush x:Key="ShelfSpineBrush" Color="#333333" />
+    <!-- A sleeve's contact shadow on the board (mockup: .sleeve3d::after, radial-gradient(closest-side, #000a, transparent)). -->
+    <RadialGradientBrush x:Key="ShelfShadowBrush">
+        <GradientStop Color="#AA000000" Offset="0" />
+        <GradientStop Color="#00000000" Offset="1" />
+    </RadialGradientBrush>
+    <!-- The crate (mockup: .crate-box, linear-gradient(#5a4232, #3b2a1f)); the same in both themes. -->
+    <LinearGradientBrush x:Key="CrateBoxBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#5A4232" Offset="0" />
+        <GradientStop Color="#3B2A1F" Offset="1" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="CrateLabelBrush" Color="#40FFFFFF" />
+    <SolidColorBrush x:Key="CrateGroupLabelBrush" Color="#80FFFFFF" />
+    <SolidColorBrush x:Key="CrateActiveLabelBrush" Color="#FFFFFF" />
+    <!-- A crate record's hover light (mockup: .crate .rec::after, #fff at .07). -->
+    <SolidColorBrush x:Key="CrateRecordHoverBrush" Color="#FFFFFF" />
+    <!-- The records behind darken: black over them (mockup: filter: brightness). -->
+    <SolidColorBrush x:Key="CrateShadeBrush" Color="#000000" />
+    <!-- A format chip (mockup: .np-tech span, background #ffffff14). -->
+    <SolidColorBrush x:Key="ChipBrush" Color="#14FFFFFF" />
 
     <!-- Records and sleeves look the same in both themes. -->
     <SolidColorBrush x:Key="VinylBrush" Color="#111111" />

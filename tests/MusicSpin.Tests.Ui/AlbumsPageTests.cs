@@ -71,7 +71,7 @@ public sealed class AlbumsPageTests
         var views = Gui.Find<ListBox>(app.Window, "ViewSwitch");
         Assert.Equal(["Cards", "Shelf", "Crate"], app.ViewModel.AlbumsPage.Views.Select(v => v.Label));
         Assert.Equal(0, views.SelectedIndex);
-        Assert.Equal([true, false, false], views.GetRealizedContainers().Select(c => c.IsEnabled)); // Shelf and Crate: #10, #11
+        Assert.Equal([true, true, true], views.GetRealizedContainers().Select(c => c.IsEnabled));
         Assert.Equal(["Sort: ", "Artist"], Texts(Gui.Find<Button>(app.Window, "SortButton")));
         Assert.Equal(["Group: ", "Genre"], Texts(Gui.Find<Button>(app.Window, "GroupButton")));
         Assert.Equal(["AMBIENT · 2", "CLASSICAL · 3", "ELECTRONIC · 1"],

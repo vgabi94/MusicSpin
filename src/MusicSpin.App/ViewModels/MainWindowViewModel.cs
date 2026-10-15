@@ -30,7 +30,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
         Layers.Register(Menu);
-        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Menu, Notices);
+        Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
+        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Menu, Notices, Settings, services.Time);
         TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Menu, Notices);
         RadioPage = new RadioPageViewModel(Player, Notices);
         CurrentPage = AlbumsPage;
@@ -41,7 +42,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         services.Library.Changed += (_, _) => services.Ui.Post(() => _ = ReloadAsync());
         Banner = services.StartupWarning;
 
-        Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
         Layers.Register(Settings);
         Settings.PropertyChanged += (_, e) =>
         {
@@ -147,6 +147,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     [RelayCommand(CanExecute = nameof(CanUseShortcuts), AllowConcurrentExecutions = true)]
     private Task VolumeDown() => PlayerBar.Volume.StepCommand.ExecuteAsync(-VolumeViewModel.KeyStep);
 
+    /// <summary>
+    /// → ↓: flips the Albums page's active crate one record on, unless a text box has focus. (A focused slider, such as
+    /// the position bar, takes the arrows itself first.)
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanUseShortcuts))]
+    private void FlipCrateOn() => FlipCrate(1);
+
+    /// <summary>← ↑: one record back.</summary>
+    [RelayCommand(CanExecute = nameof(CanUseShortcuts))]
+    private void FlipCrateBack() => FlipCrate(-1);
+
+    private void FlipCrate(int step)
+    {
+        if (CurrentPage == AlbumsPage)
+        {
+            AlbumsPage.FlipActiveCrate(step);
+        }
+    }
+
     /// <summary>The play/pause button.</summary>
     [RelayCommand]
     private Task TogglePlay() => Player.TogglePlayCommand.ExecuteAsync(null);
@@ -172,7 +191,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     private void NotifyShortcutsChanged()
     {
-        foreach (var command in new[] { SpaceCommand, SeekForwardCommand, SeekBackCommand, VolumeUpCommand, VolumeDownCommand })
+        foreach (var command in new IRelayCommand[] { SpaceCommand, SeekForwardCommand, SeekBackCommand, VolumeUpCommand, VolumeDownCommand, FlipCrateOnCommand, FlipCrateBackCommand })
         {
             command.NotifyCanExecuteChanged();
         }

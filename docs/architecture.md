@@ -101,19 +101,21 @@ src/MusicSpin.App/
 │                          notices, the format label, typed values (seek and volume syntax), turntable designs
 ├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
 │                          layers (Settings, Now Playing, queue drawer, the menu), pages (Albums, Tracks, playlists,
-│                          Radio) and LibraryOrder (their sort and grouping)
+│                          Radio), Crate (a crate and its records) and LibraryOrder (sort and grouping)
 ├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, Pages/ — structure and
 │                          bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
 │                          ScrubBar (the position, volume and Settings sliders), SpectrumView, FollowPanel, TypedBox,
-│                          TrimFirstPanel (a text that trims before the badge after it)
+│                          TrimFirstPanel (a text that trims before the badge after it), ShelfSleeve and CrateRecord
+│                          (the shelf's and the crates' 3D, drawn with Projection: CSS-style 4×4 transforms)
 ├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), Animate
-│                          (per-control transitions, animations played on a trigger), converters
+│                          (per-control transitions, animations played on a trigger), ShelfGeometry (slot widths,
+│                          sleeves per board, depth as perspective), converters
 └── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes: plain
                            button, ScrubBar, TypedBox, segmented control, cards), Window,
                            Base, TitleBar, Sidebar, Content (toolbar, group headers, the menu), Lists (track rows),
-                           Cards, PlayerBar, Dialogs (and Settings), Artwork
+                           Cards, Shelf, Crate, PlayerBar, Dialogs (and Settings), Artwork
 ```
 
 - **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
@@ -147,6 +149,17 @@ src/MusicSpin.App/
   however it is grouped. The Albums view reports how many 176 px columns fit its width, and the view model cuts the card
   rows to that. A track row's type says which columns it has, so each grouping has its own template. An album's genre is
   the one most of its tracks have (`AlbumRecord.Genre`, set by the indexer).
+- **Shelf and crates.** Avalonia's `Rotate3DTransform` keeps the eye at the element's centre; the mockup puts it at a
+  sleeve's bottom edge (so sleeves stand flat on the board) and high above a crate. So `ShelfSleeve` and `CrateRecord`
+  build the mockup's CSS transforms as 4×4 matrices (`Projection`) and draw with their 2D projective part. A sleeve's
+  slot is flat and takes the pointer; only what is drawn in it turns, so hovering never flickers. The view reports how
+  many sleeves fit a board (`ShelfGeometry.PerBoard`, leaving room for a hovered and a playing one) at the current tilt;
+  the boards are re-cut when that changes, and tilt and depth otherwise only change the transforms. A crate record's
+  place from the front is a number its transition animates, and its pose (lean, distance, darkening) follows from it;
+  only the records near the front are made. Grouped crates are the full-size crate scaled down whole (a `Viewbox`). The
+  wheel flips a crate once its turns add up to half a notch, at most every 180 ms on the app's clock, and past either
+  end it leaves the wheel to the page; the arrow keys are window key bindings, so a focused text box or slider keeps
+  them.
 - **The menu.** The Sort and Group dropdowns and the ＋ buttons fill one `MenuViewModel` (a layer, so Esc closes it)
   with entries; the window places it under the button that opened it, inside the window, and a press anywhere else
   closes it.
@@ -181,5 +194,9 @@ OS). `Harness/` has:
 - `Snapshots`: compares frames with approved baselines in `Snapshots/`, with a tolerance; on a mismatch it writes the
   actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines, and Linux has `name.linux.png` where its text smoothing shows (the player bar, Settings in dark); `MUSICSPIN_UPDATE_SNAPSHOTS=1`
   rewrites the baselines, which are reviewed against the mockup before they're committed;
-- `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's headless animation clock is real
-  time (a render tick only samples it), so this lets real time pass frame by frame.
+- `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's animation clock is real time (a
+  stopwatch in its MediaContext; a render tick only samples it), which made transitions run ahead of or behind the fake
+  clock on slow CI runners. So the test app stops that stopwatch at start, and only `UiTime` moves it, a frame at a time,
+  rendering after each: transitions follow the fake clock exactly and no real time passes (`Gui.FinishAnimations` moves
+  only the animation clock). `Gui.RunJobs` also fires the dispatcher timers that are due: Avalonia fires them only after
+  it runs a job.

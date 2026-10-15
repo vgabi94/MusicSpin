@@ -14,8 +14,8 @@ namespace MusicSpin.App.Theming;
 /// A <see cref="Transitions"/> object set by a style setter is one instance shared by every control the style matches,
 /// and a shared transition leaves later controls stuck mid-animation (seen with brushes once the first window closed).
 /// This property takes a text spec instead and builds each control its own transitions. The spec is
-/// <c>Property DurationKey [EasingKey]</c>, several separated by <c>;</c>. Durations and easings are resources from
-/// Styles/Motion.axaml; durations follow the Motion setting like <see cref="MotionExtension"/>.
+/// <c>Property DurationKey [EasingKey [DelayKey]]</c>, several separated by <c>;</c>. Durations, easings and delays
+/// are resources from Styles/Motion.axaml; durations and delays follow the Motion setting like <see cref="MotionExtension"/>.
 /// </remarks>
 public static class Animate
 {
@@ -124,9 +124,9 @@ public static class Animate
 
     private static TransitionBase Create(Animatable target, string[] words)
     {
-        if (words.Length is < 2 or > 3)
+        if (words.Length is < 2 or > 4)
         {
-            throw new FormatException($"Animate.Transitions: '{string.Join(' ', words)}' is not 'Property DurationKey [EasingKey]'.");
+            throw new FormatException($"Animate.Transitions: '{string.Join(' ', words)}' is not 'Property DurationKey [EasingKey [DelayKey]]'.");
         }
 
         var property = AvaloniaPropertyRegistry.Instance.FindRegistered(target, words[0])
@@ -141,9 +141,14 @@ public static class Animate
         };
         transition.Property = property;
         transition.Bind(TransitionBase.DurationProperty, (BindingBase)new MotionExtension(words[1]).ProvideValue(null!));
-        if (words.Length == 3)
+        if (words.Length >= 3)
         {
             transition.Easing = Resource<Easing>(words[2]);
+        }
+
+        if (words.Length == 4)
+        {
+            transition.Bind(TransitionBase.DelayProperty, (BindingBase)new MotionExtension(words[3]).ProvideValue(null!));
         }
 
         return transition;

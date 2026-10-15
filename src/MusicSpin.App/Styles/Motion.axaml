@@ -12,6 +12,18 @@
     <!-- An album card's record and cover moving on hover and while it plays (mockup: .card .art > .vinyl, > .cover). -->
     <sys:TimeSpan x:Key="CardVinylDuration">0:0:0.55</sys:TimeSpan>
     <sys:TimeSpan x:Key="CardCoverDuration">0:0:0.45</sys:TimeSpan>
+    <!--
+      A shelf sleeve turning to face you and its slot widening (mockup: .slot, .sleeve3d, .7s), after the pointer rests
+      on it for ShelfHoverDelay (60ms); the playing record sliding half out (.vinyl, 1s after .1s).
+    -->
+    <sys:TimeSpan x:Key="ShelfTurnDuration">0:0:0.7</sys:TimeSpan>
+    <sys:TimeSpan x:Key="ShelfHoverDelay">0:0:0.06</sys:TimeSpan>
+    <sys:TimeSpan x:Key="ShelfRecordDuration">0:0:1</sys:TimeSpan>
+    <sys:TimeSpan x:Key="ShelfRecordDelay">0:0:0.1</sys:TimeSpan>
+    <!-- A crate record flipping (mockup: .crate .rec, transform .8s), its hover light (.35s), the group label (.3s). -->
+    <sys:TimeSpan x:Key="CrateFlipDuration">0:0:0.8</sys:TimeSpan>
+    <sys:TimeSpan x:Key="CrateHoverDuration">0:0:0.35</sys:TimeSpan>
+    <sys:TimeSpan x:Key="CrateLabelDuration">0:0:0.3</sys:TimeSpan>
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 

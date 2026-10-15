@@ -19,6 +19,10 @@
         <KeyBinding Gesture="Ctrl+Left" Command="{Binding SeekBackCommand}" />
         <KeyBinding Gesture="Ctrl+Up" Command="{Binding VolumeUpCommand}" />
         <KeyBinding Gesture="Ctrl+Down" Command="{Binding VolumeDownCommand}" />
+        <KeyBinding Gesture="Right" Command="{Binding FlipCrateOnCommand}" />
+        <KeyBinding Gesture="Down" Command="{Binding FlipCrateOnCommand}" />
+        <KeyBinding Gesture="Left" Command="{Binding FlipCrateBackCommand}" />
+        <KeyBinding Gesture="Up" Command="{Binding FlipCrateBackCommand}" />
     </Window.KeyBindings>
 
     <Window.DataTemplates>

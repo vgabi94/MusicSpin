@@ -1,0 +1,103 @@
+<!--
+  The shelf (mockup: "Shelf (3D, tilted)"): rows of sleeves standing on wooden boards. Each sleeve (controls:ShelfSleeve)
+  is a flat slot that takes the pointer, with the turned sleeve drawn in it; hovered (after a moment) or playing, it
+  turns to face you and its slot widens, and playing, its record slides half out. The control works out the 3D and
+  its state; this file gives it its parts, sizes, colours and timing.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <Styles.Resources>
+        <ControlTheme x:Key="{x:Type controls:ShelfSleeve}" TargetType="controls:ShelfSleeve">
+            <Setter Property="Size" Value="{StaticResource ShelfSleeveSize}" />
+            <Setter Property="EdgeWidth" Value="{StaticResource ShelfSpineWidth}" />
+            <Setter Property="SpineFallback" Value="{StaticResource ShelfSpineBrush}" />
+            <Setter Property="SpineShade" Value="{StaticResource ShelfSpineShade}" />
+
+            <!-- The slot takes the pointer over its whole area, not only where the turned sleeve is drawn. -->
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="ClipToBounds" Value="False" />
+            <Setter Property="VerticalAlignment" Value="Bottom" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="theming:Animate.Transitions"
+                    Value="Turn ShelfTurnDuration EaseSoft ShelfHoverDelay; Pull ShelfTurnDuration EaseSoft; RecordOut ShelfRecordDuration EaseSoft ShelfRecordDelay" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="{TemplateBinding Background}">
+                        <Border Name="PART_Shadow"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Top"
+                                Width="{TemplateBinding Size}"
+                                Height="{StaticResource ShelfShadowHeight}"
+                                Background="{StaticResource ShelfShadowBrush}" />
+                        <controls:VinylView Name="PART_Vinyl"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
+                                            Width="{StaticResource ShelfRecordSize}"
+                                            Height="{StaticResource ShelfRecordSize}"
+                                            Label="{TemplateBinding Source}"
+                                            Angle="{TemplateBinding DiscAngle}" />
+                        <controls:CoverView Name="PART_Sleeve"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
+                                            Classes="shelf"
+                                            Width="{TemplateBinding Size}"
+                                            Height="{TemplateBinding Size}"
+                                            Source="{TemplateBinding Source}"
+                                            Title="{TemplateBinding Title}"
+                                            Artist="{TemplateBinding Artist}" />
+                        <Border Name="PART_Edge"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Top"
+                                Width="{TemplateBinding EdgeWidth}"
+                                Height="{TemplateBinding Size}"
+                                Background="{TemplateBinding Spine}" />
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <!-- A shelf sleeve's cover: square-cornered, no drop shadow (mockup: .sleeve3d .cover). -->
+    <Style Selector="controls|CoverView.shelf">
+        <Setter Property="CornerRadius" Value="{StaticResource ShelfCoverRadius}" />
+    </Style>
+    <Style Selector="controls|CoverView.shelf /template/ Border#PART_Shadow">
+        <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+    </Style>
+
+    <!-- The shelf's group headers sit right on the boards (mockup: .shelf > .group-h). -->
+    <Style Selector="ItemsControl.shelf Grid.groupHeader, ItemsControl.shelf Grid.groupHeader.first">
+        <Setter Property="Margin" Value="{StaticResource ShelfGroupHeaderMargin}" />
+    </Style>
+
+    <!-- Nothing on the way clips: a turned sleeve comes forward over its neighbours and the board. -->
+    <Style Selector="StackPanel.shelfBoard, ItemsControl.shelfRow">
+        <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="StackPanel.shelfBoard.last">
+        <Setter Property="Margin" Value="{StaticResource ShelfGroupGapMargin}" />
+    </Style>
+    <Style Selector="ItemsControl.shelfRow">
+        <!-- Over the board: the sleeves' contact shadows fall on it (mockup: .sleeve3d::after). -->
+        <Setter Property="ZIndex" Value="1" />
+        <Setter Property="Height" Value="{StaticResource ShelfRowHeight}" />
+        <Setter Property="Padding" Value="{StaticResource ShelfRowPadding}" />
+    </Style>
+    <!-- A group's later boards stand 10 below the board above (mockup: .board + .shelf-row). -->
+    <Style Selector="ItemsControl.shelfRow.later">
+        <Setter Property="Margin" Value="{StaticResource ShelfBoardGapMargin}" />
+    </Style>
+    <Style Selector="StackPanel.shelfRow">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+    </Style>
+    <!-- The board (mockup: .board): wood, lit along its top edge, with a soft shadow under it. -->
+    <Style Selector="Border.board">
+        <Setter Property="Height" Value="{StaticResource ShelfBoardHeight}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ShelfBoardRadius}" />
+        <Setter Property="Background" Value="{DynamicResource ShelfBoardBrush}" />
+        <Setter Property="BoxShadow" Value="inset 0 1 0 0 #20FFFFFF, 0 14 22 -8 #FF000000" />
+    </Style>
+</Styles>
