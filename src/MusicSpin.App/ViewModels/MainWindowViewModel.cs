@@ -29,8 +29,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
-        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, Notices);
-        TracksPage = new TracksPageViewModel(services.Library, Player, Notices);
+        Layers.Register(Menu);
+        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Menu, Notices);
+        TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Menu, Notices);
         RadioPage = new RadioPageViewModel(Player, Notices);
         CurrentPage = AlbumsPage;
         Sidebar.Navigated += (_, item) => _ = ShowAsync(item);
@@ -62,6 +63,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public NowPlayingViewModel NowPlaying { get; } = new();
 
     public QueueDrawerViewModel QueueDrawer { get; } = new();
+
+    /// <summary>The Sort and Group dropdowns and the ＋ menus.</summary>
+    public MenuViewModel Menu { get; } = new();
 
     /// <summary>What Esc closes, topmost first. Menus, Settings, the queue drawer and Now Playing register here.</summary>
     public LayerRegistry Layers { get; } = new();
@@ -194,7 +198,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         if (!_playlistPages.TryGetValue(playlist.Id, out var page))
         {
-            page = new PlaylistPageViewModel(playlist, _services.Library, Player, Notices);
+            page = new PlaylistPageViewModel(playlist, _services.Library, _services.Covers, Player, Menu, Notices);
             _playlistPages[playlist.Id] = page;
         }
 

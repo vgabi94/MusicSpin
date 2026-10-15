@@ -1,40 +1,173 @@
 <!--
-  Tracks, and a playlist's tracks (mockup: .tlist): title, artist, album, duration. Clicking a track plays the list from it.
+  Tracks, and a playlist's tracks (mockup: renderTracks): headers and rows, virtualized. A row leaves out the column its
+  header names: under an album, number, title, duration; under a genre (and in playlists), the thumbnail, title and
+  artist, album, duration; ungrouped, the genre too. Double-click a row, or click its number or thumbnail, to play it
+  (TracksPage.axaml.cs); ＋ opens Play next / Add to queue.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:theming="using:MusicSpin.App.Theming"
              x:Class="MusicSpin.App.Views.Pages.TracksPage"
              x:DataType="vm:TrackListPageViewModel">
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="vm:GroupHeaderViewModel">
+            <Grid Classes="groupHeader" Classes.first="{Binding IsFirst}" ColumnDefinitions="Auto,*">
+                <TextBlock Text="{Binding Text, Converter={x:Static theming:TextConverters.Upper}}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="vm:TrackAlbumHeaderViewModel">
+            <Border Classes="albumHeader" Classes.first="{Binding IsFirst}" Classes.playing="{Binding Album.IsPlaying}">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <controls:CoverView Source="{Binding Album.Art.Cover}" Title="{Binding Album.Title}" Artist="{Binding Album.Artist}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Classes="title" Text="{Binding Album.Title}" />
+                        <TextBlock Classes="details" Text="{Binding Album.Details}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Classes="actions">
+                        <Button Classes="iconButton"
+                                Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).PlayAlbumCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="Play"
+                                AutomationProperties.Name="Play album">
+                            <controls:Icon Data="{StaticResource Play}" />
+                        </Button>
+                        <Button Classes="iconButton"
+                                Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenAlbumMenuCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="Add to queue"
+                                AutomationProperties.Name="Add album to queue">
+                            <controls:Icon Data="{StaticResource Plus}" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="vm:NumberedTrackRow">
+            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource RowNumberColumn}" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="{StaticResource RowDurationColumn}" />
+                        <ColumnDefinition Width="{StaticResource RowAddColumn}" />
+                    </Grid.ColumnDefinitions>
+                    <Button Classes="number"
+                            Classes.note="{Binding Item.ShowsNote}"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).PlayTrackCommand}"
+                            CommandParameter="{Binding Item}"
+                            AutomationProperties.Name="Play">
+                        <Panel>
+                            <TextBlock Text="{Binding Item.Number}" />
+                            <controls:Icon Classes="note" Data="{StaticResource Note}" />
+                            <controls:Icon Classes="play" Data="{StaticResource Play}" />
+                        </Panel>
+                    </Button>
+                    <TextBlock Grid.Column="1" Classes="title" Text="{Binding Item.Title}" />
+                    <TextBlock Grid.Column="2" Classes="secondary duration" Text="{Binding Item.Duration}" />
+                    <Button Grid.Column="3"
+                            Classes="add"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenTrackMenuCommand}"
+                            CommandParameter="{Binding Item}"
+                            ToolTip.Tip="Add to queue"
+                            AutomationProperties.Name="Add to queue">
+                        <controls:Icon Data="{StaticResource Plus}" />
+                    </Button>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="vm:TrackRowWithAlbum">
+            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource RowThumbColumn}" />
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="1.4*" />
+                        <ColumnDefinition Width="{StaticResource RowDurationColumn}" />
+                        <ColumnDefinition Width="{StaticResource RowAddColumn}" />
+                    </Grid.ColumnDefinitions>
+                    <Button Classes="thumb"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).PlayTrackCommand}"
+                            CommandParameter="{Binding Item}"
+                            AutomationProperties.Name="Play">
+                        <Panel>
+                            <controls:CoverView Classes="flat" Source="{Binding Item.Art.Cover}" Title="{Binding Item.Album}" Artist="{Binding Item.AlbumArtist}" />
+                            <Border>
+                                <controls:Icon Data="{StaticResource Play}" />
+                            </Border>
+                        </Panel>
+                    </Button>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Classes="title" Text="{Binding Item.Title}" />
+                        <TextBlock Classes="secondary small" Text="{Binding Item.Artist}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding Item.Album}" />
+                    <TextBlock Grid.Column="3" Classes="secondary duration" Text="{Binding Item.Duration}" />
+                    <Button Grid.Column="4"
+                            Classes="add"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenTrackMenuCommand}"
+                            CommandParameter="{Binding Item}"
+                            ToolTip.Tip="Add to queue"
+                            AutomationProperties.Name="Add to queue">
+                        <controls:Icon Data="{StaticResource Plus}" />
+                    </Button>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="vm:TrackRowWithAlbumAndGenre">
+            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource RowThumbColumn}" />
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="1.4*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="{StaticResource RowDurationColumn}" />
+                        <ColumnDefinition Width="{StaticResource RowAddColumn}" />
+                    </Grid.ColumnDefinitions>
+                    <Button Classes="thumb"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).PlayTrackCommand}"
+                            CommandParameter="{Binding Item}"
+                            AutomationProperties.Name="Play">
+                        <Panel>
+                            <controls:CoverView Classes="flat" Source="{Binding Item.Art.Cover}" Title="{Binding Item.Album}" Artist="{Binding Item.AlbumArtist}" />
+                            <Border>
+                                <controls:Icon Data="{StaticResource Play}" />
+                            </Border>
+                        </Panel>
+                    </Button>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Classes="title" Text="{Binding Item.Title}" />
+                        <TextBlock Classes="secondary small" Text="{Binding Item.Artist}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding Item.Album}" />
+                    <TextBlock Grid.Column="3" Classes="secondary" Text="{Binding Item.Genre}" />
+                    <TextBlock Grid.Column="4" Classes="secondary duration" Text="{Binding Item.Duration}" />
+                    <Button Grid.Column="5"
+                            Classes="add"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenTrackMenuCommand}"
+                            CommandParameter="{Binding Item}"
+                            ToolTip.Tip="Add to queue"
+                            AutomationProperties.Name="Add to queue">
+                        <controls:Icon Data="{StaticResource Plus}" />
+                    </Button>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
     <ScrollViewer Name="Scroller" Classes="view">
-        <ItemsControl Name="TrackList" ItemsSource="{Binding Tracks}">
+        <ItemsControl Name="TrackList" ItemsSource="{Binding Rows}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <VirtualizingStackPanel />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vm:TrackItemViewModel">
-                    <Button Classes="row"
-                            Classes.playing="{Binding IsPlaying}"
-                            Command="{Binding $parent[ItemsControl].((vm:TrackListPageViewModel)DataContext).PlayTrackCommand}"
-                            CommandParameter="{Binding}"
-                            AutomationProperties.Name="{Binding Title}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="1.4*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="{StaticResource RowDurationColumn}" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Classes="rowTitle" Text="{Binding Title}" />
-                            <TextBlock Grid.Column="1" Classes="rowCell" Text="{Binding Artist}" />
-                            <TextBlock Grid.Column="2" Classes="rowCell" Text="{Binding Album}" />
-                            <TextBlock Grid.Column="3" Classes="rowDuration" Text="{Binding Duration}" />
-                        </Grid>
-                    </Button>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
         </ItemsControl>
     </ScrollViewer>
 </UserControl>

@@ -100,17 +100,20 @@ src/MusicSpin.App/
 ├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers,
 │                          notices, the format label, typed values (seek and volume syntax), turntable designs
 ├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
-│                          layers (Settings, Now Playing, queue drawer), pages (Albums, Tracks, playlists, Radio)
+│                          layers (Settings, Now Playing, queue drawer, the menu), pages (Albums, Tracks, playlists,
+│                          Radio) and LibraryOrder (their sort and grouping)
 ├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, Pages/ — structure and
 │                          bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
-│                          ScrubBar (the position, volume and Settings sliders), SpectrumView, FollowPanel, TypedBox
+│                          ScrubBar (the position, volume and Settings sliders), SpectrumView, FollowPanel, TypedBox,
+│                          TrimFirstPanel (a text that trims before the badge after it)
 ├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), Animate
 │                          (per-control transitions, animations played on a trigger), converters
 └── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes: plain
                            button, ScrubBar, TypedBox, segmented control, cards), Window,
-                           Base, TitleBar, Sidebar, Content, Lists, PlayerBar, Dialogs (and Settings), Artwork
+                           Base, TitleBar, Sidebar, Content (toolbar, group headers, the menu), Lists (track rows),
+                           Cards, PlayerBar, Dialogs (and Settings), Artwork
 ```
 
 - **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
@@ -138,6 +141,15 @@ src/MusicSpin.App/
   changed, whoever changed it (a scan from the CLI, a playlist from MCP).
 - **Covers.** `CoverService` reads covers through Core's cover cache and keeps decoded bitmaps for the session; a row
   asks for its cover only when it is first shown, and lists are virtualized.
+- **Albums and Tracks.** The pages sort, group and filter in the view model (`LibraryOrder`, as the mockup's
+  `cmpAlbums` and `groupBy`: group names A–Z, untagged genres last) and hand the view a flat list of rows: group
+  headers and rows of cards, or headers and track rows. A plain `VirtualizingStackPanel` then virtualizes the whole page
+  however it is grouped. The Albums view reports how many 176 px columns fit its width, and the view model cuts the card
+  rows to that. A track row's type says which columns it has, so each grouping has its own template. An album's genre is
+  the one most of its tracks have (`AlbumRecord.Genre`, set by the indexer).
+- **The menu.** The Sort and Group dropdowns and the ＋ buttons fill one `MenuViewModel` (a layer, so Esc closes it)
+  with entries; the window places it under the button that opened it, inside the window, and a press anywhere else
+  closes it.
 - **Spin clock.** One `SpinClock` drives every visible record of the playing album, at Settings › Speed (33⅓, 45 or
   16⅔ rpm), spinning up and down like a platter. It runs in every Motion mode; None only skips the ramp.
 - **Player bar.** `PlayerBarViewModel` holds the transport (⏮ restarts after 3 seconds), the format label and the

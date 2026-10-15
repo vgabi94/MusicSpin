@@ -100,6 +100,9 @@ public sealed class AlbumRecord
     public string AlbumArtistKey { get; set; } = string.Empty;
     public string TitleKey { get; set; } = string.Empty;
     public int? Year { get; set; }
+
+    /// <summary>The genre most of its tracks have (null: none tagged).</summary>
+    public string? Genre { get; set; }
     public int TrackCount { get; set; }
     public int DiscCount { get; set; }
     public double DurationSeconds { get; set; }

@@ -59,10 +59,10 @@ internal sealed class StubLibrary : ILibraryService
 
     public int AlbumReads { get; private set; }
 
-    public static AlbumSummary Album(int i) => new($"album{i:D4}", $"Album {i}", $"Artist {i % 7}", 1990 + (i % 30), "FLAC", "16/44.1", 10, 2400, false);
+    public static AlbumSummary Album(int i) => new($"album{i:D4}", $"Album {i}", $"Artist {i % 7}", 1990 + (i % 30), $"Genre {i % 5}", "FLAC", "16/44.1", 10, 2400, false);
 
     public static TrackSummary Track(int i, string? albumId = null)
-        => new($"track{i:D4}", $"/music/{i:D4}.flac", $"Track {i}", $"Artist {i % 7}", $"Album {i / 10}", albumId ?? $"album{i / 10:D4}", (i % 10) + 1, 200 + i, "FLAC", false);
+        => new($"track{i:D4}", $"/music/{i:D4}.flac", $"Track {i}", $"Artist {i % 7}", $"Album {i / 10}", albumId ?? $"album{i / 10:D4}", (i % 10) + 1, $"Genre {i / 10 % 5}", 200 + i, "FLAC", false);
 
     public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 

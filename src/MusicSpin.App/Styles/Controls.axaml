@@ -201,6 +201,10 @@
         <Style Selector="^:focus-visible">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
         </Style>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
     </ControlTheme>
 
     <!-- A segmented control (mockup: .seg): a ListBox of Choice records, one always chosen; arrows move the choice. -->

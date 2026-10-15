@@ -100,6 +100,23 @@ public sealed class MusicLibraryTests : LibraryTestBase
     }
 
     [Fact]
+    public void An_album_takes_the_genre_most_of_its_tracks_have()
+    {
+        foreach (var (file, genre) in new[] { ("1", "Jazz"), ("2", "Bebop"), ("3", "Jazz"), ("4", null) })
+        {
+            LibraryTestData.Write(Path.Combine(Music, "a", file + ".flac"), LibraryTestData.Tiny16, file, "X", "Mixed", "X", genre: genre);
+        }
+
+        LibraryTestData.Write(Path.Combine(Music, "b", "1.flac"), LibraryTestData.Tiny16, "One", "Y", "Untagged", "Y");
+        AddAndScan();
+        using var library = OpenRead();
+
+        var albums = library.Albums(new AlbumQuery()).Items;
+        Assert.Equal("Jazz", Assert.Single(albums, a => a.Title == "Mixed").Genre);
+        Assert.Null(Assert.Single(albums, a => a.Title == "Untagged").Genre);
+    }
+
+    [Fact]
     public void Same_album_title_by_different_artists_are_separate_albums()
     {
         LibraryTestData.Write(Path.Combine(Music, "a", "1.flac"), LibraryTestData.Tiny16, "One", "Weezer", "Greatest Hits", "Weezer");

@@ -97,6 +97,31 @@ internal static class Gui
         }
     }
 
+    /// <summary>Moves the mouse over the middle of <paramref name="control"/>.</summary>
+    public static void Hover(Window window, Control control)
+    {
+        window.MouseMove(Middle(window, control));
+        Settle();
+    }
+
+    /// <summary>Two clicks in a row on the middle of <paramref name="control"/> (a double-click).</summary>
+    public static void DoubleClick(Window window, Control control)
+    {
+        var point = Middle(window, control);
+        window.MouseMove(point);
+        for (var i = 0; i < 2; i++)
+        {
+            window.MouseDown(point, MouseButton.Left);
+            window.MouseUp(point, MouseButton.Left);
+        }
+
+        Settle();
+    }
+
+    private static Point Middle(Window window, Control control)
+        => control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)
+           ?? throw new InvalidOperationException($"{control} is not in the window.");
+
     public static void Press(Window window, Key key, PhysicalKey physical, string? text = null)
     {
         window.KeyPress(key, RawInputModifiers.None, physical, text);

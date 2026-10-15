@@ -9,6 +9,9 @@
     <sys:TimeSpan x:Key="HoverDuration">0:0:0.2</sys:TimeSpan>
     <!-- The mini record sliding out of its sleeve in the player bar (mockup: .mini-vinyl, 0.5s). -->
     <sys:TimeSpan x:Key="MiniVinylDuration">0:0:0.5</sys:TimeSpan>
+    <!-- An album card's record and cover moving on hover and while it plays (mockup: .card .art > .vinyl, > .cover). -->
+    <sys:TimeSpan x:Key="CardVinylDuration">0:0:0.55</sys:TimeSpan>
+    <sys:TimeSpan x:Key="CardCoverDuration">0:0:0.45</sys:TimeSpan>
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 
