@@ -138,6 +138,7 @@ internal sealed class AppHarness : IAsyncDisposable
         }
 
         Gui.Settle();
+        Gui.SyncAnimationClock();
     }
 
     /// <summary>Adds the music folder to the library and scans it (fake decoders get the same paths).</summary>

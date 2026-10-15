@@ -31,7 +31,8 @@ internal static class UiTime
             var step = by - done < Frame ? by - done : Frame;
             done += step;
             time.Advance(step);
-            Gui.RunJobs();
+            // Sleep before firing due timers so a slow RunJobs cannot leave wall time ahead of
+            // the intended step and make the animation clock catch up past it.
             var wait = done - real.Elapsed;
             if (wait > TimeSpan.Zero)
             {
