@@ -47,6 +47,89 @@
         <Setter Property="VerticalAlignment" Value="Bottom" />
     </Style>
 
+    <!-- The page's own toolbar controls: the Albums view switch next to the title, Sort and Group on the right. -->
+    <Style Selector="Grid.toolbar ListBox.viewSwitch">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <!-- Shelf and Crate are off until their views come (#10, #11). -->
+    <Style Selector="ListBox.viewSwitch ListBoxItem:nth-child(n+2)">
+        <Setter Property="IsEnabled" Value="False" />
+    </Style>
+    <Style Selector="StackPanel.sort">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource DropdownGap}" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- A dropdown (mockup: .dd): "Sort: Artist ▾". -->
+    <Style Selector="Button.dropdown">
+        <Setter Property="Padding" Value="{StaticResource DropdownPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource DropdownRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource DropdownFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.dropdown:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+    </Style>
+    <Style Selector="Button.dropdown > StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+    </Style>
+    <Style Selector="Button.dropdown TextBlock.chosen">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+    </Style>
+    <Style Selector="Button.dropdown controls|Icon">
+        <Setter Property="Width" Value="{StaticResource DropdownChevronSize}" />
+        <Setter Property="Height" Value="{StaticResource DropdownChevronSize}" />
+        <Setter Property="Margin" Value="{StaticResource DropdownChevronMargin}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A group's header (mockup: .group-h): "AMBIENT · 2", 30 below the group before it. -->
+    <Style Selector="Grid.groupHeader">
+        <Setter Property="Margin" Value="{StaticResource GroupHeaderMargin}" />
+        <Setter Property="MinHeight" Value="{StaticResource GroupHeaderMinHeight}" />
+    </Style>
+    <Style Selector="Grid.groupHeader.first">
+        <Setter Property="Margin" Value="{StaticResource FirstGroupHeaderMargin}" />
+    </Style>
+    <Style Selector="Grid.groupHeader > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource GroupHeaderFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource GroupHeaderLetterSpacing}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The menu (mockup: .menu): a raised list of choices; the current one has an accent ✓. -->
+    <Style Selector="Border.menu">
+        <Setter Property="MinWidth" Value="{StaticResource MenuMinWidth}" />
+        <Setter Property="Padding" Value="{StaticResource MenuPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource MenuRadius}" />
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="BoxShadow" Value="0 14 36 0 #AA000000" />
+    </Style>
+    <Style Selector="Button.menuEntry">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="{StaticResource MenuEntryPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource MenuEntryRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource MenuFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.menuEntry:pointerover">
+        <Setter Property="Background" Value="{DynamicResource MenuHoverBrush}" />
+    </Style>
+    <Style Selector="Button.menuEntry controls|Icon">
+        <Setter Property="Width" Value="{StaticResource MenuCheckSize}" />
+        <Setter Property="Height" Value="{StaticResource MenuCheckSize}" />
+        <Setter Property="IsStroked" Value="True" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <Style Selector="ScrollViewer.view">
         <Setter Property="Padding" Value="{StaticResource ViewPadding}" />
         <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />

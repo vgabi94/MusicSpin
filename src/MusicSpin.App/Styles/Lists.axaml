@@ -1,44 +1,179 @@
-<!-- Album and track rows (mockup: .tlist, .tr). -->
+<!--
+  Track rows (mockup: .tlist, .tr) and the Tracks page's album headers (.talbum). A row's lead is its thumbnail or its
+  number: both show ▶ while the row is hovered and play the row; the number of the track playing shows ♪. ＋ shows on
+  hover. The current track's title and number take the album colour.
+-->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
         xmlns:theming="using:MusicSpin.App.Theming">
-    <Style Selector="Button.row">
+    <Style Selector="Border.track">
         <Setter Property="Padding" Value="{StaticResource RowPadding}" />
         <Setter Property="CornerRadius" Value="{StaticResource RowRadius}" />
-        <Setter Property="MinHeight" Value="{StaticResource RowHeight}" />
         <Setter Property="Margin" Value="{StaticResource RowListGapMargin}" />
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="TextElement.FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource FgBrush}" />
     </Style>
-    <Style Selector="Button.row:pointerover">
+    <Style Selector="Border.track:pointerover">
         <Setter Property="Background" Value="{DynamicResource RowHoverBrush}" />
     </Style>
-    <Style Selector="Button.row > Grid">
+    <Style Selector="Border.track > Grid">
         <Setter Property="ColumnSpacing" Value="{StaticResource RowGap}" />
     </Style>
-    <Style Selector="Button.row TextBlock">
+    <Style Selector="Border.track TextBlock">
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         <Setter Property="TextWrapping" Value="NoWrap" />
     </Style>
-    <Style Selector="Button.row TextBlock.rowTitle">
-        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+    <Style Selector="Border.track TextBlock.secondary">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
     </Style>
-    <Style Selector="Button.row TextBlock.rowSub">
+    <Style Selector="Border.track TextBlock.small">
         <Setter Property="FontSize" Value="{StaticResource RowSecondaryFontSize}" />
-        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
     </Style>
-    <Style Selector="Button.row TextBlock.rowCell">
-        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
-    </Style>
-    <Style Selector="Button.row TextBlock.rowDuration">
-        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    <Style Selector="Border.track TextBlock.duration">
         <Setter Property="TextAlignment" Value="Right" />
         <Setter Property="FontFeatures" Value="+tnum" />
     </Style>
-    <!-- The playing album or track takes the album colour. -->
-    <Style Selector="Button.row.playing TextBlock.rowTitle">
+    <Style Selector="Border.track.current TextBlock.title">
         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+
+    <!-- The thumbnail: ▶ over a dimmed cover while the row is hovered. -->
+    <Style Selector="Button.thumb">
+        <Setter Property="Width" Value="{StaticResource RowThumbSize}" />
+        <Setter Property="Height" Value="{StaticResource RowThumbSize}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.thumb controls|CoverView">
+        <Setter Property="CornerRadius" Value="{StaticResource RowThumbRadius}" />
+    </Style>
+    <Style Selector="Button.thumb > Panel > Border">
+        <Setter Property="CornerRadius" Value="{StaticResource RowThumbRadius}" />
+        <Setter Property="Background" Value="{StaticResource ThumbOverlayBrush}" />
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.track:pointerover Button.thumb > Panel > Border">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="Button.thumb controls|Icon">
+        <Setter Property="Width" Value="{StaticResource RowPlayIconSize}" />
+        <Setter Property="Height" Value="{StaticResource RowPlayIconSize}" />
+        <Setter Property="Foreground" Value="{StaticResource ThumbOverlayInkBrush}" />
+    </Style>
+
+    <!-- The number: ♪ while its track plays, ▶ while hovered. -->
+    <Style Selector="Button.number">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Right" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.number TextBlock">
+        <Setter Property="FontFeatures" Value="+tnum" />
+    </Style>
+    <Style Selector="Button.number controls|Icon">
+        <Setter Property="Width" Value="{StaticResource RowPlayIconSize}" />
+        <Setter Property="Height" Value="{StaticResource RowPlayIconSize}" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Button.number controls|Icon.note">
+        <Setter Property="Width" Value="{StaticResource RowNoteSize}" />
+        <Setter Property="Height" Value="{StaticResource RowNoteSize}" />
+    </Style>
+    <Style Selector="Border.track.current Button.number">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="Button.number.note TextBlock">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Button.number.note controls|Icon.note">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="Border.track:pointerover Button.number TextBlock">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.track:pointerover Button.number controls|Icon.note">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.track:pointerover Button.number controls|Icon.play">
+        <Setter Property="IsVisible" Value="True" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+
+    <!-- Round icon buttons (mockup: .add, .icon-btn): ＋ in rows (shown on hover), Play and ＋ on album headers. -->
+    <Style Selector="Button.add, Button.iconButton">
+        <Setter Property="Width" Value="{StaticResource AddButtonSize}" />
+        <Setter Property="Height" Value="{StaticResource AddButtonSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource AddButtonRadius}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.add:pointerover, Button.iconButton:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.add controls|Icon">
+        <Setter Property="Width" Value="{StaticResource AddIconSize}" />
+        <Setter Property="Height" Value="{StaticResource AddIconSize}" />
+    </Style>
+    <Style Selector="Button.add">
+        <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Border.track:pointerover Button.add">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- An album's header on the Tracks page. -->
+    <Style Selector="Border.albumHeader">
+        <Setter Property="Margin" Value="{StaticResource AlbumHeadMargin}" />
+        <Setter Property="Padding" Value="{StaticResource AlbumHeadPadding}" />
+    </Style>
+    <Style Selector="Border.albumHeader.first">
+        <Setter Property="Margin" Value="{StaticResource FirstAlbumHeadMargin}" />
+    </Style>
+    <Style Selector="Border.albumHeader > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource AlbumHeadGap}" />
+    </Style>
+    <Style Selector="Border.albumHeader controls|CoverView">
+        <Setter Property="Width" Value="{StaticResource AlbumHeadCoverSize}" />
+        <Setter Property="Height" Value="{StaticResource AlbumHeadCoverSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RowThumbRadius}" />
+    </Style>
+    <Style Selector="Border.albumHeader TextBlock">
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="Border.albumHeader TextBlock.title">
+        <Setter Property="FontSize" Value="{StaticResource AlbumHeadTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource TitleFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Border.albumHeader.playing TextBlock.title">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="Border.albumHeader TextBlock.details">
+        <Setter Property="FontSize" Value="{StaticResource SmallFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Margin" Value="{StaticResource AlbumHeadDetailsMargin}" />
+    </Style>
+    <Style Selector="Border.albumHeader StackPanel.actions">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource AlbumHeadActionsGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.albumHeader Button.iconButton">
+        <Setter Property="Width" Value="{StaticResource IconButtonSize}" />
+        <Setter Property="Height" Value="{StaticResource IconButtonSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource IconButtonRadius}" />
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+    </Style>
+    <Style Selector="Border.albumHeader Button.iconButton:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+    </Style>
+    <Style Selector="Border.albumHeader Button.iconButton controls|Icon">
+        <Setter Property="Width" Value="{StaticResource IconButtonIconSize}" />
+        <Setter Property="Height" Value="{StaticResource IconButtonIconSize}" />
     </Style>
 </Styles>

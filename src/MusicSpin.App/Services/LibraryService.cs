@@ -5,11 +5,11 @@ using MusicSpin.Core.Library;
 namespace MusicSpin.App.Services;
 
 /// <summary>An album as the app shows it.</summary>
-public sealed record AlbumSummary(string Id, string Title, string Artist, int? Year, string Format, string Resolution, int TrackCount, double DurationSeconds, bool HiRes);
+public sealed record AlbumSummary(string Id, string Title, string Artist, int? Year, string? Genre, string Format, string Resolution, int TrackCount, double DurationSeconds, bool HiRes);
 
 /// <summary>A track as the app shows it.</summary>
 public sealed record TrackSummary(string Id, string Path, string Title, string Artist, string Album, string AlbumId, int? TrackNumber,
-    double DurationSeconds, string Format, bool HiRes);
+    string? Genre, double DurationSeconds, string Format, bool HiRes);
 
 /// <summary>A saved playlist in the sidebar.</summary>
 public sealed record PlaylistSummaryItem(string Id, string Name, int EntryCount);
@@ -118,11 +118,11 @@ public sealed class LibraryService : ILibraryService, IDisposable
         return all;
     }
 
-    private static AlbumSummary ToSummary(AlbumRecord a) => new(a.Id, a.Title, a.AlbumArtist, a.Year,
+    private static AlbumSummary ToSummary(AlbumRecord a) => new(a.Id, a.Title, a.AlbumArtist, a.Year, a.Genre,
         string.Join(" · ", a.Formats.Select(f => f.ToUpperInvariant())), Resolution(a), a.TrackCount, a.DurationSeconds, a.IsHiRes);
 
     private static TrackSummary ToSummary(TrackRecord t) => new(t.Id, t.Path, t.Title ?? Path.GetFileNameWithoutExtension(t.Path),
-        t.Artist ?? t.EffectiveAlbumArtist, t.Album ?? string.Empty, t.AlbumId, t.TrackNumber, t.DurationSeconds, t.Format.ToUpperInvariant(), t.IsHiRes);
+        t.Artist ?? t.EffectiveAlbumArtist, t.Album ?? string.Empty, t.AlbumId, t.TrackNumber, t.Genre, t.DurationSeconds, t.Format.ToUpperInvariant(), t.IsHiRes);
 
     /// <summary>"24/96", "16/44.1" or "DSD64", from the album's best track.</summary>
     internal static string Resolution(AlbumRecord a)

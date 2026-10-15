@@ -29,24 +29,24 @@ public sealed class ArtworkTests
         var window = app.Window;
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 2, "the albums");
 
-        var row = AlbumRow(window, "Quadrants");
-        Gui.Click(window, row);
+        var card = AlbumCard(window, "Quadrants");
+        Gui.Click(window, card);
         await Gui.UntilAsync(() => app.ViewModel.Player.State == PlayerState.Playing && app.ViewModel.PlayingAlbumId is not null, "the album playing");
         app.Advance(TimeSpan.FromSeconds(1.5));
 
-        var rowDisc = row.GetVisualDescendants().OfType<VinylView>().Single();
-        var otherDisc = AlbumRow(window, "Other").GetVisualDescendants().OfType<VinylView>().Single();
+        var cardDisc = card.GetVisualDescendants().OfType<VinylView>().Single();
+        var otherDisc = AlbumCard(window, "Other").GetVisualDescendants().OfType<VinylView>().Single();
         var miniDisc = Gui.Find<VinylView>(window, "MiniVinyl");
         Assert.True(miniDisc.RenderedAngle > 10, $"angle {miniDisc.RenderedAngle}");
-        Assert.Equal(miniDisc.RenderedAngle, rowDisc.RenderedAngle);
+        Assert.Equal(miniDisc.RenderedAngle, cardDisc.RenderedAngle);
         Assert.Equal(app.ViewModel.SpinClock.Angle, miniDisc.RenderedAngle);
         Assert.Equal(0, otherDisc.RenderedAngle);
-        Assert.Contains("playing", row.Classes);
+        Assert.Contains("playing", card.Classes);
         Assert.NotNull(Gui.Find<CoverView>(window, "MiniCover").Source);
 
-        // The playing records slide out of their sleeves (22 px in the player bar, 16 px in a row).
+        // The playing records slide out of their sleeves: 22 px in the player bar, 24% on a card (48 of the card art's 200).
         Gui.FinishAnimations();
-        Assert.Equal((22.0, 16.0, 0.0), (OffsetX(miniDisc), OffsetX(rowDisc), OffsetX(otherDisc)));
+        Assert.Equal((22.0, 48.0, 0.0), (OffsetX(miniDisc), OffsetX(cardDisc), OffsetX(otherDisc)));
     }
 
     [AvaloniaFact]
@@ -57,14 +57,14 @@ public sealed class ArtworkTests
         await Task.Delay(200, TestContext.Current.CancellationToken); // the cover lookup finds nothing
         Gui.Settle();
 
-        var cover = AlbumRow(app.Window, "Plain Sleeve").GetVisualDescendants().OfType<CoverView>().Single();
+        var cover = AlbumCard(app.Window, "Plain Sleeve").GetVisualDescendants().OfType<CoverView>().Single();
         Assert.False(cover.HasArt);
         var texts = cover.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToList();
         Assert.Equal(["PLAIN SLEEVE", "NOBODY KNOWN"], texts);
     }
 
     [AvaloniaFact]
-    public async Task A_page_of_500_albums_realizes_only_the_visible_rows()
+    public async Task A_page_of_500_albums_realizes_only_the_visible_cards()
     {
         var library = new StubLibrary();
         library.Albums.AddRange(Enumerable.Range(0, 500).Select(StubLibrary.Album));
@@ -72,9 +72,9 @@ public sealed class ArtworkTests
         await using var app = await AppHarness.OpenAsync(new AppOptions { Library = library, Covers = covers });
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 500, "the albums");
 
-        var rows = Gui.All<CoverView>(Gui.All<AlbumsPage>(app.Window).Single()).Count();
+        var cards = Gui.All<CoverView>(Gui.All<AlbumsPage>(app.Window).Single()).Count();
 
-        Assert.InRange(rows, 10, 40);
+        Assert.InRange(cards, 10, 40);
         Assert.InRange(covers.Requests.Count, 10, 40);
     }
 
@@ -89,16 +89,18 @@ public sealed class ArtworkTests
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 500, "the albums");
         var scroller = Gui.Find<ScrollViewer>(app.Window, "Scroller");
         var firstShown = covers.Requests.Keys.ToHashSet();
+        var rows = app.ViewModel.AlbumsPage.Rows.OfType<AlbumCardRowViewModel>().ToList();
+        var (first, last) = (rows[0].Albums[0], rows[^1].Albums[^1]);
 
         scroller.Offset = new Vector(0, scroller.Extent.Height);
         Gui.Settle();
         scroller.Offset = default;
         Gui.Settle();
 
-        Assert.Contains("album0000", firstShown);
+        Assert.Contains(first.Album.Id, firstShown);
         Assert.All(firstShown, id => Assert.Equal(1, covers.Requests[id]));
-        Assert.Contains("album0499", covers.Requests.Keys);
-        Assert.Same(cover, AlbumRow(app.Window, "Album 0").GetVisualDescendants().OfType<CoverView>().Single().Source);
+        Assert.Contains(last.Album.Id, covers.Requests.Keys);
+        Assert.Same(cover, AlbumCard(app.Window, first.Title).GetVisualDescendants().OfType<CoverView>().Single().Source);
     }
 
     [AvaloniaTheory]
@@ -133,6 +135,6 @@ public sealed class ArtworkTests
 
     private static double OffsetX(Visual visual) => (visual.RenderTransform as Avalonia.Media.Transformation.TransformOperations)?.Value.M31 ?? 0;
 
-    private static Button AlbumRow(Window window, string title)
-        => Gui.All<Button>(window).Single(b => b.Classes.Contains("row") && b.DataContext is AlbumItemViewModel a && a.Title == title);
+    private static Button AlbumCard(Window window, string title)
+        => Gui.All<Button>(window).Single(b => b.Classes.Contains("card") && b.DataContext is AlbumItemViewModel a && a.Title == title);
 }

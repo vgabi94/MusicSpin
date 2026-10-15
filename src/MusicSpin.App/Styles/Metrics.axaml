@@ -73,21 +73,79 @@
     <Thickness x:Key="ButtonPadding">12,6</Thickness>
     <sys:Double x:Key="ButtonFontSize">13</sys:Double>
 
-    <!-- Rows in lists (albums and tracks) -->
-    <sys:Double x:Key="RowHeight">48</sys:Double>
-    <sys:Double x:Key="RowThumbSize">36</sys:Double>
+    <!-- Toolbar controls (mockup: .sort, .dd): the Sort and Group dropdowns. -->
+    <sys:Double x:Key="DropdownGap">4</sys:Double>
+    <Thickness x:Key="DropdownPadding">8,4</Thickness>
+    <CornerRadius x:Key="DropdownRadius">6</CornerRadius>
+    <sys:Double x:Key="DropdownFontSize">12.5</sys:Double>
+    <sys:Double x:Key="DropdownChevronSize">8</sys:Double>
+    <Thickness x:Key="DropdownChevronMargin">5,1,0,0</Thickness>
+
+    <!-- The menu (mockup: .menu): under the button that opened it, 8 px inside the window at least. -->
+    <sys:Double x:Key="MenuMinWidth">170</sys:Double>
+    <Thickness x:Key="MenuPadding">5</Thickness>
+    <CornerRadius x:Key="MenuRadius">9</CornerRadius>
+    <Thickness x:Key="MenuEntryPadding">10,7</Thickness>
+    <CornerRadius x:Key="MenuEntryRadius">6</CornerRadius>
+    <sys:Double x:Key="MenuFontSize">13</sys:Double>
+    <sys:Double x:Key="MenuCheckSize">12</sys:Double>
+    <sys:Double x:Key="MenuAnchorGap">4</sys:Double>
+    <sys:Double x:Key="MenuWindowMargin">8</sys:Double>
+
+    <!-- Group headers (mockup: .group-h, .group + .group); tall enough for the Play and Radio pills (#41, #23). -->
+    <sys:Double x:Key="GroupHeaderFontSize">13</sys:Double>
+    <sys:Double x:Key="GroupHeaderLetterSpacing">1.04</sys:Double>
+    <sys:Double x:Key="GroupHeaderMinHeight">24</sys:Double>
+    <Thickness x:Key="GroupHeaderMargin">0,30,0,12</Thickness>
+    <Thickness x:Key="FirstGroupHeaderMargin">0,0,0,12</Thickness>
+
+    <!--
+      Album cards (mockup: .grid, .card): columns at least 176 wide, 26 apart; rows 30 apart. The art is laid out at
+      200 x 200 and scaled to the card's width, so the record's 3% inset and the moves in % stay in proportion.
+    -->
+    <sys:Double x:Key="CardMinWidth">176</sys:Double>
+    <sys:Double x:Key="CardColumnGap">26</sys:Double>
+    <Thickness x:Key="CardRowGapMargin">0,30,0,0</Thickness>
+    <sys:Double x:Key="CardArtSize">200</sys:Double>
+    <sys:Double x:Key="CardVinylSize">188</sys:Double>
+    <Thickness x:Key="CardVinylMargin">6</Thickness>
+    <sys:Double x:Key="PlayFabSize">40</sys:Double>
+    <CornerRadius x:Key="PlayFabRadius">20</CornerRadius>
+    <Thickness x:Key="PlayFabMargin">8</Thickness>
+    <sys:Double x:Key="PlayFabIconSize">14</sys:Double>
+    <sys:Double x:Key="CardTitleFontSize">14</sys:Double>
+    <Thickness x:Key="CardTitleMargin">0,10,0,0</Thickness>
+    <Thickness x:Key="CardDetailsMargin">0,2,0,0</Thickness>
+    <sys:Double x:Key="CardDetailsGap">6</sys:Double>
+
+    <!-- Track rows (mockup: .tlist, .tr) and album headers (.talbum). -->
     <Thickness x:Key="RowPadding">10,5</Thickness>
     <CornerRadius x:Key="RowRadius">7</CornerRadius>
     <sys:Double x:Key="RowGap">14</sys:Double>
-    <GridLength x:Key="RowThumbColumn">36</GridLength>
-    <GridLength x:Key="RowNumberColumn">36</GridLength>
-    <GridLength x:Key="RowDurationColumn">52</GridLength>
-    <GridLength x:Key="RowSleeveColumn">52</GridLength>
-    <sys:Double x:Key="RowSleeveWidth">52</sys:Double>
-    <sys:Double x:Key="RowVinylSize">32</sys:Double>
-    <Thickness x:Key="RowVinylMargin">2,2,0,0</Thickness>
-    <sys:Double x:Key="RowSecondaryFontSize">12</sys:Double>
     <Thickness x:Key="RowListGapMargin">0,0,0,1</Thickness>
+    <sys:Double x:Key="RowThumbSize">36</sys:Double>
+    <CornerRadius x:Key="RowThumbRadius">3</CornerRadius>
+    <sys:Double x:Key="RowPlayIconSize">10</sys:Double>
+    <sys:Double x:Key="RowNoteSize">13</sys:Double>
+    <GridLength x:Key="RowThumbColumn">36</GridLength>
+    <GridLength x:Key="RowNumberColumn">26</GridLength>
+    <GridLength x:Key="RowDurationColumn">44</GridLength>
+    <GridLength x:Key="RowAddColumn">28</GridLength>
+    <sys:Double x:Key="RowSecondaryFontSize">12</sys:Double>
+    <sys:Double x:Key="AddButtonSize">28</sys:Double>
+    <CornerRadius x:Key="AddButtonRadius">14</CornerRadius>
+    <sys:Double x:Key="AddIconSize">13</sys:Double>
+    <Thickness x:Key="AlbumHeadPadding">10,8</Thickness>
+    <Thickness x:Key="AlbumHeadMargin">0,30,0,4</Thickness>
+    <Thickness x:Key="FirstAlbumHeadMargin">0,0,0,4</Thickness>
+    <sys:Double x:Key="AlbumHeadGap">14</sys:Double>
+    <sys:Double x:Key="AlbumHeadCoverSize">56</sys:Double>
+    <sys:Double x:Key="AlbumHeadTitleFontSize">16</sys:Double>
+    <Thickness x:Key="AlbumHeadDetailsMargin">0,2,0,0</Thickness>
+    <sys:Double x:Key="AlbumHeadActionsGap">4</sys:Double>
+    <sys:Double x:Key="IconButtonSize">32</sys:Double>
+    <CornerRadius x:Key="IconButtonRadius">16</CornerRadius>
+    <sys:Double x:Key="IconButtonIconSize">12</sys:Double>
 
     <!-- Player bar -->
     <Thickness x:Key="PlayerBarPadding">18,0</Thickness>

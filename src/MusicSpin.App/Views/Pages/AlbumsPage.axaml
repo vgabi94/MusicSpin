@@ -1,46 +1,78 @@
 <!--
-  Albums: a virtualized list, one row per album with its sleeve and record; clicking a row plays the album.
-  (The Cards, Shelf and Crate views replace this list in their own issues.)
+  Albums as Cards (mockup: renderGrid): group headers and rows of cards, virtualized row by row. The view reports how
+  many columns fit (AlbumsPage.axaml.cs); the view model cuts the rows to that. Shelf and Crate come with #10 and #11.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MusicSpin.App.ViewModels"
              xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:theming="using:MusicSpin.App.Theming"
              x:Class="MusicSpin.App.Views.Pages.AlbumsPage"
              x:DataType="vm:AlbumsPageViewModel">
     <ScrollViewer Name="Scroller" Classes="view">
-        <ItemsControl Name="AlbumList" ItemsSource="{Binding Albums}">
+        <ItemsControl Name="AlbumGrid" Classes="cards" ItemsSource="{Binding Rows}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <VirtualizingStackPanel />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vm:AlbumItemViewModel">
-                    <Button Classes="row"
-                            Classes.playing="{Binding IsPlaying}"
-                            Command="{Binding $parent[ItemsControl].((vm:AlbumsPageViewModel)DataContext).PlayAlbumCommand}"
-                            CommandParameter="{Binding}"
-                            AutomationProperties.Name="{Binding Title}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="{StaticResource RowSleeveColumn}" />
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="1.4*" />
-                            </Grid.ColumnDefinitions>
-                            <Panel Classes="sleeve rowSleeve" Classes.playing="{Binding IsPlaying}">
-                                <controls:VinylView Label="{Binding Cover}" Angle="{Binding DiscAngle}" />
-                                <controls:CoverView Classes="flat" Source="{Binding Cover}" Title="{Binding Title}" Artist="{Binding Artist}" />
-                            </Panel>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Classes="rowTitle" Text="{Binding Title}" />
-                                <TextBlock Classes="rowSub" Text="{Binding Artist}" />
-                            </StackPanel>
-                            <TextBlock Grid.Column="2" Classes="rowCell" Text="{Binding Details}" />
-                        </Grid>
-                    </Button>
+            <ItemsControl.DataTemplates>
+                <!-- Room after the name for the group's Play and Radio buttons (#41, #23). -->
+                <DataTemplate DataType="vm:GroupHeaderViewModel">
+                    <Grid Classes="groupHeader" Classes.first="{Binding IsFirst}" ColumnDefinitions="Auto,*">
+                        <TextBlock Text="{Binding Text, Converter={x:Static theming:TextConverters.Upper}}" />
+                    </Grid>
                 </DataTemplate>
-            </ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:AlbumCardRowViewModel">
+                    <ItemsControl Classes="cardRow" Classes.first="{Binding IsFirst}" ItemsSource="{Binding Albums}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Classes="cardRow" Rows="1" Columns="{Binding Columns}" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:AlbumItemViewModel">
+                                <Button Classes="card"
+                                        Classes.playing="{Binding IsPlaying}"
+                                        Command="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).OpenAlbumCommand}"
+                                        CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Binding Title}">
+                                    <StackPanel>
+                                        <Panel>
+                                            <!-- No clip (Viewbox clips by default): the record slides out past the card, the sleeve shifts left of it. -->
+                                            <Viewbox ClipToBounds="False">
+                                                <Panel Classes="cardArt">
+                                                    <controls:VinylView Label="{Binding Art.Cover}" Angle="{Binding DiscAngle}" />
+                                                    <controls:CoverView Source="{Binding Art.Cover}" Title="{Binding Title}" Artist="{Binding Artist}" />
+                                                </Panel>
+                                            </Viewbox>
+                                            <Button Classes="playFab"
+                                                    Command="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).TogglePlayAlbumCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip.Tip="Play/pause"
+                                                    AutomationProperties.Name="Play or pause">
+                                                <Border>
+                                                    <Panel>
+                                                        <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !ShowsPause}" />
+                                                        <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding ShowsPause}" />
+                                                    </Panel>
+                                                </Border>
+                                            </Button>
+                                        </Panel>
+                                        <TextBlock Classes="cardTitle" Text="{Binding Title}" />
+                                        <controls:TrimFirstPanel Classes="cardDetails">
+                                            <TextBlock Text="{Binding ArtistAndYear}" />
+                                            <Border Classes="hiRes" IsVisible="{Binding HiRes}">
+                                                <TextBlock Text="HI-RES" />
+                                            </Border>
+                                        </controls:TrimFirstPanel>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DataTemplate>
+            </ItemsControl.DataTemplates>
         </ItemsControl>
     </ScrollViewer>
 </UserControl>

@@ -93,22 +93,4 @@
         <Setter Property="RenderTransform" Value="translateX(0px)" />
         <Setter Property="theming:Animate.Transitions" Value="RenderTransform MiniVinylDuration EaseOut" />
     </Style>
-
-    <!-- In album rows. -->
-    <Style Selector="Panel.rowSleeve">
-        <Setter Property="Width" Value="{StaticResource RowSleeveWidth}" />
-        <Setter Property="Height" Value="{StaticResource RowThumbSize}" />
-    </Style>
-    <Style Selector="Panel.rowSleeve > controls|CoverView">
-        <Setter Property="Width" Value="{StaticResource RowThumbSize}" />
-        <Setter Property="Height" Value="{StaticResource RowThumbSize}" />
-    </Style>
-    <Style Selector="Panel.rowSleeve > controls|VinylView">
-        <Setter Property="Width" Value="{StaticResource RowVinylSize}" />
-        <Setter Property="Height" Value="{StaticResource RowVinylSize}" />
-        <Setter Property="Margin" Value="{StaticResource RowVinylMargin}" />
-    </Style>
-    <Style Selector="Panel.rowSleeve.playing > controls|VinylView">
-        <Setter Property="RenderTransform" Value="translateX(16px)" />
-    </Style>
 </Styles>

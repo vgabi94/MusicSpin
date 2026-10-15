@@ -45,7 +45,7 @@ public sealed class AppIntegrationTests
         await using var cli = await app.Player.ConnectOtherAsync();
 
         var clock = Stopwatch.StartNew();
-        Gui.Click(app.Window, Gui.All<Button>(app.Window).Single(b => b.DataContext is AlbumItemViewModel));
+        Gui.Click(app.Window, Gui.All<Button>(app.Window).Single(b => b.Classes.Contains("card")));
         PlayerStatusSnapshot status;
         do
         {

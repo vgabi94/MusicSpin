@@ -112,7 +112,7 @@ public sealed class ShellViewModelTests : IAsyncDisposable
         Assert.Equal("1", vm.AlbumsPage.CountText);
 
         vm.SearchText = "nothing like this";
-        Assert.Equal("No albums match “nothing like this”.", vm.AlbumsPage.EmptyText);
+        Assert.Equal("Nothing matches “nothing like this”.", vm.AlbumsPage.EmptyText);
 
         vm.Sidebar.NavigateCommand.Execute(vm.Sidebar.Tracks);
         await _ui.UntilAsync(() => vm.TracksPage.CountText is not null, "tracks");

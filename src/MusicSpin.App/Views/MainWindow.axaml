@@ -65,16 +65,60 @@
                 </Grid>
             </Border>
 
-            <Grid Name="Toolbar" Classes="toolbar" DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+            <Grid Name="Toolbar" Classes="toolbar" DockPanel.Dock="Top" ColumnDefinitions="Auto,*">
                 <StackPanel Classes="pageHeading">
                     <TextBlock Name="PageTitle" Classes="pageTitle" Text="{Binding CurrentPage.Title}" />
                     <TextBlock Name="PageCount" Classes="pageCount" Text="{Binding CurrentPage.CountText}" />
                 </StackPanel>
                 <!-- Page-specific controls: the first template that fits the page; others show nothing. -->
-                <ContentControl Name="PageActions" Grid.Column="1" Content="{Binding CurrentPage}">
+                <ContentControl Name="PageActions" Grid.Column="1" Content="{Binding CurrentPage}" HorizontalContentAlignment="Stretch">
                     <ContentControl.DataTemplates>
+                        <DataTemplate DataType="vm:AlbumsPageViewModel">
+                            <Panel>
+                                <ListBox Name="ViewSwitch"
+                                         Classes="viewSwitch"
+                                         Theme="{StaticResource Segmented}"
+                                         ItemsSource="{Binding Views}"
+                                         SelectedItem="{Binding ViewChoice}"
+                                         AutomationProperties.Name="View" />
+                                <StackPanel Classes="sort">
+                                    <Button Name="SortButton" Classes="dropdown" Command="{Binding OpenSortMenuCommand}" AutomationProperties.Name="Sort">
+                                        <StackPanel>
+                                            <TextBlock Text="Sort: " />
+                                            <TextBlock Classes="chosen" Text="{Binding Sort}" />
+                                            <controls:Icon Data="{StaticResource ChevronDown}" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Name="GroupButton" Classes="dropdown" Command="{Binding OpenGroupMenuCommand}" AutomationProperties.Name="Group">
+                                        <StackPanel>
+                                            <TextBlock Text="Group: " />
+                                            <TextBlock Classes="chosen" Text="{Binding Grouping}" />
+                                            <controls:Icon Data="{StaticResource ChevronDown}" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Panel>
+                        </DataTemplate>
+                        <DataTemplate DataType="vm:TracksPageViewModel">
+                            <StackPanel Classes="sort">
+                                <Button Name="SortButton" Classes="dropdown" Command="{Binding OpenSortMenuCommand}" AutomationProperties.Name="Sort">
+                                    <StackPanel>
+                                        <TextBlock Text="Sort: " />
+                                        <TextBlock Classes="chosen" Text="{Binding Sort}" />
+                                        <controls:Icon Data="{StaticResource ChevronDown}" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Name="GroupButton" Classes="dropdown" Command="{Binding OpenGroupMenuCommand}" AutomationProperties.Name="Group">
+                                    <StackPanel>
+                                        <TextBlock Text="Group: " />
+                                        <TextBlock Classes="chosen" Text="{Binding Grouping}" />
+                                        <controls:Icon Data="{StaticResource ChevronDown}" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </DataTemplate>
                         <DataTemplate DataType="vm:TrackListPageViewModel">
-                            <Button Name="PlayAll" Classes="accent" Content="Play all" Command="{Binding PlayAllCommand}" />
+                            <Button Name="PlayAll" Classes="accent" HorizontalAlignment="Left" Content="Play all" Command="{Binding PlayAllCommand}" />
                         </DataTemplate>
                         <DataTemplate DataType="vm:PageViewModel">
                             <Panel />
@@ -102,5 +146,26 @@
                     AutomationProperties.Name="Close Settings" />
             <views:SettingsDialog Name="SettingsView" DataContext="{Binding Settings}" />
         </Panel>
+
+        <!-- The menu, over everything, under the button that opened it (MainWindow.axaml.cs places it). -->
+        <Canvas Name="MenuLayer" Grid.RowSpan="3" Grid.ColumnSpan="2" IsVisible="{Binding Menu.IsOpen}">
+            <Border Name="MenuBox" Classes="menu">
+                <ItemsControl Name="MenuEntries" ItemsSource="{Binding Menu.Entries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:MenuEntryViewModel">
+                            <Button Classes="menuEntry"
+                                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Menu.ChooseCommand}"
+                                    CommandParameter="{Binding}"
+                                    AutomationProperties.Name="{Binding Label}">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding Label}" />
+                                    <controls:Icon Grid.Column="1" Data="{StaticResource Check}" IsVisible="{Binding IsChosen}" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </Canvas>
     </Grid>
 </Window>

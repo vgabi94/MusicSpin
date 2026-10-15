@@ -17,6 +17,7 @@
             <SolidColorBrush x:Key="PlaceholderBrush" Color="#2A2E37" />
             <SolidColorBrush x:Key="PlaceholderInkBrush" Color="#C9CED8" />
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0DFFFFFF" />
+            <SolidColorBrush x:Key="MenuHoverBrush" Color="#14FFFFFF" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#1AFFFFFF" />
             <Color x:Key="CardShadowColor">#CC000000</Color>
             <!-- The Classic deck's plinth (mockup: .deck, linear-gradient(160deg, …)). -->
@@ -36,6 +37,7 @@
             <SolidColorBrush x:Key="PlaceholderBrush" Color="#D3CEC5" />
             <SolidColorBrush x:Key="PlaceholderInkBrush" Color="#4A4C52" />
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0A000000" />
+            <SolidColorBrush x:Key="MenuHoverBrush" Color="#0D000000" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#14000000" />
             <Color x:Key="CardShadowColor">#66000000</Color>
             <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
@@ -66,6 +68,9 @@
         <GradientStop Color="#00000000" Offset="0.7" />
         <GradientStop Color="#30000000" Offset="1" />
     </LinearGradientBrush>
+    <!-- A track thumbnail while hovered: dimmed under a white ▶ (mockup: .tr .lead::after). -->
+    <SolidColorBrush x:Key="ThumbOverlayBrush" Color="#99000000" />
+    <SolidColorBrush x:Key="ThumbOverlayInkBrush" Color="#FFFFFF" />
     <!-- Text and icons on an accent fill (the mockup's black on the accent). -->
     <SolidColorBrush x:Key="OnAccentBrush" Color="#000000" />
     <!-- The HI-RES badge (mockup: .hires) and a refused typed value (mockup: .bad). -->

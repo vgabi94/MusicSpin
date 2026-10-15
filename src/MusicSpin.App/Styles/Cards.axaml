@@ -1,0 +1,121 @@
+<!--
+  Album cards (mockup: .grid, .card): the sleeve with its record behind it, the round Play button, the title and
+  "artist · year". On hover the record slides out a little and the sleeve lifts; while the album is loaded the record is
+  further out and the sleeve shifts left. The art is laid out at CardArtSize and scaled to the card (a Viewbox), so the
+  moves below are the mockup's percentages of 200: 3% = 6, 10% = 20, 24% = 48, 8% = 16.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <!--
+      Nothing on the way clips: a playing record goes past its card and the sleeve shifts left of it (into the view's
+      padding in the first column), a hovered sleeve lifts above its row, and the Play button's shadow is round (mockup:
+      .card has no overflow).
+    -->
+    <Style Selector="ItemsControl.cards, ItemsControl.cardRow, Button.card, Button.playFab">
+        <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <!-- A row of the grid: the cards share its width; rows are 30 apart, a group's first row sits under its header. -->
+    <Style Selector="ItemsControl.cardRow">
+        <Setter Property="Margin" Value="{StaticResource CardRowGapMargin}" />
+    </Style>
+    <Style Selector="ItemsControl.cardRow.first">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="UniformGrid.cardRow">
+        <Setter Property="ColumnSpacing" Value="{StaticResource CardColumnGap}" />
+    </Style>
+
+    <Style Selector="Button.card">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+
+    <Style Selector="Panel.cardArt">
+        <Setter Property="Width" Value="{StaticResource CardArtSize}" />
+        <Setter Property="Height" Value="{StaticResource CardArtSize}" />
+    </Style>
+    <Style Selector="Panel.cardArt > controls|VinylView">
+        <Setter Property="Width" Value="{StaticResource CardVinylSize}" />
+        <Setter Property="Height" Value="{StaticResource CardVinylSize}" />
+        <Setter Property="Margin" Value="{StaticResource CardVinylMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="RenderTransform" Value="translateX(0px)" />
+        <Setter Property="theming:Animate.Transitions" Value="RenderTransform CardVinylDuration EaseOut" />
+    </Style>
+    <Style Selector="Panel.cardArt > controls|CoverView">
+        <Setter Property="RenderTransform" Value="translate(0px, 0px)" />
+        <Setter Property="theming:Animate.Transitions" Value="RenderTransform CardCoverDuration EaseOut" />
+    </Style>
+    <Style Selector="Button.card:pointerover Panel.cardArt > controls|VinylView">
+        <Setter Property="RenderTransform" Value="translateX(20px)" />
+    </Style>
+    <Style Selector="Button.card:pointerover Panel.cardArt > controls|CoverView">
+        <Setter Property="RenderTransform" Value="translate(0px, -3px)" />
+    </Style>
+    <!-- After the hover styles: the loaded album's card keeps its record out while hovered. -->
+    <Style Selector="Button.card.playing Panel.cardArt > controls|VinylView">
+        <Setter Property="RenderTransform" Value="translateX(48px)" />
+    </Style>
+    <Style Selector="Button.card.playing Panel.cardArt > controls|CoverView">
+        <Setter Property="RenderTransform" Value="translate(-16px, 0px)" />
+    </Style>
+
+    <!-- The round Play button (mockup: .playfab): shown on hover and on the loaded album's card. -->
+    <Style Selector="Button.playFab">
+        <Setter Property="Width" Value="{StaticResource PlayFabSize}" />
+        <Setter Property="Height" Value="{StaticResource PlayFabSize}" />
+        <Setter Property="Margin" Value="{StaticResource PlayFabMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="RenderTransform" Value="translate(0px, 6px)" />
+        <Setter Property="theming:Animate.Transitions" Value="Opacity HoverDuration; RenderTransform HoverDuration" />
+    </Style>
+    <Style Selector="Button.playFab > Border">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource PlayFabRadius}" />
+        <Setter Property="BoxShadow" Value="0 6 16 0 #88000000" />
+    </Style>
+    <Style Selector="Button.playFab controls|Icon">
+        <Setter Property="Width" Value="{StaticResource PlayFabIconSize}" />
+        <Setter Property="Height" Value="{StaticResource PlayFabIconSize}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.card:pointerover Button.playFab">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="RenderTransform" Value="translate(0px, 0px)" />
+    </Style>
+    <Style Selector="Button.card.playing Button.playFab">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="RenderTransform" Value="translate(0px, 0px)" />
+    </Style>
+
+    <Style Selector="TextBlock.cardTitle">
+        <Setter Property="FontSize" Value="{StaticResource CardTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="Margin" Value="{StaticResource CardTitleMargin}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="Button.card.playing TextBlock.cardTitle">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="controls|TrimFirstPanel.cardDetails">
+        <Setter Property="Spacing" Value="{StaticResource CardDetailsGap}" />
+        <Setter Property="Margin" Value="{StaticResource CardDetailsMargin}" />
+    </Style>
+    <Style Selector="controls|TrimFirstPanel.cardDetails > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource SmallFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+</Styles>

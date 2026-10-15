@@ -2,7 +2,7 @@
   Icons as path geometries, in any coordinate space: controls:Icon fits each path to its bounds (like PathIcon), so
   icons can be pasted in as they come. Filled by default; an icon drawn as lines has a "<Key>.Stroked" flag (sidebar
   entries look it up at runtime) or the "stroke" class where it is used.
-  Close and MagnifyingGlassLight come from the VVO icon set.
+  Close, MagnifyingGlassLight and ChevronDown come from the VVO icon set.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -11,6 +11,11 @@
     <!-- BEGIN General -->
     <StreamGeometry x:Key="Close">M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z</StreamGeometry>
     <StreamGeometry x:Key="MagnifyingGlassLight">M228.24,219.76l-51.38-51.38a86.15,86.15,0,1,0-8.48,8.48l51.38,51.38a6,6,0,0,0,8.48-8.48ZM38,112a74,74,0,1,1,74,74A74.09,74.09,0,0,1,38,112Z</StreamGeometry>
+    <StreamGeometry x:Key="ChevronDown">M100.3 125.9L45.8375 71.4375L38.0875 79.1625L96.45 137.5H104.175L162.5 79.1625L154.7625 71.4375L100.3 125.9z</StreamGeometry>
+    <!-- The mockup's "＋" (add to queue), "✓" (the chosen menu option) and "♪" (the track playing). -->
+    <StreamGeometry x:Key="Plus">M11,5 H13 V11 H19 V13 H13 V19 H11 V13 H5 V11 H11 Z</StreamGeometry>
+    <StreamGeometry x:Key="Check">M5,12.5 L9.5,17 L19,7</StreamGeometry>
+    <StreamGeometry x:Key="Note">M11,17 A3,3 0 1 1 9,14.17 V4 H17 V7.5 H11 Z</StreamGeometry>
     <!-- END General -->
 
     <!-- BEGIN Library (sidebar) -->
