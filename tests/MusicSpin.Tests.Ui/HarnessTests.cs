@@ -123,10 +123,26 @@ public sealed class HarnessTests : IDisposable
         UiTime.Advance(time, TimeSpan.FromMilliseconds(200));
 
         Assert.Equal(TimeSpan.FromMilliseconds(200), time.GetUtcNow() - start);
-        Assert.True(real.Elapsed >= TimeSpan.FromMilliseconds(190), $"real {real.Elapsed}");
-        Assert.InRange(border.Opacity, 0.3, 0.7); // half way, give or take the OS timer resolution
+        Assert.Equal(0.5, border.Opacity, 3); // half way, exactly: the animation clock moved with the fake one …
+        Assert.True(real.Elapsed < TimeSpan.FromMilliseconds(190), $"real {real.Elapsed}"); // … and no real time had to pass
 
         UiTime.Advance(time, TimeSpan.FromMilliseconds(250));
+        Assert.Equal(0, border.Opacity);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Real_time_does_not_move_animations()
+    {
+        var (window, border) = Animated(TimeSpan.FromMilliseconds(100));
+
+        border.Opacity = 0;
+        Gui.Settle();
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+        Gui.Settle();
+
+        Assert.Equal(1, border.Opacity);
+        Gui.FinishAnimations(100);
         Assert.Equal(0, border.Opacity);
         window.Close();
     }

@@ -28,7 +28,6 @@ public sealed class CrateTests
         app.ViewModel.AlbumsPage.Grouping = grouping;
         app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views[2];
         Gui.Settle();
-        Gui.SyncAnimationClock();
         return app;
     }
 

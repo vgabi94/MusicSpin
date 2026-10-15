@@ -1,8 +1,8 @@
 <!--
   The shelf (mockup: "Shelf (3D, tilted)"): rows of sleeves standing on wooden boards. Each sleeve (controls:ShelfSleeve)
-  is a flat slot that takes the pointer, with the turned sleeve drawn in it; :pointerover (after a moment) and
-  .playing turn it to face you and widen its slot, and .playing slides its record half out. The control works out the
-  3D; this file gives it its parts, sizes, colours and timing.
+  is a flat slot that takes the pointer, with the turned sleeve drawn in it; hovered (after a moment) or playing, it
+  turns to face you and its slot widens, and playing, its record slides half out. The control works out the 3D and
+  its state; this file gives it its parts, sizes, colours and timing.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -56,14 +56,6 @@
                     </Panel>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^:pointerover">
-                <Setter Property="Turn" Value="1" />
-            </Style>
-            <Style Selector="^.playing">
-                <Setter Property="Turn" Value="1" />
-                <Setter Property="Pull" Value="1" />
-                <Setter Property="RecordOut" Value="1" />
-            </Style>
         </ControlTheme>
     </Styles.Resources>
 

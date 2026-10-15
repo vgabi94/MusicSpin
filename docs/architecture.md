@@ -194,7 +194,9 @@ OS). `Harness/` has:
 - `Snapshots`: compares frames with approved baselines in `Snapshots/`, with a tolerance; on a mismatch it writes the
   actual image and a diff to `SnapshotFailures/` in the test output (CI uploads them). macOS renders text a little differently, so it has its own `name.macos.png` baselines, and Linux has `name.linux.png` where its text smoothing shows (the player bar, Settings in dark); `MUSICSPIN_UPDATE_SNAPSHOTS=1`
   rewrites the baselines, which are reviewed against the mockup before they're committed;
-- `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's headless animation clock is real
-  time (a render tick only samples it), so this lets real time pass frame by frame. Its `Gui.RunJobs` also fires the
-  dispatcher timers that are due: Avalonia fires them only after it runs a job, and its animation clock moves between
-  frames on a timer, so a transition that holds still (during its delay) would otherwise never resume in a test.
+- `UiTime`: advances the fake clock and Avalonia's animations together. Avalonia's animation clock is real time (a
+  stopwatch in its MediaContext; a render tick only samples it), which made transitions run ahead of or behind the fake
+  clock on slow CI runners. So the test app stops that stopwatch at start, and only `UiTime` moves it, a frame at a time,
+  rendering after each: transitions follow the fake clock exactly and no real time passes (`Gui.FinishAnimations` moves
+  only the animation clock). `Gui.RunJobs` also fires the dispatcher timers that are due: Avalonia fires them only after
+  it runs a job.

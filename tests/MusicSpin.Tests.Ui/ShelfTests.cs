@@ -28,7 +28,6 @@ public sealed class ShelfTests
         app.ViewModel.AlbumsPage.Grouping = grouping;
         app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views[1];
         Gui.Settle();
-        Gui.SyncAnimationClock();
         return app;
     }
 
@@ -104,7 +103,7 @@ public sealed class ShelfTests
             Assert.True(under.IsPointerOver);
             Assert.Single(sleeves, s => s.IsPointerOver);
             Assert.Equal(top, sleeves.Select(s => Gui.BoundsIn(window, s).Top));
-            Assert.True(Gui.BoundsIn(window, sleeves[^1]).Right <= Gui.BoundsIn(window, row).Right + 0.5, $"the row overflows at x = {x}");
+            Assert.True(Gui.BoundsIn(window, sleeves[^1]).Right <= Gui.BoundsIn(window, row).Right + 0.5, $"the row overflows at x = {x}: {Gui.BoundsIn(window, sleeves[^1]).Right} > {Gui.BoundsIn(window, row).Right}; {string.Join(", ", sleeves.Select(s => $"{s.Bounds.Width}/{s.Turn:0.###}/{s.DesiredSize.Width}"))}");
         }
 
         Assert.Equal(sleeves.Count - 1, lastHovered);
@@ -144,14 +143,13 @@ public sealed class ShelfTests
         var closed = sleeve.SleeveProjection;
 
         Gui.Hover(window, sleeve);
-        app.Advance(TimeSpan.FromMilliseconds(20));
+        app.Advance(TimeSpan.FromMilliseconds(55));
         Assert.True(sleeve.IsPointerOver);
         Assert.Equal(0, sleeve.Turn);
         Assert.Equal(closed, sleeve.SleeveProjection);
 
-        // EaseSoft (0.22,1,0.36,1) is nearly done a little after the delay, so only check that the turn has started.
-        app.Advance(TimeSpan.FromMilliseconds(80));
-        Assert.True(sleeve.Turn > 0.01);
+        app.Advance(TimeSpan.FromMilliseconds(15)); // 10 ms into the turn
+        Assert.InRange(sleeve.Turn, 0.001, 0.5);
         Gui.FinishAnimations(Settled);
         Assert.Equal(1, sleeve.Turn);
         Assert.NotEqual(closed, sleeve.SleeveProjection);
@@ -165,6 +163,27 @@ public sealed class ShelfTests
     }
 
     [AvaloniaFact]
+    public async Task A_sleeve_left_while_it_turns_turns_back_from_where_it_is()
+    {
+        await using var app = await OpenAsync();
+        var window = app.Window;
+        var sleeve = Sleeves(Boards(window)[0])[1];
+
+        Gui.Hover(window, sleeve);
+        app.Advance(TimeSpan.FromMilliseconds(200));
+        var turned = sleeve.Turn;
+        Assert.InRange(turned, 0.2, 0.99);
+
+        window.MouseMove(new Point(5, 5));
+        app.Advance(TimeSpan.FromMilliseconds(50)); // held for the delay …
+        Assert.Equal(turned, sleeve.Turn, 6);
+        app.Advance(TimeSpan.FromMilliseconds(60)); // … then back, not on to 1
+        Assert.True(sleeve.Turn < turned, $"{sleeve.Turn} after {turned}");
+        Gui.FinishAnimations(Settled);
+        Assert.Equal(0, sleeve.Turn);
+    }
+
+    [AvaloniaFact]
     public async Task The_playing_sleeve_faces_you_with_its_record_half_out()
     {
         await using var app = await OpenAsync();
@@ -174,7 +193,7 @@ public sealed class ShelfTests
         var (playing, other) = (Sleeve(window, "Partitas"), Sleeve(window, "Copper Sun"));
         var size = playing.Size;
 
-        Assert.Contains("playing", playing.Classes);
+        Assert.True(playing.IsPlaying);
         Assert.Equal((1, 1, 1), (playing.Turn, playing.Pull, playing.RecordOut));
         Assert.Equal((0, 0, 0), (other.Turn, other.Pull, other.RecordOut));
         // Facing: the sleeve's right edge is nearly a full width out; turned away it shows about cos 58° of it.

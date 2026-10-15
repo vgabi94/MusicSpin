@@ -123,7 +123,7 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="vm:AlbumItemViewModel">
-                                        <controls:ShelfSleeve Classes.playing="{Binding IsPlaying}"
+                                        <controls:ShelfSleeve IsPlaying="{Binding IsPlaying}"
                                                               Tilt="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Settings.ShelfTilt}"
                                                               Depth="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Settings.ShelfDepth}"
                                                               Source="{Binding Art.Cover}"

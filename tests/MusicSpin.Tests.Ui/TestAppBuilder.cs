@@ -8,7 +8,7 @@ namespace MusicSpin.Tests.Ui;
 
 /// <summary>
 /// The real app (its styles and resources) on the headless platform, drawn by Skia so frames can be captured, with the
-/// bundled Inter as the default font so text renders the same on every OS.
+/// bundled Inter as the default font so text renders the same on every OS, and an animation clock that only tests move.
 /// </summary>
 public static class TestAppBuilder
 {
@@ -17,5 +17,6 @@ public static class TestAppBuilder
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false, ShouldRenderOnUIThread = true, UseSharedMouseDevice = false })
             .WithInterFont()
-            .With(new Avalonia.Media.FontManagerOptions { DefaultFamilyName = "fonts:Inter#Inter" });
+            .With(new Avalonia.Media.FontManagerOptions { DefaultFamilyName = "fonts:Inter#Inter" })
+            .AfterSetup(static _ => Harness.UiTime.FreezeAnimationClock());
 }

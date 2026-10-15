@@ -10,19 +10,17 @@ namespace MusicSpin.Tests.Ui.Harness;
 /// <summary>Waiting, finding and clicking in a headless window.</summary>
 internal static class Gui
 {
-    /// <summary>Runs queued UI work and lays out (no time passes and no due dispatcher timers).</summary>
+    /// <summary>Runs queued UI work, the dispatcher timers due, and lays out and renders (no time passes).</summary>
     public static void Settle()
     {
-        Dispatcher.UIThread.RunJobs();
+        RunJobs();
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        RunJobs();
     }
 
     /// <summary>
     /// Runs queued UI work and the dispatcher timers that are due. Avalonia fires due timers only after it runs a job, and
-    /// the animation clock keeps going between frames on a timer: a transition that holds still (in its delay) changes
-    /// nothing to render, so without this it would wait forever in a test. Only <see cref="UiTime.Advance"/> and
-    /// <see cref="FinishAnimations"/> call this; Settle does not, so a long pause (OpenAsync, UntilAsync) cannot jump
-    /// the clock in one catch-up when the next hover or Advance runs.
+    /// keeps animations rendering between frames on a timer, so this posts a job first.
     /// </summary>
     public static void RunJobs()
     {
@@ -31,38 +29,11 @@ internal static class Gui
     }
 
     /// <summary>
-    /// Pumps a few real frames with due timers so Avalonia's animation clock is current. Call after a long pause before
-    /// measuring transitions; otherwise the next <see cref="RunJobs"/> would apply the whole pause in one jump.
+    /// Lets running transitions finish without moving the app's fake clock (the animation clock only moves when a test
+    /// moves it; see <see cref="UiTime"/>). Most transitions take at most 0.5 s at Motion Smooth; the shelf's and the
+    /// crate's take up to 1.1 s, so their tests pass a longer <paramref name="longest"/>.
     /// </summary>
-    public static void SyncAnimationClock()
-    {
-        for (var i = 0; i < 3; i++)
-        {
-            RunJobs();
-            Thread.Sleep(UiTime.Frame);
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            RunJobs();
-        }
-    }
-
-    /// <summary>
-    /// Lets running transitions finish (Avalonia's animation clock is real time; see <see cref="UiTime"/>) without moving
-    /// the app's fake clock. Most transitions take at most 0.5 s at Motion Smooth; the shelf's and the crate's take up to
-    /// 1.1 s, so their tests pass a longer <paramref name="longest"/>.
-    /// </summary>
-    public static void FinishAnimations(int longest = 600)
-    {
-        var real = System.Diagnostics.Stopwatch.StartNew();
-        while (real.Elapsed < TimeSpan.FromMilliseconds(longest))
-        {
-            RunJobs();
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            RunJobs();
-            Thread.Sleep(UiTime.Frame);
-        }
-
-        Settle();
-    }
+    public static void FinishAnimations(int longest = 600) => UiTime.AdvanceAnimations(TimeSpan.FromMilliseconds(longest));
 
     /// <summary>
     /// Waits (in real time: the player and the library work on their own threads) until <paramref name="condition"/>
@@ -76,7 +47,6 @@ internal static class Gui
             Settle();
             if (condition())
             {
-                SyncAnimationClock();
                 return;
             }
 

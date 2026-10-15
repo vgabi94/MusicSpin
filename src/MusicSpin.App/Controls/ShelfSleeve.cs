@@ -13,7 +13,7 @@ namespace MusicSpin.App.Controls;
 /// by <see cref="Tilt"/> about its left edge, seen from its own bottom edge (so it stands flat on the board) with
 /// Settings › Shelf depth as the perspective. <see cref="Turn"/> (hovered or playing) turns it to face you and brings it
 /// forward, <see cref="Pull"/> widens the slot for the playing record, and <see cref="RecordOut"/> slides the record
-/// half out. Styles animate those three; the slot never moves with the 3D turn, so hovering doesn't flicker.
+/// half out. The styles animate those three; the slot never moves with the 3D turn, so hovering doesn't flicker.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,9 +21,16 @@ namespace MusicSpin.App.Controls;
 /// face at the left edge) and PART_Shadow (the contact shadow on the board). The parts take no input.
 /// </para>
 /// <para>
-/// The styles turn a hovered sleeve after a short delay (mockup: .slot:hover, transition-delay 60ms). Here the delay is
+/// A hovered sleeve turns after a short delay (mockup: .slot:hover, transition-delay 60ms). Here the delay is
 /// the transition's, so it also holds a sleeve the pointer leaves a moment before it closes: the one you leave and the
 /// one you enter move in step, and the slots between them keep their places.
+/// </para>
+/// <para>
+/// The control sets Turn, Pull and RecordOut itself, from <see cref="InputElement.IsPointerOver"/> and
+/// <see cref="IsPlaying"/>, rather than leaving them to :pointerover and .playing styles: when a style stops applying while
+/// its property is still in a transition, Avalonia carries the transition on to the old value and only then drops it, so a
+/// sleeve the pointer left mid-turn would turn all the way open and then snap shut. A local value turns it back from where
+/// it is.
 /// </para>
 /// </remarks>
 [TemplatePart("PART_Sleeve", typeof(Control))]
@@ -53,6 +60,8 @@ public sealed class ShelfSleeve : Button
     public static readonly StyledProperty<double> TiltProperty = AvaloniaProperty.Register<ShelfSleeve, double>(nameof(Tilt), 58);
 
     public static readonly StyledProperty<double> DepthProperty = AvaloniaProperty.Register<ShelfSleeve, double>(nameof(Depth), 40);
+
+    public static readonly StyledProperty<bool> IsPlayingProperty = AvaloniaProperty.Register<ShelfSleeve, bool>(nameof(IsPlaying));
 
     public static readonly StyledProperty<double> TurnProperty = AvaloniaProperty.Register<ShelfSleeve, double>(nameof(Turn));
 
@@ -110,6 +119,13 @@ public sealed class ShelfSleeve : Button
     {
         get => GetValue(DepthProperty);
         set => SetValue(DepthProperty, value);
+    }
+
+    /// <summary>The playing record's sleeve: it faces you, its slot is wider and its record is half out.</summary>
+    public bool IsPlaying
+    {
+        get => GetValue(IsPlayingProperty);
+        set => SetValue(IsPlayingProperty, value);
     }
 
     /// <summary>0: turned away; 1: facing you (hovered or playing).</summary>
@@ -214,7 +230,12 @@ public sealed class ShelfSleeve : Button
     {
         ArgumentNullException.ThrowIfNull(change);
         base.OnPropertyChanged(change);
-        if (change.Property == SpineColorProperty || change.Property == SpineFallbackProperty || change.Property == SpineShadeProperty)
+        if (change.Property == IsPointerOverProperty || change.Property == IsPlayingProperty)
+        {
+            Turn = IsPointerOver || IsPlaying ? 1 : 0;
+            Pull = RecordOut = IsPlaying ? 1 : 0;
+        }
+        else if (change.Property == SpineColorProperty || change.Property == SpineFallbackProperty || change.Property == SpineShadeProperty)
         {
             Spine = SpineColor is { } color
                 ? new SolidColorBrush(Color.FromRgb(Shade(color.R), Shade(color.G), Shade(color.B)))
