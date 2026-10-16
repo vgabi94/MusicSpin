@@ -175,6 +175,22 @@ public sealed class McpServerTests : IAsyncDisposable
 
     [Fact]
     [Trait("Category", "Unhappy")]
+    public async Task Queue_tools_edit_a_queue_whose_entries_are_all_unplayable()
+    {
+        await StartAsync();
+        var gone = new[] { "a", "b", "c" }.Select(n => Path.GetFullPath($"/music/gone/{n}.flac")).ToArray();
+        Assert.Equal(3, (await Call("queue_add", new() { ["files"] = gone })).GetProperty("queueLength").GetInt32());
+
+        await Call("queue_move", new() { ["from"] = 0, ["to"] = 2 });
+        var paths = (await Call("queue")).GetProperty("items").EnumerateArray().Select(i => i.GetProperty("item").GetProperty("path").GetString());
+        Assert.Equal([gone[1], gone[2], gone[0]], paths);
+        Assert.Equal(2, (await Call("queue_remove", new() { ["index"] = 1 })).GetProperty("queueLength").GetInt32());
+        Assert.StartsWith("file_not_found:", await CallError("next"), StringComparison.Ordinal);
+        Assert.StartsWith("invalid_state:", await CallError("previous"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
     public async Task Errors_are_tool_errors_with_stable_codes()
     {
         await StartAsync();
