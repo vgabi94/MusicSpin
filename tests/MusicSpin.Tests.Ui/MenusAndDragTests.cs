@@ -108,6 +108,11 @@ public sealed class MenusAndDragTests
     /// </summary>
     private static Point Aim(Window window, Control item)
     {
+        // From nowhere: a sleeve the pointer was over (under a menu entry just clicked, say) closes first, so it can't
+        // still be turning over this one.
+        window.MouseMove(new Point(1, 1));
+        Gui.Settle();
+        Gui.FinishAnimations(Settled);
         window.MouseMove(Middle(window, item));
         Gui.Settle();
         Gui.FinishAnimations(Settled);

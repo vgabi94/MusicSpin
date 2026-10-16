@@ -52,6 +52,10 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _player.Start();
         await _vm.StartAsync();
         await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1 && _drawer.Rows.Count == upNext && _player.Count("queue") > 0, "the first read");
+
+        // Let any other read from the start land, so it can't come back after a test changes the queue.
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        _ui.Run();
     }
 
     /// <summary>The queue changed (from the app or the CLI): the player says so and the drawer reads it again.</summary>

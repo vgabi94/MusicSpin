@@ -264,16 +264,18 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                 afterUpNext++;
             }
 
-            var at = position switch { "next" => current + 1, "upnext" => afterUpNext, _ => queue.Count };
-            queue.InsertRange(at, (ProtocolJson.Deserialize<QueueItem[]>(items) ?? []).Select(item => new QueueEntry(0, false, item, position != "end")));
+            // Clamped: a test's Status may say more than its Queue holds.
+            var at = Math.Clamp(position switch { "next" => current + 1, "upnext" => afterUpNext, _ => queue.Count }, 0, queue.Count);
+            queue.InsertRange(at,(ProtocolJson.Deserialize<QueueItem[]>(items) ?? []).Select(item => new QueueEntry(0, false, item, position != "end")));
             Queue = Renumber(queue);
         }
-        else if (cmd == "queue.move" && request.TryGetProperty("from", out var from) && request.TryGetProperty("to", out var to))
+        else if (cmd == "queue.move" && request.TryGetProperty("from", out var from) && request.TryGetProperty("to", out var to)
+                 && from.GetInt32() is var f && to.GetInt32() is var t && f >= 0 && t >= 0 && f < Queue.Count && t < Queue.Count)
         {
             var queue = Queue.ToList();
-            var entry = queue[from.GetInt32()];
-            queue.RemoveAt(from.GetInt32());
-            queue.Insert(to.GetInt32(), entry);
+            var entry = queue[f];
+            queue.RemoveAt(f);
+            queue.Insert(t, entry);
             Queue = Renumber(queue);
         }
     }
