@@ -178,6 +178,10 @@
         <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
+    <Style Selector="Panel.queueEmpty controls|Icon">
+        <Setter Property="Width" Value="{StaticResource QueueEmptyIconSize}" />
+        <Setter Property="Height" Value="{StaticResource QueueEmptyIconSize}" />
+    </Style>
     <Style Selector="views|QueueDrawerView.over Panel.queueEmpty > Rectangle">
         <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
         <Setter Property="Fill" Value="{DynamicResource AccentWashBrush}" />

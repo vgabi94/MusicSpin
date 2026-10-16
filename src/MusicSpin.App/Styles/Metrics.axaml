@@ -75,6 +75,8 @@
     <sys:Double x:Key="ButtonFontSize">13</sys:Double>
     <!-- A playlist's Play all and ＋ Queue (mockup: .btn.ghost, margin-left 6px). -->
     <sys:Double x:Key="PageActionsGap">6</sys:Double>
+    <sys:Double x:Key="PageActionIconSize">11</sys:Double>
+    <sys:Double x:Key="PageActionIconGap">5</sys:Double>
 
     <!-- Toolbar controls (mockup: .sort, .dd): the Sort and Group dropdowns. -->
     <sys:Double x:Key="DropdownGap">4</sys:Double>
@@ -519,6 +521,7 @@
     <sys:Double x:Key="QueueEmptyRadius">12</sys:Double>
     <sys:Double x:Key="QueueEmptyFontSize">13</sys:Double>
     <sys:Double x:Key="QueueEmptyLineHeight">19.5</sys:Double>
+    <sys:Double x:Key="QueueEmptyIconSize">10</sys:Double>
     <Thickness x:Key="QueueFooterPadding">14,12</Thickness>
     <sys:Double x:Key="QueueFooterGap">8</sys:Double>
     <sys:Double x:Key="QueueFormGap">6</sys:Double>

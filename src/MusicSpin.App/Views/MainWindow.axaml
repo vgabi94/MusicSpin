@@ -124,7 +124,12 @@
                         <DataTemplate DataType="vm:TrackListPageViewModel">
                             <StackPanel Classes="pageActions">
                                 <Button Name="PlayAll" Classes="accent" Content="Play all" Command="{Binding PlayAllCommand}" />
-                                <Button Name="QueueAll" Classes="accent ghost" Content="＋ Queue" Command="{Binding QueueAllCommand}" />
+                                <Button Name="QueueAll" Classes="accent ghost" Command="{Binding QueueAllCommand}">
+                                    <StackPanel>
+                                        <controls:Icon Data="{StaticResource Plus}" />
+                                        <TextBlock Text="Queue" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </DataTemplate>
                         <DataTemplate DataType="vm:PageViewModel">

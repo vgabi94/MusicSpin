@@ -102,7 +102,16 @@
                 </Panel>
                 <Panel Name="QueueEmpty" Classes="queueEmpty">
                     <Rectangle />
-                    <TextBlock Text="Drag albums or tracks here,&#10;or use ＋ on any track." />
+                    <!-- The plus is the Plus icon: the app's font has no "＋". -->
+                    <TextBlock Name="QueueEmptyText">
+                        <Run Text="Drag albums or tracks here," />
+                        <LineBreak />
+                        <Run Text="or use " />
+                        <InlineUIContainer>
+                            <controls:Icon Data="{StaticResource Plus}" />
+                        </InlineUIContainer>
+                        <Run Text=" on any track." />
+                    </TextBlock>
                 </Panel>
                 <StackPanel Name="RadioSection" Classes="queueRadio" IsVisible="{Binding IsRadio}">
                     <Border Classes="queueRadioHeader">
