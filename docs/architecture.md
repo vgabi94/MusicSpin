@@ -98,24 +98,30 @@ src/MusicSpin.App/
 ├── AppHost.cs             data folder, settings and startup warning (shared rules with the CLI)
 ├── Composition/           AppServices + AppComposition: the one place that builds services and view models
 ├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers,
-│                          notices, the format label, typed values (seek and volume syntax), turntable designs
+│                          notices, the format label, typed values (seek and volume syntax), turntable designs,
+│                          the scene's timeline
 ├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
 │                          layers (Settings, Now Playing, queue drawer, the menu), pages (Albums, Tracks, playlists,
-│                          Radio), Crate (a crate and its records) and LibraryOrder (sort and grouping)
-├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, Pages/ — structure and
-│                          bindings only
+│                          Radio), Crate (a crate and its records), LibraryOrder (sort and grouping) and the
+│                          turntable scene
+├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, NowPlayingView, SceneView,
+│                          Pages/ — structure and bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
 │                          ScrubBar (the position, volume and Settings sliders), SpectrumView, FollowPanel, TypedBox,
 │                          TrimFirstPanel (a text that trims before the badge after it), ShelfSleeve and CrateRecord
-│                          (the shelf's and the crates' 3D, drawn with Projection: CSS-style 4×4 transforms)
+│                          (the shelf's and the crates' 3D, drawn with Projection: CSS-style 4×4 transforms), DeckView
+│                          (a turntable design's deck; ClassicDeckView, PlatterView), DeckHost (builds and scales
+│                          the chosen design's deck), SlidePanel (Now Playing's slide or fade),
+│                          SceneFlight and SceneSource (the scene's travelling sleeve and where it starts)
 ├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), Animate
 │                          (per-control transitions, animations played on a trigger), ShelfGeometry (slot widths,
 │                          sleeves per board, depth as perspective), converters
 └── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes: plain
                            button, ScrubBar, TypedBox, segmented control, cards), Window,
                            Base, TitleBar, Sidebar, Content (toolbar, group headers, the menu), Lists (track rows),
-                           Cards, Shelf, Crate, PlayerBar, Dialogs (and Settings), Artwork
+                           Cards, Shelf, Crate, PlayerBar, NowPlaying (and the Classic deck), Dialogs (and Settings),
+                           Artwork
 ```
 
 - **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
@@ -179,7 +185,30 @@ src/MusicSpin.App/
   gives the focus back. Every setting applies at once and is saved to `settings.json` (no Save button): the theme and
   Motion through `IAppearance`, the speed and Motion to the spin clock; the turntable design, the shelf's tilt and depth
   are properties Now Playing and the shelf read. Each design is a `DeckDesign` type (`DeckDesigns.All`), so its preview
-  in Settings, and later its deck, is picked by data template.
+  in Settings and its deck in Now Playing are picked by data template.
+- **Now Playing.** `NowPlayingViewModel` is a layer: the player bar's cover opens and closes it, ✕ and Esc close it.
+  It shows the playing track's album (title, "artist · year", the tracks; a click plays the album from that track) and
+  holds the deck's state, which follows play/pause from anywhere: playing lowers the arm and turns the platter, a pause
+  lifts the arm where it is, nothing loaded parks it. `SlidePanel` sets its `Shown` (0 down, 1 in place) as a local
+  value and its transition animates it, so a closing panel slides back from wherever it is.
+- **Turntable designs.** A design is a `DeckDesign` record and its deck a `DeckView`, chosen by data template.
+  `DeckHost` builds the deck for Settings › Design and gives it the same things whatever the design: the record (the
+  cover as label, turned by the spin clock), the arm state, whether the platter spins, the accent, and the theme as any
+  control. A design draws at a 400 px platter and the host scales it to `min(46% of the window's height, 34% of its
+  width)`, as the mockup's `--s`. A deck animates its own arm (`ClassicDeckView` sets `Swing` and `Drop` locally, so a
+  pause mid-swing turns back from where it is); `DeckView.Record` is where a record lands on it.
+- **Turntable scene.** Choosing an album on the albums page (a card, a shelf sleeve, a crate record) carries its record
+  onto the deck before it plays (`TurntableSceneViewModel`, the mockup's `playOnTurntable`). The album is loaded paused
+  at the start (`queue.set` with `play: false`) and `resume` is sent as the arm lands, so the sound starts with no
+  delay; meanwhile other playback input is held and sent in order afterwards (`PlayerViewModel.HoldInput`; not the
+  volume), and another album chosen plays after it. The steps and times are `SceneTimeline`'s, multiplied by Motion;
+  the scene runs on the app's clock a frame at a time, so tests step it with the fake clock. The window answers where
+  things are (`IScenePlaces`): the sleeve marked with `SceneSource.AlbumId`, if it is inside its scroller's view, and
+  the deck's record, measured with Now Playing put in place invisibly (`SlidePanel.IsFading`, which then fades it in
+  instead of sliding). `SceneFlight`, in the window's overlay layer, draws the travelling sleeve and record from the
+  scene's time with the mockup's keyframes and easings; the deck shows an empty platter, then spins up and moves its
+  own arm from the arm state. At Motion None, with the sleeve off screen or Now Playing open, the album plays at once
+  and Now Playing opens; the album already playing just opens it.
 
 ### UI tests
 

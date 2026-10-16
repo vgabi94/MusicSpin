@@ -31,6 +31,7 @@ public sealed class ArtworkTests
 
         var card = AlbumCard(window, "Quadrants");
         Gui.Click(window, card);
+        await app.PlaySceneAsync();
         await Gui.UntilAsync(() => app.ViewModel.Player.State == PlayerState.Playing && app.ViewModel.PlayingAlbumId is not null, "the album playing");
         app.Advance(TimeSpan.FromSeconds(1.5));
 

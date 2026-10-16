@@ -185,6 +185,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private readonly PlayerViewModel _player;
     private readonly SpinClock _clock;
     private readonly LayerViewModel _nowPlaying;
+    private readonly TurntableSceneViewModel _scene;
     private readonly MenuViewModel _menu;
     private readonly Notices _notices;
     private readonly TimeProvider _time;
@@ -197,7 +198,8 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private long? _lastFlip;
 
     public AlbumsPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, SpinClock clock,
-        LayerViewModel nowPlaying, MenuViewModel menu, Notices notices, SettingsViewModel settings, TimeProvider time)
+        LayerViewModel nowPlaying, TurntableSceneViewModel scene, MenuViewModel menu, Notices notices, SettingsViewModel settings,
+        TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(clock);
@@ -206,6 +208,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         _player = player;
         _clock = clock;
         _nowPlaying = nowPlaying;
+        _scene = scene;
         _menu = menu;
         _notices = notices;
         _time = time;
@@ -400,11 +403,8 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         return true;
     }
 
-    private Task PlayAsync(AlbumItemViewModel album) => _notices.GuardAsync(async () =>
-    {
-        var tracks = await _library.AlbumTracksAsync(album.Album.Id).ConfigureAwait(true);
-        await _player.PlayTracksAsync(tracks).ConfigureAwait(true);
-    });
+    /// <summary>The album from its first track, its record carried onto the turntable (the scene).</summary>
+    private Task PlayAsync(AlbumItemViewModel album) => _scene.PlayAlbumAsync(album.Album.Id);
 
     partial void OnViewChoiceChanged(Choice<AlbumsView> value) => LayOut();
 

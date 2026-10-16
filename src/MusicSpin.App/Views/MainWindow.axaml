@@ -140,6 +140,11 @@
             </Panel>
         </DockPanel>
 
+        <!-- Now Playing, between the title bar and the player bar; it slides up from under the player bar. -->
+        <controls:SlidePanel Name="NowPlayingLayer" Classes="nowPlaying" Grid.Row="1" Grid.ColumnSpan="2" IsOpen="{Binding NowPlaying.IsOpen}" IsFading="{Binding Scene.IsRunning}">
+            <views:NowPlayingView Name="NowPlayingView" />
+        </controls:SlidePanel>
+
         <views:PlayerBar Name="PlayerBarView" Grid.Row="2" Grid.ColumnSpan="2" />
 
         <!-- Settings over the whole window; a click on the dim around it closes it. -->

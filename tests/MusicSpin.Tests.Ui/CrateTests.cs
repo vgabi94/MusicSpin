@@ -257,6 +257,9 @@ public sealed class CrateTests
 
         Gui.Click(window, Gui.Find<Button>(window, "CratePlay"));
         await Gui.UntilAsync(() => app.Scripted!.Count("queue.set") == 1, "the album sent");
+        await app.PlaySceneAsync();
+        app.ViewModel.NowPlaying.Close();
+        Gui.FinishAnimations();
         Assert.Equal(SampleLibrary.TrackId(8, 1), app.Scripted!.Sent("queue.set")[0].GetProperty("items")[0].GetProperty("trackId").GetString());
         await PlayingAsync(app, 8);
         Assert.Contains("Pause", Texts(side));

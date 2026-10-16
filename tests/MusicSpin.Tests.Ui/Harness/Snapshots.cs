@@ -56,11 +56,18 @@ internal static class Snapshots
         return Updating || File.Exists(own) ? own : shared;
     }
 
-    /// <summary>Captures <paramref name="top"/> and compares it with the baseline <paramref name="name"/>.png.</summary>
-    public static void Match(TopLevel top, string name)
+    /// <summary>
+    /// Captures <paramref name="top"/> and compares it with the baseline <paramref name="name"/>.png; first the animations
+    /// running finish, unless <paramref name="asItIs"/> (a frame mid-animation, at a time the test set).
+    /// </summary>
+    public static void Match(TopLevel top, string name, bool asItIs = false)
     {
         ArgumentNullException.ThrowIfNull(top);
-        Gui.FinishAnimations();
+        if (!asItIs)
+        {
+            Gui.FinishAnimations();
+        }
+
         using var frame = top.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
         using var png = new MemoryStream();
         frame.Save(png, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());

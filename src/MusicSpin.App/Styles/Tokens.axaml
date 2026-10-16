@@ -25,6 +25,15 @@
                 <GradientStop Color="#2A2C31" Offset="0" />
                 <GradientStop Color="#17181B" Offset="1" />
             </LinearGradientBrush>
+            <!-- "Music Spin" cut into the plinth: the cut, its lit lower wall and its shaded upper wall (mockup: .deck-brand). -->
+            <SolidColorBrush x:Key="DeckBrandBrush" Color="#07080A" />
+            <SolidColorBrush x:Key="DeckBrandHighlightBrush" Color="#2EFFFFFF" />
+            <SolidColorBrush x:Key="DeckBrandShadeBrush" Color="#B3000000" />
+            <!-- Over Now Playing's blurred cover (mockup: .np-bg::after, linear-gradient(90deg, #0008, #000c)). -->
+            <LinearGradientBrush x:Key="NowPlayingVeilBrush" StartPoint="0%,50%" EndPoint="100%,50%">
+                <GradientStop Color="#88000000" Offset="0" />
+                <GradientStop Color="#CC000000" Offset="1" />
+            </LinearGradientBrush>
             <!-- A shelf board (mockup: .board, linear-gradient(#3a2c22, #2a1f18 40%, #1a130e)). -->
             <LinearGradientBrush x:Key="ShelfBoardBrush" StartPoint="0%,0%" EndPoint="0%,100%">
                 <GradientStop Color="#3A2C22" Offset="0" />
@@ -50,6 +59,13 @@
                 <GradientStop Color="#F7F5F1" Offset="0" />
                 <GradientStop Color="#DCD8D0" Offset="1" />
             </LinearGradientBrush>
+            <SolidColorBrush x:Key="DeckBrandBrush" Color="#CBC6BD" />
+            <SolidColorBrush x:Key="DeckBrandHighlightBrush" Color="#D9FFFFFF" />
+            <SolidColorBrush x:Key="DeckBrandShadeBrush" Color="#26000000" />
+            <LinearGradientBrush x:Key="NowPlayingVeilBrush" StartPoint="0%,50%" EndPoint="100%,50%">
+                <GradientStop Color="#66FFFFFF" Offset="0" />
+                <GradientStop Color="#CCFFFFFF" Offset="1" />
+            </LinearGradientBrush>
             <!-- mockup: :root.light .board, linear-gradient(#c9a77f, #b48f66 40%, #8f6d4b). -->
             <LinearGradientBrush x:Key="ShelfBoardBrush" StartPoint="0%,0%" EndPoint="0%,100%">
                 <GradientStop Color="#C9A77F" Offset="0" />
@@ -62,6 +78,8 @@
     <!-- The playing album's colour (80% with white) and its ink for text; replaced at runtime. -->
     <SolidColorBrush x:Key="AccentBrush" Color="#E86A3C" />
     <SolidColorBrush x:Key="AccentInkBrush" Color="#E86A3C" />
+    <!-- The accent at 18%: the current track in Now Playing (mockup: color-mix(in srgb, the accent 18%, transparent)). -->
+    <SolidColorBrush x:Key="AccentTintBrush" Color="#2EE86A3C" />
 
     <!-- A sleeve's spine when the album has no colour (mockup: .edge, background #333 by default). -->
     <SolidColorBrush x:Key="ShelfSpineBrush" Color="#333333" />
@@ -118,6 +136,14 @@
     <!-- The Classic deck's platter, its rim and the arm (mockup: .platter, .arm-base, .arm, .headshell). -->
     <SolidColorBrush x:Key="DeckPlatterBrush" Color="#33363C" />
     <SolidColorBrush x:Key="DeckPlatterRingBrush" Color="#66000000" />
+    <!-- The big deck's platter: stripes 2° apart (mockup: repeating-conic-gradient(#3a3d43 0 2deg, #2c2e33 2deg 4deg)). -->
+    <SolidColorBrush x:Key="DeckPlatterBaseBrush" Color="#2C2E33" />
+    <SolidColorBrush x:Key="DeckPlatterStripeBrush" Color="#3A3D43" />
+    <!-- The LED while the platter is still (lit, it takes the accent; mockup: .deck-led). -->
+    <SolidColorBrush x:Key="DeckLedOffBrush" Color="#444444" />
+    <SolidColorBrush x:Key="DeckArmShadowBrush" Color="#000000" />
+    <!-- Now Playing's close button (mockup: .np-close, #0004). -->
+    <SolidColorBrush x:Key="NowPlayingCloseBrush" Color="#44000000" />
     <RadialGradientBrush x:Key="DeckArmBaseBrush">
         <GradientStop Color="#D8D8D8" Offset="0.22" />
         <GradientStop Color="#888888" Offset="0.24" />

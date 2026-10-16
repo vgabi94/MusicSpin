@@ -18,7 +18,7 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero));
     private readonly QueueDispatcher _ui = new();
     private readonly PlayerViewModel _vm;
-    private readonly NowPlayingViewModel _nowPlaying = new();
+    private readonly LayerViewModel _nowPlaying = new StubLayerViewModel();
     private readonly QueueDrawerViewModel _queue = new();
     private readonly PlayerBarViewModel _bar;
 

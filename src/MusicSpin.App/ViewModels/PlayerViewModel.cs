@@ -43,6 +43,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     internal bool IsRefreshing => Volatile.Read(ref _refreshing) == 1;
     private bool _disposed;
 
+    /// <summary>Commands held while the turntable scene plays (see <see cref="HoldInput"/>), in order.</summary>
+    private List<(string Cmd, object? Args)>? _held;
+
     public PlayerViewModel(IPlayerConnector connector, TimeProvider time, IUiDispatcher ui)
     {
         ArgumentNullException.ThrowIfNull(connector);
@@ -186,6 +189,38 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             : SendAsync("queue.set", new { items = tracks.Select(ToItem).ToArray(), start = Math.Clamp(start, 0, tracks.Count - 1), play = true });
     }
 
+    /// <summary>
+    /// The turntable scene's own commands (never held): loads <paramref name="tracks"/> without playing, so
+    /// <see cref="ResumeAsync"/> starts the sound with no delay when the arm lands.
+    /// </summary>
+    public Task LoadTracksAsync(IReadOnlyList<TrackSummary> tracks)
+    {
+        ArgumentNullException.ThrowIfNull(tracks);
+        return tracks.Count == 0 ? Task.CompletedTask
+            : SendAsync("queue.set", new { items = tracks.Select(ToItem).ToArray(), start = 0, play = false }, holdable: false);
+    }
+
+    /// <inheritdoc cref="LoadTracksAsync"/>
+    public Task ResumeAsync() => SendAsync("resume", null, holdable: false);
+
+    /// <summary>
+    /// Holds playback input (transport, queue, radio; not the volume) until <see cref="ReleaseInputAsync"/>, which sends
+    /// it in order: while the turntable scene plays.
+    /// </summary>
+    public void HoldInput() => _held ??= [];
+
+    public bool IsInputHeld => _held is not null;
+
+    public async Task ReleaseInputAsync()
+    {
+        var held = _held;
+        _held = null;
+        foreach (var (cmd, args) in held ?? [])
+        {
+            await SendAsync(cmd, args).ConfigureAwait(true);
+        }
+    }
+
     /// <summary>Adds to the queue: at the end, or up next (see <see cref="QueuePosition"/>).</summary>
     public Task AddToQueueAsync(IReadOnlyList<TrackSummary> tracks, QueuePosition position = QueuePosition.End)
     {
@@ -246,9 +281,20 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         _connectLock.Dispose();
     }
 
-    /// <summary>Sends a command, starting the player when needed. Errors become a <see cref="Notice"/>.</summary>
-    public async Task SendAsync(string cmd, object? args = null)
+    /// <summary>
+    /// Sends a command, starting the player when needed. Errors become a <see cref="Notice"/>. While input is held
+    /// (<see cref="HoldInput"/>) it waits, except the volume.
+    /// </summary>
+    public Task SendAsync(string cmd, object? args = null) => SendAsync(cmd, args, holdable: cmd != "volume");
+
+    private async Task SendAsync(string cmd, object? args, bool holdable)
     {
+        if (holdable && _held is { } held)
+        {
+            held.Add((cmd, args));
+            return;
+        }
+
         try
         {
             await EnsureConnectedAsync(start: true).ConfigureAwait(false);
