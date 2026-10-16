@@ -10,12 +10,17 @@ namespace MusicSpin.Tests.Ui.Harness;
 /// <summary>Waiting, finding and clicking in a headless window.</summary>
 internal static class Gui
 {
-    /// <summary>Runs queued UI work, the dispatcher timers due, and lays out and renders (no time passes).</summary>
+    /// <summary>
+    /// Runs queued UI work, the dispatcher timers due, and lays out and renders (no time passes). It ends on a render:
+    /// hit testing reads the last rendered frame, not the layout, so work that ran after the frame (posted while
+    /// rendering, or a reply from the player's thread) would leave a click aimed by layout landing on what was there.
+    /// </summary>
     public static void Settle()
     {
         RunJobs();
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
     }
 
     /// <summary>
@@ -74,7 +79,7 @@ internal static class Gui
                     ?? throw new InvalidOperationException($"{control} is not in the window.");
         if (window.InputHitTest(point) is not Visual hit || (hit != control && !control.IsVisualAncestorOf(hit)))
         {
-            throw new InvalidOperationException($"Clicking {control} at {point} would hit {window.InputHitTest(point)} instead.");
+            throw new InvalidOperationException($"Clicking {Describe(control)} at {point} would hit {Describe(window.InputHitTest(point) as Visual)} instead.");
         }
 
         var clicked = false;
@@ -96,6 +101,20 @@ internal static class Gui
                 throw new InvalidOperationException($"{control} got the mouse but did not click (enabled: {button.IsEffectivelyEnabled}).");
             }
         }
+    }
+
+    /// <summary>A visual and its named ancestors ("Border.menu#MenuBox in Canvas#MenuLayer"), for failure messages.</summary>
+    private static string Describe(Visual? visual)
+    {
+        static string One(Visual v) => v.GetType().Name + string.Concat((v as StyledElement)?.Classes.Select(c => "." + c) ?? [])
+                                       + ((v as StyledElement)?.Name is { } name ? "#" + name : string.Empty);
+        if (visual is null)
+        {
+            return "nothing";
+        }
+
+        var named = visual.GetVisualAncestors().OfType<StyledElement>().Where(a => a.Name is not null).Take(2).Cast<Visual>();
+        return string.Join(" in ", new[] { visual }.Concat(named).Select(One));
     }
 
     /// <summary>Moves the mouse over the middle of <paramref name="control"/>.</summary>
