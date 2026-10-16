@@ -97,6 +97,30 @@ public sealed class PlayerHostTests : PlayerHostTestBase
     }
 
     [Fact]
+    public async Task The_subscribe_reply_carries_the_status_and_comes_once_the_subscription_is_active()
+    {
+        var host = StartHost();
+        var control = await ConnectAsync();
+        var listener = await ConnectAsync();
+        var ct = TestContext.Current.CancellationToken;
+        await control.SendAsync("queue.set", QueueSet(Paths), ct);
+        var expected = await control.StatusAsync(ct);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var acknowledged = new TaskCompletionSource<(PlayerStatus Status, int Subscribers)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stream = listener.SubscribeAsync(spectrum: false, s => acknowledged.TrySetResult((s, host.SubscriberCount)), cts.Token).GetAsyncEnumerator(cts.Token);
+        var first = stream.MoveNextAsync();
+
+        // No polling for the subscription: the reply is the signal, and no event after it can be missed.
+        var (status, subscribers) = await acknowledged.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+        Assert.Equal(1, subscribers);
+        Assert.Equal((expected.State, expected.QueueLength, expected.Item?.Path), (status.State, status.QueueLength, status.Item?.Path));
+        await control.SendAsync("pause", null, ct);
+        Assert.True(await first.AsTask().WaitAsync(TimeSpan.FromSeconds(30), ct));
+        await cts.CancelAsync();
+        await stream.DisposeAsync().AsTask().ContinueWith(_ => { }, TaskScheduler.Default);
+    }
+
+    [Fact]
     public async Task Spectrum_events_go_only_to_subscribers_that_asked_for_them()
     {
         Decoders.Waves[Paths[0]] = FakeDecoderFactory.Sine(1000, 8000);
