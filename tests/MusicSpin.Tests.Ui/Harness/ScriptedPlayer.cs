@@ -166,8 +166,10 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                 switch (cmd)
                 {
                     case "subscribe":
-                        connection.Subscribed = true;
+                        // Acknowledge first, as the real player does: an event written before the reply is skipped by
+                        // the client (it is still waiting for its answer), so a push racing ahead of it would be lost.
                         await connection.WriteAsync(ProtocolMessages.Ok(id, new { }));
+                        connection.Subscribed = true;
                         break;
                     case "quit":
                         await connection.WriteAsync(ProtocolMessages.Ok(id, new { }));
