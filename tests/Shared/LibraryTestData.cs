@@ -28,18 +28,35 @@ internal static class TempDir
                 return;
             }
 
-            // Restore permissions changed by tests so cleanup can proceed.
+            // Restore permissions changed by tests so cleanup can proceed. Entries that vanish
+            // mid-enumeration (e.g. a player socket removed during shutdown) are skipped; .NET then
+            // reports an invalid mode (ArgumentException) or a missing file for them.
             foreach (var entry in new DirectoryInfo(path).EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }))
             {
-                if (!OperatingSystem.IsWindows() && entry.LinkTarget is null)
+                if (OperatingSystem.IsWindows())
                 {
+                    continue;
+                }
+
+                try
+                {
+                    entry.Refresh();
+                    if (!entry.Exists || entry.LinkTarget is not null)
+                    {
+                        continue;
+                    }
+
                     entry.UnixFileMode |= UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+                {
+                    // entry vanished or is not chmod-able; skip it
                 }
             }
 
             Directory.Delete(path, recursive: true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             // best effort
         }
