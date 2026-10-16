@@ -21,13 +21,13 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
     public const string RadioShuffleTip = "Radio is already random";
 
     private readonly LayerViewModel _nowPlaying;
-    private readonly QueueDrawerViewModel _queue;
+    private readonly LayerViewModel _queue;
     private bool _restarts = true;
     private int? _queueCount;
     private string? _queuePath;
     private TrackFormat? _format;
 
-    public PlayerBarViewModel(PlayerViewModel player, LayerViewModel nowPlaying, QueueDrawerViewModel queue, TimeProvider time, IUiDispatcher ui)
+    public PlayerBarViewModel(PlayerViewModel player, LayerViewModel nowPlaying, LayerViewModel queue, TimeProvider time, IUiDispatcher ui)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(nowPlaying);
@@ -117,9 +117,8 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
 
     // ---- the right-hand buttons ------------------------------------------------------------------------------
 
-    /// <summary>Entries waiting in the queue after the current one (during radio: the ones added to play next).</summary>
-    public int QueueCount => Player.IsRadio ? Player.UpNext
-        : Player.QueueIndex is { } index ? Math.Max(0, Player.QueueLength - index - 1) : Player.QueueLength;
+    /// <summary>The entries waiting up next (what the queue drawer lists): added with Play next or Add to queue.</summary>
+    public int QueueCount => Player.UpNext;
 
     /// <summary>The count badge's text; null hides it.</summary>
     public string? QueueCountText => QueueCount > 0 ? QueueCount.ToString(CultureInfo.InvariantCulture) : null;

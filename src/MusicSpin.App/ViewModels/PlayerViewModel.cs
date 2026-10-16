@@ -65,6 +65,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Spectrum levels from the player (16 bands, 0..1), about 30 times a second while playing (on the UI thread).</summary>
     public event EventHandler<float[]>? SpectrumReceived;
 
+    /// <summary>
+    /// The queue changed (an entry added, moved or removed, here or from the CLI), or the player was found: on the UI
+    /// thread, so the queue drawer reads it again.
+    /// </summary>
+    public event EventHandler? QueueChanged;
+
     [ObservableProperty]
     public partial bool IsConnected { get; private set; }
 
@@ -221,19 +227,64 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    /// <summary>Adds to the queue: at the end, or up next (see <see cref="QueuePosition"/>).</summary>
-    public Task AddToQueueAsync(IReadOnlyList<TrackSummary> tracks, QueuePosition position = QueuePosition.End)
+    /// <summary>
+    /// Adds to the queue: at the end, or up next (see <see cref="QueuePosition"/>). False when it failed (a notice says
+    /// why), so a caller that moves the new entries afterwards can stop.
+    /// </summary>
+    public Task<bool> AddToQueueAsync(IReadOnlyList<TrackSummary> tracks, QueuePosition position = QueuePosition.End)
     {
         ArgumentNullException.ThrowIfNull(tracks);
-        return tracks.Count == 0 ? Task.CompletedTask
-            : SendAsync("queue.add", new { items = tracks.Select(ToItem).ToArray(), position = position.ToString().ToLowerInvariant() });
+        return tracks.Count == 0 ? Task.FromResult(true)
+            : SendAsync("queue.add", new { items = tracks.Select(ToItem).ToArray(), position = position.ToString().ToLowerInvariant() }, holdable: true);
     }
 
     public Task RemoveFromQueueAsync(int index) => SendAsync("queue.remove", new { index });
 
-    public Task MoveInQueueAsync(int from, int to) => SendAsync("queue.move", new { from, to });
+    /// <summary>Moves entry <paramref name="from"/> to <paramref name="to"/> (its index afterwards). False when it failed.</summary>
+    public Task<bool> MoveInQueueAsync(int from, int to) => SendAsync("queue.move", new { from, to }, holdable: true);
 
     public Task ClearQueueAsync(bool upNextOnly = false) => SendAsync("queue.clear", upNextOnly ? new { upNext = true } : null);
+
+    /// <summary>Plays queue entry <paramref name="index"/> (0-based, in play order); the up-next entries it skips are dropped.</summary>
+    public Task PlayIndexAsync(int index) => SendAsync("play", new { index });
+
+    /// <summary>
+    /// Ends radio and keeps <paramref name="keep"/>, the current track and the up-next entries after it: a new queue with
+    /// the current track at its position, playing if it was. The player has no command for this yet, so the switch may
+    /// leave a short gap.
+    /// </summary>
+    public Task EndRadioAsync(IReadOnlyList<QueueItem> keep)
+    {
+        ArgumentNullException.ThrowIfNull(keep);
+        return keep.Count == 0 ? ClearQueueAsync()
+            : SendAsync("queue.set", new { items = keep, start = 0, play = IsPlaying, startSeconds = Math.Max(0, Position) });
+    }
+
+    /// <summary>
+    /// A page of the queue, in play order (<paramref name="offset"/> 0-based); null while there is no player. It waits for
+    /// nothing held: it only reads.
+    /// </summary>
+    public async Task<QueueListing?> QueueAsync(int offset, int limit)
+    {
+        if (_client is not { } client)
+        {
+            return null;
+        }
+
+        try
+        {
+            var data = await client.SendAsync("queue", new { offset = Math.Max(0, offset), limit = Math.Max(1, limit) }, _life.Token).ConfigureAwait(false);
+            return ProtocolJson.Deserialize<QueueListing>(data);
+        }
+        catch (OperationCanceledException) when (_life.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception ex) when (ex is MusicSpinException or JsonException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>Starts a radio station (<paramref name="filter"/> null: the whole library).</summary>
     public Task StartRadioAsync(RadioFilter? filter = null) => SendAsync("radio", new { filter = filter ?? new RadioFilter(), play = true });
@@ -287,12 +338,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public Task SendAsync(string cmd, object? args = null) => SendAsync(cmd, args, holdable: cmd != "volume");
 
-    private async Task SendAsync(string cmd, object? args, bool holdable)
+    private async Task<bool> SendAsync(string cmd, object? args, bool holdable)
     {
         if (holdable && _held is { } held)
         {
             held.Add((cmd, args));
-            return;
+            return true;
         }
 
         try
@@ -308,10 +359,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             {
                 await RefreshAsync().ConfigureAwait(false);
             }
+
+            return true;
         }
         catch (OperationCanceledException) when (_life.IsCancellationRequested)
         {
-            // closing
+            return false; // closing
         }
         catch (MusicSpinException ex)
         {
@@ -320,6 +373,8 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             {
                 await LostAsync().ConfigureAwait(false);
             }
+
+            return false;
         }
     }
 
@@ -459,7 +514,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             await subscribed.Task.ConfigureAwait(false);
             _ui.Post(() => IsConnected = true);
             var status = await client.StatusAsync(_life.Token).ConfigureAwait(false);
-            _ui.Post(() => Apply(status));
+            _ui.Post(() =>
+            {
+                Apply(status);
+                QueueChanged?.Invoke(this, EventArgs.Empty);
+            });
         }
         finally
         {
@@ -496,6 +555,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
                         && stream.Current.Data.TryGetProperty("message", out var message) && message.GetString() is { } text)
                     {
                         Raise(text);
+                    }
+
+                    if (stream.Current.Name == "queueChanged")
+                    {
+                        _ui.Post(() => QueueChanged?.Invoke(this, EventArgs.Empty));
                     }
 
                     _ = RefreshAsync();

@@ -145,6 +145,13 @@
             <views:NowPlayingView Name="NowPlayingView" />
         </controls:SlidePanel>
 
+        <!-- The queue drawer, over the content and Now Playing on the right; it slides in from the window's edge. -->
+        <controls:SlidePanel Name="QueueLayer" Classes="queue" Grid.Row="1" Grid.ColumnSpan="2" IsOpen="{Binding QueueDrawer.IsOpen}">
+            <Border Classes="queueDrawer">
+                <views:QueueDrawerView Name="QueueDrawerView" DataContext="{Binding QueueDrawer}" />
+            </Border>
+        </controls:SlidePanel>
+
         <views:PlayerBar Name="PlayerBarView" Grid.Row="2" Grid.ColumnSpan="2" />
 
         <!-- Settings over the whole window; a click on the dim around it closes it. -->

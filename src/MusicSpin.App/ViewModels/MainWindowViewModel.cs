@@ -34,9 +34,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 SpinClock.IsSpinning = NowPlaying.IsSpinning;
             }
         };
+        QueueDrawer = new QueueDrawerViewModel(Player, services.Library, services.Covers, Notices, services.Time, services.Ui);
+        QueueDrawer.PlaylistSaved += (_, _) => _ = Notices.GuardAsync(LoadPlaylistsAsync);
         PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
+        Layers.Register(QueueDrawer.SaveForm);
         Layers.Register(Menu);
         Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
         Scene = new TurntableSceneViewModel(Player, NowPlaying, services.Library, services.Covers, Settings, services.Time, services.Ui, Notices);
@@ -74,7 +77,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// <summary>The record carried from the albums page onto the turntable.</summary>
     public TurntableSceneViewModel Scene { get; }
 
-    public QueueDrawerViewModel QueueDrawer { get; } = new();
+    /// <summary>The queue drawer: what plays next, and drops from the library.</summary>
+    public QueueDrawerViewModel QueueDrawer { get; }
 
     /// <summary>The Sort and Group dropdowns and the ＋ menus.</summary>
     public MenuViewModel Menu { get; } = new();
@@ -193,6 +197,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _albumLookup?.Cancel();
         _albumLookup?.Dispose();
         Scene.Dispose();
+        QueueDrawer.Dispose();
         SpinClock.Dispose();
         PlayerBar.Dispose();
         await Player.DisposeAsync().ConfigureAwait(false);

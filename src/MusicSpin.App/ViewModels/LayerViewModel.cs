@@ -25,17 +25,18 @@ public abstract partial class LayerViewModel : ObservableObject, ILayer
     [RelayCommand]
     public void Toggle() => IsOpen = !IsOpen;
 
+    /// <summary>It opened or closed, by any means.</summary>
+    protected virtual void OnOpenChanged(bool isOpen)
+    {
+    }
+
     partial void OnIsOpenChanged(bool value)
     {
         if (value)
         {
             Opens++;
         }
-    }
-}
 
-/// <summary>The queue drawer (opened from the player bar's queue button; the drawer itself comes with the queue).</summary>
-public sealed class QueueDrawerViewModel : LayerViewModel
-{
-    public override int Order => LayerOrder.QueueDrawer;
+        OnOpenChanged(value);
+    }
 }

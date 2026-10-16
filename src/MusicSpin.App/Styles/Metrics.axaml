@@ -17,6 +17,7 @@
     <Thickness x:Key="HairlineBottom">0,0,0,1</Thickness>
     <Thickness x:Key="HairlineRight">0,0,1,0</Thickness>
     <Thickness x:Key="HairlineTop">0,1,0,0</Thickness>
+    <Thickness x:Key="HairlineLeft">1,0,0,0</Thickness>
     <Thickness x:Key="Hairline">1</Thickness>
 
     <!-- Title bar -->
@@ -472,4 +473,61 @@
     <sys:Double x:Key="DeckHeadshellHeight">40</sys:Double>
     <Thickness x:Key="DeckHeadshellMargin">22.6,0,0,0</Thickness>
     <sys:Double x:Key="DeckArmShadowBlur">4</sys:Double>
+
+    <!--
+      The queue drawer (mockup: .queue): 340 wide on the right, from under the title bar to the player bar. The header
+      16 18 10 18 with "Up next" at 15 and the summary at 12; Clear 3 x 8, radius 6; ✕ 28 round. The list is padded 0 8
+      10; a row (.qi) 6 x 8, radius 7, columns 36 | title | duration | 24 (✕, 24 round, its icon 9), 10 apart, at 13 with
+      the artist at 11.5 and the duration at 12. The drop line is 2 high, 12 from the list's sides (4 past a row). The
+      empty box: 4 x 10 out, 34 x 16 in, a 1.5 dashed line, radius 12, text at 13 on 1.5 lines. The footer is padded 12
+      14 with 8 between its buttons, 6 in the name form, where the buttons are 8 x 14 and the field 0 x 12 at 13. The
+      radio part is 14 below the rows: its header 12 8 6 8 with an 8 gap at 12, its icon 15.
+    -->
+    <sys:Double x:Key="QueueWidth">340</sys:Double>
+    <Thickness x:Key="QueueHeaderPadding">18,16,12,10</Thickness>
+    <sys:Double x:Key="QueueHeaderGap">8</sys:Double>
+    <sys:Double x:Key="QueueTitleFontSize">15</sys:Double>
+    <sys:Double x:Key="QueueSummaryFontSize">12</sys:Double>
+    <Thickness x:Key="QueueTextButtonPadding">8,3</Thickness>
+    <CornerRadius x:Key="QueueTextButtonRadius">6</CornerRadius>
+    <sys:Double x:Key="QueueTextButtonFontSize">12</sys:Double>
+    <sys:Double x:Key="QueueCloseSize">28</sys:Double>
+    <CornerRadius x:Key="QueueCloseRadius">14</CornerRadius>
+    <sys:Double x:Key="QueueCloseIconSize">12</sys:Double>
+    <Thickness x:Key="QueueListPadding">8,0,8,10</Thickness>
+    <Thickness x:Key="QueueRowPadding">8,6</Thickness>
+    <CornerRadius x:Key="QueueRowRadius">7</CornerRadius>
+    <sys:Double x:Key="QueueRowGap">10</sys:Double>
+    <sys:Double x:Key="QueueRowFontSize">13</sys:Double>
+    <sys:Double x:Key="QueueRowArtistFontSize">11.5</sys:Double>
+    <sys:Double x:Key="QueueRowDurationFontSize">12</sys:Double>
+    <GridLength x:Key="QueueRemoveColumn">24</GridLength>
+    <sys:Double x:Key="QueueRemoveSize">24</sys:Double>
+    <CornerRadius x:Key="QueueRemoveRadius">12</CornerRadius>
+    <sys:Double x:Key="QueueRemoveIconSize">9</sys:Double>
+    <Thickness x:Key="QueueRemoveMargin">0,0,8,0</Thickness>
+    <sys:Double x:Key="QueueDraggedOpacity">0.35</sys:Double>
+    <sys:Double x:Key="QueuePickOpacity">0.6</sys:Double>
+    <sys:Double x:Key="QueueDropLineHeight">2</sys:Double>
+    <CornerRadius x:Key="QueueDropLineRadius">1</CornerRadius>
+    <Thickness x:Key="QueueDropLineMargin">4,0</Thickness>
+    <Thickness x:Key="QueueEmptyMargin">10,4</Thickness>
+    <Thickness x:Key="QueueEmptyTextMargin">16,34</Thickness>
+    <sys:Double x:Key="QueueEmptyDashWidth">1.5</sys:Double>
+    <sys:Double x:Key="QueueEmptyRadius">12</sys:Double>
+    <sys:Double x:Key="QueueEmptyFontSize">13</sys:Double>
+    <sys:Double x:Key="QueueEmptyLineHeight">19.5</sys:Double>
+    <Thickness x:Key="QueueFooterPadding">14,12</Thickness>
+    <sys:Double x:Key="QueueFooterGap">8</sys:Double>
+    <sys:Double x:Key="QueueFormGap">6</sys:Double>
+    <Thickness x:Key="QueueFormButtonPadding">14,8</Thickness>
+    <Thickness x:Key="QueueNamePadding">12,0</Thickness>
+    <CornerRadius x:Key="QueueNameRadius">999</CornerRadius>
+    <sys:Double x:Key="QueueNameFontSize">13</sys:Double>
+    <Thickness x:Key="QueueRadioMargin">0,14,0,0</Thickness>
+    <Thickness x:Key="QueueRadioHeaderPadding">8,12,8,6</Thickness>
+    <sys:Double x:Key="QueueRadioHeaderGap">8</sys:Double>
+    <sys:Double x:Key="QueueRadioFontSize">12</sys:Double>
+    <sys:Double x:Key="QueueRadioIconSize">15</sys:Double>
+    <sys:Double x:Key="QueueRadioIconStroke">2</sys:Double>
 </ResourceDictionary>

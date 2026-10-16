@@ -38,6 +38,7 @@ public sealed class PlayerBarTests
             Volume = volume,
             QueueIndex = 0,
             QueueLength = 8,
+            UpNext = 7,
             Track = track,
             Item = new QueueItem("/music/" + title + ".flac", title, "Kodo Arai", "Night Transit", DurationSeconds: Duration),
         };
@@ -189,14 +190,14 @@ public sealed class PlayerBarTests
         Assert.Equal("7", ((TextBlock)badge.Child!).Text);
         Assert.Equal(0, Animate.GetPlayed(badge));
 
-        await SetAsync(app, Status() with { QueueLength = 10 });
+        await SetAsync(app, Status() with { QueueLength = 10, UpNext = 9 });
         Assert.Equal("9", ((TextBlock)badge.Child!).Text);
         Assert.Equal(1, Animate.GetPlayed(badge));
 
         Gui.Click(app.Window, Find<Button>(app, "QueueButton"));
         Assert.True(app.ViewModel.QueueDrawer.IsOpen);
         Assert.Contains("on", Find<Button>(app, "QueueButton").Classes);
-        await SetAsync(app, Status() with { QueueLength = 12 });
+        await SetAsync(app, Status() with { QueueLength = 12, UpNext = 11 });
         Assert.Equal("11", ((TextBlock)badge.Child!).Text);
         Assert.Equal(1, Animate.GetPlayed(badge));
     }
