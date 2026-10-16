@@ -33,7 +33,7 @@ internal static class PlayCommand
         };
 
         var command = new Command("play",
-            "Play file(s) or a library queue (--album / --artist / --search / --playlist [--shuffle]) in the background player and return " +
+            "Play file(s) or a library queue (--album / --artist / --genre / --search / --playlist [--shuffle]) in the background player and return " +
             "immediately with its status. Starts the player for this data folder if needed, or hands the queue to the running one. " +
             "Control it with pause/resume/toggle/stop/next/prev/seek/volume/status/queue/quit. --foreground keeps the old blocking mode.");
         source.AddTo(command);
@@ -59,7 +59,7 @@ internal static class PlayCommand
             }
             else if (blocking && Options.Get(r, source.Playlist) is not null)
             {
-                r.AddError("--playlist plays in the background player; --foreground/--duration support files, --album, --artist and --search.");
+                r.AddError("--playlist plays in the background player; --foreground/--duration support files, --album, --artist, --genre and --search.");
             }
         });
 
