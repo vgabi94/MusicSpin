@@ -14,9 +14,11 @@ internal sealed record ResolvedQueue(List<QueueItem> Items, int? Seed, List<stri
 /// and/or per-field "contains" filters, combined with AND, in library order), or the favorites (newest first).
 /// </summary>
 internal sealed record LibrarySelection(string? Album = null, string? Artist = null, string? Search = null, string? Title = null,
-    string? AlbumContains = null, string? ArtistContains = null, bool Favorites = false)
+    string? AlbumContains = null, string? ArtistContains = null, bool Favorites = false, IReadOnlyList<string>? Genres = null)
 {
-    public bool IsExact => Album is not null || Artist is not null;
+    public bool HasGenres => Genres is { Count: > 0 };
+
+    public bool IsExact => Album is not null || Artist is not null || HasGenres;
 
     public bool IsQuery => Search is not null || Title is not null || AlbumContains is not null || ArtistContains is not null;
 
@@ -29,7 +31,7 @@ internal sealed record LibrarySelection(string? Album = null, string? Artist = n
     }.Where(s => s is not null));
 }
 
-/// <summary>"What to play" options shared by `play` and `queue add`: files, --album, --artist, --search, --playlist, --shuffle, --seed.</summary>
+/// <summary>"What to play" options shared by `play` and `queue add`: files, --album, --artist, --genre, --search, --playlist, --shuffle, --seed.</summary>
 internal sealed class QueueSource
 {
     public Argument<string[]> Files { get; } = new("files")
@@ -46,6 +48,13 @@ internal sealed class QueueSource
     public Option<string?> Artist { get; } = new("--artist")
     {
         Description = "All library tracks by an artist (albums by year), or narrow --album.",
+    };
+
+    public Option<string[]> Genre { get; } = new("--genre")
+    {
+        Description = "All library tracks of a genre (exact name, case/diacritics-insensitive; multi-genre tags split on ; / , |), " +
+            "albums by album artist then year. Repeat for several (any of them). Combine with --artist to narrow. No match: exit 12.",
+        AllowMultipleArgumentsPerToken = false,
     };
 
     public Option<string?> Search { get; } = new("--search")
@@ -93,6 +102,7 @@ internal sealed class QueueSource
         command.Add(Files);
         command.Add(Album);
         command.Add(Artist);
+        command.Add(Genre);
         command.Add(Search);
         command.Add(Title);
         command.Add(AlbumContains);
@@ -108,16 +118,20 @@ internal sealed class QueueSource
     {
         var hasFiles = Options.Get(r, Files) is { Length: > 0 } files && files.Any(f => !string.IsNullOrWhiteSpace(f));
         var selection = new LibrarySelection(Options.Get(r, Album), Options.Get(r, Artist), Options.Get(r, Search), Options.Get(r, Title),
-            Options.Get(r, AlbumContains), Options.Get(r, ArtistContains), Options.Get(r, Favorites));
+            Options.Get(r, AlbumContains), Options.Get(r, ArtistContains), Options.Get(r, Favorites), Options.Get(r, Genre));
         var hasPlaylist = Options.Get(r, Playlist) is not null;
         var kinds = (hasFiles ? 1 : 0) + selection.Kinds + (hasPlaylist ? 1 : 0);
-        if (kinds > 1)
+        if (GenreError(selection) is { } genreError)
+        {
+            r.AddError(genreError);
+        }
+        else if (kinds > 1)
         {
             r.AddError(SourceConflict);
         }
         else if (kinds == 0 && required)
         {
-            r.AddError("Nothing to play: give a file, --album <title>, --artist <name>, --search <text>, --title/--album-contains/--artist-contains <words>, --playlist <name> or --favorites.");
+            r.AddError("Nothing to play: give a file, --album <title>, --artist <name>, --genre <name>, --search <text>, --title/--album-contains/--artist-contains <words>, --playlist <name> or --favorites.");
         }
         else if (Options.Get(r, Seed) is not null && !Options.Get(r, Shuffle))
         {
@@ -127,10 +141,18 @@ internal sealed class QueueSource
 
     public bool HasFiles(ParseResult parseResult) => parseResult.GetValue(Files) is { Length: > 0 };
 
-    public const string SourceConflict = "Give either file(s), --album/--artist, --search/--title/--album-contains/--artist-contains, --playlist, or --favorites, not several.";
+    /// <summary>--genre rules: every value names a genre, and only --artist may go with it. Null when fine.</summary>
+    public static string? GenreError(LibrarySelection selection, string option = "--genre")
+        => selection.Genres is not { Count: > 0 } genres ? null
+            : genres.Any(string.IsNullOrWhiteSpace) ? $"{option} needs a genre name."
+            : selection.Album is not null ? $"{option} combines only with {(option == "--genre" ? "--artist" : "artist")}, not with an album."
+            : null;
+
+    public const string SourceConflict = "Give either file(s), --album/--artist/--genre, --search/--title/--album-contains/--artist-contains, --playlist, or --favorites, not several.";
 
     public LibrarySelection Selection(ParseResult parseResult) => new(parseResult.GetValue(Album), parseResult.GetValue(Artist), parseResult.GetValue(Search),
-        parseResult.GetValue(Title), parseResult.GetValue(AlbumContains), parseResult.GetValue(ArtistContains), parseResult.GetValue(Favorites));
+        parseResult.GetValue(Title), parseResult.GetValue(AlbumContains), parseResult.GetValue(ArtistContains), parseResult.GetValue(Favorites),
+        parseResult.GetValue(Genre) is { Length: > 0 } genres ? genres : null);
 
     /// <summary>Library tracks for --album/--artist, or for --search and the contains filters (null for files). Releases the library before returning.</summary>
     public IReadOnlyList<TrackRecord>? LibraryTracks(CommandRunner runner, ParseResult parseResult, List<string> warnings)
@@ -175,6 +197,11 @@ internal sealed class QueueSource
             }
 
             return page.Items;
+        }
+
+        if (selection.HasGenres)
+        {
+            return library.GenreQueue(selection.Genres!, selection.Artist);
         }
 
         return selection.Album is not null ? library.AlbumQueue(selection.Album, selection.Artist) : library.ArtistQueue(selection.Artist!);
@@ -247,8 +274,9 @@ internal sealed class QueueSource
     {
         var hasFiles = files is { Count: > 0 } && files.Any(f => !string.IsNullOrWhiteSpace(f));
         var kinds = (hasFiles ? 1 : 0) + selection.Kinds + (playlist is not null ? 1 : 0);
-        return kinds > 1 ? "Give either files, album/artist, search/title/albumContains/artistContains, playlist, or favorites, not several."
-            : kinds == 0 ? "Nothing to play: give files, an album, an artist, a search text, title/albumContains/artistContains words, a playlist or favorites."
+        return GenreError(selection, "genre") is { } genreError ? genreError
+            : kinds > 1 ? "Give either files, album/artist/genre, search/title/albumContains/artistContains, playlist, or favorites, not several."
+            : kinds == 0 ? "Nothing to play: give files, an album, an artist, a genre, a search text, title/albumContains/artistContains words, a playlist or favorites."
             : seed is not null && !shuffle ? "seed only applies together with shuffle."
             : null;
     }

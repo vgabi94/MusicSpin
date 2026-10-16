@@ -73,7 +73,7 @@ Decoder: FFmpeg n9.0.2-23-g27b46f0fbc-20261008 (LGPL version 3 or later)
 ## play
 
 ```
-music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--search <query>]
+music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--genre <name>]... [--search <query>]
                 [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--playlist <name>] [--favorites]
                 [--shuffle] [--seed <n>] [--start <seconds>] [--volume <0..1>]
                 [--backend auto|null] [--device <id|name>] [--exclusive]
@@ -87,6 +87,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `<files>` | Audio files. Relative paths are resolved against the caller's working directory |
 | `--album <album>` | A library album: title (case-insensitive exact match after normalization) or album id. If several albums share the title: exit 2 with the candidates; add `--artist` to pick one. Unknown: exit 12 |
 | `--artist <artist>` | All library tracks by this artist (track artist or album artist, case-insensitive exact match), albums ordered by year, then disc/track. With `--album`: narrows the album |
+| `--genre <name>` | All library tracks of this genre: the exact name, ignoring case and diacritics, with multi-genre tags (`Rock; Pop`) split on `;` `/` `,` `|`, the same matching as `radio --genre` (`--genre rock` does **not** find "Folk Rock"; `--search genre:rock` does). Repeat for several (any of them). Ordered like the app's default sort: album artist, then year, then disc/track. No 10,000 cap. With `--artist`: only that artist's tracks of the genre. No match (or no match by that artist): exit 12. An empty name, or `--genre` with any source other than `--artist`: exit 2 |
 | `--search <query>` | Library tracks matching the [search syntax](library.md#search-syntax), in **library order** (not by relevance), up to 10,000. If more match, the first 10,000 are used and a warning gives the total (`warnings` in the JSON); this applies to `--title`/`--album-contains`/`--artist-contains` too, and to `queue add` and `playlist add`. No match: exit 12 |
 | `--title`, `--album-contains`, `--artist-contains <words>` | Library tracks whose title / album title / artist contains every word. Combine with each other and with `--search` (AND). No match: exit 12 |
 | `--playlist <name>` | A saved [playlist](#playlist) (name or id, case-insensitive). `missing` entries are left out with a warning (`warnings` in the JSON). Unknown, empty or nothing playable: exit 12. Not with `--foreground` (exit 2) |
@@ -101,7 +102,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--foreground`, `--wait` | Play in this process and block until done (Ctrl+C: exit 130) |
 | `--duration <s>` | Stop after this many seconds. Implies `--foreground`. For a library queue it applies per track |
 
-Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, a query (`--search` and/or `--title`/`--album-contains`/`--artist-contains`), `--playlist`, or `--favorites`. Unknown album or artist: exit 12. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
+Use **exactly one source kind**: files, `--album` (optionally with `--artist`), `--artist`, `--genre` (optionally with `--artist`), a query (`--search` and/or `--title`/`--album-contains`/`--artist-contains`), `--playlist`, or `--favorites`. Unknown album or artist: exit 12. Missing or undecodable files are skipped and reported under `skipped`. If none of the new files can be played, `play` exits 3 and the current queue keeps playing. `--backend`, `--device` and `--exclusive` only apply when the player starts. If a running player uses a different output, `play` adds a warning; run `music-spin quit` first to change it.
 
 ## radio
 
@@ -190,7 +191,7 @@ State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, d
 | Command | Meaning |
 |---|---|
 | `queue [--limit N] [--offset N]` | List the queue (index, current flag, path, tags). Up-next entries are marked `+` (JSON: `upNext: true`) |
-| `queue add [<files>...] \| --album ... \| --artist ... \| --search/--title/--album-contains/--artist-contains ... \| --playlist <name> \| --favorites [--shuffle] [--seed] [--next \| --up-next]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue. `--next` plays them right after the current track, `--up-next` after the tracks already added to play next ([Up next](playback.md#up-next)); not both (exit 2) |
+| `queue add [<files>...] \| --album ... \| --artist ... \| --genre ... \| --search/--title/--album-contains/--artist-contains ... \| --playlist <name> \| --favorites [--shuffle] [--seed] [--next \| --up-next]` | Append to the queue. Starts the player (stopped) if needed. Also takes `--backend/--device/--exclusive`. `--shuffle` shuffles only the added batch. When the player's shuffle mode is on, the new entries are mixed into the upcoming part of the queue. `--next` plays them right after the current track, `--up-next` after the tracks already added to play next ([Up next](playback.md#up-next)); not both (exit 2) |
 | `queue remove <position>` | Remove the entry at a 1-based position (as listed by `queue`). The current track: exit 8 (skip it with `next` first). Out of range: exit 2 |
 | `queue move <from> <to>` | Move an entry between 1-based positions; the current track keeps playing. Moving an entry right after the current track, or among the up-next tracks, makes it up next. Out of range: exit 2 |
 | `queue clear [--up-next]` | Stop playback and empty the queue. With `--up-next`, only remove the up-next tracks; playback goes on |

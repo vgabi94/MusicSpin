@@ -73,10 +73,12 @@ internal static class McpCommand
         public IEnumerable<McpServerTool> Create()
         {
             yield return Tool("play", "Play files or library music in the background player (starts it if needed) and return its status. " +
-                "Give one source: files, album (optionally with artist), artist, playlist, favorites, or a query (search and/or title/albumContains/artistContains, combined).",
+                "Give one source: files, album (optionally with artist), artist, genre (optionally with artist), playlist, favorites, or a query (search and/or title/albumContains/artistContains, combined).",
                 ([Description("Absolute paths of audio files, played in order.")] string[]? files = null,
                  [Description("Album title (exact, case-insensitive) or id from 'albums'.")] string? album = null,
                  [Description("Artist name (exact; all their tracks), or the album artist when album is given.")] string? artist = null,
+                 [Description("Genre name, or an array of names (any of them): every library track of that genre (exact name, case/diacritic-insensitive; " +
+                     "multi-genre tags split on ; / , |), albums by album artist then year. Combine with artist to narrow. No match: not_found.")] JsonElement? genre = null,
                  [Description("Play every library track matching this search (syntax as the search tool), in album order.")] string? search = null,
                  [Description("Library tracks whose title contains these words.")] string? title = null,
                  [Description("Library tracks whose album title contains these words.")] string? albumContains = null,
@@ -85,7 +87,7 @@ internal static class McpCommand
                  [Description("Play the favorite tracks, most recently favorited first.")] bool favorites = false,
                  [Description("Turn the player's shuffle mode on for this queue.")] bool shuffle = false,
                  [Description("Shuffle seed for a reproducible order.")] int? seed = null,
-                 CancellationToken ct = default) => Guard(() => SetQueueAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains, favorites),
+                 CancellationToken ct = default) => Guard(() => SetQueueAsync(files, new LibrarySelection(album, artist, search, title, albumContains, artistContains, favorites, Genres(genre)),
                     playlist, shuffle, seed, ct)));
             yield return Tool("radio", "Endless random playback of the library (or the tracks the filters select) in the background player; returns its status " +
                 "(queueMode 'radio', radio.description, radio.poolSize). Each list is ORed, different filters are ANDed; exclude* lists leave matching tracks out (exclude wins). No track repeats within the last 100 " +
@@ -438,6 +440,17 @@ internal static class McpCommand
             => MusicSpin.Core.Library.Paging.Validate(offset, limit) is { } error
                 ? throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, error.Replace("--", string.Empty, StringComparison.Ordinal))
                 : new Paging(offset, limit);
+
+        /// <summary>The MCP <c>genre</c> argument: a string or an array of strings (null when absent).</summary>
+        internal static IReadOnlyList<string>? Genres(JsonElement? genre) => genre switch
+        {
+            null => null,
+            { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+            { ValueKind: JsonValueKind.String } g => [g.GetString()!],
+            { ValueKind: JsonValueKind.Array } g when g.EnumerateArray().All(e => e.ValueKind == JsonValueKind.String)
+                => g.GetArrayLength() == 0 ? null : [.. g.EnumerateArray().Select(e => e.GetString()!)],
+            _ => throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, "genre must be a string or an array of strings."),
+        };
 
         private static JsonElement ToElement<T>(T value) => ProtocolJson.ToElement(value);
 
