@@ -163,6 +163,43 @@ public sealed class PlayerViewModelTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task It_counts_as_connected_only_once_the_player_has_acknowledged_the_subscription()
+    {
+        _player.Start();
+        _player.Status = ScriptedPlayer.Playing("Acked");
+        await _vm.StartAsync();
+        await _ui.UntilAsync(() => _vm.IsConnected, "connected");
+
+        // No gap: by the time the app says connected, the player has it subscribed and the status came with the reply.
+        Assert.Equal(1, _player.Subscribers);
+        Assert.Equal("Acked", _vm.Title);
+        Assert.Equal(0, _player.Count("status"));
+    }
+
+    [Fact]
+    public async Task A_refresh_asked_for_during_a_status_read_reads_again_after_it()
+    {
+        _player.Start();
+        _player.Status = ScriptedPlayer.Playing("Old");
+        await StartAsync();
+        var gate = _player.Hold("status");
+
+        Advance(PlayerViewModel.PollInterval);
+        await _ui.UntilAsync(() => _player.Count("status") == 1 && _vm.IsRefreshing, "a poll in flight");
+        _player.Status = ScriptedPlayer.Playing("New");
+
+        // What an event does: ask for a status while the poll's read is in flight. It must not be dropped.
+        var eventRead = _vm.RefreshAsync();
+        Assert.True(eventRead.IsCompleted); // it doesn't wait: the read in flight takes it on
+        Assert.Equal(1, _player.Count("status"));
+        gate.SetResult();
+
+        // The held poll answers "Old"; the event's read follows it and wins.
+        await _ui.UntilAsync(() => _vm.Title == "New" && !_vm.IsRefreshing, "the newer status");
+        Assert.Equal(2, _player.Count("status"));
+    }
+
+    [Fact]
     public async Task While_paused_the_status_is_not_polled()
     {
         _player.Start();

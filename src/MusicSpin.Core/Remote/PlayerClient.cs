@@ -150,9 +150,18 @@ public sealed class PlayerClient : IAsyncDisposable
     /// Subscribes to player events; with <paramref name="spectrum"/> also to <c>spectrum</c> events (16 levels 0..1, about
     /// 30 per second while playing; see <see cref="Playback.SpectrumMeter"/>).
     /// </summary>
-    public async IAsyncEnumerable<PlayerEvent> SubscribeAsync(bool spectrum, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<PlayerEvent> SubscribeAsync(bool spectrum, CancellationToken cancellationToken = default)
+        => SubscribeAsync(spectrum, acknowledged: null, cancellationToken);
+
+    /// <summary>
+    /// Subscribes as <see cref="SubscribeAsync(bool, CancellationToken)"/> does, and calls <paramref name="acknowledged"/>
+    /// with the player's status once it has acknowledged the subscription: from then on no event can be missed, and the
+    /// status is the one the first event follows (call it before reading any event).
+    /// </summary>
+    public async IAsyncEnumerable<PlayerEvent> SubscribeAsync(bool spectrum, Action<PlayerStatus>? acknowledged, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await SendAsync("subscribe", spectrum ? new { spectrum = true } : null, cancellationToken).ConfigureAwait(false);
+        var ack = await SendAsync("subscribe", spectrum ? new { spectrum = true } : null, cancellationToken).ConfigureAwait(false);
+        acknowledged?.Invoke(ProtocolJson.Deserialize<PlayerStatus>(ack)!);
         while (true)
         {
             string? line;
