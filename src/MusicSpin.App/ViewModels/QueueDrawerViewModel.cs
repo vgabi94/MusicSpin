@@ -370,7 +370,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         QueueListing? listing = null;
         if (key.Index is { } current)
         {
-            listing = await _player.QueueAsync(current, 1 + key.UpNext + (_player.IsRadio ? RadioPicks : 0)).ConfigureAwait(true);
+            listing = await ReadPastUpNextAsync(current, key.UpNext).ConfigureAwait(true);
             if (listing is null)
             {
                 return;
@@ -386,17 +386,51 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         var entries = listing?.Items ?? [];
         _current = entries.FirstOrDefault(e => e.Current)?.Item;
         var after = entries.Where(e => key.Index is { } i && e.Index > i).ToList();
-        var rows = after.TakeWhile(e => e.UpNext).Select(e => new QueueRowViewModel(e.Item, e.Index)).ToList();
-        var picks = _player.IsRadio ? after.SkipWhile(e => e.UpNext).Take(RadioPicks).Select(e => new QueueRowViewModel(e.Item, e.Index)).ToList() : [];
-        var fresh = _hasRead ? MarkFresh(Rows, rows) : null;
+
+        // An entry still where it was keeps its row (a flash under way, its cover); a read that changes nothing leaves
+        // the lists as they are, so the view keeps its rows too.
+        var known = Rows.Concat(Picks).ToDictionary(r => (r.Index, r.Item.Path));
+        var made = new List<QueueRowViewModel>();
+        QueueRowViewModel RowFor(QueueEntry e)
+        {
+            if (known.TryGetValue((e.Index, e.Item.Path), out var row))
+            {
+                return row;
+            }
+
+            row = new QueueRowViewModel(e.Item, e.Index);
+            made.Add(row);
+            return row;
+        }
+
+        var rows = after.TakeWhile(e => e.UpNext).Select(RowFor).ToList();
+        var picks = _player.IsRadio ? after.SkipWhile(e => e.UpNext).Take(RadioPicks).Select(RowFor).ToList() : [];
+        var changed = !rows.SequenceEqual(Rows);
+        if (changed)
+        {
+            // Only the rows this change brought are fresh (a row shown again would flash again).
+            foreach (var row in rows.Except(made))
+            {
+                row.IsFresh = false;
+            }
+        }
+
+        var fresh = _hasRead && changed ? MarkFresh(Rows, rows) : null;
         _hasRead = true;
-        foreach (var row in rows.Concat(picks))
+        foreach (var row in made)
         {
             _ = FindArtAsync(row);
         }
 
-        Rows = rows;
-        Picks = picks;
+        if (changed)
+        {
+            Rows = rows;
+        }
+
+        if (!picks.SequenceEqual(Picks))
+        {
+            Picks = picks;
+        }
         if (rows.Count == 0)
         {
             SaveForm.Close();
@@ -405,6 +439,34 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         if (fresh is not null)
         {
             RowsAdded?.Invoke(this, fresh);
+        }
+    }
+
+    /// <summary>
+    /// The queue from <paramref name="current"/> until past the up-next entries (and on radio, the picks after them), or
+    /// to its end. The status's count only sets the first page: a queueChanged can arrive before the status that counts
+    /// the new entries, and a page cut short there would make the rows it missed look new on the next read.
+    /// </summary>
+    private async Task<QueueListing?> ReadPastUpNextAsync(int current, int upNext)
+    {
+        var after = _player.IsRadio ? RadioPicks : 1;
+        var limit = 1 + upNext + after;
+        while (true)
+        {
+            var listing = await _player.QueueAsync(current, limit).ConfigureAwait(true);
+            if (listing is null)
+            {
+                return null;
+            }
+
+            var past = listing.Items.Where(e => e.Index > (listing.CurrentIndex ?? current)).ToList();
+            // Fewer than asked for: the end of the queue (or as much as the player gives at once).
+            if (listing.Items.Count < limit || past.Count >= past.TakeWhile(e => e.UpNext).Count() + after)
+            {
+                return listing;
+            }
+
+            limit *= 2;
         }
     }
 

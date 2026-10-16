@@ -52,10 +52,6 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _player.Start();
         await _vm.StartAsync();
         await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1 && _drawer.Rows.Count == upNext && _player.Count("queue") > 0, "the first read");
-
-        // Let any other read from the start land, so it can't come back after a test changes the queue.
-        await Task.Delay(50, TestContext.Current.CancellationToken);
-        _ui.Run();
     }
 
     /// <summary>The queue changed (from the app or the CLI): the player says so and the drawer reads it again.</summary>
@@ -90,8 +86,9 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         Assert.Equal("3 tracks · 15 min", _drawer.Summary);
         Assert.All(_drawer.Rows, r => Assert.False(r.IsFresh));
 
+        // the current entry, the three up next, and one more to see where they end
         var request = _player.Sent("queue")[^1];
-        Assert.Equal((0, 4), (request.GetProperty("offset").GetInt32(), request.GetProperty("limit").GetInt32()));
+        Assert.Equal((0, 5), (request.GetProperty("offset").GetInt32(), request.GetProperty("limit").GetInt32()));
     }
 
     [Fact]
@@ -145,6 +142,43 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await ChangeAsync(Titles("q1", "q2", "q1"), upNext: 3);
         Assert.All(_drawer.Rows, r => Assert.False(r.IsFresh));
         Assert.Null(announced);
+    }
+
+    [Fact]
+    public async Task A_queue_change_ahead_of_the_status_that_counts_it_still_reads_every_row()
+    {
+        await StartAsync(upNext: 2);
+        var status = _player.Status;
+        _player.SetQueue(Titles("q1", "new", "q2", "q1"), 0, 4);
+        _player.Status = status; // the status still says two up next
+
+        var reads = _player.Count("queue");
+        await _player.PushAsync("queueChanged");
+        await _ui.UntilAsync(() => _player.Count("queue") > reads && _drawer.Rows.Count == 4, "the rows read again");
+        Assert.Equal(["q1", "new", "q2", "q1"], TitlesOf(_drawer.Rows));
+        Assert.Equal([false, true, false, true], _drawer.Rows.Select(r => r.IsFresh));
+    }
+
+    [Fact]
+    public async Task A_read_that_changes_nothing_keeps_the_rows_and_their_flash()
+    {
+        await StartAsync(upNext: 2);
+        await ChangeAsync(Titles("q1", "new", "q2"), upNext: 3);
+        var rows = _drawer.Rows;
+        Assert.True(rows[1].IsFresh);
+
+        var reads = _player.Count("queue");
+        await _player.PushAsync("queueChanged");
+        await _ui.UntilAsync(() => _player.Count("queue") > reads, "the queue read again");
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        _ui.Run();
+        Assert.Same(rows, _drawer.Rows);
+        Assert.True(rows[1].IsFresh);
+
+        // a real change: the rows that stay are no longer fresh, the new one is
+        await ChangeAsync(Titles("q1", "new", "q2", "newer"), upNext: 4);
+        Assert.Same(rows[1], _drawer.Rows[1]);
+        Assert.Equal([false, false, false, true], _drawer.Rows.Select(r => r.IsFresh));
     }
 
     [Fact]
