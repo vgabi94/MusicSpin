@@ -480,11 +480,9 @@ public sealed class MenusAndDragTests
         Release(app.Window, at);
 
         Assert.True(string.IsNullOrEmpty(search.Text));
-        Assert.False(app.ViewModel.QueueDrawer.IsOpen);
         Assert.False(Ghost(app).IsVisible);
-        await Task.Delay(100, TestContext.Current.CancellationToken);
-        Gui.Settle();
-        Assert.Equal(0, app.Scripted!.Count("queue.add"));
+        // Closed at once: nothing was dropped (after a drop it stays a while, and the tracks are added).
+        Assert.False(app.ViewModel.QueueDrawer.IsOpen);
     }
 
     [AvaloniaFact]

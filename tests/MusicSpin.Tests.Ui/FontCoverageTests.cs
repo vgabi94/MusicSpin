@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
@@ -12,7 +11,7 @@ namespace MusicSpin.Tests.Ui;
 /// (Icons/IconsResource.axaml), or allowed below when the usual fallback fonts of all three OSes have it. This checks
 /// every non-ASCII character in the views' text and the app's strings.
 /// </summary>
-public sealed partial class FontCoverageTests
+public sealed class FontCoverageTests
 {
     /// <summary>View attributes that show text.</summary>
     private static readonly HashSet<string> TextAttributes = new(StringComparer.Ordinal)
@@ -46,41 +45,118 @@ public sealed partial class FontCoverageTests
         Assert.True(InterHas(new Rune('…')));
         Assert.Contains(AppCharacters(), c => c.Rune == new Rune('·'));
         Assert.All(Allowed.Keys, r => Assert.False(InterHas(r), $"{r} is in Inter now; drop it from Allowed."));
-        Assert.Equal(["＋"], [.. NonAscii("Text=\"x\" a \"or use ＋ here\" // \"✓\"", CSharpString()).Select(r => r.ToString())]);
+        Assert.Equal(["＋", "♪", "✕", "→"], [.. Literals(CodeSample).SelectMany(NonAscii).Select(r => r.ToString())]);
+        Assert.Equal(["＋"], [.. ViewTexts(XDocument.Parse(ViewSample)).SelectMany(NonAscii).Select(r => r.ToString())]);
     }
+
+    /// <summary>
+    /// Strings, a char, a verbatim string with a doubled quote, and a URL whose "//" is not a comment; the comments' ✓
+    /// and ✗ are left out.
+    /// </summary>
+    private const string CodeSample = """
+        var a = "or use ＋ here"; // "✓"
+        var b = '♪'; /* "✗" */
+        var c = @"say ""✕"" ";
+        var d = "https://example.com → there";
+        """;
+
+    private const string ViewSample = """
+        <StackPanel xmlns="https://github.com/avaloniaui">
+          <!-- ✓ a comment -->
+          <TextBlock>Drag here <Run>or use ＋</Run></TextBlock>
+          <TextBlock Text="{Binding Title}" />
+        </StackPanel>
+        """;
 
     private static bool InterHas(Rune rune)
         => FontManager.Current.TryGetGlyphTypeface(new Typeface("fonts:Inter#Inter"), out var inter)
            && inter.CharacterToGlyphMap.ContainsGlyph(rune.Value);
 
-    /// <summary>The non-ASCII characters in the views' text attributes and in the string literals of the app's C#.</summary>
+    /// <summary>The non-ASCII characters in the views' text and in the string and char literals of the app's C#.</summary>
     private static List<(Rune Rune, string Where)> AppCharacters()
     {
         var app = AppDirectory();
         var found = new List<(Rune, string)>();
         foreach (var file in SourceFiles(app, "*.axaml").Where(f => !Relative(app, f).StartsWith("Styles", StringComparison.Ordinal)))
         {
-            var texts = XDocument.Load(file).Descendants().SelectMany(e => e.Attributes())
-                .Where(a => TextAttributes.Contains(a.Name.LocalName.Split('.')[^1]) && !a.Value.TrimStart().StartsWith('{'))
-                .Select(a => a.Value);
-            found.AddRange(texts.SelectMany(t => t.EnumerateRunes()).Where(r => r.Value > 0x7F).Select(r => (r, Relative(app, file))));
+            found.AddRange(ViewTexts(XDocument.Load(file)).SelectMany(NonAscii).Select(r => (r, Relative(app, file))));
         }
 
         foreach (var file in SourceFiles(app, "*.cs"))
         {
-            found.AddRange(NonAscii(File.ReadAllText(file), CSharpString()).Select(r => (r, Relative(app, file))));
+            found.AddRange(Literals(File.ReadAllText(file)).SelectMany(NonAscii).Select(r => (r, Relative(app, file))));
         }
 
         return [.. found.Distinct()];
     }
 
-    /// <summary>The non-ASCII characters inside the quoted strings of <paramref name="code"/>, leaving out comments.</summary>
-    private static IEnumerable<Rune> NonAscii(string code, Regex strings)
-        => code.Split('\n')
-            .Select(line => line.Contains("//", StringComparison.Ordinal) ? line[..line.IndexOf("//", StringComparison.Ordinal)] : line)
-            .SelectMany(line => strings.Matches(line))
-            .SelectMany(m => m.Value.EnumerateRunes())
-            .Where(r => r.Value > 0x7F);
+    /// <summary>A view's text: its text attributes (not bindings) and the text inside elements (not comments).</summary>
+    private static IEnumerable<string> ViewTexts(XDocument view)
+        => view.Descendants().SelectMany(e => e.Attributes())
+            .Where(a => TextAttributes.Contains(a.Name.LocalName.Split('.')[^1]) && !a.Value.TrimStart().StartsWith('{'))
+            .Select(a => a.Value)
+            .Concat(view.DescendantNodes().OfType<XText>().Select(t => t.Value));
+
+    private static IEnumerable<Rune> NonAscii(string text) => text.EnumerateRunes().Where(r => r.Value > 0x7F);
+
+    /// <summary>
+    /// The string and char literals of C# <paramref name="code"/>, comments left out: "…" (with escapes), @"…" (with
+    /// doubled quotes), """…""" and '…'. Interpolations stay inside their string, which is close enough here.
+    /// </summary>
+    private static IEnumerable<string> Literals(string code)
+    {
+        var i = 0;
+        while (i < code.Length)
+        {
+            if (code[i] == '/' && i + 1 < code.Length && code[i + 1] == '/')
+            {
+                i = code.IndexOf('\n', i) is var end and >= 0 ? end : code.Length;
+            }
+            else if (code[i] == '/' && i + 1 < code.Length && code[i + 1] == '*')
+            {
+                i = code.IndexOf("*/", i + 2, StringComparison.Ordinal) is var end and >= 0 ? end + 2 : code.Length;
+            }
+            else if (string.CompareOrdinal(code, i, "\"\"\"", 0, 3) == 0 && (i == 0 || code[i - 1] != '@'))
+            {
+                var end = code.IndexOf("\"\"\"", i + 3, StringComparison.Ordinal);
+                end = end < 0 ? code.Length : end;
+                yield return code[(i + 3)..end];
+                i = Math.Min(code.Length, end + 3);
+            }
+            else if (code[i] is '"' or '\'')
+            {
+                var quote = code[i];
+                var verbatim = quote == '"' && i > 0 && (code[i - 1] == '@' || (code[i - 1] == '$' && i > 1 && code[i - 2] == '@'));
+                var start = ++i;
+                while (i < code.Length && code[i] != '\n')
+                {
+                    if (!verbatim && code[i] == '\\')
+                    {
+                        i += 2;
+                    }
+                    else if (code[i] == quote && verbatim && i + 1 < code.Length && code[i + 1] == quote)
+                    {
+                        i += 2;
+                    }
+                    else if (code[i] == quote)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        i++;
+                    }
+                }
+
+                yield return code[start..Math.Min(i, code.Length)];
+                i++;
+            }
+            else
+            {
+                i++;
+            }
+        }
+    }
 
     private static IEnumerable<string> SourceFiles(string app, string pattern)
         => Directory.EnumerateFiles(app, pattern, SearchOption.AllDirectories)
@@ -101,7 +177,4 @@ public sealed partial class FontCoverageTests
 
         throw new InvalidOperationException("src/MusicSpin.App not found above the test output.");
     }
-
-    [GeneratedRegex("\"(?:[^\"\\\\]|\\\\.)*\"")]
-    private static partial Regex CSharpString();
 }

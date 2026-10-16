@@ -362,10 +362,28 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     private (int? Index, int Length, int UpNext, string Mode, string? Path) Key()
         => (_player.QueueIndex, _player.QueueLength, _player.UpNext, _player.QueueMode, _player.Path);
 
+    /// <summary>Reads started (tests wait on these, not on time).</summary>
+    internal int ReadsStarted => _reads;
+
+    /// <summary>Reads finished: applied, superseded by a later one, or failed.</summary>
+    internal int ReadsFinished { get; private set; }
+
     /// <summary>Reads the current entry, the up-next entries and (on radio) the picks after them; the latest read wins.</summary>
     private async Task ReadAsync()
     {
         var read = ++_reads;
+        try
+        {
+            await ReadOnceAsync(read).ConfigureAwait(true);
+        }
+        finally
+        {
+            ReadsFinished++;
+        }
+    }
+
+    private async Task ReadOnceAsync(int read)
+    {
         var key = Key();
         QueueListing? listing = null;
         if (key.Index is { } current)

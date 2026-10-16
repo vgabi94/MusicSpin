@@ -58,11 +58,21 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     private async Task ChangeAsync(string[] titles, int upNext, string? radio = null, int current = 0)
     {
         _player.SetQueue(titles, current, upNext, radio);
-        var reads = _player.Count("queue");
+        string[] expected = [.. titles.Skip(current + 1).Take(upNext)];
+        var started = _drawer.ReadsStarted;
         await _player.PushAsync("queueChanged");
-        await _ui.UntilAsync(() => _player.Count("queue") > reads && _drawer.Rows.Count == upNext, "the queue read again");
-        await Task.Delay(50, TestContext.Current.CancellationToken);
-        _ui.Run();
+        await _ui.UntilAsync(() => _drawer.ReadsStarted > started && ReadsSettled() && TitlesOf(_drawer.Rows).SequenceEqual(expected), "the queue read again");
+    }
+
+    /// <summary>No read of the drawer's is under way.</summary>
+    private bool ReadsSettled() => _drawer.ReadsFinished == _drawer.ReadsStarted;
+
+    /// <summary>Pushes queueChanged and waits for the read it starts to finish.</summary>
+    private async Task PushQueueChangedAsync()
+    {
+        var started = _drawer.ReadsStarted;
+        await _player.PushAsync("queueChanged");
+        await _ui.UntilAsync(() => _drawer.ReadsStarted > started && ReadsSettled(), "the queue read again");
     }
 
     private async Task<JsonElement> SentAsync(string cmd, int count = 1)
@@ -167,11 +177,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         var rows = _drawer.Rows;
         Assert.True(rows[1].IsFresh);
 
-        var reads = _player.Count("queue");
-        await _player.PushAsync("queueChanged");
-        await _ui.UntilAsync(() => _player.Count("queue") > reads, "the queue read again");
-        await Task.Delay(50, TestContext.Current.CancellationToken);
-        _ui.Run();
+        await PushQueueChangedAsync();
         Assert.Same(rows, _drawer.Rows);
         Assert.True(rows[1].IsFresh);
 
@@ -197,11 +203,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await StartAsync(upNext: 2);
         _player.Fail("queue", 1, "busy");
         _player.SetQueue(Titles("q1", "q2", "q3"), upNext: 3);
-        var reads = _player.Count("queue");
-        await _player.PushAsync("queueChanged");
-        await _ui.UntilAsync(() => _player.Count("queue") > reads, "the failed read");
-        await Task.Delay(50, TestContext.Current.CancellationToken);
-        _ui.Run();
+        await PushQueueChangedAsync();
 
         Assert.Equal(["q1", "q2"], TitlesOf(_drawer.Rows));
         Assert.Empty(_posted);
@@ -368,13 +370,15 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     {
         await StartAsync(upNext: 2);
         _drawer.Dispose();
-        var reads = _player.Count("queue");
+        var started = _drawer.ReadsStarted;
 
+        // The drawer subscribed first, so by the time this handler runs, a drawer still listening has started its read.
+        var raised = false;
+        _vm.QueueChanged += (_, _) => raised = true;
         _player.SetQueue(Titles("q1"), 0, 1);
         await _player.PushAsync("queueChanged");
-        await Task.Delay(100, TestContext.Current.CancellationToken);
-        _ui.Run();
-        Assert.Equal(reads, _player.Count("queue"));
+        await _ui.UntilAsync(() => raised, "queueChanged");
+        Assert.Equal(started, _drawer.ReadsStarted);
         Assert.Equal(2, _drawer.Rows.Count);
     }
 

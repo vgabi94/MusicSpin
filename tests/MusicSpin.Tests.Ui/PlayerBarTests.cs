@@ -490,7 +490,8 @@ public sealed class PlayerBarTests
         app.Window.MouseMove(At(app, bar, 55), RawInputModifiers.Shift | RawInputModifiers.LeftMouseButton);
         app.Window.MouseUp(At(app, bar, 55), MouseButton.Left, RawInputModifiers.Shift);
         await Gui.UntilAsync(() => app.ViewModel.PlayerBar.Volume.Level == 80, "80% (45 px with Shift: 5%)");
-        Assert.True(app.Scripted.Count("volume") > sent);
+        // The level shows at once; the command reaches the player a moment later.
+        await Gui.UntilAsync(() => app.Scripted.Count("volume") > sent, "the fine drag's volume sent");
     }
 
     [AvaloniaFact]
