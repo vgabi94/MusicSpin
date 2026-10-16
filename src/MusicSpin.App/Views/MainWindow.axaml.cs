@@ -1,17 +1,22 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Reactive;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using MusicSpin.App.Controls;
 using MusicSpin.App.ViewModels;
 
 namespace MusicSpin.App.Views;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IScenePlaces
 {
+    private readonly SceneView _scene = new();
     private bool _shutDown;
+    private Control? _hiddenSource;
     private Button? _lastClicked;
     private MainWindowViewModel? _viewModel;
 
@@ -53,9 +58,64 @@ public partial class MainWindow : Window
     {
         base.OnDataContextChanged(e);
         _viewModel?.Menu.PropertyChanged -= OnMenuChanged;
+        _viewModel?.Scene.Places = null;
         _viewModel = DataContext as MainWindowViewModel;
         _viewModel?.Menu.PropertyChanged += OnMenuChanged;
+        _viewModel?.Scene.Places = this;
+        _scene.DataContext = _viewModel;
     }
+
+    /// <summary>The turntable scene draws over everything: in the window's overlay layer.</summary>
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        if (_scene.Parent is null && OverlayLayer.GetOverlayLayer(this) is { } overlay)
+        {
+            // Over the whole window (the overlay layer is a canvas: its children take only the size they ask for).
+            overlay.Children.Add(_scene);
+            overlay.GetObservable(BoundsProperty).Subscribe(new AnonymousObserver<Rect>(b => (_scene.Width, _scene.Height) = (b.Width, b.Height)));
+        }
+    }
+
+    /// <summary>The album's sleeve on the page, if it is on screen: inside its scroller's view.</summary>
+    Rect? IScenePlaces.Source(string albumId)
+    {
+        if (SourceOf(albumId) is not { } source || BoundsHere(source) is not { } bounds)
+        {
+            return null;
+        }
+
+        var view = BoundsHere(source.FindAncestorOfType<ScrollViewer>() ?? (Control)ContentArea);
+        return view is { } v && bounds.Intersects(v) ? bounds : null;
+    }
+
+    /// <summary>The deck's record, once Now Playing is in place (the scene just put it there, invisible).</summary>
+    Rect? IScenePlaces.Landing()
+    {
+        UpdateLayout();
+        return NowPlayingView.Deck.Deck?.Record is { } record ? BoundsHere(record) : null;
+    }
+
+    void IScenePlaces.HideSource(string albumId, bool hidden)
+    {
+        if (hidden)
+        {
+            _hiddenSource = SourceOf(albumId);
+            _hiddenSource?.Classes.Add("inFlight");
+        }
+        else
+        {
+            _hiddenSource?.Classes.Remove("inFlight");
+            _hiddenSource = null;
+        }
+    }
+
+    private Control? SourceOf(string albumId)
+        => ContentArea.GetVisualDescendants().OfType<Control>()
+            .FirstOrDefault(c => SceneSource.GetAlbumId(c) == albumId && c.IsEffectivelyVisible);
+
+    private Rect? BoundsHere(Control control)
+        => control.TransformToVisual(this) is { } transform ? new Rect(control.Bounds.Size).TransformToAABB(transform) : null;
 
     private void OnMenuChanged(object? sender, PropertyChangedEventArgs e)
     {

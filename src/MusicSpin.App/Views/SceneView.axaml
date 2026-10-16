@@ -1,0 +1,20 @@
+<!--
+  The turntable scene's travelling sleeve and record (mockup: .fly), in the window's overlay layer (MainWindow puts it
+  there): drawn while they travel, from the scene's time. Looks are in Styles/NowPlaying.axaml.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             x:Class="MusicSpin.App.Views.SceneView"
+             x:DataType="vm:MainWindowViewModel"
+             Classes="scene">
+    <controls:SceneFlight Name="Flight"
+                          IsVisible="{Binding Scene.IsFlying}"
+                          Time="{Binding Scene.Time}"
+                          Source="{Binding Scene.Source}"
+                          Landing="{Binding Scene.Landing}"
+                          Cover="{Binding Scene.Cover}"
+                          Title="{Binding NowPlaying.Title}"
+                          Angle="{Binding SpinClock.Angle}" />
+</UserControl>

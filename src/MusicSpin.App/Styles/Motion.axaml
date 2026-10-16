@@ -32,6 +32,8 @@
     <sys:TimeSpan x:Key="NowPlayingSlideDuration">0:0:0.55</sys:TimeSpan>
     <sys:TimeSpan x:Key="ArmSwingDuration">0:0:0.85</sys:TimeSpan>
     <sys:TimeSpan x:Key="ArmDropDuration">0:0:0.45</sys:TimeSpan>
+    <!-- Now Playing fading in behind the turntable scene instead of sliding (mockup: .nowplaying.scene, opacity .8s ease). -->
+    <sys:TimeSpan x:Key="NowPlayingFadeDuration">0:0:0.8</sys:TimeSpan>
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 
@@ -90,4 +92,6 @@
     <SplineEasing x:Key="EaseSwing" X1="0.65" Y1="0" X2="0.35" Y2="1" />
     <!-- cubic-bezier(.33,0,.2,1): the arm lowering. -->
     <SplineEasing x:Key="EaseLower" X1="0.33" Y1="0" X2="0.2" Y2="1" />
+    <!-- cubic-bezier(.25,.1,.25,1): CSS ease. -->
+    <SplineEasing x:Key="Ease" X1="0.25" Y1="0.1" X2="0.25" Y2="1" />
 </ResourceDictionary>

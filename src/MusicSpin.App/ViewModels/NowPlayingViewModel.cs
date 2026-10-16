@@ -53,6 +53,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
     private readonly Notices _notices;
     private string? _albumId;
     private bool _shown;
+    private bool _deckHeld;
 
     public NowPlayingViewModel(PlayerViewModel player, ILibraryService library, ICoverService covers, Notices notices)
     {
@@ -97,6 +98,27 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
     /// <summary>The platter turns (and the deck's LED is lit).</summary>
     [ObservableProperty]
     public partial bool IsSpinning { get; private set; }
+
+    /// <summary>No record on the platter (while one travels onto it).</summary>
+    [ObservableProperty]
+    public partial bool IsEmpty { get; private set; }
+
+    /// <summary>
+    /// The turntable scene drives the deck (the arm, the spin, the empty platter) until <see cref="ReleaseDeck"/>;
+    /// meanwhile the player's state doesn't move it.
+    /// </summary>
+    public void HoldDeck(ArmState arm, bool spinning, bool empty)
+    {
+        _deckHeld = true;
+        (Arm, IsSpinning, IsEmpty) = (arm, spinning, empty);
+    }
+
+    /// <summary>The deck follows the player again (from its next change; the scene leaves it as playback starts).</summary>
+    public void ReleaseDeck()
+    {
+        _deckHeld = false;
+        IsEmpty = false;
+    }
 
     /// <summary>
     /// Shows the playing track's library album (<paramref name="albumId"/>; null: a file outside the library, shown with
@@ -168,6 +190,11 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
     /// </summary>
     private void FollowPlayer()
     {
+        if (_deckHeld)
+        {
+            return;
+        }
+
         IsSpinning = _player.IsPlaying;
         Arm = _player.State switch
         {

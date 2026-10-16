@@ -148,6 +148,9 @@ public sealed class AlbumsPageTests
 
         Gui.Click(window, Fab(card));
         await Gui.UntilAsync(() => app.Scripted!.Count("queue.set") == 1, "the album sent");
+        await app.PlaySceneAsync();
+        app.ViewModel.NowPlaying.Close();
+        Gui.FinishAnimations();
         var sent = app.Scripted!.Sent("queue.set")[0];
         Assert.Equal([SampleLibrary.TrackId(1, 1), SampleLibrary.TrackId(1, 2), SampleLibrary.TrackId(1, 3)],
             sent.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("trackId").GetString()));

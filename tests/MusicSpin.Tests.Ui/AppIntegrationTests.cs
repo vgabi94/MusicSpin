@@ -44,8 +44,9 @@ public sealed class AppIntegrationTests
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 1, "the album");
         await using var cli = await app.Player.ConnectOtherAsync();
 
-        var clock = Stopwatch.StartNew();
         Gui.Click(app.Window, Gui.All<Button>(app.Window).Single(b => b.Classes.Contains("card")));
+        await app.PlaySceneAsync();
+        var clock = Stopwatch.StartNew();
         PlayerStatusSnapshot status;
         do
         {

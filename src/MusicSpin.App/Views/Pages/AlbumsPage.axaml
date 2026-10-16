@@ -28,7 +28,8 @@
                                     Command="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).OpenRecordCommand}"
                                     CommandParameter="{Binding}"
                                     AutomationProperties.Name="{Binding Album.Name}">
-                                <controls:CrateRecord Position="{Binding Position}"
+                                <controls:CrateRecord controls:SceneSource.AlbumId="{Binding Album.Album.Id}"
+                                                      Position="{Binding Position}"
                                                       Source="{Binding Album.Art.Cover}"
                                                       Title="{Binding Album.Title}"
                                                       Artist="{Binding Album.Artist}" />
@@ -81,7 +82,7 @@
                                             <Panel>
                                                 <!-- No clip (Viewbox clips by default): the record slides out past the card, the sleeve shifts left of it. -->
                                                 <Viewbox ClipToBounds="False">
-                                                    <Panel Classes="cardArt">
+                                                    <Panel Classes="cardArt" controls:SceneSource.AlbumId="{Binding Album.Id}">
                                                         <controls:VinylView Label="{Binding Art.Cover}" Angle="{Binding DiscAngle}" />
                                                         <controls:CoverView Source="{Binding Art.Cover}" Title="{Binding Title}" Artist="{Binding Artist}" />
                                                     </Panel>
@@ -123,7 +124,8 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="vm:AlbumItemViewModel">
-                                        <controls:ShelfSleeve IsPlaying="{Binding IsPlaying}"
+                                        <controls:ShelfSleeve controls:SceneSource.AlbumId="{Binding Album.Id}"
+                                                              IsPlaying="{Binding IsPlaying}"
                                                               Tilt="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Settings.ShelfTilt}"
                                                               Depth="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Settings.ShelfDepth}"
                                                               Source="{Binding Art.Cover}"

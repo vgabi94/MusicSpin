@@ -36,7 +36,8 @@
                                Label="{Binding NowPlaying.Cover}"
                                Angle="{Binding SpinClock.Angle}"
                                Arm="{Binding NowPlaying.Arm}"
-                               IsSpinning="{Binding NowPlaying.IsSpinning}" />
+                               IsSpinning="{Binding NowPlaying.IsSpinning}"
+                               IsEmpty="{Binding NowPlaying.IsEmpty}" />
 
             <!-- The album takes the column, up to its widest (mockup: .np-info, max-width). -->
             <Grid Grid.Column="1">

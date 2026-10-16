@@ -156,6 +156,17 @@ internal sealed class AppHarness : IAsyncDisposable
     /// <summary>Moves the fake clock (the app's timers) and Avalonia's animations forward together.</summary>
     public void Advance(TimeSpan by) => UiTime.Advance(Time, by);
 
+    /// <summary>
+    /// After choosing an album on the albums page: waits for the turntable scene to start, plays it through on the
+    /// app's clock and waits until it has ended (play sent).
+    /// </summary>
+    public async Task PlaySceneAsync()
+    {
+        await Gui.UntilAsync(() => ViewModel.Scene.IsRunning, "the scene started");
+        Advance(TimeSpan.FromMilliseconds(SceneTimeline.End * MotionScale.Current.Multiplier));
+        await Gui.UntilAsync(() => !ViewModel.Scene.IsRunning, "the scene ended");
+    }
+
     /// <summary>Closes the window as the user would and waits until it has shut down.</summary>
     public async Task CloseAsync()
     {

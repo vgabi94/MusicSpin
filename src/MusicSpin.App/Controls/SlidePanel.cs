@@ -63,8 +63,9 @@ public sealed class SlidePanel : Panel
 
     private void Show()
     {
+        // Fading, it stays in place even closed (invisible), so what is on it can be measured.
         IsHitTestVisible = IsOpen;
-        IsVisible = IsOpen || Shown > 0;
+        IsVisible = IsOpen || Shown > 0 || IsFading;
         Opacity = IsFading ? Shown : 1;
         RenderTransform = IsFading ? null : new TranslateTransform(0, (1 - Shown) * Below * Bounds.Height);
     }

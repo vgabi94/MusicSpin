@@ -39,7 +39,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Layers.Register(QueueDrawer);
         Layers.Register(Menu);
         Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
-        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Menu, Notices, Settings, services.Time);
+        Scene = new TurntableSceneViewModel(Player, NowPlaying, services.Library, services.Covers, Settings, services.Time, services.Ui, Notices);
+        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Scene, Menu, Notices, Settings, services.Time);
         TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Menu, Notices);
         RadioPage = new RadioPageViewModel(Player, Notices);
         CurrentPage = AlbumsPage;
@@ -69,6 +70,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public PlayerBarViewModel PlayerBar { get; }
 
     public NowPlayingViewModel NowPlaying { get; }
+
+    /// <summary>The record carried from the albums page onto the turntable.</summary>
+    public TurntableSceneViewModel Scene { get; }
 
     public QueueDrawerViewModel QueueDrawer { get; } = new();
 
@@ -188,6 +192,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         _albumLookup?.Cancel();
         _albumLookup?.Dispose();
+        Scene.Dispose();
         SpinClock.Dispose();
         PlayerBar.Dispose();
         await Player.DisposeAsync().ConfigureAwait(false);

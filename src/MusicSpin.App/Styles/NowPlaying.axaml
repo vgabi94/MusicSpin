@@ -139,6 +139,29 @@
                 <Setter Property="Background" Value="{StaticResource DeckArmShadowBrush}" />
             </Style>
         </ControlTheme>
+
+        <!--
+          The turntable scene's sleeve and record, over everything (mockup: .fly, .pack): the control places and moves
+          them; they don't take the pointer.
+        -->
+        <ControlTheme x:Key="{x:Type controls:SceneFlight}" TargetType="controls:SceneFlight">
+            <Setter Property="ClipToBounds" Value="False" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Canvas>
+                        <Panel Name="PART_Pack" RenderTransformOrigin="0%,0%">
+                            <controls:VinylView Name="PART_Record"
+                                                Label="{TemplateBinding Cover}"
+                                                Angle="{TemplateBinding Angle}"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top" />
+                            <controls:CoverView Name="PART_Sleeve" Source="{TemplateBinding Cover}" Title="{TemplateBinding Title}" />
+                        </Panel>
+                    </Canvas>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
     </Styles.Resources>
 
     <!-- The overlay: on the page background, sliding up into place (mockup: .nowplaying). -->
@@ -146,6 +169,19 @@
         <Setter Property="Background" Value="{DynamicResource BgBrush}" />
         <Setter Property="ClipToBounds" Value="True" />
         <Setter Property="theming:Animate.Transitions" Value="Shown NowPlayingSlideDuration EaseOut" />
+    </Style>
+    <!-- Behind the turntable scene it fades in, in place (mockup: .nowplaying.scene). -->
+    <Style Selector="controls|SlidePanel.nowPlaying[IsFading=True]">
+        <Setter Property="theming:Animate.Transitions" Value="Shown NowPlayingFadeDuration Ease" />
+    </Style>
+    <!-- The scene's layer: what it draws travels across the whole window, under no pointer. -->
+    <Style Selector="UserControl.scene">
+        <Setter Property="ClipToBounds" Value="False" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <!-- The sleeve whose copy flies onto the deck, where it sat (mockup: visibility hidden). -->
+    <Style Selector=":is(Control).inFlight">
+        <Setter Property="Opacity" Value="0" />
     </Style>
     <!-- The cover, blurred well past the edges, under a veil (mockup: .np-bg, .np-bg::after). -->
     <Style Selector="Image.npBackground">
