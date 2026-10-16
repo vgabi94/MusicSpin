@@ -19,7 +19,7 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
     private readonly QueueDispatcher _ui = new();
     private readonly PlayerViewModel _vm;
     private readonly LayerViewModel _nowPlaying = new StubLayerViewModel();
-    private readonly QueueDrawerViewModel _queue = new();
+    private readonly LayerViewModel _queue = new StubLayerViewModel();
     private readonly PlayerBarViewModel _bar;
 
     public PlayerBarViewModelTests()
@@ -56,8 +56,8 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
     /// <summary>Statuses compare by their JSON: a received track's tags are a new dictionary.</summary>
     private static bool Same(PlayerStatus? a, PlayerStatus b) => a is not null && ProtocolJson.Serialize(a) == ProtocolJson.Serialize(b);
 
-    private static PlayerStatus Playing(double position = 0, int index = 1, int length = 3, string title = "Blue in Green")
-        => ScriptedPlayer.Playing(title, position, duration: 406) with { QueueIndex = index, QueueLength = length };
+    private static PlayerStatus Playing(double position = 0, int index = 1, int length = 3, string title = "Blue in Green", int upNext = 0)
+        => ScriptedPlayer.Playing(title, position, duration: 406) with { QueueIndex = index, QueueLength = length, UpNext = upNext };
 
     private async Task<JsonElement> SentAsync(string cmd, int count = 1)
     {
@@ -176,30 +176,32 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
     [Fact]
     public async Task Adding_to_the_queue_pulses_the_count_while_the_drawer_is_closed()
     {
-        await StartAsync(Playing(index: 0, length: 3));
+        // the count is what waits up next (the drawer's rows), not the rest of the album
+        await StartAsync(Playing(index: 0, length: 12, upNext: 2));
         Assert.Equal(("2", 0), (_bar.QueueCountText, _bar.QueuePulses));
 
-        await ChangeAsync(Playing(index: 0, length: 5));
+        await ChangeAsync(Playing(index: 0, length: 14, upNext: 4));
         Assert.Equal(("4", 1), (_bar.QueueCountText, _bar.QueuePulses));
 
-        // the track moving on lowers the count: no pulse
-        await ChangeAsync(Playing(index: 1, length: 5, title: "Next one"));
+        // the track moving on to the first up-next entry lowers the count: no pulse
+        await ChangeAsync(Playing(index: 1, length: 14, title: "Next one", upNext: 3));
         Assert.Equal(("3", 1), (_bar.QueueCountText, _bar.QueuePulses));
 
-        // playing something else replaces the queue: no pulse
-        await ChangeAsync(Playing(index: 0, length: 12, title: "Another album"));
-        Assert.Equal(("11", 1), (_bar.QueueCountText, _bar.QueuePulses));
+        // playing something else that has entries up next: no pulse
+        await ChangeAsync(Playing(index: 0, length: 20, title: "Another album", upNext: 5));
+        Assert.Equal(("5", 1), (_bar.QueueCountText, _bar.QueuePulses));
 
         _bar.ToggleQueueCommand.Execute(null);
         Assert.True(_queue.IsOpen);
-        await ChangeAsync(Playing(index: 0, length: 14, title: "Another album"));
-        Assert.Equal(("13", 1), (_bar.QueueCountText, _bar.QueuePulses));
+        await ChangeAsync(Playing(index: 0, length: 21, title: "Another album", upNext: 6));
+        Assert.Equal(("6", 1), (_bar.QueueCountText, _bar.QueuePulses));
     }
 
     [Fact]
     public async Task The_queue_count_is_hidden_when_nothing_waits()
     {
-        await StartAsync(Playing(index: 2, length: 3));
+        // the rest of the album is not counted: only what was added up next
+        await StartAsync(Playing(index: 0, length: 12));
         Assert.Null(_bar.QueueCountText);
     }
 

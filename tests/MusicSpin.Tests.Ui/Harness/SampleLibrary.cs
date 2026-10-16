@@ -1,5 +1,6 @@
 using Avalonia.Media.Imaging;
 using MusicSpin.App.Services;
+using MusicSpin.Core.Remote;
 using SkiaSharp;
 
 namespace MusicSpin.Tests.Ui.Harness;
@@ -34,6 +35,14 @@ internal static class SampleLibrary
         var a = Albums[album - 1];
         return new AlbumSummary(AlbumId(album), a.Title, a.Artist, a.Year, a.Genre, "FLAC", a.HiRes ? "24/96" : "16/44.1",
             a.Tracks.Length, a.Tracks.Length * 200, a.HiRes);
+    }
+
+    /// <summary>Track <paramref name="track"/> of album <paramref name="album"/> (both 1-based) as a queue entry.</summary>
+    public static QueueItem Item(int album, int track)
+    {
+        var a = Albums[album - 1];
+        return new QueueItem($"/music/{a.Title}/{track}.flac", a.Tracks[track - 1], a.Artist, a.Title, a.Artist, track,
+            150 + (album * 7) + ((track - 1) * 31), TrackId(album, track));
     }
 
     public static StubLibrary Create()

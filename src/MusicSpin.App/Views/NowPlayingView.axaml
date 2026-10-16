@@ -57,6 +57,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:NowPlayingTrackViewModel">
                                     <Button Classes="npTrack"
+                                            controls:QueueSource.Item="{Binding}"
                                             Classes.current="{Binding IsCurrent}"
                                             Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).NowPlaying.PlayTrackCommand}"
                                             CommandParameter="{Binding}"

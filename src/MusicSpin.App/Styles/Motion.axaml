@@ -34,6 +34,8 @@
     <sys:TimeSpan x:Key="ArmDropDuration">0:0:0.45</sys:TimeSpan>
     <!-- Now Playing fading in behind the turntable scene instead of sliding (mockup: .nowplaying.scene, opacity .8s ease). -->
     <sys:TimeSpan x:Key="NowPlayingFadeDuration">0:0:0.8</sys:TimeSpan>
+    <!-- The queue drawer sliding in from the right and back out (mockup: .queue, translate .45s, cubic-bezier(.2,.8,.2,1)). -->
+    <sys:TimeSpan x:Key="QueueSlideDuration">0:0:0.45</sys:TimeSpan>
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 
@@ -68,6 +70,17 @@
         </KeyFrame>
         <KeyFrame Cue="100%">
             <Setter Property="RenderTransform" Value="scale(1)" />
+        </KeyFrame>
+    </Animation>
+
+    <!-- A row just added to the queue: its accent wash fading out (mockup: @keyframes qflash, 1.6s ease-out). -->
+    <sys:TimeSpan x:Key="FlashAnimation.Duration">0:0:1.6</sys:TimeSpan>
+    <Animation x:Key="FlashAnimation" x:SetterTargetType="Visual" Duration="0:0:1.6" Easing="0,0,0.58,1">
+        <KeyFrame Cue="0%">
+            <Setter Property="Opacity" Value="1" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="0" />
         </KeyFrame>
     </Animation>
 

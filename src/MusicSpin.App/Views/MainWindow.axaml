@@ -122,7 +122,15 @@
                             </StackPanel>
                         </DataTemplate>
                         <DataTemplate DataType="vm:TrackListPageViewModel">
-                            <Button Name="PlayAll" Classes="accent" HorizontalAlignment="Left" Content="Play all" Command="{Binding PlayAllCommand}" />
+                            <StackPanel Classes="pageActions">
+                                <Button Name="PlayAll" Classes="accent" Content="Play all" Command="{Binding PlayAllCommand}" />
+                                <Button Name="QueueAll" Classes="accent ghost" Command="{Binding QueueAllCommand}">
+                                    <StackPanel>
+                                        <controls:Icon Data="{StaticResource Plus}" />
+                                        <TextBlock Text="Queue" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                         </DataTemplate>
                         <DataTemplate DataType="vm:PageViewModel">
                             <Panel />
@@ -143,6 +151,13 @@
         <!-- Now Playing, between the title bar and the player bar; it slides up from under the player bar. -->
         <controls:SlidePanel Name="NowPlayingLayer" Classes="nowPlaying" Grid.Row="1" Grid.ColumnSpan="2" IsOpen="{Binding NowPlaying.IsOpen}" IsFading="{Binding Scene.IsRunning}">
             <views:NowPlayingView Name="NowPlayingView" />
+        </controls:SlidePanel>
+
+        <!-- The queue drawer, over the content and Now Playing on the right; it slides in from the window's edge. -->
+        <controls:SlidePanel Name="QueueLayer" Classes="queue" Grid.Row="1" Grid.ColumnSpan="2" IsOpen="{Binding QueueDrawer.IsOpen}">
+            <Border Classes="queueDrawer">
+                <views:QueueDrawerView Name="QueueDrawerView" DataContext="{Binding QueueDrawer}" />
+            </Border>
         </controls:SlidePanel>
 
         <views:PlayerBar Name="PlayerBarView" Grid.Row="2" Grid.ColumnSpan="2" />

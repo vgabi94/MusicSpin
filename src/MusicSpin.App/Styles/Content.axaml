@@ -57,6 +57,22 @@
         <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- A playlist's Play all and ＋ Queue (mockup: .pl-actions). -->
+    <Style Selector="StackPanel.pageActions">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource PageActionsGap}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.pageActions Button > StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource PageActionIconGap}" />
+    </Style>
+    <Style Selector="StackPanel.pageActions Button controls|Icon">
+        <Setter Property="Width" Value="{StaticResource PageActionIconSize}" />
+        <Setter Property="Height" Value="{StaticResource PageActionIconSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <!-- A dropdown (mockup: .dd): "Sort: Artist ▾". -->
     <Style Selector="Button.dropdown">
         <Setter Property="Padding" Value="{StaticResource DropdownPadding}" />

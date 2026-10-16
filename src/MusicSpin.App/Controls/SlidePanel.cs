@@ -5,20 +5,26 @@ using Avalonia.Media;
 namespace MusicSpin.App.Controls;
 
 /// <summary>
-/// A panel that slides up into place when it opens and back down when it closes (mockup: .nowplaying, translate 0 104%),
-/// or, while <see cref="IsFading"/>, fades in and out in place (mockup: .nowplaying.scene). <see cref="Shown"/> is set
-/// here from <see cref="IsOpen"/> as a local value and animated by the styles' transitions; it's hidden once it's down.
+/// A panel that slides into place from its <see cref="Edge"/> when it opens and back out when it closes (mockup:
+/// .nowplaying, translate 0 104%, from below; .queue, translate 105% 0, from the right), or, while <see cref="IsFading"/>,
+/// fades in and out in place (mockup: .nowplaying.scene). <see cref="Shown"/> is set here from <see cref="IsOpen"/> as a
+/// local value and animated by the styles' transitions; it's hidden once it's out.
 /// </summary>
 public sealed class SlidePanel : Panel
 {
     /// <summary>How far below its place a closed panel sits, as a share of its height (mockup: 104%).</summary>
     private const double Below = 1.04;
 
+    /// <summary>How far right of its place a closed panel sits, as a share of its width (mockup: 105%, past its shadow).</summary>
+    private const double Aside = 1.05;
+
     public static readonly StyledProperty<bool> IsOpenProperty = AvaloniaProperty.Register<SlidePanel, bool>(nameof(IsOpen));
 
     public static readonly StyledProperty<double> ShownProperty = AvaloniaProperty.Register<SlidePanel, double>(nameof(Shown));
 
     public static readonly StyledProperty<bool> IsFadingProperty = AvaloniaProperty.Register<SlidePanel, bool>(nameof(IsFading));
+
+    public static readonly StyledProperty<Dock> EdgeProperty = AvaloniaProperty.Register<SlidePanel, Dock>(nameof(Edge), Dock.Bottom);
 
     public SlidePanel()
     {
@@ -31,7 +37,7 @@ public sealed class SlidePanel : Panel
         set => SetValue(IsOpenProperty, value);
     }
 
-    /// <summary>0: down (hidden); 1: in place.</summary>
+    /// <summary>0: out (hidden); 1: in place.</summary>
     public double Shown
     {
         get => GetValue(ShownProperty);
@@ -45,6 +51,13 @@ public sealed class SlidePanel : Panel
         set => SetValue(IsFadingProperty, value);
     }
 
+    /// <summary>Where it slides in from: <see cref="Dock.Bottom"/> (the default) or <see cref="Dock.Right"/>.</summary>
+    public Dock Edge
+    {
+        get => GetValue(EdgeProperty);
+        set => SetValue(EdgeProperty, value);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         ArgumentNullException.ThrowIfNull(change);
@@ -55,7 +68,8 @@ public sealed class SlidePanel : Panel
             Shown = IsOpen ? 1 : 0;
             Show();
         }
-        else if (change.Property == ShownProperty || change.Property == IsFadingProperty || change.Property == BoundsProperty)
+        else if (change.Property == ShownProperty || change.Property == IsFadingProperty || change.Property == BoundsProperty
+                 || change.Property == EdgeProperty)
         {
             Show();
         }
@@ -67,6 +81,9 @@ public sealed class SlidePanel : Panel
         IsHitTestVisible = IsOpen;
         IsVisible = IsOpen || Shown > 0 || IsFading;
         Opacity = IsFading ? Shown : 1;
-        RenderTransform = IsFading ? null : new TranslateTransform(0, (1 - Shown) * Below * Bounds.Height);
+        var away = 1 - Shown;
+        RenderTransform = IsFading ? null
+            : Edge == Dock.Right ? new TranslateTransform(away * Aside * Bounds.Width, 0)
+            : new TranslateTransform(0, away * Below * Bounds.Height);
     }
 }

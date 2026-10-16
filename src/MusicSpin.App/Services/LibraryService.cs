@@ -15,7 +15,7 @@ public sealed record TrackSummary(string Id, string Path, string Title, string A
 public sealed record PlaylistSummaryItem(string Id, string Name, int EntryCount);
 
 /// <summary>
-/// Library reads for the app. Each call opens the library briefly (<see cref="MusicLibrary.OpenForRead"/>: it holds a
+/// Library reads for the app, and saving a playlist. Each call opens the library briefly (<see cref="MusicLibrary.OpenForRead"/>: it holds a
 /// cross-process lock while open) on a worker thread. <see cref="Changed"/> fires when <c>library.db</c> changes on disk
 /// (a scan, a playlist edit or a favorite, by this or another process), checked every <see cref="PollInterval"/>.
 /// </summary>
@@ -36,11 +36,20 @@ public interface ILibraryService
 
     /// <summary>The album of a library track, or null when the track isn't in the library.</summary>
     Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves <paramref name="paths"/> as a new playlist named <paramref name="name"/> (the queue drawer's Save as
+    /// playlist). Throws <see cref="MusicSpin.Core.MusicSpinException"/> when the name is taken or invalid, or a file is gone.
+    /// </summary>
+    Task<PlaylistSummaryItem> CreatePlaylistAsync(string name, IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
 }
 
 public sealed class LibraryService : ILibraryService, IDisposable
 {
     public static TimeSpan PollInterval { get; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long a write waits for another process (a scan) to let go of the library.</summary>
+    public static TimeSpan WriteLockTimeout { get; } = TimeSpan.FromSeconds(5);
 
     private readonly DataDirectory _directory;
     private readonly ITimer _poll;
@@ -87,6 +96,18 @@ public sealed class LibraryService : ILibraryService, IDisposable
 
     public Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default)
         => Read(library => library.TracksById([trackId]) is [var track, ..] ? track.AlbumId : null, cancellationToken);
+
+    public async Task<PlaylistSummaryItem> CreatePlaylistAsync(string name, IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        var created = await Task.Run(() =>
+        {
+            using var library = MusicLibrary.OpenWritable(_directory, lockTimeout: WriteLockTimeout);
+            var playlist = library.CreatePlaylist(name, library.PlaylistInputsForFiles(paths)).Playlist;
+            return new PlaylistSummaryItem(playlist.Id, playlist.Name, playlist.EntryCount);
+        }, cancellationToken).ConfigureAwait(false);
+        CheckForChanges();
+        return created;
+    }
 
     public void Dispose() => _poll.Dispose();
 
