@@ -19,7 +19,7 @@
         </DataTemplate>
 
         <DataTemplate DataType="vm:TrackAlbumHeaderViewModel">
-            <Border Classes="albumHeader" Classes.first="{Binding IsFirst}" Classes.playing="{Binding Album.IsPlaying}">
+            <Border Classes="albumHeader" Classes.first="{Binding IsFirst}" Classes.playing="{Binding Album.IsPlaying}" controls:QueueSource.Item="{Binding}">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                     <controls:CoverView Source="{Binding Album.Art.Cover}" Title="{Binding Album.Title}" Artist="{Binding Album.Artist}" />
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -47,7 +47,7 @@
         </DataTemplate>
 
         <DataTemplate DataType="vm:NumberedTrackRow">
-            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}">
+            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}" controls:QueueSource.Item="{Binding Item}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="{StaticResource RowNumberColumn}" />
@@ -81,7 +81,7 @@
         </DataTemplate>
 
         <DataTemplate DataType="vm:TrackRowWithAlbum">
-            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}">
+            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}" controls:QueueSource.Item="{Binding Item}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="{StaticResource RowThumbColumn}" />
@@ -120,7 +120,7 @@
         </DataTemplate>
 
         <DataTemplate DataType="vm:TrackRowWithAlbumAndGenre">
-            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}">
+            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}" controls:QueueSource.Item="{Binding Item}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="{StaticResource RowThumbColumn}" />

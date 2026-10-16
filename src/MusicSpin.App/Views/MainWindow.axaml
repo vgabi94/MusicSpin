@@ -122,7 +122,10 @@
                             </StackPanel>
                         </DataTemplate>
                         <DataTemplate DataType="vm:TrackListPageViewModel">
-                            <Button Name="PlayAll" Classes="accent" HorizontalAlignment="Left" Content="Play all" Command="{Binding PlayAllCommand}" />
+                            <StackPanel Classes="pageActions">
+                                <Button Name="PlayAll" Classes="accent" Content="Play all" Command="{Binding PlayAllCommand}" />
+                                <Button Name="QueueAll" Classes="accent ghost" Content="＋ Queue" Command="{Binding QueueAllCommand}" />
+                            </StackPanel>
                         </DataTemplate>
                         <DataTemplate DataType="vm:PageViewModel">
                             <Panel />

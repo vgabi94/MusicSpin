@@ -256,4 +256,37 @@
     <Style Selector="TextBox.playlistName:focus">
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     </Style>
+
+    <!-- The drag ghost (mockup: .drag-ghost): under the pointer, never hit by it. -->
+    <Style Selector="views|DragGhostView">
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="MaxWidth" Value="{StaticResource GhostMaxWidth}" />
+    </Style>
+    <Style Selector="Border.dragGhost">
+        <Setter Property="Padding" Value="{StaticResource GhostPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource GhostRadius}" />
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="TextElement.FontSize" Value="{StaticResource GhostFontSize}" />
+        <Setter Property="TextElement.FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Border.dragGhost > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource GhostGap}" />
+    </Style>
+    <Style Selector="Border.dragGhost controls|CoverView">
+        <Setter Property="Width" Value="{StaticResource GhostCoverSize}" />
+        <Setter Property="Height" Value="{StaticResource GhostCoverSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RowThumbRadius}" />
+    </Style>
+    <Style Selector="Border.dragGhost StackPanel">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.dragGhost TextBlock">
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+    <Style Selector="Border.dragGhost TextBlock.detail">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="FontWeight" Value="Normal" />
+    </Style>
 </Styles>

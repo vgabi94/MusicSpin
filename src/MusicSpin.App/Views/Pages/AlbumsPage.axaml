@@ -24,6 +24,7 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:CrateRecordViewModel">
                             <Button Classes="crateRecord"
+                                    controls:QueueSource.Item="{Binding}"
                                     IsHitTestVisible="{Binding IsShown}"
                                     Command="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).OpenRecordCommand}"
                                     CommandParameter="{Binding}"
@@ -74,6 +75,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:AlbumItemViewModel">
                                     <Button Classes="card"
+                                            controls:QueueSource.Item="{Binding}"
                                             Classes.playing="{Binding IsPlaying}"
                                             Command="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).OpenAlbumCommand}"
                                             CommandParameter="{Binding}"
@@ -125,6 +127,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="vm:AlbumItemViewModel">
                                         <controls:ShelfSleeve controls:SceneSource.AlbumId="{Binding Album.Id}"
+                                                              controls:QueueSource.Item="{Binding}"
                                                               IsPlaying="{Binding IsPlaying}"
                                                               Tilt="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Settings.ShelfTilt}"
                                                               Depth="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Settings.ShelfDepth}"

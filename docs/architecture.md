@@ -101,10 +101,12 @@ src/MusicSpin.App/
 │                          notices, the format label, typed values (seek and volume syntax), turntable designs,
 │                          the scene's timeline
 ├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
-│                          layers (Settings, Now Playing, queue drawer, the menu), pages (Albums, Tracks, playlists,
-│                          Radio), Crate (a crate and its records), LibraryOrder (sort and grouping) and the
-│                          turntable scene
+│                          layers (Settings, Now Playing, the queue drawer and its name form, the menu),
+│                          LibraryItemActions (right-click and drag of albums and tracks), pages (Albums, Tracks,
+│                          playlists, Radio), Crate (a crate and its records), LibraryOrder (sort and grouping) and
+│                          the turntable scene
 ├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, NowPlayingView, SceneView,
+│                          QueueDrawerView, DragGhostView, LibraryDrag (drags into the queue), MenuPlacement,
 │                          Pages/ — structure and bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
@@ -112,7 +114,8 @@ src/MusicSpin.App/
 │                          TrimFirstPanel (a text that trims before the badge after it), ShelfSleeve and CrateRecord
 │                          (the shelf's and the crates' 3D, drawn with Projection: CSS-style 4×4 transforms), DeckView
 │                          (a turntable design's deck; ClassicDeckView, PlatterView), DeckHost (builds and scales
-│                          the chosen design's deck), SlidePanel (Now Playing's slide or fade),
+│                          the chosen design's deck), SlidePanel (Now Playing's slide or fade, the queue drawer's
+│                          slide), QueueSource (what a right-click or a drag acts on),
 │                          SceneFlight and SceneSource (the scene's travelling sleeve and where it starts)
 ├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), Animate
 │                          (per-control transitions, animations played on a trigger), ShelfGeometry (slot widths,
@@ -120,8 +123,8 @@ src/MusicSpin.App/
 └── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes: plain
                            button, ScrubBar, TypedBox, segmented control, cards), Window,
                            Base, TitleBar, Sidebar, Content (toolbar, group headers, the menu), Lists (track rows),
-                           Cards, Shelf, Crate, PlayerBar, NowPlaying (and the Classic deck), Dialogs (and Settings),
-                           Artwork
+                           Cards, Shelf, Crate, PlayerBar, NowPlaying (and the Classic deck), Queue (the drawer and
+                           the drag ghost), Dialogs (and Settings), Artwork
 ```
 
 - **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
@@ -135,8 +138,8 @@ src/MusicSpin.App/
   computed once per session.
 - **View models don't know controls.** Services come in through constructors from `AppComposition`. The window
   reports one thing back: whether a text box has focus, so the Space key binding (play/pause) declines and the text
-  box gets the space. Esc closes the topmost open layer registered with `LayerRegistry` (menu, Settings, queue drawer,
-  Now Playing, in that order).
+  box gets the space. Esc closes the topmost open layer registered with `LayerRegistry` (menu, Settings, the queue
+  drawer's playlist name, the queue drawer, Now Playing, in that order).
 - **Player.** `PlayerViewModel` uses two connections: one for requests and polling, one for the `subscribe` event
   stream (with `spectrum` levels for the analyzer). Every other event triggers a `status` refresh, so the state follows
   the player whoever changed it. While playing,
@@ -166,9 +169,26 @@ src/MusicSpin.App/
   wheel flips a crate once its turns add up to half a notch, at most every 180 ms on the app's clock, and past either
   end it leaves the wheel to the page; the arrow keys are window key bindings, so a focused text box or slider keeps
   them.
-- **The menu.** The Sort and Group dropdowns and the ＋ buttons fill one `MenuViewModel` (a layer, so Esc closes it)
-  with entries; the window places it under the button that opened it, inside the window, and a press anywhere else
-  closes it.
+- **The menu.** The Sort and Group dropdowns, the ＋ buttons and right-clicks fill one `MenuViewModel` (a layer, so Esc
+  closes it) with entries. The window places it under the button that opened it, or with its corner at the pointer for
+  a right-click, always 8 px inside the window (`MenuPlacement`). A press anywhere else, a scroll and the window losing
+  the focus close it. What a right-click acts on is the nearest control marked with `QueueSource.Item`: an album (a
+  card, a sleeve, a crate record), a Tracks page album header, a track row or a Now Playing track.
+  `LibraryItemActions` turns it into Play (as clicking it would), Play next and Add to queue.
+- **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
+  whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
+  counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
+  an index (skipping to a row drops the up-next entries above it), `queue.remove`, `queue.clear` with `upNext`, and
+  `queue.set` to end radio while keeping the current track and the rows. A drop between rows adds the tracks up next and
+  then moves them into place with `queue.move`. Save as playlist writes a library playlist. Rows that were not there at
+  the last read flash (`Animate.When`), and the first of them scrolls into view. The player bar's count is the number of
+  up-next entries.
+- **Dragging.** Albums, tracks and queue rows are dragged with pointer capture, not `DoDragDropAsync` (which can't show
+  a custom drag image on every platform). `LibraryDrag` starts a drag once the pointer has moved 4 px from a press on
+  a `QueueSource` item. The window then holds the pointer, so the press clicks nothing, and a `DragGhostView` in the
+  overlay layer follows it. Over the drawer the view says where the drop goes and shows the drop line. A drag from the
+  library opens the drawer, which then closes at once without a drop, or 1.4 s after one once the pointer has left it.
+  Since these drags never leave the window, no text box or other app can take them.
 - **Spin clock.** One `SpinClock` drives every visible record of the playing album, at Settings › Speed (33⅓, 45 or
   16⅔ rpm), spinning up and down like a platter. It runs in every Motion mode; None only skips the ramp.
 - **Player bar.** `PlayerBarViewModel` holds the transport (⏮ restarts after 3 seconds), the format label and the

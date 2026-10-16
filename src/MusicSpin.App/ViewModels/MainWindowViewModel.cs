@@ -47,6 +47,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Menu, Notices);
         RadioPage = new RadioPageViewModel(Player, Notices);
         CurrentPage = AlbumsPage;
+        Items = new LibraryItemActions(Player, services.Library, Scene, NowPlaying, Menu, Notices, () => CurrentPage);
         Sidebar.Navigated += (_, item) => _ = ShowAsync(item);
         Notices.Posted += (_, message) => Banner = message;
         Player.Notice += (_, message) => Notices.Post(message);
@@ -80,7 +81,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// <summary>The queue drawer: what plays next, and drops from the library.</summary>
     public QueueDrawerViewModel QueueDrawer { get; }
 
-    /// <summary>The Sort and Group dropdowns and the ＋ menus.</summary>
+    /// <summary>Right-clicking and dragging albums and tracks (the window finds the item under the pointer).</summary>
+    public LibraryItemActions Items { get; }
+
+    /// <summary>The Sort and Group dropdowns, the ＋ menus and the right-click menus.</summary>
     public MenuViewModel Menu { get; } = new();
 
     /// <summary>What Esc closes, topmost first. Menus, Settings, the queue drawer and Now Playing register here.</summary>

@@ -73,6 +73,8 @@
     <CornerRadius x:Key="ButtonRadius">7</CornerRadius>
     <Thickness x:Key="ButtonPadding">12,6</Thickness>
     <sys:Double x:Key="ButtonFontSize">13</sys:Double>
+    <!-- A playlist's Play all and ＋ Queue (mockup: .btn.ghost, margin-left 6px). -->
+    <sys:Double x:Key="PageActionsGap">6</sys:Double>
 
     <!-- Toolbar controls (mockup: .sort, .dd): the Sort and Group dropdowns. -->
     <sys:Double x:Key="DropdownGap">4</sys:Double>
@@ -530,4 +532,18 @@
     <sys:Double x:Key="QueueRadioFontSize">12</sys:Double>
     <sys:Double x:Key="QueueRadioIconSize">15</sys:Double>
     <sys:Double x:Key="QueueRadioIconStroke">2</sys:Double>
+
+    <!--
+      The drag ghost (mockup: .drag-ghost): at most 260 wide, padded 6 14 6 6, radius 9, a 40 cover 10 from the text at
+      12.5; the pointer holds it 24 in from its top left (setDragImage(ghost, 24, 24)). A drag starts once the pointer has
+      moved 4 from where it was pressed.
+    -->
+    <sys:Double x:Key="GhostMaxWidth">260</sys:Double>
+    <Thickness x:Key="GhostPadding">6,6,14,6</Thickness>
+    <CornerRadius x:Key="GhostRadius">9</CornerRadius>
+    <sys:Double x:Key="GhostFontSize">12.5</sys:Double>
+    <sys:Double x:Key="GhostGap">10</sys:Double>
+    <sys:Double x:Key="GhostCoverSize">40</sys:Double>
+    <sys:Double x:Key="GhostGrip">24</sys:Double>
+    <sys:Double x:Key="DragThreshold">4</sys:Double>
 </ResourceDictionary>

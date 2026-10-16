@@ -130,6 +130,8 @@
     <Style Selector="Border.albumHeader">
         <Setter Property="Margin" Value="{StaticResource AlbumHeadMargin}" />
         <Setter Property="Padding" Value="{StaticResource AlbumHeadPadding}" />
+        <!-- All of it takes a right-click or a drag, between its title and its buttons too. -->
+        <Setter Property="Background" Value="Transparent" />
     </Style>
     <Style Selector="Border.albumHeader.first">
         <Setter Property="Margin" Value="{StaticResource FirstAlbumHeadMargin}" />
