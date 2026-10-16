@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Avalonia.Media.Imaging;
 using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
+using MusicSpin.App.ViewModels;
 using MusicSpin.Core.Library;
 
 namespace MusicSpin.Tests.Ui.Harness;
@@ -116,4 +117,10 @@ internal sealed class StubAppearance : IAppearance
     public void SetMotion(MotionMode motion) => Motion = motion;
 
     public void SetAccent(Rgb? color) => Accent = color;
+}
+
+/// <summary>A layer that only opens and closes (where a test needs Now Playing's or the queue's place).</summary>
+internal sealed class StubLayerViewModel : LayerViewModel
+{
+    public override int Order => LayerOrder.NowPlaying;
 }

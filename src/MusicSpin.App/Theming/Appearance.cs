@@ -33,6 +33,9 @@ public sealed class Appearance(Application application) : IAppearance
     /// <summary>The mockup's default accent (before an album with art plays).</summary>
     public static readonly Rgb DefaultAccent = new(0xE8, 0x6A, 0x3C);
 
+    /// <summary>The accent at 18% (0x2E): the current track in Now Playing.</summary>
+    private const byte TintAlpha = 0x2E;
+
     private Rgb? _base;
 
     public AppTheme Theme { get; private set; } = AppTheme.Dark;
@@ -61,6 +64,7 @@ public sealed class Appearance(Application application) : IAppearance
         var ink = Theme == AppTheme.Light ? AccentColors.Ink(accent) : accent;
         application.Resources["AccentBrush"] = new SolidColorBrush(ToColor(accent));
         application.Resources["AccentInkBrush"] = new SolidColorBrush(ToColor(ink));
+        application.Resources["AccentTintBrush"] = new SolidColorBrush(Color.FromArgb(TintAlpha, accent.R, accent.G, accent.B));
     }
 
     private static Color ToColor(Rgb c) => Color.FromRgb(c.R, c.G, c.B);

@@ -1,0 +1,249 @@
+<!--
+  Now Playing (mockup: "Now Playing"): the overlay over the window between the title bar and the player bar, the
+  playing album's cover blurred behind it, the turntable on the left and the album's title and tracks on the right.
+  controls:ClassicDeckView is the mockup's own deck; controls:DeckHost holds whichever design Settings chose.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <Styles.Resources>
+        <!-- The Classic deck (mockup: .deck), drawn at s = 400; the host scales it. -->
+        <ControlTheme x:Key="{x:Type controls:ClassicDeckView}" TargetType="controls:ClassicDeckView">
+            <Setter Property="Width" Value="{StaticResource DeckWidth}" />
+            <Setter Property="Height" Value="{StaticResource DeckHeight}" />
+            <!-- The plinth's shadow falls outside it (templated controls clip by default). -->
+            <Setter Property="ClipToBounds" Value="False" />
+            <Setter Property="LedOffBrush" Value="{StaticResource DeckLedOffBrush}" />
+            <Setter Property="LedGlow" Value="{StaticResource DeckLedGlow}" />
+            <Setter Property="theming:Animate.Transitions" Value="Swing ArmSwingDuration EaseSwing; Drop ArmDropDuration EaseLower" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Classes="plinth">
+                        <Panel>
+                            <controls:PlatterView Classes="platter" />
+                            <controls:VinylView Name="PART_Record"
+                                                Classes="deckRecord"
+                                                Label="{TemplateBinding Label}"
+                                                Angle="{TemplateBinding Angle}"
+                                                IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
+                            <Ellipse Name="PART_Led" Classes="led" />
+                            <!-- Cut into the plinth: its lower wall catches the light, its upper wall is in shade. -->
+                            <TextBlock Classes="brand highlight" Text="MUSIC SPIN" />
+                            <TextBlock Classes="brand shade" Text="MUSIC SPIN" />
+                            <TextBlock Classes="brand" Text="MUSIC SPIN" />
+                            <Panel Name="PART_Tonearm" Classes="tonearm">
+                                <Panel Name="PART_ArmShadow" Classes="armShadow">
+                                    <Border Classes="tube" />
+                                    <Border Classes="headshell" />
+                                </Panel>
+                                <Border Classes="armBase" />
+                                <Border Classes="tube" />
+                                <Border Classes="headshell" />
+                            </Panel>
+                        </Panel>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="CornerRadius" Value="{StaticResource DeckRadius}" />
+                <Setter Property="Background" Value="{DynamicResource DeckPlinthBrush}" />
+                <Setter Property="BoxShadow" Value="inset 0 1 0 0 #1AFFFFFF, 0 30 60 -20 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ controls|PlatterView.platter">
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+                <Setter Property="Width" Value="{StaticResource DeckPlatterSize}" />
+                <Setter Property="Height" Value="{StaticResource DeckPlatterSize}" />
+                <Setter Property="Margin" Value="{StaticResource DeckPlatterMargin}" />
+                <Setter Property="Background" Value="{StaticResource DeckPlatterBaseBrush}" />
+                <Setter Property="StripeBrush" Value="{StaticResource DeckPlatterStripeBrush}" />
+                <Setter Property="StripeAngle" Value="{StaticResource DeckPlatterStripe}" />
+                <Setter Property="RingBrush" Value="{StaticResource DeckPlatterRingBrush}" />
+                <Setter Property="RingWidth" Value="{StaticResource DeckPlatterRing}" />
+            </Style>
+            <Style Selector="^ /template/ controls|VinylView.deckRecord">
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+                <Setter Property="Width" Value="{StaticResource DeckRecordSize}" />
+                <Setter Property="Height" Value="{StaticResource DeckRecordSize}" />
+                <Setter Property="Margin" Value="{StaticResource DeckRecordMargin}" />
+            </Style>
+            <Style Selector="^ /template/ Ellipse.led">
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="VerticalAlignment" Value="Bottom" />
+                <Setter Property="Width" Value="{StaticResource DeckLedSize}" />
+                <Setter Property="Height" Value="{StaticResource DeckLedSize}" />
+                <Setter Property="Margin" Value="{StaticResource DeckLedMargin}" />
+            </Style>
+            <Style Selector="^ /template/ TextBlock.brand">
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Bottom" />
+                <Setter Property="Margin" Value="{StaticResource DeckBrandMargin}" />
+                <Setter Property="FontSize" Value="{StaticResource DeckBrandFontSize}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="LetterSpacing" Value="{StaticResource DeckBrandLetterSpacing}" />
+                <Setter Property="Foreground" Value="{DynamicResource DeckBrandBrush}" />
+            </Style>
+            <Style Selector="^ /template/ TextBlock.brand.highlight">
+                <Setter Property="Margin" Value="{StaticResource DeckBrandHighlightMargin}" />
+                <Setter Property="Foreground" Value="{DynamicResource DeckBrandHighlightBrush}" />
+            </Style>
+            <Style Selector="^ /template/ TextBlock.brand.shade">
+                <Setter Property="Margin" Value="{StaticResource DeckBrandShadeMargin}" />
+                <Setter Property="Foreground" Value="{DynamicResource DeckBrandShadeBrush}" />
+            </Style>
+            <!-- The arm turns about the middle of its base, .07 s down its box (28 of 320). -->
+            <Style Selector="^ /template/ Panel.tonearm">
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+                <Setter Property="Width" Value="{StaticResource DeckArmWidth}" />
+                <Setter Property="Height" Value="{StaticResource DeckArmHeight}" />
+                <Setter Property="Margin" Value="{StaticResource DeckArmMargin}" />
+                <Setter Property="RenderTransformOrigin" Value="50%,8.75%" />
+            </Style>
+            <Style Selector="^ /template/ Panel.armShadow">
+                <Setter Property="Effect">
+                    <BlurEffect Radius="{StaticResource DeckArmShadowBlur}" />
+                </Setter>
+            </Style>
+            <Style Selector="^ /template/ Border.armBase">
+                <Setter Property="HorizontalAlignment" Value="Center" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+                <Setter Property="Width" Value="{StaticResource DeckArmBaseSize}" />
+                <Setter Property="Height" Value="{StaticResource DeckArmBaseSize}" />
+                <Setter Property="CornerRadius" Value="{StaticResource DeckArmBaseRadius}" />
+                <Setter Property="Background" Value="{StaticResource DeckArmBaseBrush}" />
+                <Setter Property="BoxShadow" Value="0 6 12 0 #88000000" />
+            </Style>
+            <Style Selector="^ /template/ Border.tube">
+                <Setter Property="HorizontalAlignment" Value="Center" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+                <Setter Property="Width" Value="{StaticResource DeckTubeWidth}" />
+                <Setter Property="Height" Value="{StaticResource DeckTubeHeight}" />
+                <Setter Property="Margin" Value="{StaticResource DeckTubeMargin}" />
+                <Setter Property="CornerRadius" Value="{StaticResource DeckTubeRadius}" />
+                <Setter Property="Background" Value="{StaticResource DeckArmBrush}" />
+            </Style>
+            <Style Selector="^ /template/ Border.headshell">
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="VerticalAlignment" Value="Bottom" />
+                <Setter Property="Width" Value="{StaticResource DeckHeadshellWidth}" />
+                <Setter Property="Height" Value="{StaticResource DeckHeadshellHeight}" />
+                <Setter Property="Margin" Value="{StaticResource DeckHeadshellMargin}" />
+                <Setter Property="CornerRadius" Value="{StaticResource DeckTubeRadius}" />
+                <Setter Property="Background" Value="{StaticResource DeckHeadshellBrush}" />
+                <Setter Property="RenderTransform" Value="rotate(18deg)" />
+            </Style>
+            <Style Selector="^ /template/ Panel.armShadow > Border">
+                <Setter Property="Background" Value="{StaticResource DeckArmShadowBrush}" />
+            </Style>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <!-- The overlay: on the page background, sliding up into place (mockup: .nowplaying). -->
+    <Style Selector="controls|SlidePanel.nowPlaying">
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+        <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="theming:Animate.Transitions" Value="Shown NowPlayingSlideDuration EaseOut" />
+    </Style>
+    <!-- The cover, blurred well past the edges, under a veil (mockup: .np-bg, .np-bg::after). -->
+    <Style Selector="Image.npBackground">
+        <Setter Property="Stretch" Value="UniformToFill" />
+        <Setter Property="Margin" Value="{StaticResource NowPlayingBackgroundInset}" />
+        <Setter Property="Opacity" Value="{StaticResource NowPlayingBackgroundOpacity}" />
+        <Setter Property="RenderTransform" Value="scale(1.2)" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="Effect">
+            <BlurEffect Radius="{StaticResource NowPlayingBackgroundBlur}" />
+        </Setter>
+    </Style>
+    <Style Selector="Border.npVeil">
+        <Setter Property="Background" Value="{DynamicResource NowPlayingVeilBrush}" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Button.npClose">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Margin" Value="{StaticResource NowPlayingCloseMargin}" />
+        <Setter Property="Width" Value="{StaticResource NowPlayingCloseSize}" />
+        <Setter Property="Height" Value="{StaticResource NowPlayingCloseSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource NowPlayingCloseRadius}" />
+        <Setter Property="Background" Value="{StaticResource NowPlayingCloseBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="ZIndex" Value="3" />
+    </Style>
+    <Style Selector="Button.npClose controls|Icon">
+        <Setter Property="Width" Value="{StaticResource NowPlayingCloseIconSize}" />
+        <Setter Property="Height" Value="{StaticResource NowPlayingCloseIconSize}" />
+    </Style>
+
+    <!-- Two columns, 1.15 : 1, the deck centred in the first and the album in the second (mockup: .np-body). -->
+    <Style Selector="Grid.npBody">
+        <Setter Property="Margin" Value="{StaticResource NowPlayingPadding}" />
+        <Setter Property="ColumnSpacing" Value="{StaticResource NowPlayingColumnGap}" />
+    </Style>
+    <Style Selector="controls|DeckHost">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Accent" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="StackPanel.npInfo">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- "RADIO · JAZZ" while a station is on air (mockup: .np-kicker.np-radio). -->
+    <Style Selector="StackPanel.npKicker">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource NowPlayingKickerGap}" />
+    </Style>
+    <Style Selector="StackPanel.npKicker controls|Icon">
+        <Setter Property="Width" Value="{StaticResource NowPlayingKickerIconSize}" />
+        <Setter Property="Height" Value="{StaticResource NowPlayingKickerIconSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="StackPanel.npInfo > TextBlock.npTitle">
+        <Setter Property="FontSize" Value="{StaticResource NowPlayingTitleFontSize}" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Margin" Value="{StaticResource NowPlayingTitleMargin}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="StackPanel.npInfo > TextBlock.npArtist">
+        <Setter Property="FontSize" Value="{StaticResource NowPlayingArtistFontSize}" />
+        <Setter Property="Margin" Value="{StaticResource NowPlayingArtistMargin}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+
+    <!-- A track (mockup: .tracklist li): number, title, duration; the current one in the album's colour. -->
+    <Style Selector="Button.npTrack">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="{StaticResource NowPlayingTrackPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource NowPlayingTrackRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource NowPlayingTrackFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.npTrack:pointerover">
+        <Setter Property="Background" Value="{DynamicResource RowHoverBrush}" />
+    </Style>
+    <Style Selector="Button.npTrack.current, Button.npTrack.current:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="Button.npTrack Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource NowPlayingTrackGap}" />
+    </Style>
+    <Style Selector="Button.npTrack TextBlock.number">
+        <Setter Property="Width" Value="{StaticResource NowPlayingTrackNumberWidth}" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.npTrack.current TextBlock.number">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="Button.npTrack TextBlock.duration">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="FontFeatures" Value="+tnum" />
+    </Style>
+</Styles>

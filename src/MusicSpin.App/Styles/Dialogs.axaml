@@ -182,20 +182,20 @@
         <Setter Property="RenderTransformOrigin" Value="50%,9%" />
         <Setter Property="RenderTransform" Value="rotate(-4deg)" />
     </Style>
-    <Style Selector="Panel.tonearm > Ellipse.armBase">
+    <Style Selector="Panel.deckPreview Panel.tonearm > Ellipse.armBase">
         <Setter Property="Width" Value="{StaticResource DeckPreviewArmBaseSize}" />
         <Setter Property="Height" Value="{StaticResource DeckPreviewArmBaseSize}" />
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="Fill" Value="{StaticResource DeckArmBaseBrush}" />
     </Style>
-    <Style Selector="Panel.tonearm > Border.arm">
+    <Style Selector="Panel.deckPreview Panel.tonearm > Border.arm">
         <Setter Property="Width" Value="{StaticResource DeckPreviewTubeWidth}" />
         <Setter Property="Height" Value="{StaticResource DeckPreviewTubeHeight}" />
         <Setter Property="Margin" Value="{StaticResource DeckPreviewTubeMargin}" />
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="Background" Value="{StaticResource DeckArmBrush}" />
     </Style>
-    <Style Selector="Panel.tonearm > Border.headshell">
+    <Style Selector="Panel.deckPreview Panel.tonearm > Border.headshell">
         <Setter Property="Width" Value="{StaticResource DeckPreviewHeadshellWidth}" />
         <Setter Property="Height" Value="{StaticResource DeckPreviewHeadshellHeight}" />
         <Setter Property="Margin" Value="{StaticResource DeckPreviewHeadshellMargin}" />

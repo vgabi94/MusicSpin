@@ -20,14 +20,14 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
     public const string PreviousTip = "Previous track";
     public const string RadioShuffleTip = "Radio is already random";
 
-    private readonly NowPlayingViewModel _nowPlaying;
+    private readonly LayerViewModel _nowPlaying;
     private readonly QueueDrawerViewModel _queue;
     private bool _restarts = true;
     private int? _queueCount;
     private string? _queuePath;
     private TrackFormat? _format;
 
-    public PlayerBarViewModel(PlayerViewModel player, NowPlayingViewModel nowPlaying, QueueDrawerViewModel queue, TimeProvider time, IUiDispatcher ui)
+    public PlayerBarViewModel(PlayerViewModel player, LayerViewModel nowPlaying, QueueDrawerViewModel queue, TimeProvider time, IUiDispatcher ui)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(nowPlaying);

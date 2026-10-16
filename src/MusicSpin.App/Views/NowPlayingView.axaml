@@ -1,0 +1,77 @@
+<!--
+  Now Playing (mockup: #np): the playing album's cover blurred behind, ✕ top left, the turntable (the design chosen in
+  Settings, in controls:DeckHost) and the album: a kicker while radio is on air, the title, "artist · year" and the
+  tracks. Sizes and looks are in Styles/NowPlaying.axaml.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:services="using:MusicSpin.App.Services"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:theming="using:MusicSpin.App.Theming"
+             x:Class="MusicSpin.App.Views.NowPlayingView"
+             x:DataType="vm:MainWindowViewModel">
+    <!-- Each design's deck. -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="services:ClassicDeck">
+            <controls:ClassicDeckView />
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Panel>
+        <Image Name="Backdrop" Classes="npBackground" Source="{Binding NowPlaying.Cover}" />
+        <Border Classes="npVeil" />
+
+        <Button Name="CloseNowPlaying"
+                Classes="npClose"
+                Command="{Binding NowPlaying.CloseCommand}"
+                ToolTip.Tip="Close (Esc)"
+                AutomationProperties.Name="Close Now Playing">
+            <controls:Icon Data="{StaticResource Close}" />
+        </Button>
+
+        <Grid Classes="npBody" ColumnDefinitions="1.15*,*">
+            <controls:DeckHost Name="Deck"
+                               Design="{Binding Settings.Design}"
+                               Label="{Binding NowPlaying.Cover}"
+                               Angle="{Binding SpinClock.Angle}"
+                               Arm="{Binding NowPlaying.Arm}"
+                               IsSpinning="{Binding NowPlaying.IsSpinning}" />
+
+            <!-- The album takes the column, up to its widest (mockup: .np-info, max-width). -->
+            <Grid Grid.Column="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource NowPlayingInfoMaxWidth}" />
+                    <ColumnDefinition Width="0*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Classes="npInfo">
+                    <StackPanel Name="Kicker" Classes="npKicker" IsVisible="{Binding NowPlaying.Kicker, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <controls:Icon Data="{StaticResource Radio}" />
+                        <TextBlock Classes="kicker" Text="{Binding NowPlaying.Kicker, Converter={x:Static theming:TextConverters.Upper}}" />
+                    </StackPanel>
+                    <TextBlock Name="AlbumTitle" Classes="npTitle" Text="{Binding NowPlaying.Title}" />
+                    <TextBlock Name="AlbumArtist" Classes="npArtist" Text="{Binding NowPlaying.ArtistLine}" />
+                    <ScrollViewer Name="TrackScroller" Classes="npTracks">
+                        <ItemsControl Name="Tracks" ItemsSource="{Binding NowPlaying.Tracks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:NowPlayingTrackViewModel">
+                                    <Button Classes="npTrack"
+                                            Classes.current="{Binding IsCurrent}"
+                                            Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).NowPlaying.PlayTrackCommand}"
+                                            CommandParameter="{Binding}"
+                                            AutomationProperties.Name="{Binding Title}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <TextBlock Classes="number" Text="{Binding Marker}" />
+                                            <TextBlock Grid.Column="1" Classes="trim" Text="{Binding Title}" />
+                                            <TextBlock Grid.Column="2" Classes="duration" Text="{Binding Duration}" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Panel>
+</UserControl>

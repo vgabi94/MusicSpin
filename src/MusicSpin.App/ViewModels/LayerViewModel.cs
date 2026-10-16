@@ -34,12 +34,6 @@ public abstract partial class LayerViewModel : ObservableObject, ILayer
     }
 }
 
-/// <summary>The Now Playing overlay (opened from the player bar's cover; the overlay itself comes with Now Playing).</summary>
-public sealed class NowPlayingViewModel : LayerViewModel
-{
-    public override int Order => LayerOrder.NowPlaying;
-}
-
 /// <summary>The queue drawer (opened from the player bar's queue button; the drawer itself comes with the queue).</summary>
 public sealed class QueueDrawerViewModel : LayerViewModel
 {

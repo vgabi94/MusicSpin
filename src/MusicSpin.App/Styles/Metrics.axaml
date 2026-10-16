@@ -403,4 +403,73 @@
     <sys:Double x:Key="DeckPreviewHeadshellWidth">3.5</sys:Double>
     <sys:Double x:Key="DeckPreviewHeadshellHeight">6.7</sys:Double>
     <Thickness x:Key="DeckPreviewHeadshellMargin">1,0,0,0</Thickness>
+
+    <!--
+      Now Playing (mockup: .nowplaying, .np-body, .np-info, .tracklist). The overlay covers the window between the title
+      bar and the player bar; its body is two columns, 1.15 : 1, 40 apart, inside 40 x 56 of padding.
+    -->
+    <Thickness x:Key="NowPlayingPadding">56,40</Thickness>
+    <sys:Double x:Key="NowPlayingColumnGap">40</sys:Double>
+    <Thickness x:Key="NowPlayingBackgroundInset">-60</Thickness>
+    <sys:Double x:Key="NowPlayingBackgroundBlur">60</sys:Double>
+    <sys:Double x:Key="NowPlayingBackgroundOpacity">0.55</sys:Double>
+    <sys:Double x:Key="NowPlayingBackgroundScale">1.2</sys:Double>
+    <sys:Double x:Key="NowPlayingCloseSize">36</sys:Double>
+    <sys:Double x:Key="NowPlayingCloseIconSize">22</sys:Double>
+    <CornerRadius x:Key="NowPlayingCloseRadius">18</CornerRadius>
+    <Thickness x:Key="NowPlayingCloseMargin">16,12,0,0</Thickness>
+    <sys:Double x:Key="NowPlayingInfoMaxWidth">520</sys:Double>
+    <sys:Double x:Key="NowPlayingKickerGap">6</sys:Double>
+    <sys:Double x:Key="NowPlayingKickerIconSize">12</sys:Double>
+    <sys:Double x:Key="NowPlayingTitleFontSize">40</sys:Double>
+    <!-- 6 above and 4 below, less the half-leading line-height 1.05 takes off a 40 px line (3 each side). -->
+    <Thickness x:Key="NowPlayingTitleMargin">0,3,0,1</Thickness>
+    <sys:Double x:Key="NowPlayingArtistFontSize">18</sys:Double>
+    <Thickness x:Key="NowPlayingArtistMargin">0,0,0,22</Thickness>
+    <!-- The track list is at most 44% of the window high (mockup: max-height: 44vh). -->
+    <sys:Double x:Key="NowPlayingTrackListShare">0.44</sys:Double>
+    <Thickness x:Key="NowPlayingTrackPadding">10,8</Thickness>
+    <CornerRadius x:Key="NowPlayingTrackRadius">7</CornerRadius>
+    <sys:Double x:Key="NowPlayingTrackFontSize">14</sys:Double>
+    <sys:Double x:Key="NowPlayingTrackNumberWidth">28</sys:Double>
+    <sys:Double x:Key="NowPlayingTrackGap">10</sys:Double>
+
+    <!--
+      The Classic deck (mockup: .deck), drawn at s = 400 (DeckView.BaseSize; the host scales it to min(46vh, 34vw)): the
+      plinth 1.32 s x 1.08 s; the platter s at .04 s, its ring 4; the record .98 s at .05 s; the LED 7 at 18 x 14 from
+      the bottom left; "Music Spin" .03 s high, .055 s x .042 s from the bottom right, its letters .32 em apart. The arm
+      box .14 s x .8 s, .07 s from the top right, turning about its middle .07 s down: the base .14 s round on top, the
+      tube 5 wide and .66 s long from .07 s, the headshell 18 x .1 s at the bottom, 30% of its width left of the middle,
+      turned 18°.
+    -->
+    <sys:Double x:Key="DeckWidth">528</sys:Double>
+    <sys:Double x:Key="DeckHeight">432</sys:Double>
+    <CornerRadius x:Key="DeckRadius">18</CornerRadius>
+    <sys:Double x:Key="DeckPlatterSize">400</sys:Double>
+    <Thickness x:Key="DeckPlatterMargin">16,16,0,0</Thickness>
+    <sys:Double x:Key="DeckPlatterRing">4</sys:Double>
+    <sys:Double x:Key="DeckPlatterStripe">2</sys:Double>
+    <sys:Double x:Key="DeckRecordSize">392</sys:Double>
+    <Thickness x:Key="DeckRecordMargin">20,20,0,0</Thickness>
+    <sys:Double x:Key="DeckLedSize">7</sys:Double>
+    <Thickness x:Key="DeckLedMargin">18,0,0,14</Thickness>
+    <sys:Double x:Key="DeckLedGlow">10</sys:Double>
+    <sys:Double x:Key="DeckBrandFontSize">12</sys:Double>
+    <sys:Double x:Key="DeckBrandLetterSpacing">3.84</sys:Double>
+    <Thickness x:Key="DeckBrandMargin">0,0,18.16,16.8</Thickness>
+    <Thickness x:Key="DeckBrandHighlightMargin">0,0,18.16,15.8</Thickness>
+    <Thickness x:Key="DeckBrandShadeMargin">0,0,18.16,17.8</Thickness>
+    <sys:Double x:Key="DeckArmWidth">56</sys:Double>
+    <sys:Double x:Key="DeckArmHeight">320</sys:Double>
+    <Thickness x:Key="DeckArmMargin">0,28,28,0</Thickness>
+    <sys:Double x:Key="DeckArmBaseSize">56</sys:Double>
+    <CornerRadius x:Key="DeckArmBaseRadius">28</CornerRadius>
+    <sys:Double x:Key="DeckTubeWidth">5</sys:Double>
+    <sys:Double x:Key="DeckTubeHeight">264</sys:Double>
+    <Thickness x:Key="DeckTubeMargin">0,28,0,0</Thickness>
+    <CornerRadius x:Key="DeckTubeRadius">3</CornerRadius>
+    <sys:Double x:Key="DeckHeadshellWidth">18</sys:Double>
+    <sys:Double x:Key="DeckHeadshellHeight">40</sys:Double>
+    <Thickness x:Key="DeckHeadshellMargin">22.6,0,0,0</Thickness>
+    <sys:Double x:Key="DeckArmShadowBlur">4</sys:Double>
 </ResourceDictionary>

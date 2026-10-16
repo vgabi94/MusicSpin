@@ -26,6 +26,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _services = services;
         Player = new PlayerViewModel(services.Player, services.Time, services.Ui);
         SpinClock = new SpinClock(services.Time, services.Ui);
+        NowPlaying = new NowPlayingViewModel(Player, services.Library, services.Covers, Notices);
+        NowPlaying.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(NowPlayingViewModel.IsSpinning))
+            {
+                SpinClock.IsSpinning = NowPlaying.IsSpinning;
+            }
+        };
         PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
@@ -60,7 +68,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     public PlayerBarViewModel PlayerBar { get; }
 
-    public NowPlayingViewModel NowPlaying { get; } = new();
+    public NowPlayingViewModel NowPlaying { get; }
 
     public QueueDrawerViewModel QueueDrawer { get; } = new();
 
@@ -245,9 +253,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             case nameof(PlayerViewModel.Album):
                 OnPropertyChanged(nameof(PlayerArtist));
                 break;
-            case nameof(PlayerViewModel.IsPlaying):
-                SpinClock.IsSpinning = Player.IsPlaying;
-                break;
             case nameof(PlayerViewModel.TrackId):
                 CurrentPage.PlayingTrackId = Player.TrackId;
                 _ = FindPlayingAlbumAsync(Player.TrackId);
@@ -278,6 +283,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
 
         PlayingAlbumId = albumId;
+        _ = NowPlaying.ShowAlbumAsync(albumId);
         foreach (var page in new PageViewModel[] { AlbumsPage, TracksPage }.Concat(_playlistPages.Values))
         {
             page.PlayingAlbumId = albumId;
