@@ -1,0 +1,20 @@
+<!--
+  What a drag shows under the pointer (mockup: .drag-ghost): the cover, the title and "N tracks" or the artist. It sits
+  in the window's overlay layer; MainWindow.axaml.cs moves it. Sizes and looks are in Styles/Queue.axaml.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             x:Class="MusicSpin.App.Views.DragGhostView"
+             x:DataType="vm:DragGhostViewModel">
+    <Border Name="Ghost" Classes="dragGhost">
+        <Grid ColumnDefinitions="Auto,*">
+            <controls:CoverView Name="GhostCover" Classes="flat" Source="{Binding Cover}" Title="{Binding Album}" Artist="{Binding Artist}" />
+            <StackPanel Grid.Column="1">
+                <TextBlock Name="GhostTitle" Classes="title" Text="{Binding Title}" />
+                <TextBlock Name="GhostDetail" Classes="detail" Text="{Binding Detail}" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

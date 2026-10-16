@@ -33,6 +33,13 @@ public static class Animate
     public static readonly AttachedProperty<object?> TriggerProperty =
         AvaloniaProperty.RegisterAttached<Animatable, object?>("Trigger", typeof(Animate));
 
+    /// <summary>
+    /// Plays <see cref="PlayProperty"/> each time this turns true, also when the control comes on screen with it true (a
+    /// list row made for an item that is already marked): <c>theming:Animate.When="{Binding IsFresh}"</c>.
+    /// </summary>
+    public static readonly AttachedProperty<bool> WhenProperty =
+        AvaloniaProperty.RegisterAttached<Animatable, bool>("When", typeof(Animate));
+
     static Animate()
     {
         TransitionsProperty.Changed.AddClassHandler<Animatable>((target, e) => Apply(target, e.NewValue as string));
@@ -41,6 +48,13 @@ public static class Animate
             if (e.OldValue is not null && target is Visual visual)
             {
                 _ = PlayAsync(visual);
+            }
+        });
+        WhenProperty.Changed.AddClassHandler<Animatable>((target, e) =>
+        {
+            if (e.NewValue is true && target is Visual visual)
+            {
+                PlayOnScreen(visual);
             }
         });
     }
@@ -77,6 +91,38 @@ public static class Animate
     {
         ArgumentNullException.ThrowIfNull(target);
         target.SetValue(TriggerProperty, value);
+    }
+
+    public static bool GetWhen(Animatable target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return target.GetValue(WhenProperty);
+    }
+
+    public static void SetWhen(Animatable target, bool value)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        target.SetValue(WhenProperty, value);
+    }
+
+    private static void PlayOnScreen(Visual target)
+    {
+        if (Avalonia.Controls.TopLevel.GetTopLevel(target) is not null)
+        {
+            _ = PlayAsync(target);
+            return;
+        }
+
+        void OnAttached(object? sender, VisualTreeAttachmentEventArgs e)
+        {
+            target.AttachedToVisualTree -= OnAttached;
+            if (GetWhen(target))
+            {
+                _ = PlayAsync(target);
+            }
+        }
+
+        target.AttachedToVisualTree += OnAttached;
     }
 
     private static async Task PlayAsync(Visual target)

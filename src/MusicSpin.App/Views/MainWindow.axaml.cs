@@ -17,7 +17,10 @@ public partial class MainWindow : Window, IScenePlaces
     private readonly SceneView _scene = new();
     private bool _shutDown;
     private Control? _hiddenSource;
-    private Button? _lastClicked;
+    private readonly LibraryDrag _drag;
+
+    /// <summary>Where the menu opens: under the last button clicked, or at the pointer for a right-click (a <see cref="Point"/>).</summary>
+    private object? _menuAnchor;
     private MainWindowViewModel? _viewModel;
 
     public MainWindow()
@@ -37,7 +40,37 @@ public partial class MainWindow : Window, IScenePlaces
         AddHandler(PointerPressedEvent, OnPointerPressedAnywhere, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         // The menu opens under the button that opened it: remember the last button clicked.
-        AddHandler(Button.ClickEvent, (_, e) => _lastClicked = e.Source as Button ?? _lastClicked, RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(Button.ClickEvent, (_, e) => _menuAnchor = e.Source as Button ?? _menuAnchor, RoutingStrategies.Bubble, handledEventsToo: true);
+
+        // Right-clicking an album or a track opens its menu at the pointer (mockup: the contextmenu handler).
+        AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Bubble);
+
+        // A menu closes when the page under it scrolls, and when the window loses the focus (mockup: closeMenu). The
+        // queue drawer scrolling (new rows brought into view) leaves it: no menu opens from the drawer.
+        AddHandler(ScrollViewer.ScrollChangedEvent, (_, e) =>
+        {
+            if (e.OffsetDelta != default && e.Source is Visual scroller && !QueueDrawerView.IsVisualAncestorOf(scroller))
+            {
+                _viewModel?.Menu.Close();
+            }
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
+        Deactivated += (_, _) => _viewModel?.Menu.Close();
+
+        _drag = new LibraryDrag(this);
+    }
+
+    private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (_viewModel is null || e.Source is not Visual source || LibraryDrag.ItemAt(source) is not { } item)
+        {
+            return;
+        }
+
+        // From the keyboard (the menu key) there is no pointer: the menu opens at the item's middle.
+        _menuAnchor = e.TryGetPosition(this, out var at) ? at
+            : source is Control c && c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), this) is { } middle ? middle
+            : default(Point);
+        e.Handled = _viewModel.Items.ShowMenu(item);
     }
 
     private void OnPointerPressedAnywhere(object? sender, PointerPressedEventArgs e)
@@ -74,6 +107,7 @@ public partial class MainWindow : Window, IScenePlaces
             // Over the whole window (the overlay layer is a canvas: its children take only the size they ask for).
             overlay.Children.Add(_scene);
             overlay.GetObservable(BoundsProperty).Subscribe(new AnonymousObserver<Rect>(b => (_scene.Width, _scene.Height) = (b.Width, b.Height)));
+            _drag.Attach(overlay);
         }
     }
 
@@ -127,8 +161,9 @@ public partial class MainWindow : Window, IScenePlaces
     }
 
     /// <summary>
-    /// Under the button that opened the menu, left-aligned, kept MenuWindowMargin inside the window; above the button
-    /// when there is no room below (mockup: openMenu).
+    /// Under the button that opened the menu, left-aligned, or with its corner at the pointer for a right-click; kept
+    /// MenuWindowMargin inside the window, and above the button (or the pointer)
+    /// when there is no room below (mockup: openMenu, menuBelow).
     /// </summary>
     private void PlaceMenu()
     {
@@ -137,17 +172,21 @@ public partial class MainWindow : Window, IScenePlaces
         MenuBox.Measure(Size.Infinity);
         var size = MenuBox.DesiredSize;
         var area = MenuLayer.Bounds.Size;
-        var anchor = _lastClicked is { } button && button.TranslatePoint(default, MenuLayer) is { } at
-            ? new Rect(at, button.Bounds.Size)
-            : new Rect(area.Width / 2, area.Height / 2, 0, 0);
-        var top = anchor.Bottom + gap;
-        if (top + size.Height > area.Height - margin)
+        // At the pointer the menu's corner is the pointer itself; under a button it keeps a gap.
+        if (_menuAnchor is Point)
         {
-            top = anchor.Top - gap - size.Height;
+            gap = 0;
         }
 
-        Canvas.SetLeft(MenuBox, Math.Max(margin, Math.Min(anchor.Left, area.Width - size.Width - margin)));
-        Canvas.SetTop(MenuBox, Math.Max(margin, top));
+        var anchor = _menuAnchor switch
+        {
+            Point p when this.TranslatePoint(p, MenuLayer) is { } at => new Rect(at, default(Size)),
+            Button button when button.TranslatePoint(default, MenuLayer) is { } at => new Rect(at, button.Bounds.Size),
+            _ => new Rect(area.Width / 2, area.Height / 2, 0, 0),
+        };
+        var place = MenuPlacement.Place(anchor, size, area, gap, margin);
+        Canvas.SetLeft(MenuBox, place.X);
+        Canvas.SetTop(MenuBox, place.Y);
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)

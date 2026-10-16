@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
+using MusicSpin.Core;
 using MusicSpin.Core.Library;
 
 namespace MusicSpin.Tests.Ui.Harness;
@@ -87,6 +88,20 @@ internal sealed class StubLibrary : ILibraryService
 
     public Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default)
         => Task.FromResult(Tracks.FirstOrDefault(t => t.Id == trackId)?.AlbumId);
+
+    /// <summary>Adds the playlist with the tracks at <paramref name="paths"/>; a name taken (any case) fails as the library does.</summary>
+    public Task<PlaylistSummaryItem> CreatePlaylistAsync(string name, IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        if (Playlists.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Task.FromException<PlaylistSummaryItem>(new MusicSpinException(MusicSpinErrorCode.InvalidState, $"A playlist named '{name}' already exists."));
+        }
+
+        var playlist = new PlaylistSummaryItem($"playlist{Playlists.Count:D4}", name, paths.Count);
+        Playlists.Add(playlist);
+        PlaylistEntries[playlist.Id] = [.. paths.Select(p => Tracks.First(t => t.Path == p))];
+        return Task.FromResult(playlist);
+    }
 }
 
 /// <summary>Covers from a function, counting requests per album.</summary>

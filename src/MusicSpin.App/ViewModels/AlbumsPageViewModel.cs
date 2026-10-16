@@ -354,11 +354,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private Task QueueFront() => ActiveCrate?.Front is { } front ? _notices.GuardAsync(async () =>
     {
         var tracks = await _library.AlbumTracksAsync(front.Album.Id).ConfigureAwait(true);
-        _menu.Show(
-        [
-            new MenuEntryViewModel("Play next", () => _notices.GuardAsync(() => _player.AddToQueueAsync(tracks, QueuePosition.Next))),
-            new MenuEntryViewModel("Add to queue", () => _notices.GuardAsync(() => _player.AddToQueueAsync(tracks, QueuePosition.UpNext))),
-        ]);
+        _menu.Show(QueueMenu.Entries(tracks, _player, _notices));
     }) : Task.CompletedTask;
 
     /// <summary>

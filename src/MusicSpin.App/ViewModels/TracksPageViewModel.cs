@@ -158,12 +158,12 @@ public abstract partial class TrackListPageViewModel : PageViewModel
     [RelayCommand(CanExecute = nameof(CanPlayAll))]
     private Task PlayAll() => Notices.GuardAsync(() => Player.PlayTracksAsync(Tracks.Select(t => t.Track).ToList()));
 
+    /// <summary>A playlist's ＋ Queue: the whole list as shown (mockup: #plQueue).</summary>
+    [RelayCommand(CanExecute = nameof(CanPlayAll))]
+    private void QueueAll() => ShowQueueMenu([.. Tracks.Select(t => t.Track)]);
+
     /// <summary>The ＋ menu (mockup: queueMenu).</summary>
-    protected void ShowQueueMenu(IReadOnlyList<TrackSummary> tracks) => Menu.Show(
-    [
-        new MenuEntryViewModel("Play next", () => Notices.GuardAsync(() => Player.AddToQueueAsync(tracks, QueuePosition.Next))),
-        new MenuEntryViewModel("Add to queue", () => Notices.GuardAsync(() => Player.AddToQueueAsync(tracks, QueuePosition.UpNext))),
-    ]);
+    protected void ShowQueueMenu(IReadOnlyList<TrackSummary> tracks) => Menu.Show(QueueMenu.Entries(tracks, Player, Notices));
 
     protected override void Filter()
     {
@@ -172,6 +172,7 @@ public abstract partial class TrackListPageViewModel : PageViewModel
         EmptyText = _all.Count == 0 ? EmptyLibraryText : Tracks.Count == 0 ? $"Nothing matches “{SearchText.Trim()}”." : null;
         Rows = LayOut(Tracks);
         PlayAllCommand.NotifyCanExecuteChanged();
+        QueueAllCommand.NotifyCanExecuteChanged();
     }
 
     protected override void MarkPlaying()

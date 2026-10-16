@@ -4,6 +4,7 @@ using System.Text.Json;
 using MusicSpin.App.Services;
 using MusicSpin.Core;
 using MusicSpin.Core.Hosting;
+using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Remote;
 
@@ -29,6 +30,9 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
     /// <summary>What <c>status</c> and the commands answer.</summary>
     public PlayerStatus Status { get; set; } = Idle;
 
+    /// <summary>What <c>queue</c> answers a page of (see <see cref="SetQueue"/>).</summary>
+    public IReadOnlyList<QueueEntry> Queue { get; set; } = [];
+
     /// <summary>Every request received, in order: (command, the whole request).</summary>
     public ConcurrentQueue<(string Cmd, JsonElement Request)> Requests { get; } = new();
 
@@ -39,7 +43,10 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 
     public bool AllowStart { get; set; } = true;
 
-    /// <summary>Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would.</summary>
+    /// <summary>
+    /// Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would, and queue.add and
+    /// queue.move edit <see cref="Queue"/>.
+    /// </summary>
     public bool FollowsCommands { get; set; }
 
     /// <summary>Open subscriptions (the app's event stream).</summary>
@@ -63,6 +70,33 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
             QueueLength = 1,
             Item = new QueueItem("/music/" + title + ".flac", title, "Artist", "Album", DurationSeconds: duration, TrackId: trackId),
         };
+
+    /// <summary>
+    /// A queue of <paramref name="titles"/> with <paramref name="current"/> playing and the <paramref name="upNext"/> entries
+    /// after it up next; <see cref="Status"/> follows (playing, unless it was already paused). <paramref name="radio"/> puts a
+    /// station with that description on air.
+    /// </summary>
+    public void SetQueue(IReadOnlyList<string> titles, int current = 0, int upNext = 0, string? radio = null)
+        => SetQueue([.. titles.Select(title => Item(title))], current, upNext, radio);
+
+    /// <summary>The same with <paramref name="items"/> (library tracks, say).</summary>
+    public void SetQueue(IReadOnlyList<QueueItem> items, int current = 0, int upNext = 0, string? radio = null)
+    {
+        Queue = [.. items.Select((item, i) => new QueueEntry(i, i == current, item, i > current && i <= current + upNext))];
+        var status = Status.State == PlayerState.Stopped ? Playing(items[current].Title ?? "?") : Status;
+        Status = status with
+        {
+            QueueIndex = current,
+            QueueLength = items.Count,
+            Item = items[current],
+            UpNext = upNext,
+            Radio = radio is null ? null : new RadioInfo(new RadioFilter(), radio, 100),
+        };
+    }
+
+    /// <summary>The queue item <see cref="SetQueue"/> makes for <paramref name="title"/>: its track id is the title.</summary>
+    public static QueueItem Item(string title, double duration = 300)
+        => new("/music/" + title + ".flac", title, "Artist", "Album", DurationSeconds: duration, TrackId: title);
 
     public void Start()
     {
@@ -171,6 +205,9 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                         await connection.WriteAsync(ProtocolMessages.Ok(id, new { }));
                         connection.Subscribed = true;
                         break;
+                    case "queue":
+                        await connection.WriteAsync(ProtocolMessages.Ok(id, QueuePage(request)));
+                        break;
                     case "quit":
                         await connection.WriteAsync(ProtocolMessages.Ok(id, new { }));
                         _ = Task.Run(StopAsync, CancellationToken.None);
@@ -197,6 +234,14 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         }
     }
 
+    private QueueListing QueuePage(JsonElement request)
+    {
+        var offset = request.TryGetProperty("offset", out var o) ? o.GetInt32() : 0;
+        var limit = request.TryGetProperty("limit", out var l) ? l.GetInt32() : 100;
+        var queue = Queue;
+        return new QueueListing(queue.Count, offset, limit, Status.QueueIndex, [.. queue.Skip(offset).Take(limit)]);
+    }
+
     private void Follow(string cmd, JsonElement request)
     {
         if (cmd == "seek" && request.TryGetProperty("seconds", out var seconds))
@@ -207,7 +252,35 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         {
             Status = Status with { Volume = value.GetSingle() };
         }
+        else if (cmd == "queue.add" && request.TryGetProperty("items", out var items))
+        {
+            // After the current entry: next, after the up-next entries, or at the end (Status is left as it was).
+            var queue = Queue.ToList();
+            var current = Status.QueueIndex ?? -1;
+            var position = request.TryGetProperty("position", out var p) ? p.GetString() : "end";
+            var afterUpNext = current + 1;
+            while (afterUpNext < queue.Count && queue[afterUpNext].UpNext)
+            {
+                afterUpNext++;
+            }
+
+            // Clamped: a test's Status may say more than its Queue holds.
+            var at = Math.Clamp(position switch { "next" => current + 1, "upnext" => afterUpNext, _ => queue.Count }, 0, queue.Count);
+            queue.InsertRange(at,(ProtocolJson.Deserialize<QueueItem[]>(items) ?? []).Select(item => new QueueEntry(0, false, item, position != "end")));
+            Queue = Renumber(queue);
+        }
+        else if (cmd == "queue.move" && request.TryGetProperty("from", out var from) && request.TryGetProperty("to", out var to)
+                 && from.GetInt32() is var f && to.GetInt32() is var t && f >= 0 && t >= 0 && f < Queue.Count && t < Queue.Count)
+        {
+            var queue = Queue.ToList();
+            var entry = queue[f];
+            queue.RemoveAt(f);
+            queue.Insert(t, entry);
+            Queue = Renumber(queue);
+        }
     }
+
+    private static List<QueueEntry> Renumber(List<QueueEntry> queue) => [.. queue.Select((entry, i) => entry with { Index = i })];
 
     private sealed class Connection(Stream stream) : IAsyncDisposable
     {
