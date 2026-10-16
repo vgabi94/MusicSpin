@@ -438,6 +438,42 @@ public sealed partial class MusicLibrary : IDisposable
         return tracks.OrderBy(t => years.GetValueOrDefault(t.AlbumId, int.MaxValue)).ThenBy(t => t.SortKey, StringComparer.Ordinal).ToList();
     });
 
+    /// <summary>
+    /// All tracks of any of these genres (exact name ignoring case/diacritics; multi-genre tags split on ; / , |, as radio),
+    /// optionally only those by <paramref name="artist"/> (track or album artist). Ordered as the albums' default sort:
+    /// album artist, year, title, then disc/track. No cap.
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidArgument (no genre name); NotFound (unknown artist, or nothing matches).</exception>
+    public IReadOnlyList<TrackRecord> GenreQueue(IReadOnlyList<string> genres, string? artist = null) => Guard(() =>
+    {
+        ArgumentNullException.ThrowIfNull(genres);
+        var wanted = genres.Select(LibrarySearch.Fold).Where(g => g.Length > 0).ToHashSet(StringComparer.Ordinal);
+        if (wanted.Count == 0)
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, "Give a genre name.");
+        }
+
+        var keys = artist is null ? null : ArtistKeys(artist);
+        var tracks = _db.Tracks.FindAll()
+            .Where(t => GenreMatches(t.Genre, wanted) && (keys is null || keys.Contains(t.ArtistKey) || keys.Contains(t.AlbumArtistKey)))
+            .ToList();
+        if (tracks.Count == 0)
+        {
+            var names = string.Join(" or ", genres.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => $"'{g.Trim()}'"));
+            throw new MusicSpinException(MusicSpinErrorCode.NotFound,
+                $"No tracks with genre {names}{(artist is null ? string.Empty : $" by '{artist}'")}. See 'music-spin search genre:<word>'.");
+        }
+
+        var albums = _db.Albums.FindAll().ToDictionary(a => a.Id, StringComparer.Ordinal);
+        return tracks
+            .OrderBy(t => albums.TryGetValue(t.AlbumId, out var a) ? a.AlbumArtistKey : t.AlbumArtistKey, StringComparer.Ordinal)
+            .ThenBy(t => albums.TryGetValue(t.AlbumId, out var a) ? a.Year ?? 0 : 0)
+            .ThenBy(t => albums.TryGetValue(t.AlbumId, out var a) ? a.TitleKey : string.Empty, StringComparer.Ordinal)
+            .ThenBy(t => t.AlbumId, StringComparer.Ordinal)
+            .ThenBy(t => t.SortKey, StringComparer.Ordinal)
+            .ToList();
+    });
+
     /// <summary>Deterministic Fisher-Yates shuffle (same seed, same order).</summary>
     public static IReadOnlyList<T> Shuffle<T>(IReadOnlyList<T> items, int seed)
     {

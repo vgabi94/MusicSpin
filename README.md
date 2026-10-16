@@ -60,6 +60,7 @@ $ music-spin search rani                         # artists, albums and tracks ma
 $ music-spin tracks --artist "Hania Rani"        # exact artist name, case-insensitive
 $ music-spin filter --hires --min-sample-rate 96000 --format flac,dsd
 $ music-spin play --artist "Nils Frahm" --shuffle --seed 7
+$ music-spin play --genre jazz --genre blues            # every jazz or blues track, by album artist then year
 $ music-spin queue add --search "glass"
 $ music-spin seek 1:30 && music-spin volume 80%
 $ music-spin repeat all && music-spin shuffle on

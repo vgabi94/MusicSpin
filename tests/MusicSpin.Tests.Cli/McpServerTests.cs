@@ -80,6 +80,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var props = play.JsonSchema.GetProperty("properties");
         Assert.Contains("array", props.GetProperty("files").GetProperty("type").ToString(), StringComparison.Ordinal);
         Assert.True(props.TryGetProperty("album", out _));
+        Assert.True(props.TryGetProperty("genre", out _));
         Assert.True(props.TryGetProperty("shuffle", out _));
         Assert.True(tools.Single(t => t.Name == "status").ProtocolTool.Annotations?.ReadOnlyHint);
     }
@@ -140,6 +141,36 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.Equal(2, play.GetProperty("queueLength").GetInt32());
         var shuffled = await Call("play", new() { ["artist"] = "miles davis", ["shuffle"] = true, ["seed"] = 5 });
         Assert.Equal(5, shuffled.GetProperty("seed").GetInt32());
+    }
+
+    [Fact]
+    public async Task Play_takes_a_genre_as_a_string_or_an_array_and_reports_bad_genres_as_tool_errors()
+    {
+        var music = LibraryTestData.CreateGenreLibrary(TempDir.Create("mcp-genre"));
+        foreach (var file in Directory.EnumerateFiles(music, "*", SearchOption.AllDirectories))
+        {
+            _cli.Decoders.With(TestAudio.Track(file, seconds: 60));
+        }
+
+        Assert.Equal(0, (await _cli.RunAsync("library", "add", music)).ExitCode);
+        Assert.Equal(0, (await _cli.RunAsync("library", "scan", "--quiet")).ExitCode);
+        await StartAsync();
+
+        var one = await Call("play", new() { ["genre"] = "JAZZ" });
+        Assert.Equal(4, one.GetProperty("queueLength").GetInt32());
+        Assert.Equal("Blue Train", one.GetProperty("item").GetProperty("title").GetString());
+        Assert.Equal(5, (await Call("play", new() { ["genre"] = new[] { "jazz", "blues" } })).GetProperty("queueLength").GetInt32());
+        Assert.Equal(3, (await Call("play", new() { ["genre"] = "jazz", ["artist"] = "miles davis" })).GetProperty("queueLength").GetInt32());
+        Assert.Equal(9, (await Call("play", new() { ["genre"] = "jazz", ["shuffle"] = true, ["seed"] = 9 })).GetProperty("seed").GetInt32());
+
+        Assert.StartsWith("not_found:", await CallError("play", new() { ["genre"] = "rock" }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found:", await CallError("play", new() { ["genre"] = new[] { "polka", "ska" } }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("play", new() { ["genre"] = 5 }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("play", new() { ["genre"] = new object[] { "jazz", 1 } }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("play", new() { ["genre"] = " " }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("play", new() { ["genre"] = "jazz", ["album"] = "Kind of Blue" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("play", new() { ["genre"] = "jazz", ["search"] = "miles" }), StringComparison.Ordinal);
+        Assert.StartsWith("usage:", await CallError("play", new() { ["genre"] = System.Array.Empty<string>() }), StringComparison.Ordinal); // nothing to play
     }
 
     [Fact]
