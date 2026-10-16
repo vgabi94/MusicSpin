@@ -82,6 +82,12 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     /// <summary>While the pointer is still over it then, it looks again this much later (mockup: 400 ms).</summary>
     public static readonly TimeSpan CloseRetry = TimeSpan.FromMilliseconds(400);
 
+    /// <summary>The notice when tracks dropped between rows can't be put there: the queue changed under the drop.</summary>
+    public const string AddedLast = "The queue changed during the drop, so the tracks went to the end of Up next.";
+
+    /// <summary>The notice when the row dragged has left the queue (it played, or the CLI removed it).</summary>
+    public const string RowGone = "That track isn't up next any more.";
+
     private readonly PlayerViewModel _player;
     private readonly ILibraryService _library;
     private readonly ICoverService _covers;
@@ -106,14 +112,8 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         _notices = notices;
         _time = time;
         _ui = ui;
-        _player.QueueChanged += (_, _) => _ = ReadAsync();
-        _player.StatusApplied += (_, _) =>
-        {
-            if (_readFor != Key())
-            {
-                _ = ReadAsync();
-            }
-        };
+        _player.QueueChanged += OnQueueChanged;
+        _player.StatusApplied += OnStatusApplied;
         _player.PropertyChanged += OnPlayerChanged;
         SaveForm.PropertyChanged += (_, e) =>
         {
@@ -164,7 +164,13 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     /// <summary>Rows were added; the argument is the first, which the view scrolls into view.</summary>
     public event EventHandler<QueueRowViewModel>? RowsAdded;
 
-    public void Dispose() => _closeTimer?.Dispose();
+    public void Dispose()
+    {
+        _player.QueueChanged -= OnQueueChanged;
+        _player.StatusApplied -= OnStatusApplied;
+        _player.PropertyChanged -= OnPlayerChanged;
+        _closeTimer?.Dispose();
+    }
 
     // ---- actions --------------------------------------------------------------------------------------------------
 
@@ -221,7 +227,8 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     /// <summary>
     /// Drops library tracks at <paramref name="at"/> (0: first). The player adds up next at either end of the rows, so in
-    /// between they are added last and moved up into place.
+    /// between they are added last and moved up into place. The moves come from the queue read again after the add: a
+    /// track may have ended, or the CLI changed the queue, since the rows were read.
     /// </summary>
     public Task InsertAsync(IReadOnlyList<TrackSummary> tracks, int at)
     {
@@ -245,10 +252,18 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
                 return;
             }
 
-            var end = rows[^1].Index + 1;
-            for (var i = 0; i < tracks.Count; i++)
+            var upNext = await UpNextAsync(rows.Count + tracks.Count).ConfigureAwait(true);
+            var added = upNext.Count >= tracks.Count ? upNext.Skip(upNext.Count - tracks.Count).ToList() : [];
+            var target = Nearest(upNext.Take(upNext.Count - added.Count), rows[at], e => e.Item.Path, e => e.Index);
+            if (target is null || !added.Select(e => e.Item.Path).SequenceEqual(tracks.Select(t => t.Path), StringComparer.Ordinal))
             {
-                if (!await _player.MoveInQueueAsync(end + i, rows[at].Index + i).ConfigureAwait(true))
+                _notices.Post(AddedLast);
+                return;
+            }
+
+            for (var i = 0; i < added.Count; i++)
+            {
+                if (!await _player.MoveInQueueAsync(added[i].Index, target.Index + i).ConfigureAwait(true))
                 {
                     return; // the rest stay at the end of the rows
                 }
@@ -256,14 +271,24 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         });
     }
 
-    /// <summary>Drops a row at <paramref name="at"/> (the row above which it goes; the count: last).</summary>
+    /// <summary>
+    /// Drops a row at <paramref name="at"/> (the row above which it goes; the count: last). The rows may have been read
+    /// again during the drag (a track ended, say): then it's the same entry among the new rows.
+    /// </summary>
     public Task MoveAsync(QueueRowViewModel row, int at)
     {
         ArgumentNullException.ThrowIfNull(row);
-        var from = IndexOf(row);
-        var to = at > from ? at - 1 : at;
-        return from < 0 || to == from ? Task.CompletedTask
-            : _notices.GuardAsync(() => _player.MoveInQueueAsync(row.Index, Rows[Math.Clamp(to, 0, Rows.Count - 1)].Index));
+        var rows = Rows;
+        var from = rows.Contains(row) ? row : Nearest(rows, row, r => r.Item.Path, r => r.Index);
+        if (from is null)
+        {
+            _notices.Post(RowGone);
+            return Task.CompletedTask;
+        }
+
+        var fromAt = IndexOf(rows, from);
+        var to = Math.Clamp(at > fromAt ? at - 1 : at, 0, rows.Count - 1);
+        return to == fromAt ? Task.CompletedTask : _notices.GuardAsync(() => _player.MoveInQueueAsync(from.Index, rows[to].Index));
     }
 
     // ---- dragging -------------------------------------------------------------------------------------------------
@@ -430,17 +455,47 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         }
     }
 
-    private int IndexOf(QueueRowViewModel row)
+    private static int IndexOf(IReadOnlyList<QueueRowViewModel> rows, QueueRowViewModel row)
     {
-        for (var i = 0; i < Rows.Count; i++)
+        for (var i = 0; i < rows.Count; i++)
         {
-            if (ReferenceEquals(Rows[i], row))
+            if (ReferenceEquals(rows[i], row))
             {
                 return i;
             }
         }
 
         return -1;
+    }
+
+    /// <summary>The entry among <paramref name="entries"/> that is <paramref name="row"/>: the same file, nearest where it was.</summary>
+    private static T? Nearest<T>(IEnumerable<T> entries, QueueRowViewModel row, Func<T, string> path, Func<T, int> index)
+        where T : class
+        => entries.Where(e => string.Equals(path(e), row.Item.Path, StringComparison.Ordinal))
+            .MinBy(e => Math.Abs(index(e) - row.Index));
+
+    /// <summary>The up-next entries as the player has them now (none when it can't say).</summary>
+    private async Task<IReadOnlyList<QueueEntry>> UpNextAsync(int expected)
+    {
+        if (_player.QueueIndex is not { } current)
+        {
+            return [];
+        }
+
+        // From the current entry as last read, with room for a track that ended since.
+        var listing = await _player.QueueAsync(current, expected + 2).ConfigureAwait(true);
+        return listing?.CurrentIndex is { } now ? [.. listing.Items.Where(e => e.Index > now).TakeWhile(e => e.UpNext)] : [];
+    }
+
+    private void OnQueueChanged(object? sender, EventArgs e) => _ = ReadAsync();
+
+    /// <summary>The status says the queue moved on (a track ended, say) without a queueChanged event: read it again.</summary>
+    private void OnStatusApplied(object? sender, EventArgs e)
+    {
+        if (_readFor != Key())
+        {
+            _ = ReadAsync();
+        }
     }
 
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)

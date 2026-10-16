@@ -320,6 +320,26 @@ public sealed class MenusAndDragTests
     }
 
     [AvaloniaFact]
+    public async Task A_menu_stays_open_when_the_queue_drawer_scrolls()
+    {
+        await using var app = await OpenAsync();
+        await QueueRowsAsync(app, 20);
+        app.ViewModel.QueueDrawer.Open();
+        Gui.FinishAnimations(Slid);
+        var row = await ShowAsync(app, Kind.TrackRow);
+        RightClick(app.Window, Middle(app.Window, row));
+        Assert.True(app.ViewModel.Menu.IsOpen);
+
+        // as when the CLI adds rows and the drawer brings them into view
+        var drawer = Gui.Find<ScrollViewer>(app.Window, "QueueScroll");
+        Assert.True(drawer.Extent.Height > drawer.Viewport.Height, "the rows scroll");
+        drawer.Offset = new Vector(0, 60);
+        Gui.Settle();
+        Assert.Equal(60, drawer.Offset.Y);
+        Assert.True(app.ViewModel.Menu.IsOpen);
+    }
+
+    [AvaloniaFact]
     public async Task A_menu_closes_when_the_window_loses_the_focus()
     {
         await using var app = await MenuOnTracksAsync();
@@ -511,7 +531,8 @@ public sealed class MenusAndDragTests
 
     private static async Task QueueRowsAsync(AppHarness app, int count)
     {
-        IReadOnlyList<Core.Remote.QueueItem> rows = [.. Enumerable.Range(1, count).Select(i => SampleLibrary.Item(7 + ((i - 1) / 3), ((i - 1) % 3) + 1))];
+        // From album 7 on, three tracks each, round to album 1 after album 10.
+        IReadOnlyList<Core.Remote.QueueItem> rows = [.. Enumerable.Range(1, count).Select(i => SampleLibrary.Item(((6 + ((i - 1) / 3)) % 10) + 1, ((i - 1) % 3) + 1))];
         app.Scripted!.SetQueue([SampleLibrary.Item(6, 1), .. rows, SampleLibrary.Item(6, 2)], 0, count);
         await app.Scripted.PushAsync("queueChanged");
         await app.Scripted.PushAsync("stateChanged");

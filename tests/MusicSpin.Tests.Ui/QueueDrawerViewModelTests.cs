@@ -48,6 +48,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     private async Task StartAsync(int upNext, string? radio = null, int current = 0)
     {
         _player.SetQueue(Titles([.. Enumerable.Range(1, upNext).Select(i => "q" + i)]), current, upNext, radio);
+        _player.FollowsCommands = true; // queue.add and queue.move edit its queue, as a real player's
         _player.Start();
         await _vm.StartAsync();
         await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1 && _drawer.Rows.Count == upNext && _player.Count("queue") > 0, "the first read");
@@ -273,6 +274,70 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await StartAsync(upNext: 2);
         await _drawer.InsertAsync([], 1);
         Assert.Equal(0, _player.Count("queue.add"));
+    }
+
+    [Fact]
+    public async Task Tracks_dropped_between_rows_land_there_when_the_queue_shifted_since_it_was_read()
+    {
+        await StartAsync(upNext: 3);
+        _player.SetQueue(Titles("cli", "q1", "q2", "q3"), 0, 4); // the CLI played "cli" next; the drawer hasn't read it yet
+
+        await _drawer.InsertAsync([StubLibrary.Track(1), StubLibrary.Track(2)], 1); // above q2
+        var moves = new[] { await SentAsync("queue.move"), await SentAsync("queue.move", 2) };
+        Assert.Equal([(5, 3), (6, 4)], moves.Select(m => (m.GetProperty("from").GetInt32(), m.GetProperty("to").GetInt32())));
+        Assert.Equal(["cli", "q1", "Track 1", "Track 2", "q2", "q3"], _player.Queue.Where(e => e.UpNext).Select(e => e.Item.Title));
+    }
+
+    [Fact]
+    public async Task When_the_row_dropped_above_has_left_the_queue_the_tracks_stay_last_with_a_notice()
+    {
+        await StartAsync(upNext: 3);
+        _player.SetQueue(Titles("q1", "q3"), 0, 2); // q2 removed from the CLI
+
+        await _drawer.InsertAsync([StubLibrary.Track(1)], 1); // above q2
+        await _ui.UntilAsync(() => _posted.Count > 0, "the notice");
+        Assert.Equal([QueueDrawerViewModel.AddedLast], _posted);
+        Assert.Equal(1, _player.Count("queue.add"));
+        Assert.Equal(0, _player.Count("queue.move"));
+    }
+
+    [Fact]
+    public async Task A_row_dragged_while_the_rows_were_read_again_still_moves()
+    {
+        await StartAsync(upNext: 3);
+        var dragged = _drawer.Rows[0];
+        await ChangeAsync(Titles("cli", "q1", "q2", "q3"), 4); // new row objects, q1 one place down
+
+        await _drawer.MoveAsync(dragged, 4); // to the end
+        var move = await SentAsync("queue.move");
+        Assert.Equal((2, 4), (move.GetProperty("from").GetInt32(), move.GetProperty("to").GetInt32()));
+    }
+
+    [Fact]
+    public async Task A_row_that_left_the_queue_during_the_drag_moves_nothing_with_a_notice()
+    {
+        await StartAsync(upNext: 3);
+        var dragged = _drawer.Rows[0];
+        await ChangeAsync(Titles("q2", "q3"), 2); // q1 removed from the CLI
+
+        await _drawer.MoveAsync(dragged, 2);
+        Assert.Equal([QueueDrawerViewModel.RowGone], _posted);
+        Assert.Equal(0, _player.Count("queue.move"));
+    }
+
+    [Fact]
+    public async Task Once_disposed_it_reads_nothing_more()
+    {
+        await StartAsync(upNext: 2);
+        _drawer.Dispose();
+        var reads = _player.Count("queue");
+
+        _player.SetQueue(Titles("q1"), 0, 1);
+        await _player.PushAsync("queueChanged");
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        _ui.Run();
+        Assert.Equal(reads, _player.Count("queue"));
+        Assert.Equal(2, _drawer.Rows.Count);
     }
 
     [Theory]

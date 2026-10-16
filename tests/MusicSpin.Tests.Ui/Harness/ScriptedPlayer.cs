@@ -43,7 +43,10 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 
     public bool AllowStart { get; set; } = true;
 
-    /// <summary>Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would.</summary>
+    /// <summary>
+    /// Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would, and queue.add and
+    /// queue.move edit <see cref="Queue"/>.
+    /// </summary>
     public bool FollowsCommands { get; set; }
 
     /// <summary>Open subscriptions (the app's event stream).</summary>
@@ -249,7 +252,33 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         {
             Status = Status with { Volume = value.GetSingle() };
         }
+        else if (cmd == "queue.add" && request.TryGetProperty("items", out var items))
+        {
+            // After the current entry: next, after the up-next entries, or at the end (Status is left as it was).
+            var queue = Queue.ToList();
+            var current = Status.QueueIndex ?? -1;
+            var position = request.TryGetProperty("position", out var p) ? p.GetString() : "end";
+            var afterUpNext = current + 1;
+            while (afterUpNext < queue.Count && queue[afterUpNext].UpNext)
+            {
+                afterUpNext++;
+            }
+
+            var at = position switch { "next" => current + 1, "upnext" => afterUpNext, _ => queue.Count };
+            queue.InsertRange(at, (ProtocolJson.Deserialize<QueueItem[]>(items) ?? []).Select(item => new QueueEntry(0, false, item, position != "end")));
+            Queue = Renumber(queue);
+        }
+        else if (cmd == "queue.move" && request.TryGetProperty("from", out var from) && request.TryGetProperty("to", out var to))
+        {
+            var queue = Queue.ToList();
+            var entry = queue[from.GetInt32()];
+            queue.RemoveAt(from.GetInt32());
+            queue.Insert(to.GetInt32(), entry);
+            Queue = Renumber(queue);
+        }
     }
+
+    private static List<QueueEntry> Renumber(List<QueueEntry> queue) => [.. queue.Select((entry, i) => entry with { Index = i })];
 
     private sealed class Connection(Stream stream) : IAsyncDisposable
     {

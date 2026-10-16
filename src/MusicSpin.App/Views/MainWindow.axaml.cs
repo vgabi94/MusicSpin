@@ -45,10 +45,11 @@ public partial class MainWindow : Window, IScenePlaces
         // Right-clicking an album or a track opens its menu at the pointer (mockup: the contextmenu handler).
         AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Bubble);
 
-        // A menu closes when what is under it scrolls, and when the window loses the focus (mockup: closeMenu).
+        // A menu closes when the page under it scrolls, and when the window loses the focus (mockup: closeMenu). The
+        // queue drawer scrolling (new rows brought into view) leaves it: no menu opens from the drawer.
         AddHandler(ScrollViewer.ScrollChangedEvent, (_, e) =>
         {
-            if (e.OffsetDelta != default)
+            if (e.OffsetDelta != default && e.Source is Visual scroller && !QueueDrawerView.IsVisualAncestorOf(scroller))
             {
                 _viewModel?.Menu.Close();
             }

@@ -131,6 +131,10 @@ src/MusicSpin.App/
   a theme switch applies to what is on screen. Sizes, spacing, radii and font sizes are in `Metrics.axaml`; durations
   in `Motion.axaml`. Views outside `Styles/` contain no literal colours, sizes, opacity or durations; a UI test
   (`CodeOrganisationTests`) enforces it, with its exceptions listed in the test.
+- **Symbols Inter lacks are icons.** Text is drawn in the bundled Inter; a character it lacks falls back to whatever
+  the OS has, and Linux often has nothing for symbols like the mockup's "＋". Such symbols are path icons
+  (`Icons/IconsResource.axaml`). `FontCoverageTests` checks every non-ASCII character in the views and the app's
+  strings, with the few that every OS's fallback fonts draw listed in the test.
 - **Motion.** Settings › Motion multiplies every duration (Smooth 1, Fast 0.5, None 0). Views write
   `Duration="{theming:Motion HoverDuration}"`; the extension binds the base duration to the current multiplier.
 - **Accent colour.** The playing album's colour (the most saturated prominent colour of its cover, mixed 80% with white)
@@ -171,8 +175,8 @@ src/MusicSpin.App/
   them.
 - **The menu.** The Sort and Group dropdowns, the ＋ buttons and right-clicks fill one `MenuViewModel` (a layer, so Esc
   closes it) with entries. The window places it under the button that opened it, or with its corner at the pointer for
-  a right-click, always 8 px inside the window (`MenuPlacement`). A press anywhere else, a scroll and the window losing
-  the focus close it. What a right-click acts on is the nearest control marked with `QueueSource.Item`: an album (a
+  a right-click, always 8 px inside the window (`MenuPlacement`). A press anywhere else, a scroll (not the queue drawer's) and
+  the window losing the focus close it. What a right-click acts on is the nearest control marked with `QueueSource.Item`: an album (a
   card, a sleeve, a crate record), a Tracks page album header, a track row or a Now Playing track.
   `LibraryItemActions` turns it into Play (as clicking it would), Play next and Add to queue.
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
@@ -180,7 +184,8 @@ src/MusicSpin.App/
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
   an index (skipping to a row drops the up-next entries above it), `queue.remove`, `queue.clear` with `upNext`, and
   `queue.set` to end radio while keeping the current track and the rows. A drop between rows adds the tracks up next and
-  then moves them into place with `queue.move`. Save as playlist writes a library playlist. Rows that were not there at
+  then moves them into place with `queue.move`, at indices from the queue read again after the add (it may have moved
+  on since the rows were read); a row dragged while the rows were read again is found by its file. Save as playlist writes a library playlist. Rows that were not there at
   the last read flash (`Animate.When`), and the first of them scrolls into view. The player bar's count is the number of
   up-next entries.
 - **Dragging.** Albums, tracks and queue rows are dragged with pointer capture, not `DoDragDropAsync` (which can't show

@@ -198,5 +198,8 @@ internal sealed class LibraryDrag
                && new Rect(view.Bounds.Size).TransformToAABB(transform).Contains(at);
     }
 
-    private double Metric(string key) => _window.TryFindResource(key, out var value) && value is double d ? d : 0;
+    /// <summary>A size from Styles/Metrics.axaml; a missing one is a bug (with 0, every press would be a drag).</summary>
+    private double Metric(string key)
+        => _window.TryFindResource(key, out var value) && value is double d ? d
+            : throw new InvalidOperationException($"The metric '{key}' is missing from Styles/Metrics.axaml.");
 }
