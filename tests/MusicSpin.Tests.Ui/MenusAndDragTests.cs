@@ -429,8 +429,10 @@ public sealed class MenusAndDragTests
         Assert.True(app.ViewModel.QueueDrawer.IsDragOver);
         Assert.Contains("over", Gui.Find<QueueDrawerView>(app.Window, "QueueDrawerView").Classes);
 
+        var drops = app.Window.Drag.Drops;
         Release(app.Window, over);
         Assert.False(ghost.IsVisible);
+        Assert.Equal(drops + 1, app.Window.Drag.Drops);
         var added = await SentAsync(app, "queue.add");
         Assert.Equal("next", added.GetProperty("position").GetString());
         Assert.Equal(expected.Ids, TrackIds(added));
@@ -477,11 +479,14 @@ public sealed class MenusAndDragTests
         var at = Middle(app.Window, search);
         MoveTo(app.Window, at);
         Assert.False(app.ViewModel.QueueDrawer.IsDragOver);
+        var drops = app.Window.Drag.Drops;
         Release(app.Window, at);
 
+        // The release decides the drop there and then, so no add can follow: none started, and none was sent.
+        Assert.Equal(drops, app.Window.Drag.Drops);
+        Assert.Equal(0, app.Scripted!.Count("queue.add"));
         Assert.True(string.IsNullOrEmpty(search.Text));
         Assert.False(Ghost(app).IsVisible);
-        // Closed at once: nothing was dropped (after a drop it stays a while, and the tracks are added).
         Assert.False(app.ViewModel.QueueDrawer.IsOpen);
     }
 
@@ -527,6 +532,7 @@ public sealed class MenusAndDragTests
         var at = StartDrag(app.Window, card);
         Gui.FinishAnimations(Slid);
         Release(app.Window, at + new Point(100, 100));
+        Assert.Equal(0, app.Window.Drag.Drops);
         Assert.False(app.ViewModel.QueueDrawer.IsOpen);
     }
 

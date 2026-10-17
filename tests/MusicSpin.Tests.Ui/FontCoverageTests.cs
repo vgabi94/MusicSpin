@@ -45,20 +45,22 @@ public sealed class FontCoverageTests
         Assert.True(InterHas(new Rune('…')));
         Assert.Contains(AppCharacters(), c => c.Rune == new Rune('·'));
         Assert.All(Allowed.Keys, r => Assert.False(InterHas(r), $"{r} is in Inter now; drop it from Allowed."));
-        Assert.Equal(["＋", "♪", "✕", "→"], [.. Literals(CodeSample).SelectMany(NonAscii).Select(r => r.ToString())]);
+        Assert.Equal(["＋", "♪", "✕", "’", "→", "¶"], [.. Literals(CodeSample).SelectMany(NonAscii).Select(r => r.ToString())]);
         Assert.Equal(["＋"], [.. ViewTexts(XDocument.Parse(ViewSample)).SelectMany(NonAscii).Select(r => r.ToString())]);
     }
 
     /// <summary>
-    /// Strings, a char, a verbatim string with a doubled quote, and a URL whose "//" is not a comment; the comments' ✓
-    /// and ✗ are left out.
+    /// Strings, a char, a verbatim string over two lines with a doubled quote and an apostrophe, a URL whose "//" is not
+    /// a comment, and a raw string with four quotes around three; the comments' ✓ and ✗ are left out.
     /// </summary>
-    private const string CodeSample = """
+    private const string CodeSample = """""
         var a = "or use ＋ here"; // "✓"
         var b = '♪'; /* "✗" */
-        var c = @"say ""✕"" ";
+        var c = @"say ""✕"",
+            it's ’ two lines";
         var d = "https://example.com → there";
-        """;
+        var e = """"a raw """ string ¶"""";
+        """"";
 
     private const string ViewSample = """
         <StackPanel xmlns="https://github.com/avaloniaui">
@@ -118,17 +120,25 @@ public sealed class FontCoverageTests
             }
             else if (string.CompareOrdinal(code, i, "\"\"\"", 0, 3) == 0 && (i == 0 || code[i - 1] != '@'))
             {
-                var end = code.IndexOf("\"\"\"", i + 3, StringComparison.Ordinal);
+                // A raw string ends at a run of as many quotes as it opened with (three or more).
+                var fence = 3;
+                while (i + fence < code.Length && code[i + fence] == '"')
+                {
+                    fence++;
+                }
+
+                var end = code.IndexOf(new string('"', fence), i + fence, StringComparison.Ordinal);
                 end = end < 0 ? code.Length : end;
-                yield return code[(i + 3)..end];
-                i = Math.Min(code.Length, end + 3);
+                yield return code[(i + fence)..end];
+                i = Math.Min(code.Length, end + fence);
             }
             else if (code[i] is '"' or '\'')
             {
                 var quote = code[i];
                 var verbatim = quote == '"' && i > 0 && (code[i - 1] == '@' || (code[i - 1] == '$' && i > 1 && code[i - 2] == '@'));
                 var start = ++i;
-                while (i < code.Length && code[i] != '\n')
+                // Only a verbatim string runs on past the end of its line.
+                while (i < code.Length && (verbatim || code[i] != '\n'))
                 {
                     if (!verbatim && code[i] == '\\')
                     {

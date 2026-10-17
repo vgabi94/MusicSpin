@@ -59,6 +59,8 @@ public partial class MainWindow : Window, IScenePlaces
         _drag = new LibraryDrag(this);
     }
 
+    internal LibraryDrag Drag => _drag;
+
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (_viewModel is null || e.Source is not Visual source || LibraryDrag.ItemAt(source) is not { } item)
