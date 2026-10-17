@@ -37,6 +37,9 @@ internal sealed class LibraryDrag
 
     public bool IsDragging => _dragged is not null;
 
+    /// <summary>Drags let go over the drawer (tests check that a release anywhere else dropped nothing).</summary>
+    internal int Drops { get; private set; }
+
     private MainWindowViewModel? ViewModel => _window.DataContext as MainWindowViewModel;
 
     private QueueDrawerViewModel? Drawer => ViewModel?.QueueDrawer;
@@ -163,6 +166,7 @@ internal sealed class LibraryDrag
             return;
         }
 
+        Drops++;
         _ = item is QueueRowViewModel row
             ? drawer.MoveAsync(row, at)
             : viewModel.Notices.GuardAsync(async () => await drawer.InsertAsync(await viewModel.Items.TracksAsync(item).ConfigureAwait(true), at).ConfigureAwait(true));

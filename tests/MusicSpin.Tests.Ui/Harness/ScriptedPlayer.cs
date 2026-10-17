@@ -257,7 +257,9 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         var offset = request.TryGetProperty("offset", out var o) ? o.GetInt32() : 0;
         var limit = request.TryGetProperty("limit", out var l) ? l.GetInt32() : 100;
         var queue = Queue;
-        return new QueueListing(queue.Count, offset, limit, Status.QueueIndex, [.. queue.Skip(offset).Take(limit)]);
+        // As the real player's: the queue's own current entry, which can be ahead of the last status sent.
+        var current = queue.FirstOrDefault(e => e.Current) is { } now ? now.Index : Status.QueueIndex;
+        return new QueueListing(queue.Count, offset, limit, current, [.. queue.Skip(offset).Take(limit)]);
     }
 
     private void Follow(string cmd, JsonElement request)
