@@ -68,10 +68,34 @@ internal sealed class StubLibrary : ILibraryService
 
     public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
-    public Task<IReadOnlyList<AlbumSummary>> AlbumsAsync(CancellationToken cancellationToken = default)
+    /// <summary>Set: album reads wait for it (a slow library); a faulted one fails them with its exception.</summary>
+    public TaskCompletionSource? AlbumsGate { get; set; }
+
+    /// <summary>Set: album reads fail as a busy library's do.</summary>
+    public string? AlbumsFailure { get; set; }
+
+    /// <summary>The most album and playlist reads under way at once (the library lets one reader in at a time).</summary>
+    public int MostReadsAtOnce { get; private set; }
+
+    private int _readsNow;
+
+    public async Task<IReadOnlyList<AlbumSummary>> AlbumsAsync(CancellationToken cancellationToken = default)
     {
         AlbumReads++;
-        return Task.FromResult<IReadOnlyList<AlbumSummary>>([.. Albums]);
+        MostReadsAtOnce = Math.Max(MostReadsAtOnce, ++_readsNow);
+        try
+        {
+            if (AlbumsGate is { } gate)
+            {
+                await gate.Task;
+            }
+
+            return AlbumsFailure is { } failure ? throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure) : [.. Albums];
+        }
+        finally
+        {
+            _readsNow--;
+        }
     }
 
     public Task<IReadOnlyList<TrackSummary>> TracksAsync(CancellationToken cancellationToken = default)
@@ -97,6 +121,7 @@ internal sealed class StubLibrary : ILibraryService
     {
         PlaylistReads++;
         MostPlaylistReadsAtOnce = Math.Max(MostPlaylistReadsAtOnce, ++_playlistReadsNow);
+        MostReadsAtOnce = Math.Max(MostReadsAtOnce, ++_readsNow);
         try
         {
             if (PlaylistsGate is { } gate)
@@ -109,6 +134,7 @@ internal sealed class StubLibrary : ILibraryService
         finally
         {
             _playlistReadsNow--;
+            _readsNow--;
         }
     }
 
@@ -119,8 +145,19 @@ internal sealed class StubLibrary : ILibraryService
         => Task.FromResult<IReadOnlyList<PlaylistEntryItem>>([.. (PlaylistEntries.GetValueOrDefault(playlistId) ?? [])
             .Select((t, i) => new PlaylistEntryItem(i + 1, t, !MissingPaths.Contains(t.Path)))]);
 
+    /// <summary>Set: album lookups (a track's album) fail with it, a busy library's refusal say.</summary>
+    public Exception? AlbumIdFailure { get; set; }
+
+    public int AlbumIdReads { get; private set; }
+
     public Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default)
-        => Task.FromResult(Tracks.FirstOrDefault(t => t.Id == trackId)?.AlbumId);
+    {
+        AlbumIdReads++;
+        return AlbumIdFailure is { } failure ? Task.FromException<string?>(failure) : Task.FromResult(Tracks.FirstOrDefault(t => t.Id == trackId)?.AlbumId);
+    }
+
+    /// <summary>The refusal of a library another process holds.</summary>
+    public static MusicSpinException Busy() => new(MusicSpinErrorCode.LibraryLocked, LibraryService.BusyMessage);
 
     /// <summary>Adds the playlist with the tracks at <paramref name="paths"/>; a name taken (any case) fails as the library does.</summary>
     public Task<PlaylistSummaryItem> CreatePlaylistAsync(string name, IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
@@ -215,10 +252,13 @@ internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<strin
 {
     public ConcurrentDictionary<string, int> Requests { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>An album's covers wait for its gate (a cover service waiting out a busy library).</summary>
+    public ConcurrentDictionary<string, TaskCompletionSource<Bitmap?>> Gates { get; } = new(StringComparer.Ordinal);
+
     public Task<Bitmap?> CoverAsync(string albumId, CoverSize size)
     {
         Requests.AddOrUpdate(albumId, 1, (_, n) => n + 1);
-        return Task.FromResult(cover?.Invoke(albumId));
+        return Gates.TryGetValue(albumId, out var gate) ? gate.Task : Task.FromResult(cover?.Invoke(albumId));
     }
 
     public Task<Rgb?> AccentAsync(string albumId) => Task.FromResult(accent?.Invoke(albumId));
