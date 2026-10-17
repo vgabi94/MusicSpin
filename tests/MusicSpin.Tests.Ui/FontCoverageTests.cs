@@ -45,21 +45,24 @@ public sealed class FontCoverageTests
         Assert.True(InterHas(new Rune('…')));
         Assert.Contains(AppCharacters(), c => c.Rune == new Rune('·'));
         Assert.All(Allowed.Keys, r => Assert.False(InterHas(r), $"{r} is in Inter now; drop it from Allowed."));
-        Assert.Equal(["＋", "♪", "✕", "’", "→", "¶"], [.. Literals(CodeSample).SelectMany(NonAscii).Select(r => r.ToString())]);
+        Assert.Equal(["＋", "♪", "✕", "’", "…", "→", "¶"], [.. Literals(CodeSample).SelectMany(NonAscii).Select(r => r.ToString())]);
         Assert.Equal(["＋"], [.. ViewTexts(XDocument.Parse(ViewSample)).SelectMany(NonAscii).Select(r => r.ToString())]);
     }
 
     /// <summary>
-    /// Strings, a char, a verbatim string over two lines with a doubled quote and an apostrophe, a URL whose "//" is not
+    /// Strings, a char, a verbatim string over two lines with a doubled quote (its second line has the ’ before an
+    /// apostrophe, so a scanner that ended it at the line break would read a char literal from the apostrophe on and miss
+    /// the ’), an interpolated verbatim string that opens with a doubled quote (not a raw string), a URL whose "//" is not
     /// a comment, and a raw string with four quotes around three; the comments' ✓ and ✗ are left out.
     /// </summary>
     private const string CodeSample = """""
         var a = "or use ＋ here"; // "✓"
         var b = '♪'; /* "✗" */
         var c = @"say ""✕"",
-            it's ’ two lines";
-        var d = "https://example.com → there";
-        var e = """"a raw """ string ¶"""";
+            ’ it's two lines";
+        var d = @$"""…"" in quotes {a}";
+        var e = "https://example.com → there";
+        var f = """"a raw """ string ¶"""";
         """"";
 
     private const string ViewSample = """
@@ -101,6 +104,10 @@ public sealed class FontCoverageTests
 
     private static IEnumerable<Rune> NonAscii(string text) => text.EnumerateRunes().Where(r => r.Value > 0x7F);
 
+    /// <summary>The quote at <paramref name="i"/> opens a verbatim string (@" or @$").</summary>
+    private static bool IsVerbatimAt(string code, int i)
+        => (i > 0 && code[i - 1] == '@') || (i > 1 && code[i - 1] == '$' && code[i - 2] == '@');
+
     /// <summary>
     /// The string and char literals of C# <paramref name="code"/>, comments left out: "…" (with escapes), @"…" (with
     /// doubled quotes), """…""" and '…'. Interpolations stay inside their string, which is close enough here.
@@ -118,7 +125,7 @@ public sealed class FontCoverageTests
             {
                 i = code.IndexOf("*/", i + 2, StringComparison.Ordinal) is var end and >= 0 ? end + 2 : code.Length;
             }
-            else if (string.CompareOrdinal(code, i, "\"\"\"", 0, 3) == 0 && (i == 0 || code[i - 1] != '@'))
+            else if (string.CompareOrdinal(code, i, "\"\"\"", 0, 3) == 0 && !IsVerbatimAt(code, i))
             {
                 // A raw string ends at a run of as many quotes as it opened with (three or more).
                 var fence = 3;
@@ -135,7 +142,7 @@ public sealed class FontCoverageTests
             else if (code[i] is '"' or '\'')
             {
                 var quote = code[i];
-                var verbatim = quote == '"' && i > 0 && (code[i - 1] == '@' || (code[i - 1] == '$' && i > 1 && code[i - 2] == '@'));
+                var verbatim = quote == '"' && IsVerbatimAt(code, i);
                 var start = ++i;
                 // Only a verbatim string runs on past the end of its line.
                 while (i < code.Length && (verbatim || code[i] != '\n'))
