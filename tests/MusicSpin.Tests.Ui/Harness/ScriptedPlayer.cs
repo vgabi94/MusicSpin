@@ -175,9 +175,32 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         return (await ConnectAsync(cancellationToken), started);
     }
 
-    public Task<PlayerClient> ConnectAsync(CancellationToken cancellationToken)
-        => IsRunning ? PlayerClient.ConnectAsync(Endpoint, cancellationToken: cancellationToken)
-            : Task.FromException<PlayerClient>(new MusicSpinException(MusicSpinErrorCode.PlayerNotRunning, "The scripted player is not running."));
+    /// <summary>Set: connecting waits for it (or for the caller's cancellation), as a slow connect would.</summary>
+    public TaskCompletionSource? ConnectGate { get; set; }
+
+    /// <summary>Connects waiting at <see cref="ConnectGate"/> now.</summary>
+    public int ConnectsWaiting => Volatile.Read(ref _connectsWaiting);
+
+    private int _connectsWaiting;
+
+    public async Task<PlayerClient> ConnectAsync(CancellationToken cancellationToken)
+    {
+        if (ConnectGate is { } gate)
+        {
+            Interlocked.Increment(ref _connectsWaiting);
+            try
+            {
+                await gate.Task.WaitAsync(cancellationToken);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _connectsWaiting);
+            }
+        }
+
+        return IsRunning ? await PlayerClient.ConnectAsync(Endpoint, cancellationToken: cancellationToken)
+            : throw new MusicSpinException(MusicSpinErrorCode.PlayerNotRunning, "The scripted player is not running.");
+    }
 
     public async ValueTask DisposeAsync() => await StopAsync();
 

@@ -78,6 +78,56 @@ public sealed class PlayerClientTests : PlayerHostTestBase
     }
 
     [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_request_after_the_client_is_disposed_fails_as_unavailable_not_with_a_disposed_lock()
+    {
+        var (player, client) = await ConnectScriptedAsync();
+        await using var _ = player;
+        await client.DisposeAsync();
+
+        var ex = await Assert.ThrowsAsync<MusicSpinException>(() => client.SendAsync("status", null, Ct));
+        Assert.Equal(MusicSpinErrorCode.PlayerUnavailable, ex.Code);
+        await client.DisposeAsync(); // twice is fine
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Disposing_the_client_during_a_request_fails_the_request_cleanly()
+    {
+        // The app disposes a connection when the player goes away, possibly while another task's request (a quit at
+        // shutdown, a poll) is still using it. That request must end in the client's own error, not in the request lock
+        // being disposed under it.
+        var (player, client) = await ConnectScriptedAsync();
+        await using var _ = player;
+        var send = client.SendAsync("status", null, Ct);
+        Assert.Equal("status", (await player.ReadRequestAsync()).Cmd); // in flight: sent, waiting for its answer
+
+        await client.DisposeAsync();
+
+        var ex = await Assert.ThrowsAsync<MusicSpinException>(() => send.WaitAsync(TimeSpan.FromSeconds(30), Ct));
+        Assert.Equal(MusicSpinErrorCode.PlayerUnavailable, ex.Code);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_subscription_ends_when_its_client_is_disposed()
+    {
+        var (player, client) = await ConnectScriptedAsync();
+        await using var _ = player;
+        var acknowledged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var events = client.SubscribeAsync(spectrum: false, _ => acknowledged.SetResult(), Ct).GetAsyncEnumerator(Ct);
+        var first = events.MoveNextAsync();
+        var id = (await player.ReadRequestAsync()).Id;
+        await player.WriteAsync($$$"""{"id":{{{id}}},"ok":true,"data":{}}""");
+        await acknowledged.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct); // subscribed: now reading events
+
+        await client.DisposeAsync();
+
+        Assert.False(await first.AsTask().WaitAsync(TimeSpan.FromSeconds(30), Ct)); // ended, no exception
+        await events.DisposeAsync();
+    }
+
+    [Fact]
     public async Task Events_stale_and_foreign_ids_before_the_answer_are_skipped()
     {
         var (player, client) = await ConnectScriptedAsync();
@@ -309,15 +359,5 @@ public sealed class PlayerClientTests : PlayerHostTestBase
         Assert.False(quit.IsCompleted); // still waiting for the player to finish cleaning up
         await player.CloseConnectionAsync();
         await quit.WaitAsync(TimeSpan.FromSeconds(30), Ct);
-    }
-
-    [Fact]
-    [Trait("Category", "Unhappy")]
-    public async Task Requests_after_dispose_fail_cleanly()
-    {
-        var (player, client) = await ConnectScriptedAsync();
-        await using var _ = player;
-        await client.DisposeAsync();
-        await Assert.ThrowsAnyAsync<ObjectDisposedException>(() => client.SendAsync("status", null, Ct));
     }
 }

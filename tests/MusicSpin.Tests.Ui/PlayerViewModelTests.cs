@@ -376,6 +376,22 @@ public sealed class PlayerViewModelTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Disposing_while_connecting_ends_the_connect_quietly()
+    {
+        // The window closing while the app is still connecting: the connect ends without an error escaping, rather than
+        // its lock (or its cancellation source) being disposed under it.
+        _player.Start();
+        _player.ConnectGate = new TaskCompletionSource();
+        var start = _vm.StartAsync();
+        await _ui.UntilAsync(() => _player.ConnectsWaiting == 1, "the connect under way");
+
+        await _vm.DisposeAsync();
+
+        await start.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(0, _player.Subscribers);
+    }
+
+    [Fact]
     public async Task Shutting_down_quits_a_player_the_app_started()
     {
         await StartAsync();
