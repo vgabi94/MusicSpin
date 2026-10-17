@@ -180,7 +180,7 @@ Details:
 |---|---|
 | `next` | The next pick; never runs out |
 | `prev` | Back through the **last 100** played tracks (older ones are dropped from the queue); exit 8 before the oldest |
-| `pause` / `resume` / `toggle` / `stop` / `seek` / `volume` | As usual. `stop` keeps radio mode; `resume` continues the station |
+| `pause` / `resume` / `toggle` / `stop` / `seek` / `volume` / `mute` | As usual. `stop` keeps radio mode; `resume` continues the station |
 | `queue` | Shows the history, the current track and the lookahead |
 | `queue add` | The added tracks are [up next](#up-next): they play **next** (after earlier additions; with `--next`, before them), then the station continues. `queue clear --up-next` removes them and keeps radio going |
 | `queue remove` / `queue move` | As usual; history and lookahead are ordinary entries |

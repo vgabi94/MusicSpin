@@ -221,7 +221,7 @@ internal static class PlayerSupport
             ? $"{t.Codec.ToUpperInvariant()} {(t.BitsPerSample is { } b ? $"{b}-bit / " : string.Empty)}{t.SampleRate / 1000.0:0.#} kHz · {t.Channels} ch"
             : "?";
         yield return string.Create(CultureInfo.InvariantCulture,
-            $"  {format}    {Human.Time(TimeSpan.FromSeconds(s.PositionSeconds))} / {Human.Time(TimeSpan.FromSeconds(s.DurationSeconds))}    volume {s.Volume * 100:0}%");
+            $"  {format}    {Human.Time(TimeSpan.FromSeconds(s.PositionSeconds))} / {Human.Time(TimeSpan.FromSeconds(s.DurationSeconds))}    volume {s.Volume * 100:0}%{(s.Muted ? " (muted)" : string.Empty)}");
         yield return Modes(s);
 
         if (s.Output is { } o)
