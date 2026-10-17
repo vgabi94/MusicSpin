@@ -18,6 +18,7 @@ public sealed class PlayerClient : IAsyncDisposable
     private readonly SemaphoreSlim _requestLock = new(1, 1);
     private readonly TimeSpan _requestTimeout;
     private int _nextId;
+    private int _closed;
 
     private PlayerClient(PlayerEndpoint endpoint, Stream stream, TimeSpan requestTimeout)
     {
@@ -62,9 +63,11 @@ public sealed class PlayerClient : IAsyncDisposable
     public async Task<JsonElement> SendAsync(string cmd, object? args = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(cmd);
+        ThrowIfClosed(cmd);
         await _requestLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            ThrowIfClosed(cmd); // disposed while this request waited its turn
             var id = Interlocked.Increment(ref _nextId);
             var request = new Dictionary<string, object?> { ["id"] = id, ["cmd"] = cmd };
             if (args is not null)
@@ -98,6 +101,10 @@ public sealed class PlayerClient : IAsyncDisposable
 
                     throw ToException(root);
                 }
+            }
+            catch (Exception ex) when (IsClosed && ex is IOException or ObjectDisposedException or OperationCanceledException)
+            {
+                throw Closed(cmd, ex); // this client hung up (DisposeAsync): not a sign of the player's health
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -173,6 +180,10 @@ public sealed class PlayerClient : IAsyncDisposable
             {
                 yield break;
             }
+            catch (ObjectDisposedException) when (IsClosed)
+            {
+                yield break; // this client was disposed: the subscription ends as when the player hangs up
+            }
 
             if (line is null)
             {
@@ -186,11 +197,34 @@ public sealed class PlayerClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Hangs up. A request under way on another task (a quit at shutdown, a poll) ends with PlayerUnavailable, as does
+    /// any request after this. The request lock is deliberately not disposed: a request still unwinding releases it
+    /// after this returns, and a disposed SemaphoreSlim would turn that release into an ObjectDisposedException. (It
+    /// holds nothing to free: its wait handle is never created.)
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _closed, 1) == 1)
+        {
+            return;
+        }
+
         await _channel.DisposeAsync().ConfigureAwait(false);
-        _requestLock.Dispose();
     }
+
+    private bool IsClosed => Volatile.Read(ref _closed) == 1;
+
+    private void ThrowIfClosed(string cmd)
+    {
+        if (IsClosed)
+        {
+            throw Closed(cmd, null);
+        }
+    }
+
+    private static MusicSpinException Closed(string cmd, Exception? inner)
+        => new(MusicSpinErrorCode.PlayerUnavailable, $"The connection to the player was closed before '{cmd}' was answered.", inner);
 
     /// <summary>An event line, or null for anything else (responses, garbage: a bad line must not end the subscription).</summary>
     private static PlayerEvent? ParseEvent(string line)
