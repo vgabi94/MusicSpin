@@ -410,7 +410,9 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         _readFor = key;
         var entries = listing?.Items ?? [];
         _current = entries.FirstOrDefault(e => e.Current)?.Item;
-        var after = entries.Where(e => key.Index is { } i && e.Index > i).ToList();
+        // The listing's own current entry: the track may have moved on during the read, ahead of the status that says so.
+        var at = listing?.CurrentIndex ?? key.Index;
+        var after = entries.Where(e => at is { } i && e.Index > i).ToList();
 
         // An entry still where it was keeps its row (a flash under way, its cover); a read that changes nothing leaves
         // the lists as they are, so the view keeps its rows too.

@@ -188,6 +188,40 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task A_read_that_sees_the_track_move_on_before_the_status_does_keeps_the_rows()
+    {
+        await StartAsync(upNext: 3);
+        var counts = new List<int>();
+        var added = 0;
+        _drawer.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(QueueDrawerViewModel.Rows))
+            {
+                counts.Add(_drawer.Rows.Count);
+            }
+        };
+        _drawer.RowsAdded += (_, _) => added++;
+
+        // the track ends while the read is in flight: the queue has moved on, the status the app holds hasn't
+        var status = _player.Status;
+        _player.SetQueue(Titles("q1", "q2", "q3"), current: 1, upNext: 2);
+        var moved = _player.Status;
+        _player.Status = status;
+        await PushQueueChangedAsync();
+        Assert.Equal(["q2", "q3"], TitlesOf(_drawer.Rows));
+
+        // then the status arrives and the drawer reads again: the same rows, nothing fresh, nothing announced
+        _player.Status = moved;
+        var started = _drawer.ReadsStarted;
+        await _player.PushAsync("stateChanged");
+        await _ui.UntilAsync(() => _vm.QueueIndex == 1 && _drawer.ReadsStarted > started && ReadsSettled(), "the read after the status");
+        Assert.Equal(["q2", "q3"], TitlesOf(_drawer.Rows));
+        Assert.All(_drawer.Rows, r => Assert.False(r.IsFresh));
+        Assert.Equal([2], counts);
+        Assert.Equal(0, added);
+    }
+
+    [Fact]
     public async Task The_track_moving_on_reads_the_rows_again_without_an_event()
     {
         await StartAsync(upNext: 3);
