@@ -254,6 +254,68 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await _ui.UntilAsync(() => _covers.Requests.ContainsKey("album0000"), "the cover requested");
     }
 
+    [Fact]
+    public async Task Rows_read_while_the_library_is_held_get_their_covers_at_the_next_check_without_a_notice()
+    {
+        _library.Tracks.Add(StubLibrary.Track(1) with { Id = "q1" });
+        _library.AlbumIdFailure = StubLibrary.Busy(); // a scan from the CLI holds the library
+        await StartAsync(upNext: 2);
+        await _ui.UntilAsync(() => _library.AlbumIdReads == 2, "both rows' albums asked for");
+        _ui.Run();
+        Assert.All(_drawer.Rows, r => Assert.Null(r.Art));
+        Assert.Empty(_posted);
+
+        // still held at the next check: asked again, still the placeholders, still nothing said
+        _time.Advance(LibraryService.PollInterval);
+        await _ui.UntilAsync(() => _library.AlbumIdReads == 4, "the rows asked again");
+        _ui.Run();
+        Assert.Null(_drawer.Rows[0].Art);
+
+        // the scan lets go: the next check finds q1's album (q2 isn't in the library)
+        _library.AlbumIdFailure = null;
+        _time.Advance(LibraryService.PollInterval);
+        await _ui.UntilAsync(() => _drawer.Rows[0].Art is not null, "q1's cover after the scan");
+        Assert.Null(_drawer.Rows[1].Art);
+        Assert.Empty(_posted);
+
+        // caught up: nothing more is owed
+        var reads = _library.AlbumIdReads;
+        _time.Advance(LibraryService.PollInterval * 3);
+        _ui.Run();
+        Assert.Equal(reads, _library.AlbumIdReads);
+    }
+
+    [Fact]
+    public async Task A_row_that_left_the_queue_before_the_next_check_is_not_looked_up_again()
+    {
+        _library.AlbumIdFailure = StubLibrary.Busy();
+        await StartAsync(upNext: 2);
+        await _ui.UntilAsync(() => _library.AlbumIdReads == 2, "both rows' albums asked for");
+
+        await ChangeAsync(Titles(), upNext: 0); // both played, or cleared from the CLI
+        _library.AlbumIdFailure = null;
+        _time.Advance(LibraryService.PollInterval);
+        _ui.Run();
+        Assert.Equal(2, _library.AlbumIdReads);
+        Assert.Empty(_posted);
+    }
+
+    [Fact]
+    public async Task A_cover_lookup_that_fails_for_another_reason_keeps_the_placeholder_and_is_not_retried()
+    {
+        _library.Tracks.Add(StubLibrary.Track(1) with { Id = "q1" });
+        _library.AlbumIdFailure = new IOException("The disk went away.");
+        await StartAsync(upNext: 1);
+        await _ui.UntilAsync(() => _library.AlbumIdReads == 1, "the album asked for");
+
+        _library.AlbumIdFailure = null;
+        _time.Advance(LibraryService.PollInterval * 3);
+        _ui.Run();
+        Assert.Equal(1, _library.AlbumIdReads);
+        Assert.Null(_drawer.Rows[0].Art);
+        Assert.Empty(_posted);
+    }
+
     // ---- actions ----------------------------------------------------------------------------------------------
 
     [Fact]
