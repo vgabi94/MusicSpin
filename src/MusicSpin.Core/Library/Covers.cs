@@ -63,18 +63,22 @@ public sealed record CoverSource(string AlbumId, IReadOnlyList<CoverSource.Embed
 /// <summary>
 /// Album covers cached in <see cref="Hosting.DataDirectory.CoversDirectory"/>, produced on first request. A cached cover is
 /// replaced when its source file changes (a scan records the new modification time of a track; folder images are checked
-/// on each request). Safe to use from several threads and processes at once. Reads and writes files: keep it off the UI
-/// thread.
+/// on each request). When the data folder can't be written (read-only), covers go to a folder of this process's own in
+/// the system's temp folder instead, removed when the process exits. Safe to use from several threads and processes at
+/// once. Reads and writes files: keep it off the UI thread.
 /// </summary>
 /// <param name="resizer">Shrinks covers to the requested size. Without one, the original image is cached for every size.</param>
 public sealed class CoverStore(Hosting.DataDirectory dir, ICoverResizer? resizer = null)
 {
+    /// <summary>For tests: where covers go when the data folder can't be written (default: this process's temp folder).</summary>
+    internal Lazy<string?> Fallback { get; init; } = CoverCache.ProcessFallback;
+
     /// <summary>The path of the album's cover at <paramref name="size"/>; null when none of its sources has a usable image.</summary>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="size"/> is not a <see cref="CoverSize"/>.</exception>
     public string? GetPath(CoverSource source, CoverSize size)
     {
         ArgumentNullException.ThrowIfNull(source);
-        return CoverCache.Get(dir.CoversDirectory, source, size.Pixels(), resizer);
+        return CoverCache.Get(dir.CoversDirectory, source, size.Pixels(), resizer, Fallback);
     }
 }
 
@@ -84,15 +88,22 @@ public sealed class CoverStore(Hosting.DataDirectory dir, ICoverResizer? resizer
 /// and modification time. A changed source gets a new hash, so its old files are replaced on the next request.
 /// <c>&lt;source&gt;.none</c> marks a picture that couldn't be used, so the file isn't read again until it changes.
 /// Several processes may fill the cache at once: files are written under a temporary name and published atomically.
+/// When the cache can't be written, the same files go to a fallback folder (<see cref="ProcessFallback"/>).
 /// </summary>
 internal static partial class CoverCache
 {
+    /// <summary>
+    /// A folder only this process uses (created on first need with owner-only permissions on Unix, so nothing else can
+    /// put a file where a cover is looked for), deleted when it exits; null when even that can't be created.
+    /// </summary>
+    public static Lazy<string?> ProcessFallback { get; } = new(CreateProcessFallback, LazyThreadSafetyMode.ExecutionAndPublication);
+
     /// <summary>Folder images, best first; any of these extensions.</summary>
     private static readonly string[] FolderNames = ["cover", "folder", "front", "album"];
     private static readonly string[] FolderExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
     /// <summary>The path of the cached cover, creating it if needed. Null when the album has no usable cover.</summary>
-    public static string? Get(string coversRoot, CoverSource source, int pixels, ICoverResizer? resizer)
+    public static string? Get(string coversRoot, CoverSource source, int pixels, ICoverResizer? resizer, Lazy<string?> fallback)
     {
         if (!LibraryKeys.IsId(source.AlbumId)) // it becomes a folder name
         {
@@ -104,7 +115,7 @@ internal static partial class CoverCache
         foreach (var track in source.Embedded)
         {
             var stamp = Stamp("embedded", track.Path, track.SizeBytes, track.ModifiedUtcTicks);
-            if (Existing(dir, stamp, sizeName) is { } cached)
+            if ((Existing(dir, stamp, sizeName) ?? ExistingOutside(fallback, source.AlbumId, stamp, sizeName)) is { } cached)
             {
                 return cached;
             }
@@ -114,14 +125,16 @@ internal static partial class CoverCache
                 continue;
             }
 
-            if (Store(dir, stamp, sizeName, ReadEmbedded(track.Path), pixels, resizer, out var unusable) is { } stored)
-            {
-                return stored;
-            }
-
-            if (unusable)
+            if (Encode(ReadEmbedded(track.Path), pixels, resizer) is not { } image)
             {
                 MarkUnusable(dir, stamp);
+                continue;
+            }
+
+            // The cache can't be written (a read-only data folder): the copy outside it shows instead.
+            if ((Write(dir, stamp, sizeName, image) ?? WriteOutside(fallback, source.AlbumId, stamp, sizeName, image)) is { } stored)
+            {
+                return stored;
             }
         }
 
@@ -142,7 +155,7 @@ internal static partial class CoverCache
             }
 
             var stamp = Stamp("folder", image, info.Length, info.LastWriteTimeUtc.Ticks);
-            if (Existing(dir, stamp, sizeName) is { } cached)
+            if ((Existing(dir, stamp, sizeName) ?? ExistingOutside(fallback, source.AlbumId, stamp, sizeName)) is { } cached)
             {
                 return cached;
             }
@@ -162,19 +175,14 @@ internal static partial class CoverCache
                 continue;
             }
 
-            if (Store(dir, stamp, sizeName, bytes, pixels, resizer, out var unusable) is { } stored)
-            {
-                return stored;
-            }
-
-            if (unusable)
+            if (Encode(bytes, pixels, resizer) is not { } encoded)
             {
                 MarkUnusable(dir, stamp);
                 continue;
             }
 
-            // The cache can't be written (read-only data folder): the original file still shows, at full size.
-            return image;
+            // The cache can't be written (a read-only data folder): the copy outside it, else the original at full size.
+            return Write(dir, stamp, sizeName, encoded) ?? WriteOutside(fallback, source.AlbumId, stamp, sizeName, encoded) ?? image;
         }
 
         return null;
@@ -298,34 +306,49 @@ internal static partial class CoverCache
         }
     }
 
-    /// <summary>
-    /// Writes the cover for one source and size. Null when the image is unusable (<paramref name="unusable"/>: no picture,
-    /// an unknown format, or the resizer can't decode it) or the cache can't be written.
-    /// </summary>
-    private static string? Store(string dir, string stamp, string sizeName, byte[]? source, int pixels, ICoverResizer? resizer, out bool unusable)
+    /// <summary>The image as cached at <paramref name="pixels"/>; null when it is unusable (no picture, an unknown format, or the resizer can't decode it).</summary>
+    private static CoverImage? Encode(byte[]? source, int pixels, ICoverResizer? resizer)
     {
-        unusable = true;
         if (source is null || ImageExtension(source) is not { } extension)
         {
             return null;
         }
 
-        CoverImage? image;
         try
         {
-            image = resizer is null ? new CoverImage(source, extension) : resizer.Resize(source, pixels);
+            return resizer is null ? new CoverImage(source, extension) : resizer.Resize(source, pixels);
         }
         catch (Exception)
         {
-            image = null; // a decoder that throws on a damaged image counts as "can't decode"
+            return null; // a decoder that throws on a damaged image counts as "can't decode"
         }
+    }
 
-        if (image is null)
+    /// <summary>The cover in the fallback folder, if that folder has been made (it isn't made just to look).</summary>
+    private static string? ExistingOutside(Lazy<string?> fallback, string albumId, string stamp, string sizeName)
+        => fallback.IsValueCreated && fallback.Value is { } root ? Existing(Path.Combine(root, albumId), stamp, sizeName) : null;
+
+    /// <summary>Writes the cover to the fallback folder; null when there is none or it can't be written either.</summary>
+    private static string? WriteOutside(Lazy<string?> fallback, string albumId, string stamp, string sizeName, CoverImage image)
+        => fallback.Value is { } root ? Write(Path.Combine(root, albumId), stamp, sizeName, image) : null;
+
+    private static string? CreateProcessFallback()
+    {
+        try
+        {
+            var root = Directory.CreateTempSubdirectory("musicspin-covers-").FullName;
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => TryDelete(() => Directory.Delete(root, recursive: true));
+            return root;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return null;
         }
+    }
 
-        unusable = false;
+    /// <summary>Writes the cover for one source and size into <paramref name="dir"/>; null when it can't be written.</summary>
+    private static string? Write(string dir, string stamp, string sizeName, CoverImage image)
+    {
         var destination = Path.Combine(dir, $"{stamp}-{sizeName}{image.Extension}");
         var temp = Path.Combine(dir, $"{stamp}-{sizeName}.{Guid.NewGuid():N}.tmp");
         try
