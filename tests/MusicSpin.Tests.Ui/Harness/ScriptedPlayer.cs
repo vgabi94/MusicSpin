@@ -60,6 +60,9 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
     /// <summary>Makes <paramref name="cmd"/> fail with the player's error for <paramref name="exitCode"/>.</summary>
     public void Fail(string cmd, int exitCode, string message) => _failures[cmd] = (exitCode, message);
 
+    /// <summary>Undoes <see cref="Fail"/>: <paramref name="cmd"/> is answered again.</summary>
+    public void Succeed(string cmd) => _failures.TryRemove(cmd, out _);
+
     /// <summary>
     /// Holds the answers to <paramref name="cmd"/> until the returned source is completed. Each answer is the status as
     /// it was when the request came in, as a real player's in-flight reply would be.
