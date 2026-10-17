@@ -35,7 +35,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             }
         };
         QueueDrawer = new QueueDrawerViewModel(Player, services.Library, services.Covers, Notices, services.Time, services.Ui);
-        QueueDrawer.PlaylistSaved += (_, _) => _ = Notices.GuardAsync(LoadPlaylistsAsync);
+        QueueDrawer.PlaylistSaved += (_, playlist) => _ = Notices.GuardAsync(async () =>
+        {
+            await LoadPlaylistsAsync().ConfigureAwait(true);
+            Sidebar.MarkFresh(playlist.Id);
+        });
         PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
@@ -246,8 +250,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         return page;
     }
 
+    /// <summary>The sidebar's playlists; an open page follows its playlist's new name, and a deleted one's page goes.</summary>
     private async Task LoadPlaylistsAsync()
-        => Sidebar.SetPlaylists(await _services.Library.PlaylistsAsync().ConfigureAwait(true));
+    {
+        var playlists = await _services.Library.PlaylistsAsync().ConfigureAwait(true);
+        var byId = playlists.ToDictionary(p => p.Id, StringComparer.Ordinal);
+        foreach (var (id, page) in _playlistPages.ToList())
+        {
+            if (byId.TryGetValue(id, out var playlist))
+            {
+                page.Playlist = playlist;
+            }
+            else
+            {
+                _playlistPages.Remove(id);
+            }
+        }
+
+        Sidebar.SetPlaylists(playlists);
+    }
 
     /// <summary>The library changed on disk (a scan, a playlist edit): re-read the playlists and the current page.</summary>
     private async Task ReloadAsync()

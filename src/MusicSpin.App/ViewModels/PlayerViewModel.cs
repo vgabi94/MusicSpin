@@ -685,5 +685,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         return result;
     }
 
-    private static QueueItem ToItem(TrackSummary t) => new(t.Path, t.Title, t.Artist, t.Album, null, t.TrackNumber, t.DurationSeconds, t.Id);
+    /// <summary>A plain file (a playlist entry outside the library) has no track id.</summary>
+    private static QueueItem ToItem(TrackSummary t)
+        => new(t.Path, t.Title, t.Artist, t.Album, null, t.TrackNumber, t.DurationSeconds, t.Id.Length == 0 ? null : t.Id);
 }

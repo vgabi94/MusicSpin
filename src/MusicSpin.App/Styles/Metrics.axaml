@@ -73,7 +73,7 @@
     <CornerRadius x:Key="ButtonRadius">7</CornerRadius>
     <Thickness x:Key="ButtonPadding">12,6</Thickness>
     <sys:Double x:Key="ButtonFontSize">13</sys:Double>
-    <!-- A playlist's Play all and ＋ Queue (mockup: .btn.ghost, margin-left 6px). -->
+    <!-- A playlist's ▶ Play and ＋ Queue (mockup: .btn.ghost, margin-left 6px). -->
     <sys:Double x:Key="PageActionsGap">6</sys:Double>
     <sys:Double x:Key="PageActionIconSize">11</sys:Double>
     <sys:Double x:Key="PageActionIconGap">5</sys:Double>
@@ -215,6 +215,8 @@
     <GridLength x:Key="RowDurationColumn">44</GridLength>
     <GridLength x:Key="RowAddColumn">28</GridLength>
     <sys:Double x:Key="RowSecondaryFontSize">12</sys:Double>
+    <!-- A playlist entry whose file is missing (the mockup has none; as dim as a muted control). -->
+    <sys:Double x:Key="UnavailableOpacity">0.45</sys:Double>
     <sys:Double x:Key="AddButtonSize">28</sys:Double>
     <CornerRadius x:Key="AddButtonRadius">14</CornerRadius>
     <sys:Double x:Key="AddIconSize">13</sys:Double>

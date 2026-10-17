@@ -15,6 +15,12 @@ public sealed record TrackSummary(string Id, string Path, string Title, string A
 public sealed record PlaylistSummaryItem(string Id, string Name, int EntryCount);
 
 /// <summary>
+/// A playlist entry as its page shows it (<paramref name="Position"/> 1-based): a library track, or a file outside the
+/// library (no track id or album), which <paramref name="IsAvailable"/> says is still there.
+/// </summary>
+public sealed record PlaylistEntryItem(int Position, TrackSummary Track, bool IsAvailable);
+
+/// <summary>
 /// Library reads for the app, and saving a playlist. Each call opens the library briefly (<see cref="MusicLibrary.OpenForRead"/>: it holds a
 /// cross-process lock while open) on a worker thread. <see cref="Changed"/> fires when <c>library.db</c> changes on disk
 /// (a scan, a playlist edit or a favorite, by this or another process), checked every <see cref="PollInterval"/>.
@@ -31,8 +37,8 @@ public interface ILibraryService
 
     Task<IReadOnlyList<PlaylistSummaryItem>> PlaylistsAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The playlist's entries that are library tracks, in order.</summary>
-    Task<IReadOnlyList<TrackSummary>> PlaylistTracksAsync(string playlistId, CancellationToken cancellationToken = default);
+    /// <summary>Every entry of the playlist, in order, missing files included (what <c>music-spin playlist show</c> lists).</summary>
+    Task<IReadOnlyList<PlaylistEntryItem>> PlaylistEntriesAsync(string playlistId, CancellationToken cancellationToken = default);
 
     /// <summary>The album of a library track, or null when the track isn't in the library.</summary>
     Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default);
@@ -87,11 +93,21 @@ public sealed class LibraryService : ILibraryService, IDisposable
         => Read(library => (IReadOnlyList<PlaylistSummaryItem>)library.Playlists().Select(p => new PlaylistSummaryItem(p.Id, p.Name, p.EntryCount)).ToList(),
             cancellationToken);
 
-    public Task<IReadOnlyList<TrackSummary>> PlaylistTracksAsync(string playlistId, CancellationToken cancellationToken = default) => Read(library =>
+    public Task<IReadOnlyList<PlaylistEntryItem>> PlaylistEntriesAsync(string playlistId, CancellationToken cancellationToken = default) => Read(library =>
     {
-        var ids = library.PlaylistQueue(playlistId).Playable.Where(e => e.TrackId is not null).Select(e => e.TrackId!).ToList();
-        var tracks = library.TracksById(ids).ToDictionary(t => t.Id, ToSummary, StringComparer.Ordinal);
-        return (IReadOnlyList<TrackSummary>)ids.Where(tracks.ContainsKey).Select(id => tracks[id]).ToList();
+        var details = library.Playlist(playlistId);
+        var entries = details.Entries.Items.ToList();
+        for (var offset = entries.Count; offset < details.Entries.Total; offset += Paging.MaxLimit)
+        {
+            entries.AddRange(library.Playlist(playlistId, new Paging(offset, Paging.MaxLimit)).Entries.Items);
+        }
+
+        var tracks = library.TracksById(entries.Where(e => e.TrackId is not null).Select(e => e.TrackId!))
+            .ToDictionary(t => t.Id, ToSummary, StringComparer.Ordinal);
+        return (IReadOnlyList<PlaylistEntryItem>)entries.Select(e => e.TrackId is { } id && tracks.TryGetValue(id, out var track)
+                ? new PlaylistEntryItem(e.Position, track, IsAvailable: true)
+                : new PlaylistEntryItem(e.Position, FileSummary(e), e.Status != PlaylistEntryStatus.Missing))
+            .ToList();
     }, cancellationToken);
 
     public Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default)
@@ -144,6 +160,11 @@ public sealed class LibraryService : ILibraryService, IDisposable
 
     private static TrackSummary ToSummary(TrackRecord t) => new(t.Id, t.Path, t.Title ?? Path.GetFileNameWithoutExtension(t.Path),
         t.Artist ?? t.EffectiveAlbumArtist, t.Album ?? string.Empty, t.AlbumId, t.TrackNumber, t.Genre, t.DurationSeconds, t.Format.ToUpperInvariant(), t.IsHiRes);
+
+    /// <summary>A playlist entry that isn't a library track: what the playlist stored about it, no track id or album.</summary>
+    private static TrackSummary FileSummary(PlaylistEntry e) => new(string.Empty, e.Path, e.Title ?? Path.GetFileNameWithoutExtension(e.Path),
+        e.Artist ?? string.Empty, e.Album ?? string.Empty, string.Empty, e.TrackNumber, null, e.DurationSeconds ?? 0,
+        Path.GetExtension(e.Path).TrimStart('.').ToUpperInvariant(), false);
 
     /// <summary>"24/96", "16/44.1" or "DSD64", from the album's best track.</summary>
     internal static string Resolution(AlbumRecord a)

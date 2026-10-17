@@ -80,8 +80,12 @@
             </Border>
         </DataTemplate>
 
+        <!-- Under a genre, and in playlists; a playlist entry whose file is missing is dimmed and says so, with no play or ＋. -->
         <DataTemplate DataType="vm:TrackRowWithAlbum">
-            <Border Classes="track" Classes.current="{Binding Item.IsPlaying}" controls:QueueSource.Item="{Binding Item}">
+            <Border Classes="track"
+                    Classes.current="{Binding Item.IsPlaying}"
+                    Classes.unavailable="{Binding !Item.IsAvailable}"
+                    controls:QueueSource.Item="{Binding Item}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="{StaticResource RowThumbColumn}" />
@@ -93,6 +97,7 @@
                     <Button Classes="thumb"
                             Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).PlayTrackCommand}"
                             CommandParameter="{Binding Item}"
+                            IsEnabled="{Binding Item.IsAvailable}"
                             AutomationProperties.Name="Play">
                         <Panel>
                             <controls:CoverView Classes="flat" Source="{Binding Item.Art.Cover}" Title="{Binding Item.Album}" Artist="{Binding Item.AlbumArtist}" />
@@ -105,12 +110,14 @@
                         <TextBlock Classes="title" Text="{Binding Item.Title}" />
                         <TextBlock Classes="secondary small" Text="{Binding Item.Artist}" />
                     </StackPanel>
-                    <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding Item.Album}" />
+                    <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding Item.Album}" IsVisible="{Binding Item.IsAvailable}" />
+                    <TextBlock Grid.Column="2" Classes="secondary missing" Text="File not found" IsVisible="{Binding !Item.IsAvailable}" />
                     <TextBlock Grid.Column="3" Classes="secondary duration" Text="{Binding Item.Duration}" />
                     <Button Grid.Column="4"
                             Classes="add"
                             Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenTrackMenuCommand}"
                             CommandParameter="{Binding Item}"
+                            IsVisible="{Binding Item.IsAvailable}"
                             ToolTip.Tip="Add to queue"
                             AutomationProperties.Name="Add to queue">
                         <controls:Icon Data="{StaticResource Plus}" />

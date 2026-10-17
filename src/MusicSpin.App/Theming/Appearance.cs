@@ -42,6 +42,9 @@ public sealed class Appearance(Application application) : IAppearance
     /// <summary>The accent at 8% (0x14): the queue's empty box while something is dragged over it (mockup: .queue.over .qempty).</summary>
     private const byte WashAlpha = 0x14;
 
+    /// <summary>The accent at 40% (0x66): a playlist just saved flashes from it in the sidebar (mockup: @keyframes navflash).</summary>
+    private const byte HighlightAlpha = 0x66;
+
     private Rgb? _base;
 
     public AppTheme Theme { get; private set; } = AppTheme.Dark;
@@ -73,6 +76,7 @@ public sealed class Appearance(Application application) : IAppearance
         application.Resources["AccentTintBrush"] = new SolidColorBrush(Color.FromArgb(TintAlpha, accent.R, accent.G, accent.B));
         application.Resources["AccentFlashBrush"] = new SolidColorBrush(Color.FromArgb(FlashAlpha, accent.R, accent.G, accent.B));
         application.Resources["AccentWashBrush"] = new SolidColorBrush(Color.FromArgb(WashAlpha, accent.R, accent.G, accent.B));
+        application.Resources["AccentHighlightBrush"] = new SolidColorBrush(Color.FromArgb(HighlightAlpha, accent.R, accent.G, accent.B));
     }
 
     private static Color ToColor(Rgb c) => Color.FromRgb(c.R, c.G, c.B);

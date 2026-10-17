@@ -42,9 +42,12 @@ public sealed class LibraryItemActions(
     PlayerViewModel player, ILibraryService library, TurntableSceneViewModel scene, NowPlayingViewModel nowPlaying, MenuViewModel menu,
     Notices notices, Func<PageViewModel> currentPage)
 {
-    /// <summary>Whether <paramref name="item"/> is a library album or track (it has a menu and drops into the queue).</summary>
+    /// <summary>
+    /// Whether <paramref name="item"/> is a library album or track (it has a menu and drops into the queue). A playlist
+    /// entry whose file is missing isn't.
+    /// </summary>
     public static bool IsLibraryItem(object? item)
-        => item is AlbumItemViewModel or CrateRecordViewModel or TrackAlbumHeaderViewModel or TrackItemViewModel or NowPlayingTrackViewModel;
+        => item is AlbumItemViewModel or CrateRecordViewModel or TrackAlbumHeaderViewModel or TrackItemViewModel { IsAvailable: true } or NowPlayingTrackViewModel;
 
     /// <summary>Whether <paramref name="item"/> can be dragged: a library item, or a queue row (to move it).</summary>
     public static bool CanDrag(object? item) => IsLibraryItem(item) || item is QueueRowViewModel;

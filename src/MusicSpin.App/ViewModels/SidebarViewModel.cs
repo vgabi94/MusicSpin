@@ -16,16 +16,23 @@ public enum PageKind
 /// <summary>A sidebar entry. <see cref="Icon"/> names a geometry in Icons/IconsResource.axaml ("Albums").</summary>
 public sealed partial class NavItemViewModel(string title, string icon, PageKind kind, PlaylistSummaryItem? playlist = null) : ObservableObject
 {
-    public string Title { get; } = title;
+    [ObservableProperty]
+    public partial string Title { get; set; } = title;
 
     public string Icon { get; } = icon;
 
     public PageKind Kind { get; } = kind;
 
-    public PlaylistSummaryItem? Playlist { get; } = playlist;
+    /// <summary>The playlist this entry opens (a rename or an edit elsewhere updates it).</summary>
+    [ObservableProperty]
+    public partial PlaylistSummaryItem? Playlist { get; set; } = playlist;
 
     [ObservableProperty]
     public partial bool IsActive { get; set; }
+
+    /// <summary>Just saved from the queue: it flashes in the accent (mockup: #plNav a.fresh).</summary>
+    [ObservableProperty]
+    public partial bool IsFresh { get; set; }
 }
 
 /// <summary>The sidebar: Library (Albums, Tracks, Radio), then the saved playlists. The active page is highlighted.</summary>
@@ -69,28 +76,57 @@ public sealed partial class SidebarViewModel : ObservableObject
         Navigated?.Invoke(this, item);
     }
 
-    /// <summary>Replaces the playlist entries, keeping the active one when it still exists (else Albums).</summary>
+    /// <summary>
+    /// Shows <paramref name="playlists"/>, in their order. A playlist already listed keeps its entry (renamed if it was), so
+    /// a flash under way goes on; when the active one is gone, Albums opens.
+    /// </summary>
     public void SetPlaylists(IReadOnlyList<PlaylistSummaryItem> playlists)
     {
         ArgumentNullException.ThrowIfNull(playlists);
-        var activeId = Active?.Playlist?.Id;
-        var found = false;
-        Playlists.Clear();
-        foreach (var playlist in playlists)
+        var known = Playlists.Where(p => p.Playlist is not null).ToDictionary(p => p.Playlist!.Id, StringComparer.Ordinal);
+        var items = playlists.Select(p =>
         {
-            var item = new NavItemViewModel(playlist.Name, "Playlist", PageKind.Playlist, playlist);
-            Playlists.Add(item);
-            if (playlist.Id == activeId)
+            if (!known.TryGetValue(p.Id, out var item))
             {
-                Active = item;
-                item.IsActive = true;
-                found = true;
+                return new NavItemViewModel(p.Name, "Playlist", PageKind.Playlist, p);
+            }
+
+            item.Playlist = p;
+            item.Title = p.Name;
+            return item;
+        }).ToList();
+
+        // Edits in place, not a reset: a reset would make every entry's control again (and replay a flash).
+        foreach (var gone in Playlists.Except(items).ToList())
+        {
+            Playlists.Remove(gone);
+        }
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var at = Playlists.IndexOf(items[i]);
+            if (at < 0)
+            {
+                Playlists.Insert(i, items[i]);
+            }
+            else if (at != i)
+            {
+                Playlists.Move(at, i);
             }
         }
 
-        if (activeId is not null && !found)
+        if (Active is { Kind: PageKind.Playlist } active && !items.Contains(active))
         {
             Navigate(Albums);
+        }
+    }
+
+    /// <summary>The playlist just saved from the queue flashes (mockup: renderNav(fresh)).</summary>
+    public void MarkFresh(string playlistId)
+    {
+        foreach (var item in Playlists)
+        {
+            item.IsFresh = item.Playlist?.Id == playlistId;
         }
     }
 }

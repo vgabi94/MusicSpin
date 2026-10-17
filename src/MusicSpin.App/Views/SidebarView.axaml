@@ -7,18 +7,22 @@
              x:Class="MusicSpin.App.Views.SidebarView"
              x:DataType="vm:SidebarViewModel">
     <UserControl.DataTemplates>
+        <!-- An entry; a playlist just saved flashes in the accent over it. -->
         <DataTemplate DataType="vm:NavItemViewModel">
-            <Button Classes="nav"
-                    Classes.active="{Binding IsActive}"
-                    Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).NavigateCommand}"
-                    CommandParameter="{Binding}"
-                    AutomationProperties.Name="{Binding Title}">
-                <StackPanel>
-                    <controls:Icon Data="{Binding Icon, Converter={x:Static theming:IconConverters.Geometry}}"
-                                   IsStroked="{Binding Icon, Converter={x:Static theming:IconConverters.IsStroked}}" />
-                    <TextBlock Text="{Binding Title}" />
-                </StackPanel>
-            </Button>
+            <Panel Classes="navItem">
+                <Button Classes="nav"
+                        Classes.active="{Binding IsActive}"
+                        Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).NavigateCommand}"
+                        CommandParameter="{Binding}"
+                        AutomationProperties.Name="{Binding Title}">
+                    <StackPanel>
+                        <controls:Icon Data="{Binding Icon, Converter={x:Static theming:IconConverters.Geometry}}"
+                                       IsStroked="{Binding Icon, Converter={x:Static theming:IconConverters.IsStroked}}" />
+                        <TextBlock Text="{Binding Title}" />
+                    </StackPanel>
+                </Button>
+                <Border Classes="navFlash" theming:Animate.Play="NavFlashAnimation" theming:Animate.When="{Binding IsFresh}" />
+            </Panel>
         </DataTemplate>
     </UserControl.DataTemplates>
 

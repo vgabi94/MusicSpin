@@ -39,6 +39,17 @@
     <Style Selector="Border.track.current TextBlock.title">
         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
     </Style>
+    <!-- A playlist entry whose file is missing: dimmed, no hover, its cover's ▶ never shows. -->
+    <Style Selector="Border.track.unavailable">
+        <Setter Property="Opacity" Value="{StaticResource UnavailableOpacity}" />
+        <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+    <Style Selector="Border.track.unavailable:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.track.unavailable Button.thumb > Panel > Border">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
 
     <!-- The thumbnail: ▶ over a dimmed cover while the row is hovered. -->
     <Style Selector="Button.thumb">

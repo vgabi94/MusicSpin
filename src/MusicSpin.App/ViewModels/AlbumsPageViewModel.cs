@@ -55,6 +55,11 @@ public sealed class AlbumArt(string albumId, CoverSize size, ICoverService cover
 
     private async Task LoadAsync()
     {
+        if (albumId.Length == 0)
+        {
+            return; // a plain file: no album, the placeholder stays
+        }
+
         try
         {
             Cover = await covers.CoverAsync(albumId, size).ConfigureAwait(true);

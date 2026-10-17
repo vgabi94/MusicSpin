@@ -83,8 +83,12 @@ internal sealed class StubLibrary : ILibraryService
     public Task<IReadOnlyList<PlaylistSummaryItem>> PlaylistsAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<PlaylistSummaryItem>>([.. Playlists]);
 
-    public Task<IReadOnlyList<TrackSummary>> PlaylistTracksAsync(string playlistId, CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<TrackSummary>>([.. PlaylistEntries.GetValueOrDefault(playlistId) ?? []]);
+    /// <summary>Playlist entries at these paths are missing files.</summary>
+    public HashSet<string> MissingPaths { get; } = new(StringComparer.Ordinal);
+
+    public Task<IReadOnlyList<PlaylistEntryItem>> PlaylistEntriesAsync(string playlistId, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<PlaylistEntryItem>>([.. (PlaylistEntries.GetValueOrDefault(playlistId) ?? [])
+            .Select((t, i) => new PlaylistEntryItem(i + 1, t, !MissingPaths.Contains(t.Path)))]);
 
     public Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default)
         => Task.FromResult(Tracks.FirstOrDefault(t => t.Id == trackId)?.AlbumId);

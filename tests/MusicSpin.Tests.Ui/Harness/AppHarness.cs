@@ -28,6 +28,9 @@ internal sealed record AppOptions
     /// <summary>Writes music into the folder; the harness then adds and scans it. Null: no library.</summary>
     public Action<string>? Music { get; init; }
 
+    /// <summary>Edits the scanned library before the app opens (playlists, favorites), given its track paths.</summary>
+    public Action<MusicLibrary, IReadOnlyList<string>>? Prepare { get; init; }
+
     public string? StartupWarning { get; init; }
 
     /// <summary>Replaces the library on disk (large or scripted libraries).</summary>
@@ -111,6 +114,11 @@ internal sealed class AppHarness : IAsyncDisposable
             music(Music);
             TrackPaths = Scan();
             Player.AddTracks(TrackPaths);
+            if (Options.Prepare is { } prepare)
+            {
+                using var library = OpenLibrary();
+                prepare(library, TrackPaths);
+            }
         }
 
         if (Options.PlayerRunning)
@@ -151,6 +159,31 @@ internal sealed class AppHarness : IAsyncDisposable
 
         library.Scan(cancellationToken: TestContext.Current.CancellationToken);
         return [.. library.Tracks(new TrackQuery { Paging = new Paging(0, Paging.MaxLimit) }).Items.Select(t => t.Path)];
+    }
+
+    /// <summary>Opens the library as another process would (the CLI): dispose it to let go of the lock.</summary>
+    public MusicLibrary OpenLibrary() => MusicLibrary.OpenWritable(Data, lockTimeout: TimeSpan.FromSeconds(5));
+
+    /// <summary>Edits the library as the CLI would, then lets the app's poll see the change.</summary>
+    public T Edit<T>(Func<MusicLibrary, T> edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        T result;
+        using (var library = OpenLibrary())
+        {
+            result = edit(library);
+        }
+
+        Advance(LibraryService.PollInterval);
+        return result;
+    }
+
+    /// <summary>Reads the library afresh, as <c>music-spin playlist show</c> would.</summary>
+    public T Read<T>(Func<MusicLibrary, T> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        using var library = MusicLibrary.OpenForRead(Data, TimeSpan.FromSeconds(5));
+        return read(library);
     }
 
     /// <summary>Moves the fake clock (the app's timers) and Avalonia's animations forward together.</summary>

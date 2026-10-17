@@ -45,4 +45,11 @@
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
+    <!-- A playlist just saved (mockup: #plNav a.fresh): an accent wash over the entry, fading out. -->
+    <Style Selector="Panel.navItem > Border.navFlash">
+        <Setter Property="CornerRadius" Value="{StaticResource NavItemRadius}" />
+        <Setter Property="Background" Value="{DynamicResource AccentHighlightBrush}" />
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
 </Styles>

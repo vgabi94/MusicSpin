@@ -18,6 +18,12 @@ public sealed partial class TrackItemViewModel(TrackSummary track, AlbumItemView
     /// <summary>The album's cover (the row's thumbnail).</summary>
     public AlbumArt Art { get; } = art;
 
+    /// <summary>False for a playlist entry whose file is missing: the row is dimmed, and it can't be played, queued or dragged.</summary>
+    public bool IsAvailable { get; init; } = true;
+
+    /// <summary>The entry's place in its playlist (1-based); null on the Tracks page.</summary>
+    public int? Position { get; init; }
+
     public string Title => Track.Title;
 
     public string Artist => Track.Artist;
@@ -120,12 +126,18 @@ public abstract partial class TrackListPageViewModel : PageViewModel
     /// <summary>The tracks the search lets through, in the order shown.</summary>
     protected virtual IEnumerable<TrackItemViewModel> Shown() => _all.Where(t => Matches(t.Title, t.Artist, t.Album));
 
+    /// <summary>Plays the list as shown from <paramref name="track"/>; entries whose files are missing are left out.</summary>
     [RelayCommand]
     private Task PlayTrack(TrackItemViewModel track)
     {
         ArgumentNullException.ThrowIfNull(track);
-        var shown = Tracks.Select(t => t.Track).ToList();
-        return Notices.GuardAsync(() => Player.PlayTracksAsync(shown, Math.Max(0, IndexOf(track))));
+        if (!track.IsAvailable)
+        {
+            return Task.CompletedTask;
+        }
+
+        var playable = Playable();
+        return Notices.GuardAsync(() => Player.PlayTracksAsync([.. playable.Select(t => t.Track)], Math.Max(0, IndexOf(playable, track))));
     }
 
     /// <summary>A row's ＋: Play next, Add to queue.</summary>
@@ -133,7 +145,10 @@ public abstract partial class TrackListPageViewModel : PageViewModel
     private void OpenTrackMenu(TrackItemViewModel track)
     {
         ArgumentNullException.ThrowIfNull(track);
-        ShowQueueMenu([track.Track]);
+        if (track.IsAvailable)
+        {
+            ShowQueueMenu([track.Track]);
+        }
     }
 
     /// <summary>The album header's Play: the whole album from its first track.</summary>
@@ -152,15 +167,18 @@ public abstract partial class TrackListPageViewModel : PageViewModel
         ShowQueueMenu(album.Tracks);
     }
 
-    private bool CanPlayAll() => Tracks.Count > 0;
+    private bool CanPlayAll() => Tracks.Any(t => t.IsAvailable);
 
-    /// <summary>Plays the whole list from the start.</summary>
+    /// <summary>A playlist's ▶ Play: the whole list as shown, from the start (mockup: #plPlay). It ends a radio station.</summary>
     [RelayCommand(CanExecute = nameof(CanPlayAll))]
-    private Task PlayAll() => Notices.GuardAsync(() => Player.PlayTracksAsync(Tracks.Select(t => t.Track).ToList()));
+    private Task PlayAll() => Notices.GuardAsync(() => Player.PlayTracksAsync([.. Playable().Select(t => t.Track)]));
 
     /// <summary>A playlist's ＋ Queue: the whole list as shown (mockup: #plQueue).</summary>
     [RelayCommand(CanExecute = nameof(CanPlayAll))]
-    private void QueueAll() => ShowQueueMenu([.. Tracks.Select(t => t.Track)]);
+    private void QueueAll() => ShowQueueMenu([.. Playable().Select(t => t.Track)]);
+
+    /// <summary>The tracks shown that can play (a missing file can't).</summary>
+    private List<TrackItemViewModel> Playable() => [.. Tracks.Where(t => t.IsAvailable)];
 
     /// <summary>The ＋ menu (mockup: queueMenu).</summary>
     protected void ShowQueueMenu(IReadOnlyList<TrackSummary> tracks) => Menu.Show(QueueMenu.Entries(tracks, Player, Notices));
@@ -184,11 +202,11 @@ public abstract partial class TrackListPageViewModel : PageViewModel
         }
     }
 
-    private int IndexOf(TrackItemViewModel track)
+    private static int IndexOf(List<TrackItemViewModel> tracks, TrackItemViewModel track)
     {
-        for (var i = 0; i < Tracks.Count; i++)
+        for (var i = 0; i < tracks.Count; i++)
         {
-            if (ReferenceEquals(Tracks[i], track))
+            if (ReferenceEquals(tracks[i], track))
             {
                 return i;
             }
@@ -313,22 +331,32 @@ public sealed partial class TracksPageViewModel(ILibraryService library, ICoverS
     }
 }
 
-/// <summary>A saved playlist's library tracks, in the playlist's order.</summary>
-public sealed class PlaylistPageViewModel(PlaylistSummaryItem playlist, ILibraryService library, ICoverService covers, PlayerViewModel player,
+/// <summary>
+/// A saved playlist's entries, in the playlist's order (mockup: renderTracks, playlist branch): the title is its name, the
+/// count its entries. An entry whose file is missing shows dimmed and is left out of ▶ Play and ＋ Queue.
+/// </summary>
+public sealed partial class PlaylistPageViewModel(PlaylistSummaryItem playlist, ILibraryService library, ICoverService covers, PlayerViewModel player,
     MenuViewModel menu, Notices notices) : TrackListPageViewModel(covers, player, menu, notices)
 {
-    public PlaylistSummaryItem Playlist { get; } = playlist;
+    /// <summary>The playlist (a rename elsewhere changes it, and the title with it).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    public partial PlaylistSummaryItem Playlist { get; set; } = playlist;
 
     public override string Title => Playlist.Name;
 
-    protected override string EmptyLibraryText => "This playlist is empty. Add tracks with 'music-spin playlist add'.";
+    protected override string EmptyLibraryText => "This playlist is empty. Drag albums or tracks onto it in the sidebar.";
 
     protected override async Task<IReadOnlyList<TrackItemViewModel>> ReadAsync()
     {
-        var tracks = await library.PlaylistTracksAsync(Playlist.Id).ConfigureAwait(true);
+        var entries = await library.PlaylistEntriesAsync(Playlist.Id).ConfigureAwait(true);
         var art = new Dictionary<string, AlbumArt>(StringComparer.Ordinal);
-        return [.. tracks.Select(t => new TrackItemViewModel(t, null,
-            art.TryGetValue(t.AlbumId, out var a) ? a : art[t.AlbumId] = new AlbumArt(t.AlbumId, CoverSize.Small, Covers)))];
+        return [.. entries.Select(e => new TrackItemViewModel(e.Track, null,
+            art.TryGetValue(e.Track.AlbumId, out var a) ? a : art[e.Track.AlbumId] = new AlbumArt(e.Track.AlbumId, CoverSize.Small, Covers))
+        {
+            IsAvailable = e.IsAvailable,
+            Position = e.Position,
+        })];
     }
 
     protected override IReadOnlyList<object> LayOut(IReadOnlyList<TrackItemViewModel> shown) => [.. shown.Select(t => new TrackRowWithAlbum(t))];

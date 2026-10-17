@@ -287,6 +287,12 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
             queue.InsertRange(at,(ProtocolJson.Deserialize<QueueItem[]>(items) ?? []).Select(item => new QueueEntry(0, false, item, position != "end")));
             Queue = Renumber(queue);
         }
+        else if (cmd == "queue.set" && request.TryGetProperty("items", out var set) && ProtocolJson.Deserialize<QueueItem[]>(set) is { Length: > 0 } entries)
+        {
+            // As the player does: a new queue from the start entry, and a station on air goes off.
+            var start = request.TryGetProperty("start", out var s) ? s.GetInt32() : 0;
+            SetQueue(entries, Math.Clamp(start, 0, entries.Length - 1));
+        }
         else if (cmd == "queue.move" && request.TryGetProperty("from", out var from) && request.TryGetProperty("to", out var to)
                  && from.GetInt32() is var f && to.GetInt32() is var t && f >= 0 && t >= 0 && f < Queue.Count && t < Queue.Count)
         {
