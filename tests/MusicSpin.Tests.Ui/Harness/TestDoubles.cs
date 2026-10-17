@@ -80,8 +80,37 @@ internal sealed class StubLibrary : ILibraryService
     public Task<IReadOnlyList<TrackSummary>> AlbumTracksAsync(string albumId, CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<TrackSummary>>([.. Tracks.Where(t => t.AlbumId == albumId)]);
 
-    public Task<IReadOnlyList<PlaylistSummaryItem>> PlaylistsAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<PlaylistSummaryItem>>([.. Playlists]);
+    /// <summary>Set: playlist reads wait for it (a slow library).</summary>
+    public TaskCompletionSource? PlaylistsGate { get; set; }
+
+    /// <summary>Set: playlist reads fail as a busy library's do.</summary>
+    public string? PlaylistsFailure { get; set; }
+
+    public int PlaylistReads { get; private set; }
+
+    /// <summary>The most playlist reads under way at once.</summary>
+    public int MostPlaylistReadsAtOnce { get; private set; }
+
+    private int _playlistReadsNow;
+
+    public async Task<IReadOnlyList<PlaylistSummaryItem>> PlaylistsAsync(CancellationToken cancellationToken = default)
+    {
+        PlaylistReads++;
+        MostPlaylistReadsAtOnce = Math.Max(MostPlaylistReadsAtOnce, ++_playlistReadsNow);
+        try
+        {
+            if (PlaylistsGate is { } gate)
+            {
+                await gate.Task;
+            }
+
+            return PlaylistsFailure is { } failure ? throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure) : [.. Playlists];
+        }
+        finally
+        {
+            _playlistReadsNow--;
+        }
+    }
 
     /// <summary>Playlist entries at these paths are missing files.</summary>
     public HashSet<string> MissingPaths { get; } = new(StringComparer.Ordinal);
@@ -151,8 +180,11 @@ internal sealed class StubLibrary : ILibraryService
     public Task<IReadOnlySet<string>> FavoriteIdsAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(Favorites, StringComparer.Ordinal));
 
+    public int FavoritesReads { get; private set; }
+
     public Task<FavoritesList> FavoritesAsync(CancellationToken cancellationToken = default)
     {
+        FavoritesReads++;
         var tracks = Favorites.Select(id => Tracks.FirstOrDefault(t => t.Id == id)).ToList();
         return Task.FromResult(new FavoritesList([.. tracks.OfType<TrackSummary>()], tracks.Count(t => t is null)));
     }

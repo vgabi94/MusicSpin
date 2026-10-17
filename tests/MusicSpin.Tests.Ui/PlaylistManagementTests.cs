@@ -130,6 +130,7 @@ public sealed class PlaylistManagementTests
         Mouse.Release(app.Window, at);
         await Gui.UntilAsync(() => Nav(app, "Other").IsFresh, "the playlist flashed");
         Assert.Equal(["Blue Train 2", "Kind of Blue 3"], Show(app, "Other"));
+        Assert.Equal(Mix, Show(app, "Mix")); // still nothing from the drop over Albums (a write from it would have landed before the later drop on Other)
     }
 
     // ---- the sidebar playlist's menu --------------------------------------------------------------------------
@@ -221,7 +222,7 @@ public sealed class PlaylistManagementTests
     public async Task Delete_asks_first_where_the_menu_was_and_Cancel_keeps_the_playlist()
     {
         await using var app = await OpenAsync();
-        await PlaylistTests.OpenPlaylistAsync(app, "Mix", 4);
+        var page = await PlaylistTests.OpenPlaylistAsync(app, "Mix", 4);
         Mouse.RightClick(app.Window, NavPanel(app, "Mix"));
         var at = MenuAt(app);
 
@@ -243,6 +244,12 @@ public sealed class PlaylistManagementTests
         await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists.Count == 1, "the playlist gone");
         Assert.Equal(["Other"], Names(app));
         Assert.Same(app.ViewModel.AlbumsPage, app.ViewModel.CurrentPage); // its page was open
+
+        // its page is gone: it no longer follows the favorites
+        var track = page.Tracks.First(t => t.IsAvailable);
+        await app.ViewModel.Favorites.ToggleAsync(track.Track.Id);
+        Assert.True(app.ViewModel.Favorites.Contains(track.Track.Id));
+        Assert.False(track.IsFavorite);
 
         // a plain menu has no caption
         Mouse.RightClick(app.Window, NavPanel(app, "Other"));

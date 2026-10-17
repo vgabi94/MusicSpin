@@ -25,10 +25,11 @@ public sealed record PlaylistEntryItem(int Position, TrackSummary Track, bool Is
 public sealed record FavoritesList(IReadOnlyList<TrackSummary> Tracks, int Missing);
 
 /// <summary>
-/// Library reads for the app, and its playlist edits. Each call opens the library briefly on a worker thread (it holds a
-/// cross-process lock while open). <see cref="Changed"/> fires when <c>library.db</c> changes on disk (a scan, a playlist
-/// edit or a favorite, by this or another process), checked every <see cref="PollInterval"/> and after each edit. An edit
-/// that finds the library held by another process for too long fails with <see cref="LibraryService.BusyMessage"/>.
+/// Library reads for the app, and its playlist and favorite edits. Each call opens the library briefly on a worker thread
+/// (it holds a cross-process lock while open). <see cref="Changed"/> fires when <c>library.db</c> changes on disk (a scan,
+/// a playlist edit or a favorite by another process), checked every <see cref="PollInterval"/>; the app's own edits don't
+/// raise it. A call that finds the library held by another process for too long fails with
+/// <see cref="LibraryService.BusyMessage"/>.
 /// </summary>
 public interface ILibraryService
 {
@@ -224,17 +225,30 @@ public sealed class LibraryService : ILibraryService, IDisposable
     }, cancellationToken);
 
     /// <summary>
-    /// An edit: the library opened for writing (waiting up to the lock timeout for another process), then a check for
-    /// changes, so the app shows the edit at once.
+    /// An edit: the library opened for writing (waiting up to the lock timeout for another process). The edit's own change
+    /// raises no <see cref="Changed"/>: whoever made it reads what it changed, so the library isn't read twice. A change
+    /// from elsewhere found on the way (before the poll saw it) still raises it.
     /// </summary>
     private async Task<T> Write<T>(Func<MusicLibrary, T> write, CancellationToken cancellationToken)
     {
-        var result = await Task.Run(() =>
+        var (result, before, after) = await Task.Run(() =>
         {
-            using var library = Busy(() => MusicLibrary.OpenWritable(_directory, lockTimeout: _lockTimeout));
-            return write(library);
+            T result;
+            string before;
+            using (var library = Busy(() => MusicLibrary.OpenWritable(_directory, lockTimeout: _lockTimeout)))
+            {
+                before = Stamp();
+                result = write(library);
+            }
+
+            // (after closing it: closing writes its log back)
+            return (result, before, Stamp());
         }, cancellationToken).ConfigureAwait(false);
-        CheckForChanges();
+        if (Interlocked.Exchange(ref _stamp, after) != before)
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+
         return result;
     }
 

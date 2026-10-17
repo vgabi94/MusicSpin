@@ -19,7 +19,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 {
     private readonly AppServices _services;
     private readonly Dictionary<string, PlaylistPageViewModel> _playlistPages = new(StringComparer.Ordinal);
+    private readonly List<(int Asked, TaskCompletionSource Done)> _reloadWaiters = [];
     private CancellationTokenSource? _albumLookup;
+    private int _reloadsAsked;
+    private int _reloadsDone;
+    private bool _reloading;
 
     public MainWindowViewModel(AppServices services)
     {
@@ -40,7 +44,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         QueueDrawer = new QueueDrawerViewModel(Player, services.Library, services.Covers, Notices, services.Time, services.Ui);
         QueueDrawer.PlaylistSaved += (_, playlist) => _ = Notices.GuardAsync(async () =>
         {
-            await LoadPlaylistsAsync().ConfigureAwait(true);
+            await ReloadAsync().ConfigureAwait(true);
             Sidebar.MarkFresh(playlist.Id);
         });
         PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
@@ -57,6 +61,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         FavoritesPage = new FavoritesPageViewModel(services.Library, services.Covers, Player, Menu, Playlists, Favorites, Notices, () => Sidebar.Navigate(Sidebar.Radio));
         RadioPage = new RadioPageViewModel(Player, Notices);
         CurrentPage = AlbumsPage;
+        AlbumsPage.IsShown = true;
         Items = new LibraryItemActions(Player, services.Library, Scene, NowPlaying, Menu, Playlists, Favorites, Notices, () => CurrentPage);
         Sidebar.Navigated += (_, item) => _ = ShowAsync(item);
         Notices.Posted += (_, message) => Banner = message;
@@ -278,6 +283,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         page.SearchText = SearchText;
         page.PlayingAlbumId = PlayingAlbumId;
         page.PlayingTrackId = Player.TrackId;
+        CurrentPage.IsShown = false;
+        page.IsShown = true;
         CurrentPage = page;
         await Notices.GuardAsync(page.LoadAsync).ConfigureAwait(true);
     }
@@ -307,19 +314,70 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             else
             {
                 _playlistPages.Remove(id);
+                page.Dispose();
             }
         }
 
         Sidebar.SetPlaylists(playlists);
     }
 
-    /// <summary>The library changed on disk (a scan, a playlist edit, a favorite): re-read the playlists, the favorites and the current page.</summary>
-    private async Task ReloadAsync()
+    /// <summary>
+    /// The library changed (on disk, or by an edit here): re-reads the playlists, the favorites and the current page.
+    /// Reloads never overlap: asked for while one runs, exactly one more runs after it, however often it was asked (a scan
+    /// from the CLI changes the library many times). The task completes once a reload begun after the ask has finished.
+    /// </summary>
+    private Task ReloadAsync()
     {
-        await Notices.GuardAsync(LoadPlaylistsAsync).ConfigureAwait(true);
-        await Notices.GuardAsync(Favorites.LoadAsync).ConfigureAwait(true);
-        await Notices.GuardAsync(CurrentPage.LoadAsync).ConfigureAwait(true);
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _reloadWaiters.Add((++_reloadsAsked, done));
+        if (!_reloading)
+        {
+            _ = ReloadUntilCurrentAsync();
+        }
+
+        return done.Task;
     }
+
+    private async Task ReloadUntilCurrentAsync()
+    {
+        _reloading = true;
+        try
+        {
+            while (_reloadsDone < _reloadsAsked)
+            {
+                var asked = _reloadsAsked;
+                await Quietly(LoadPlaylistsAsync).ConfigureAwait(true);
+                await Quietly(Favorites.LoadAsync).ConfigureAwait(true);
+                await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                _reloadsDone = asked;
+                foreach (var waiter in _reloadWaiters.Where(w => w.Asked <= asked).ToList())
+                {
+                    _reloadWaiters.Remove(waiter);
+                    waiter.Done.SetResult();
+                }
+            }
+        }
+        finally
+        {
+            _reloading = false;
+        }
+    }
+
+    /// <summary>
+    /// A read in the background: if another process holds the library (a scan, say), it says nothing and waits for the
+    /// next change, which a scan makes when it is done. Other failures are notices.
+    /// </summary>
+    private Task Quietly(Func<Task> read) => Notices.GuardAsync(async () =>
+    {
+        try
+        {
+            await read().ConfigureAwait(true);
+        }
+        catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.LibraryLocked)
+        {
+            // busy: the next change reloads
+        }
+    });
 
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)
     {

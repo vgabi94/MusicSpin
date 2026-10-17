@@ -95,7 +95,7 @@ public sealed class TrackAlbumHeaderViewModel(AlbumItemViewModel album, IReadOnl
 /// A list of tracks: the whole library (Tracks) or a playlist. Playing a track plays the list as shown from it, so the
 /// next track follows in the same order. ＋ adds a track to the queue.
 /// </summary>
-public abstract partial class TrackListPageViewModel : PageViewModel
+public abstract partial class TrackListPageViewModel : PageViewModel, IDisposable
 {
     private List<TrackItemViewModel> _all = [];
     private int _loads;
@@ -113,7 +113,7 @@ public abstract partial class TrackListPageViewModel : PageViewModel
         Favorites = favorites;
         Notices = notices;
         Player.PropertyChanged += OnPlayerChanged;
-        Favorites.Changed += (_, _) => OnFavoritesChanged();
+        Favorites.Changed += OnFavoritesChanged;
     }
 
     /// <summary>A playlist row is dragged over the list (the window reports it): the drop line shows where it would go.</summary>
@@ -178,6 +178,16 @@ public abstract partial class TrackListPageViewModel : PageViewModel
 
     /// <summary>The favorites changed: the hearts follow (the Favorites view reads its list again).</summary>
     protected virtual void OnFavoritesChanged() => MarkFavorites();
+
+    private void OnFavoritesChanged(object? sender, EventArgs e) => OnFavoritesChanged();
+
+    /// <summary>The page is gone (its playlist was deleted): it stops following the player and the favorites.</summary>
+    public void Dispose()
+    {
+        Player.PropertyChanged -= OnPlayerChanged;
+        Favorites.Changed -= OnFavoritesChanged;
+        GC.SuppressFinalize(this);
+    }
 
     private void MarkFavorites()
     {
@@ -576,10 +586,16 @@ public sealed partial class FavoritesPageViewModel : TrackListPageViewModel
 
     private bool CanStartRadio() => IsOnAir || Favorites.Count > 0;
 
-    /// <summary>A heart changed here or elsewhere: the list is read again (an un-hearted row goes).</summary>
+    /// <summary>
+    /// A heart changed here or elsewhere: shown, the list is read again (an un-hearted row goes); otherwise it is read when
+    /// the page is next opened.
+    /// </summary>
     protected override void OnFavoritesChanged()
     {
         RadioCommand.NotifyCanExecuteChanged();
-        _ = Notices.GuardAsync(LoadAsync);
+        if (IsShown)
+        {
+            _ = Notices.GuardAsync(LoadAsync);
+        }
     }
 }
