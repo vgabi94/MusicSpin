@@ -136,6 +136,67 @@ public sealed class QueuePlayerTests : IDisposable
     }
 
     [Fact]
+    public void Mute_plays_at_0_and_keeps_the_level_which_unmuting_goes_back_to()
+    {
+        var (decoders, paths) = PlayerTestKit.Tracks(2, 30);
+        using var player = new Player(decoders, Outputs.Realtime());
+        using var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
+        queue.SetQueue(Items(paths));
+        queue.SetVolume(0.8);
+
+        var muted = queue.SetMuted(true);
+        Assert.Equal((0.8f, true), (muted.Volume, muted.Muted)); // the status keeps the level …
+        Assert.Equal(0f, player.Volume); // … the samples go out at 0
+        Assert.True(queue.Muted);
+
+        var again = queue.SetMuted(true); // muting twice doesn't take 0 for the level
+        Assert.Equal((0.8f, true, 0f), (again.Volume, again.Muted, player.Volume));
+
+        var unmuted = queue.SetMuted(false);
+        Assert.Equal((0.8f, false, 0.8f), (unmuted.Volume, unmuted.Muted, player.Volume));
+        Assert.Equal((0.8f, false), (queue.SetMuted(false).Volume, queue.Muted)); // unmuting twice changes nothing
+
+        Assert.True(queue.SetMuted(null).Muted); // toggles
+        Assert.Equal(0f, player.Volume);
+        Assert.False(queue.SetMuted(null).Muted);
+        Assert.Equal(0.8f, player.Volume);
+    }
+
+    [Fact]
+    public void Setting_or_changing_the_volume_while_muted_unmutes_from_the_kept_level()
+    {
+        var (decoders, paths) = PlayerTestKit.Tracks(2, 30);
+        using var player = new Player(decoders, Outputs.Realtime());
+        using var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
+        queue.SetQueue(Items(paths));
+        queue.SetVolume(0.6);
+        queue.SetMuted(true);
+
+        var changed = queue.ChangeVolume(0.1); // from 0.6, not from the 0 it plays at
+        Assert.Equal((0.7f, false, 0.7f), (changed.Volume, changed.Muted, player.Volume));
+
+        queue.SetMuted(true);
+        var set = queue.SetVolume(0.25);
+        Assert.Equal((0.25f, false, 0.25f), (set.Volume, set.Muted, player.Volume));
+    }
+
+    [Fact]
+    public void An_invalid_volume_while_muted_leaves_it_muted_at_its_level()
+    {
+        var (decoders, paths) = PlayerTestKit.Tracks(2, 30);
+        using var player = new Player(decoders, Outputs.Realtime());
+        using var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
+        queue.SetQueue(Items(paths));
+        queue.SetVolume(0.6);
+        queue.SetMuted(true);
+
+        Assert.Equal(MusicSpinErrorCode.InvalidArgument, Assert.Throws<MusicSpinException>(() => queue.SetVolume(2)).Code);
+        Assert.Equal(MusicSpinErrorCode.InvalidArgument, Assert.Throws<MusicSpinException>(() => queue.ChangeVolume(double.NaN)).Code);
+        var status = queue.Status();
+        Assert.Equal((0.6f, true, 0f), (status.Volume, status.Muted, player.Volume));
+    }
+
+    [Fact]
     public void Add_to_an_empty_queue_loads_without_playing_and_list_pages()
     {
         var (queue, paths, _) = Create();

@@ -266,26 +266,28 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
         var volume = _bar.Volume;
         Assert.Equal((80.0, false, "80%"), (volume.Level, volume.IsMuted, volume.Number.Text));
 
-        _player.Status = _player.Status with { Volume = 0 };
+        // The player mutes (it keeps the level and plays at 0): no volume of 0 is sent.
+        _player.Status = _player.Status with { Muted = true };
         await volume.ToggleMuteCommand.ExecuteAsync(null);
-        Assert.Equal(0, (await SentAsync("volume")).GetProperty("value").GetDouble());
+        Assert.Equal("on", (await SentAsync("mute")).GetProperty("mode").GetString());
         _ui.Run();
         Assert.Equal((80.0, true, true, "Unmute", "Muted"), (volume.Level, volume.IsMuted, volume.IsSilent, volume.MuteTip, volume.ValueText));
+        Assert.Equal(0, _player.Count("volume"));
 
         await ChangeAsync(_player.Status with { PositionSeconds = 5 });
         Assert.Equal((80.0, true), (volume.Level, volume.IsMuted));
 
-        _player.Status = _player.Status with { Volume = 0.8f };
+        _player.Status = _player.Status with { Muted = false };
         await volume.ToggleMuteCommand.ExecuteAsync(null);
-        Assert.Equal(0.8, (await SentAsync("volume", 2)).GetProperty("value").GetDouble(), 3);
+        Assert.Equal("off", (await SentAsync("mute", 2)).GetProperty("mode").GetString());
         _ui.Run();
         Assert.Equal((80.0, false), (volume.Level, volume.IsMuted));
 
-        _player.Status = _player.Status with { Volume = 0 };
+        _player.Status = _player.Status with { Muted = true };
         await volume.ToggleMuteCommand.ExecuteAsync(null);
-        _player.Status = _player.Status with { Volume = 0.375f };
+        _player.Status = _player.Status with { Volume = 0.375f, Muted = false }; // a volume unmutes the player
         await volume.SetLevelCommand.ExecuteAsync(37.5);
-        Assert.Equal(0.375, (await SentAsync("volume", 4)).GetProperty("value").GetDouble(), 4);
+        Assert.Equal(0.375, (await SentAsync("volume")).GetProperty("value").GetDouble(), 4);
         _ui.Run();
         Assert.Equal((37.5, false, true), (volume.Level, volume.IsMuted, volume.IsLow));
     }
@@ -294,13 +296,76 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
     public async Task A_volume_change_from_elsewhere_shows_up_and_unmutes()
     {
         await StartAsync(Playing() with { Volume = 0.8f });
-        _player.Status = _player.Status with { Volume = 0 };
+        _player.Status = _player.Status with { Muted = true };
         await _bar.Volume.ToggleMuteCommand.ExecuteAsync(null);
         _ui.Run();
         Assert.True(_bar.Volume.IsMuted);
 
-        await ChangeAsync(_player.Status with { Volume = 0.5f });
+        await ChangeAsync(_player.Status with { Volume = 0.5f, Muted = false }); // music-spin volume 50%
         Assert.Equal((50.0, false), (_bar.Volume.Level, _bar.Volume.IsMuted));
+    }
+
+    [Fact]
+    public async Task A_new_session_with_a_muted_player_shows_it_muted_and_unmuting_goes_back_to_the_level()
+    {
+        // The app closed while muted: the player kept the level (#69), it didn't stay at a bare 0.
+        await StartAsync(Playing() with { Volume = 0.8f, Muted = true });
+        var volume = _bar.Volume;
+        Assert.Equal((80.0, true, "Muted"), (volume.Level, volume.IsMuted, volume.ValueText));
+
+        _player.Status = _player.Status with { Muted = false };
+        await volume.ToggleMuteCommand.ExecuteAsync(null);
+        Assert.Equal("off", (await SentAsync("mute")).GetProperty("mode").GetString());
+        _ui.Run();
+        Assert.Equal((80.0, false), (volume.Level, volume.IsMuted));
+        Assert.Equal(0, _player.Count("volume")); // not a guess at the level: the player had it
+    }
+
+    [Fact]
+    public async Task A_poll_from_before_the_mute_was_answered_does_not_undo_it()
+    {
+        await StartAsync(Playing() with { Volume = 0.8f });
+        var gate = _player.Hold("mute");
+        _player.Status = _player.Status with { Muted = true };
+        var mute = _bar.Volume.ToggleMuteCommand.ExecuteAsync(null);
+        await SentAsync("mute");
+        Assert.True(_bar.Volume.IsMuted); // shown at once
+
+        _vm.Apply(Playing() with { Volume = 0.8f }); // a poll's answer from before the mute
+        Assert.True(_bar.Volume.IsMuted);
+
+        gate.SetResult();
+        await mute;
+        _ui.Run();
+        Assert.Equal((80.0, true), (_bar.Volume.Level, _bar.Volume.IsMuted));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_mute_the_player_refuses_says_why_and_shows_what_the_player_has()
+    {
+        await StartAsync(Playing() with { Volume = 0.8f });
+        var notices = new List<string>();
+        _vm.Notice += (_, message) =>
+        {
+            lock (notices)
+            {
+                notices.Add(message);
+            }
+        };
+        _player.Fail("mute", 2, "Unknown cmd 'mute'.");
+
+        await _bar.Volume.ToggleMuteCommand.ExecuteAsync(null);
+        await _ui.UntilAsync(() =>
+        {
+            lock (notices)
+            {
+                return notices.Contains("Unknown cmd 'mute'.");
+            }
+        }, "the notice");
+
+        await ChangeAsync(_player.Status with { PositionSeconds = 5 }); // the player's word counts once it has answered
+        Assert.Equal((80.0, false), (_bar.Volume.Level, _bar.Volume.IsMuted));
     }
 
     [Fact]

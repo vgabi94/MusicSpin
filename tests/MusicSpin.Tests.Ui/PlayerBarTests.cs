@@ -541,7 +541,9 @@ public sealed class PlayerBarTests
         Assert.Equal((1.0, 1.0), (box.Opacity, fill.Opacity));
 
         Gui.Click(app.Window, Find<Button>(app, "MuteButton"));
-        Assert.Equal(0, await SentAsync(app, "volume", "value", 1));
+        await Gui.UntilAsync(() => app.Scripted!.Count("mute") == 1, "the mute sent");
+        Assert.Equal("on", app.Scripted!.Sent("mute")[0].GetProperty("mode").GetString()); // the player mutes, keeping the level
+        Assert.Equal(0, app.Scripted.Count("volume"));
         Gui.Click(app.Window, Find<Border>(app, "FormatBadge")); // the pointer leaves the volume
         Assert.Equal("80%", box.Text);
         Assert.Equal((false, false, true), (Find<Icon>(app, "WaveNear").IsVisible, Find<Icon>(app, "WaveFar").IsVisible, Find<Icon>(app, "MutedCross").IsVisible));
@@ -551,7 +553,7 @@ public sealed class PlayerBarTests
         // Setting a level unmutes.
         app.Window.MouseDown(At(app, Find<ScrubBar>(app, "VolumeBar"), 27), MouseButton.Left);
         app.Window.MouseUp(At(app, Find<ScrubBar>(app, "VolumeBar"), 27), MouseButton.Left);
-        Assert.Equal(0.3, await SentAsync(app, "volume", "value", 2), 4);
+        Assert.Equal(0.3, await SentAsync(app, "volume", "value", 1), 4);
         Gui.Click(app.Window, Find<Border>(app, "FormatBadge"));
         Assert.Equal((true, false, false), (Find<Icon>(app, "WaveNear").IsVisible, Find<Icon>(app, "WaveFar").IsVisible, Find<Icon>(app, "MutedCross").IsVisible));
         Assert.Equal((1.0, 1.0), (box.Opacity, fill.Opacity));
