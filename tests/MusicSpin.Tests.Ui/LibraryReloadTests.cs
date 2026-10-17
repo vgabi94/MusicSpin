@@ -21,6 +21,27 @@ public sealed class LibraryReloadTests
     }
 
     [AvaloniaFact]
+    public async Task A_change_while_the_app_starts_reloads_after_the_first_read_not_alongside_it()
+    {
+        var library = new StubLibrary { Tracks = { StubLibrary.Track(1) } };
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Library = library, Initialize = false });
+        var gate = library.PlaylistsGate = new TaskCompletionSource();
+        var start = app.ViewModel.InitializeAsync();
+        await Gui.UntilAsync(() => library.PlaylistReads == 1, "the first read under way");
+
+        library.RaiseChanged(); // a scan from the CLI, say, while the app opens
+        Gui.Settle();
+        Assert.Equal(1, library.PlaylistReads); // it waits for the first read
+
+        library.Playlists.Add(new PlaylistSummaryItem("playlist0000", "During startup", 0));
+        library.PlaylistsGate = null;
+        gate.SetResult();
+        await Gui.UntilAsync(() => start.IsCompleted && app.ViewModel.Sidebar.Playlists.Any(p => p.Title == "During startup"), "the reload after it");
+        Assert.Equal(2, library.PlaylistReads);
+        Assert.Equal(1, library.MostPlaylistReadsAtOnce);
+    }
+
+    [AvaloniaFact]
     public async Task Changes_during_a_slow_reload_make_one_more_reload_after_it_never_one_alongside()
     {
         var (app, library) = await OpenAsync();

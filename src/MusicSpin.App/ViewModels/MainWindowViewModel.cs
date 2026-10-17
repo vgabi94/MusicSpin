@@ -24,6 +24,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private int _reloadsAsked;
     private int _reloadsDone;
     private bool _reloading;
+    private bool _reloadPage;
 
     public MainWindowViewModel(AppServices services)
     {
@@ -53,7 +54,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Layers.Register(QueueDrawer.SaveForm);
         Layers.Register(Menu);
         Layers.Register(Sidebar.Rename);
-        Playlists = new PlaylistActions(services.Library, Player, Sidebar, Menu, Notices, ReloadAsync);
+        Playlists = new PlaylistActions(services.Library, Player, Sidebar, Menu, Notices, () => ReloadAsync());
         Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
         Scene = new TurntableSceneViewModel(Player, NowPlaying, services.Library, services.Covers, Settings, services.Time, services.Ui, Notices);
         AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Scene, Menu, Playlists, Notices, Settings, services.Time);
@@ -169,7 +170,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public async Task InitializeAsync()
     {
         Sidebar.Navigate(Sidebar.Albums);
-        await Task.WhenAll(Player.StartAsync(), Notices.GuardAsync(LoadPlaylistsAsync), Notices.GuardAsync(Favorites.LoadAsync)).ConfigureAwait(true);
+        // The first read of the playlists and favorites is a reload like any other (the page loads as it is shown), so a
+        // change seen while the app opens waits for it rather than racing it.
+        await Task.WhenAll(Player.StartAsync(), ReloadAsync(page: false)).ConfigureAwait(true);
     }
 
     /// <summary>Esc: closes the topmost open layer (a menu, Settings, the queue drawer, Now Playing).</summary>
@@ -326,8 +329,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// Reloads never overlap: asked for while one runs, exactly one more runs after it, however often it was asked (a scan
     /// from the CLI changes the library many times). The task completes once a reload begun after the ask has finished.
     /// </summary>
-    private Task ReloadAsync()
+    /// <param name="page">Read the current page too (not at startup: showing it loads it).</param>
+    private Task ReloadAsync(bool page = true)
     {
+        _reloadPage |= page;
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _reloadWaiters.Add((++_reloadsAsked, done));
         if (!_reloading)
@@ -346,12 +351,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             while (_reloadsDone < _reloadsAsked)
             {
                 var asked = _reloadsAsked;
+                var page = _reloadPage;
+                _reloadPage = false;
                 Exception? failure = null;
                 try
                 {
                     await Quietly(LoadPlaylistsAsync).ConfigureAwait(true);
                     await Quietly(Favorites.LoadAsync).ConfigureAwait(true);
-                    await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                    if (page)
+                    {
+                        await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                    }
                 }
 #pragma warning disable CA1031 // anything the notices don't cover goes to whoever waits for this pass, as it did before reloads were sequenced
                 catch (Exception ex)
