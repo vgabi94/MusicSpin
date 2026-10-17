@@ -85,9 +85,10 @@ public sealed class LineChannel : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _stream.DisposeAsync().ConfigureAwait(false);
-        _writeLock.Dispose();
-    }
+    /// <summary>
+    /// Closes the stream. The write lock is deliberately not disposed: a write still under way on another task releases
+    /// it after this returns, and a disposed SemaphoreSlim would replace that write's own error with an
+    /// ObjectDisposedException about the lock. (It holds nothing to free: its wait handle is never created.)
+    /// </summary>
+    public async ValueTask DisposeAsync() => await _stream.DisposeAsync().ConfigureAwait(false);
 }
