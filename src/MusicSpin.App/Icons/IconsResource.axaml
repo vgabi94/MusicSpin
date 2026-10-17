@@ -26,6 +26,10 @@
     <!-- The mockup's radio icon (index.html, sidebar): a dot and two pairs of waves. -->
     <StreamGeometry x:Key="Radio">M14.2,12 A2.2,2.2 0 1 1 9.8,12 A2.2,2.2 0 1 1 14.2,12 Z M8.5,8.5 A5,5 0 0 0 8.5,15.5 M15.5,8.5 A5,5 0 0 1 15.5,15.5 M5.6,5.6 A9,9 0 0 0 5.6,18.4 M18.4,5.6 A9,9 0 0 1 18.4,18.4</StreamGeometry>
     <sys:Boolean x:Key="Radio.Stroked">True</sys:Boolean>
+    <!-- The same icon in layers (controls:RadioIcon), so its waves can pulse while a station is on air (#23). -->
+    <StreamGeometry x:Key="RadioDot">M14.2,12 A2.2,2.2 0 1 1 9.8,12 A2.2,2.2 0 1 1 14.2,12 Z</StreamGeometry>
+    <StreamGeometry x:Key="RadioNearWaves">M8.5,8.5 A5,5 0 0 0 8.5,15.5 M15.5,8.5 A5,5 0 0 1 15.5,15.5</StreamGeometry>
+    <StreamGeometry x:Key="RadioFarWaves">M5.6,5.6 A9,9 0 0 0 5.6,18.4 M18.4,5.6 A9,9 0 0 1 18.4,18.4</StreamGeometry>
     <StreamGeometry x:Key="Playlist">M4,6 H16 M4,11 H16 M4,16 H11 M17,14 V20 M14,17 H20</StreamGeometry>
     <sys:Boolean x:Key="Playlist.Stroked">True</sys:Boolean>
     <!-- Favorites (#48): one heart everywhere, drawn as a line when not a favorite and filled when it is. -->
@@ -35,6 +39,8 @@
 
     <!-- BEGIN Transport -->
     <StreamGeometry x:Key="Play">M8,5 L19,12 L8,19 Z</StreamGeometry>
+    <!-- A group's ▶ Play (mockup: .group-play .tri), in a 24 x 24 box (GroupPlayViewBox) so it stands as small as there. -->
+    <StreamGeometry x:Key="GroupPlay">M8,6.5 V17.5 L17,12 Z</StreamGeometry>
     <StreamGeometry x:Key="Pause">M6.5,5 H10 V19 H6.5 Z M14,5 H17.5 V19 H14 Z</StreamGeometry>
     <StreamGeometry x:Key="Previous">M6,5 H8 V19 H6 Z M19,5 L9,12 L19,19 Z</StreamGeometry>
     <StreamGeometry x:Key="Next">M16,5 H18 V19 H16 Z M5,5 L15,12 L5,19 Z</StreamGeometry>

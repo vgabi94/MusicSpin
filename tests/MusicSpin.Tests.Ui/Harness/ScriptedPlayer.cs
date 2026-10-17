@@ -45,8 +45,8 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
     public bool AllowStart { get; set; } = true;
 
     /// <summary>
-    /// Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would, and queue.add and
-    /// queue.move edit <see cref="Queue"/>.
+    /// Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would, queue.add and
+    /// queue.move edit <see cref="Queue"/>, queue.set replaces it (ending radio), and radio puts the station on air.
     /// </summary>
     public bool FollowsCommands { get; set; }
 
@@ -85,14 +85,14 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 
     /// <summary>
     /// A queue of <paramref name="titles"/> with <paramref name="current"/> playing and the <paramref name="upNext"/> entries
-    /// after it up next; <see cref="Status"/> follows (playing, unless it was already paused). <paramref name="radio"/> puts a
-    /// station with that description on air.
+    /// after it up next; <see cref="Status"/> follows (playing, unless it was already paused). <paramref name="radio"/> puts
+    /// that station on air.
     /// </summary>
-    public void SetQueue(IReadOnlyList<string> titles, int current = 0, int upNext = 0, string? radio = null)
+    public void SetQueue(IReadOnlyList<string> titles, int current = 0, int upNext = 0, RadioFilter? radio = null)
         => SetQueue([.. titles.Select(title => Item(title))], current, upNext, radio);
 
     /// <summary>The same with <paramref name="items"/> (library tracks, say).</summary>
-    public void SetQueue(IReadOnlyList<QueueItem> items, int current = 0, int upNext = 0, string? radio = null)
+    public void SetQueue(IReadOnlyList<QueueItem> items, int current = 0, int upNext = 0, RadioFilter? radio = null)
     {
         Queue = [.. items.Select((item, i) => new QueueEntry(i, i == current, item, i > current && i <= current + upNext))];
         var status = Status.State == PlayerState.Stopped ? Playing(items[current].Title ?? "?") : Status;
@@ -102,7 +102,7 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
             QueueLength = items.Count,
             Item = items[current],
             UpNext = upNext,
-            Radio = radio is null ? null : new RadioInfo(new RadioFilter(), radio, 100),
+            Radio = radio is null ? null : new RadioInfo(radio, radio.Describe(), 100),
         };
     }
 
@@ -319,6 +319,11 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
             // doesn't play (the turntable scene's) is left alone: those tests script the status themselves.
             var start = request.TryGetProperty("start", out var s) ? s.GetInt32() : 0;
             SetQueue(entries, Math.Clamp(start, 0, entries.Length - 1));
+        }
+        else if (cmd == "queue.set")
+        {
+            // A load that doesn't play still replaces the queue, so a station on air goes off (as the player's does).
+            Status = Status with { Radio = null };
         }
         else if (cmd == "radio" && request.TryGetProperty("filter", out var filter) && ProtocolJson.Deserialize<RadioFilter>(filter) is { } station)
         {

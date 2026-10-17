@@ -41,6 +41,9 @@ public interface ILibraryService
 
     Task<IReadOnlyList<TrackSummary>> AlbumTracksAsync(string albumId, CancellationToken cancellationToken = default);
 
+    /// <summary>The tracks of several albums in one read: album after album in the order given, each in disc and track order.</summary>
+    Task<IReadOnlyList<TrackSummary>> AlbumsTracksAsync(IReadOnlyList<string> albumIds, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<PlaylistSummaryItem>> PlaylistsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Every entry of the playlist, in order, missing files included (what <c>music-spin playlist show</c> lists).</summary>
@@ -132,6 +135,9 @@ public sealed class LibraryService : ILibraryService, IDisposable
 
     public Task<IReadOnlyList<TrackSummary>> AlbumTracksAsync(string albumId, CancellationToken cancellationToken = default)
         => Read(library => (IReadOnlyList<TrackSummary>)library.AlbumQueue(albumId).Select(ToSummary).ToList(), cancellationToken);
+
+    public Task<IReadOnlyList<TrackSummary>> AlbumsTracksAsync(IReadOnlyList<string> albumIds, CancellationToken cancellationToken = default)
+        => Read(library => (IReadOnlyList<TrackSummary>)library.AlbumsQueue(albumIds).Select(ToSummary).ToList(), cancellationToken);
 
     public Task<IReadOnlyList<PlaylistSummaryItem>> PlaylistsAsync(CancellationToken cancellationToken = default)
         => Read(library => (IReadOnlyList<PlaylistSummaryItem>)library.Playlists().Select(p => new PlaylistSummaryItem(p.Id, p.Name, p.EntryCount)).ToList(),

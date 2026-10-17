@@ -192,7 +192,8 @@ public sealed class NowPlayingTests
         var kicker = Find<StackPanel>(app, "Kicker");
         Assert.False(kicker.IsVisible);
 
-        await SetStatusAsync(app, app.Scripted!.Status with { Radio = new RadioInfo(new RadioFilter(), "Jazz", 40) });
+        // The app's own words for the station, not the player's ("genre Jazz").
+        await SetStatusAsync(app, app.Scripted!.Status with { Radio = new RadioInfo(new RadioFilter { Genres = ["Jazz"] }, "genre Jazz", 40) });
         Assert.True(kicker.IsVisible);
         Assert.Equal("RADIO · JAZZ", Gui.All<TextBlock>(kicker).Single().Text);
 

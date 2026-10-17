@@ -125,6 +125,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     public bool IsRadio => QueueMode == "radio";
 
+    /// <summary>The player's own words for the station on air ("genre Jazz", as the CLI prints it); the app shows <see cref="RadioViewModel.Description"/>.</summary>
     [ObservableProperty]
     public partial string? RadioDescription { get; private set; }
 
@@ -196,12 +197,17 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [RelayCommand]
     private Task SetShuffle(bool on) => SendAsync("shuffle", new { mode = on ? "on" : "off" });
 
-    /// <summary>Replaces the queue with <paramref name="tracks"/> and plays entry <paramref name="start"/>.</summary>
-    public Task PlayTracksAsync(IReadOnlyList<TrackSummary> tracks, int start = 0)
+    /// <summary>
+    /// Replaces the queue with <paramref name="tracks"/> and plays entry <paramref name="start"/>. With no start the queue
+    /// plays from its first entry, or, with shuffle on, all of it in the player's shuffled order (as <c>play</c> does).
+    /// </summary>
+    public Task PlayTracksAsync(IReadOnlyList<TrackSummary> tracks, int? start = 0)
     {
         ArgumentNullException.ThrowIfNull(tracks);
+        var items = tracks.Select(ToItem).ToArray();
         return tracks.Count == 0 ? Task.CompletedTask
-            : SendAsync("queue.set", new { items = tracks.Select(ToItem).ToArray(), start = Math.Clamp(start, 0, tracks.Count - 1), play = true });
+            : start is { } from ? SendAsync("queue.set", new { items, start = Math.Clamp(from, 0, tracks.Count - 1), play = true })
+            : SendAsync("queue.set", new { items, play = true });
     }
 
     /// <summary>

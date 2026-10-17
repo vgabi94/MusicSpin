@@ -1,0 +1,139 @@
+<!--
+  Radio (mockup: styles.css "Radio"): the radio icon and its pulse, a group's Play and Radio on its header and on its
+  crate's label (#41, #23), what shows a station is on air (#23) and the Radio page (#24).
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls">
+    <!-- The radio icon in layers; its waves fade this low as they pulse while on air. -->
+    <Style Selector="controls|RadioIcon">
+        <Setter Property="Dot" Value="{StaticResource RadioDot}" />
+        <Setter Property="NearWaves" Value="{StaticResource RadioNearWaves}" />
+        <Setter Property="FarWaves" Value="{StaticResource RadioFarWaves}" />
+        <Setter Property="DimOpacity" Value="{StaticResource OnAirWaveDimOpacity}" />
+    </Style>
+
+    <!-- A group's Play and Radio, after its name (mockup: .group-acts, .radio-btn, .group-play). -->
+    <Style Selector="StackPanel.groupActs">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource GroupActsGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.groupAct">
+        <Setter Property="Padding" Value="{StaticResource GroupActPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource GroupActRadius}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="FontSize" Value="{StaticResource GroupActFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource MediumFontWeight}" />
+        <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
+    </Style>
+    <Style Selector="Button.groupAct:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+    </Style>
+    <!-- The group's station on air: "On air" in the accent ink (mockup: .radio-btn.on). -->
+    <Style Selector="Button.groupAct.on">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentRingBrush}" />
+    </Style>
+    <Style Selector="Button.groupAct > StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource GroupActIconGap}" />
+    </Style>
+    <Style Selector="Button.groupAct controls|Icon, Button.groupAct controls|RadioIcon">
+        <Setter Property="Width" Value="{StaticResource GroupActIconSize}" />
+        <Setter Property="Height" Value="{StaticResource GroupActIconSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.groupAct controls|Icon.groupPlay">
+        <Setter Property="ViewBox" Value="{StaticResource GroupPlayViewBox}" />
+    </Style>
+    <Style Selector="Button.groupAct controls|RadioIcon">
+        <Setter Property="ViewBox" Value="{StaticResource RadioViewBox}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource RadioIconStroke}" />
+    </Style>
+    <Style Selector="Button.groupAct TextBlock.label">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!--
+      On a grouped crate's label, icons only, together at its right end (mockup: .crate-box .group-acts). They sit on a
+      layer laid over the box exactly as the box is, because the box lets clicks through to the records behind it.
+    -->
+    <Style Selector="Panel.crateActs">
+        <Setter Property="Width" Value="{StaticResource CrateBoxWidth}" />
+        <Setter Property="Height" Value="{StaticResource CrateBoxHeight}" />
+        <Setter Property="Margin" Value="{StaticResource CrateBoxMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="RenderTransformOrigin" Value="50%,-680%" />
+        <Setter Property="RenderTransform" Value="scale(1.0638)" />
+    </Style>
+    <Style Selector="Panel.crateActs > ContentControl">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="{StaticResource CrateActsMargin}" />
+    </Style>
+    <Style Selector="Panel.crateActs StackPanel.groupActs">
+        <Setter Property="Spacing" Value="{StaticResource CrateActsGap}" />
+    </Style>
+    <Style Selector="Panel.crateActs Button.groupAct">
+        <Setter Property="Padding" Value="{StaticResource CrateActPadding}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{StaticResource CrateActBrush}" />
+    </Style>
+    <Style Selector="Panel.crateActs Button.groupAct:pointerover">
+        <Setter Property="Background" Value="{StaticResource CrateActHoverBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource CrateActiveLabelBrush}" />
+    </Style>
+    <Style Selector="Panel.crateActs Button.groupAct.on">
+        <Setter Property="Background" Value="{DynamicResource AccentLiveBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource CrateActiveLabelBrush}" />
+    </Style>
+    <Style Selector="Panel.crateActs Button.groupAct > StackPanel">
+        <Setter Property="Spacing" Value="0" />
+    </Style>
+    <Style Selector="Panel.crateActs Button.groupAct TextBlock.label">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Panel.crateActs controls|Icon, Panel.crateActs controls|RadioIcon">
+        <Setter Property="Width" Value="{StaticResource CrateActIconSize}" />
+        <Setter Property="Height" Value="{StaticResource CrateActIconSize}" />
+    </Style>
+    <Style Selector="Panel.crateActs controls|RadioIcon">
+        <Setter Property="StrokeThickness" Value="{StaticResource CrateActStroke}" />
+    </Style>
+
+    <!-- The player bar's RADIO pill while a station is on air (mockup: .onair); a click opens the Radio page. -->
+    <Style Selector="Button.onAirPill">
+        <Setter Property="Margin" Value="{StaticResource OnAirPillMargin}" />
+        <Setter Property="Padding" Value="{StaticResource OnAirPillPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource OnAirPillRadius}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentRingBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.onAirPill:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+    <Style Selector="Button.onAirPill > StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource OnAirPillIconGap}" />
+    </Style>
+    <Style Selector="Button.onAirPill controls|RadioIcon">
+        <Setter Property="Width" Value="{StaticResource OnAirPillIconSize}" />
+        <Setter Property="Height" Value="{StaticResource OnAirPillIconSize}" />
+        <Setter Property="ViewBox" Value="{StaticResource RadioViewBox}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource RadioIconStroke}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.onAirPill TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource OnAirPillFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource TitleFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource OnAirPillLetterSpacing}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+</Styles>

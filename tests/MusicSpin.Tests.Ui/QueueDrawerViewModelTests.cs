@@ -32,7 +32,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _vm = new PlayerViewModel(_player, _time, _ui);
         _vm.Notice += (_, message) => _notices.Post(message);
         _notices.Posted += (_, message) => _posted.Add(message);
-        _drawer = new QueueDrawerViewModel(_vm, _library, _covers, _notices, _time, _ui);
+        _drawer = new QueueDrawerViewModel(_vm, new RadioViewModel(_vm, _library, _notices), _library, _covers, _notices, _time, _ui);
     }
 
     public async ValueTask DisposeAsync()
@@ -45,7 +45,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
 
     private static string[] Titles(params string[] upNext) => [Album[0], .. upNext, .. Album[1..]];
 
-    private async Task StartAsync(int upNext, string? radio = null, int current = 0)
+    private async Task StartAsync(int upNext, RadioFilter? radio = null, int current = 0)
     {
         _player.SetQueue(Titles([.. Enumerable.Range(1, upNext).Select(i => "q" + i)]), current, upNext, radio);
         _player.FollowsCommands = true; // queue.add and queue.move edit its queue, as a real player's
@@ -55,7 +55,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     }
 
     /// <summary>The queue changed (from the app or the CLI): the player says so and the drawer reads it again.</summary>
-    private async Task ChangeAsync(string[] titles, int upNext, string? radio = null, int current = 0)
+    private async Task ChangeAsync(string[] titles, int upNext, RadioFilter? radio = null, int current = 0)
     {
         _player.SetQueue(titles, current, upNext, radio);
         string[] expected = [.. titles.Skip(current + 1).Take(upNext)];
@@ -123,7 +123,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     public async Task On_radio_the_stations_next_six_picks_follow_the_rows()
     {
         var picks = Enumerable.Range(1, 9).Select(i => "pick" + i).ToArray();
-        _player.SetQueue(["now", "q1", .. picks], 0, 1, radio: "Jazz · 1960s");
+        _player.SetQueue(["now", "q1", .. picks], 0, 1, radio: new RadioFilter { Genres = ["Jazz"], Years = [new YearRange(1960, 1969)] });
         _player.Start();
         await _vm.StartAsync();
         await _ui.UntilAsync(() => _drawer.Picks.Count == QueueDrawerViewModel.RadioPicks, "the picks");
@@ -287,7 +287,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     [Fact]
     public async Task End_radio_keeps_the_current_track_and_the_rows_and_plays_on()
     {
-        _player.SetQueue(["now", "q1", "q2", "pick1", "pick2"], 0, 2, radio: "Everything");
+        _player.SetQueue(["now", "q1", "q2", "pick1", "pick2"], 0, 2, radio: new RadioFilter());
         _player.Start();
         await _vm.StartAsync();
         await _ui.UntilAsync(() => _drawer.Rows.Count == 2 && _drawer.Picks.Count == 2, "the radio queue");

@@ -255,7 +255,7 @@ public sealed class ShelfTests
         var window = app.Window;
 
         var headers = Gui.All<Grid>(window).Where(g => g.Classes.Contains("groupHeader")).ToList();
-        Assert.Equal("DELTA RUTH · 1", headers[1].GetVisualDescendants().OfType<TextBlock>().Single().Text);
+        Assert.Equal("DELTA RUTH · 1", headers[1].Children.OfType<TextBlock>().Single().Text);
         Assert.Equal(Gui.BoundsIn(window, headers[0]).Bottom, Gui.BoundsIn(window, Boards(window)[0]).Top, 0.5);
         Assert.Equal(["Velvet Hours", "Copper Sun", "Cello Suites, Partitas"], Layout(window).Take(3));
         var first = Gui.BoundsIn(window, Boards(window)[0]);

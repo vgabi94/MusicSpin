@@ -80,6 +80,20 @@ internal sealed class StubLibrary : ILibraryService
     public Task<IReadOnlyList<TrackSummary>> AlbumTracksAsync(string albumId, CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<TrackSummary>>([.. Tracks.Where(t => t.AlbumId == albumId)]);
 
+    /// <summary>How many times several albums' tracks were read (group Play reads them once).</summary>
+    public int AlbumsTracksReads { get; private set; }
+
+    /// <summary>Set: reading several albums' tracks fails as a busy library's does.</summary>
+    public string? AlbumsTracksFailure { get; set; }
+
+    public Task<IReadOnlyList<TrackSummary>> AlbumsTracksAsync(IReadOnlyList<string> albumIds, CancellationToken cancellationToken = default)
+    {
+        AlbumsTracksReads++;
+        return AlbumsTracksFailure is { } failure
+            ? Task.FromException<IReadOnlyList<TrackSummary>>(new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure))
+            : Task.FromResult<IReadOnlyList<TrackSummary>>([.. albumIds.Distinct().SelectMany(id => Tracks.Where(t => t.AlbumId == id))]);
+    }
+
     /// <summary>Set: playlist reads wait for it (a slow library).</summary>
     public TaskCompletionSource? PlaylistsGate { get; set; }
 

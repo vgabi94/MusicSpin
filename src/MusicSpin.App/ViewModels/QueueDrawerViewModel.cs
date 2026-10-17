@@ -102,6 +102,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     public const string RowGone = "That track isn't up next any more.";
 
     private readonly PlayerViewModel _player;
+    private readonly RadioViewModel _radio;
     private readonly ILibraryService _library;
     private readonly ICoverService _covers;
     private readonly Notices _notices;
@@ -116,10 +117,13 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     private bool _openedForDrag;
     private ITimer? _closeTimer;
 
-    public QueueDrawerViewModel(PlayerViewModel player, ILibraryService library, ICoverService covers, Notices notices, TimeProvider time, IUiDispatcher ui)
+    public QueueDrawerViewModel(PlayerViewModel player, RadioViewModel radio, ILibraryService library, ICoverService covers, Notices notices, TimeProvider time,
+        IUiDispatcher ui)
     {
         ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(radio);
         _player = player;
+        _radio = radio;
         _library = library;
         _covers = covers;
         _notices = notices;
@@ -128,6 +132,13 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         _player.QueueChanged += OnQueueChanged;
         _player.StatusApplied += OnStatusApplied;
         _player.PropertyChanged += OnPlayerChanged;
+        _radio.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RadioViewModel.Description))
+            {
+                OnPropertyChanged(nameof(RadioDescription));
+            }
+        };
         SaveForm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(IsOpen))
@@ -157,7 +168,8 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     public bool IsRadio => _player.IsRadio;
 
-    public string? RadioDescription => _player.RadioDescription;
+    /// <summary>The station on air: "Jazz or Ambient · 1960s" (#23).</summary>
+    public string? RadioDescription => _radio.Description;
 
     /// <summary>Save as playlist: the name field instead of the footer's buttons.</summary>
     public PlaylistNameViewModel SaveForm { get; } = new();
@@ -593,9 +605,6 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         {
             case nameof(PlayerViewModel.IsRadio):
                 OnPropertyChanged(nameof(IsRadio));
-                break;
-            case nameof(PlayerViewModel.RadioDescription):
-                OnPropertyChanged(nameof(RadioDescription));
                 break;
         }
     }

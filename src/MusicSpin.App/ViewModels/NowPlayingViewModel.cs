@@ -61,13 +61,16 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
     private readonly ICoverService _covers;
     private readonly Notices _notices;
     private readonly FavoritesViewModel _favorites;
+    private readonly RadioViewModel _radio;
     private string? _albumId;
     private bool _shown;
     private bool _deckHeld;
 
-    public NowPlayingViewModel(PlayerViewModel player, ILibraryService library, ICoverService covers, FavoritesViewModel favorites, Notices notices)
+    public NowPlayingViewModel(PlayerViewModel player, RadioViewModel radio, ILibraryService library, ICoverService covers, FavoritesViewModel favorites,
+        Notices notices)
     {
         ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(radio);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(covers);
         ArgumentNullException.ThrowIfNull(favorites);
@@ -77,10 +80,17 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
         _covers = covers;
         _notices = notices;
         _favorites = favorites;
+        _radio = radio;
         _player.PropertyChanged += OnPlayerChanged;
         _favorites.Changed += (_, _) => MarkFavorites();
+        _radio.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RadioViewModel.Kicker))
+            {
+                OnPropertyChanged(nameof(Kicker));
+            }
+        };
         FollowPlayer();
-        ShowKicker();
     }
 
     public override int Order => LayerOrder.NowPlaying;
@@ -101,8 +111,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
     public partial IReadOnlyList<NowPlayingTrackViewModel> Tracks { get; private set; } = [];
 
     /// <summary>"Radio · Jazz" while a station is on air; null hides the line.</summary>
-    [ObservableProperty]
-    public partial string? Kicker { get; private set; }
+    public string? Kicker => _radio.Kicker;
 
     /// <summary>The tonearm: parked, over the lead-in (lifted), or lowered onto the record.</summary>
     [ObservableProperty]
@@ -196,10 +205,6 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
             case nameof(PlayerViewModel.TrackId):
                 MarkTracks();
                 break;
-            case nameof(PlayerViewModel.QueueMode):
-            case nameof(PlayerViewModel.RadioDescription):
-                ShowKicker();
-                break;
             case nameof(PlayerViewModel.Title) or nameof(PlayerViewModel.Artist) or nameof(PlayerViewModel.Album) when !_shown:
                 (Title, ArtistLine) = (_player.Album ?? _player.Title, _player.Artist);
                 break;
@@ -226,10 +231,6 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
             _ => ArmState.Parked,
         };
     }
-
-    private void ShowKicker()
-        => Kicker = !_player.IsRadio ? null
-            : string.IsNullOrWhiteSpace(_player.RadioDescription) ? "Radio" : $"Radio · {_player.RadioDescription}";
 
     private void MarkTracks()
     {

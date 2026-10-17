@@ -8,6 +8,7 @@ using MusicSpin.App.Controls;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
 using MusicSpin.App.Views;
+using MusicSpin.Core.Library;
 using MusicSpin.Core.Remote;
 using MusicSpin.Tests.Ui.Harness;
 
@@ -36,7 +37,7 @@ public sealed class QueueDrawerTests
     /// Night Transit's first track playing, the <paramref name="upNext"/> tracks after it up next, then the rest of the
     /// album; <paramref name="radio"/> puts a station on air, whose picks follow.
     /// </summary>
-    private static async Task QueueAsync(AppHarness app, IReadOnlyList<QueueItem> upNext, string? radio = null, IReadOnlyList<QueueItem>? after = null)
+    private static async Task QueueAsync(AppHarness app, IReadOnlyList<QueueItem> upNext, RadioFilter? radio = null, IReadOnlyList<QueueItem>? after = null)
     {
         IReadOnlyList<QueueItem> rest = after ?? [SampleLibrary.Item(6, 2), SampleLibrary.Item(6, 3)];
         app.Scripted!.SetQueue([SampleLibrary.Item(6, 1), .. upNext, .. rest], 0, upNext.Count, radio);
@@ -259,7 +260,7 @@ public sealed class QueueDrawerTests
     public async Task On_radio_the_picks_follow_dimmed_and_a_click_skips_ahead_and_End_radio_keeps_the_rows()
     {
         await using var app = await OpenAsync();
-        await QueueAsync(app, Tracks((7, 1)), radio: "Jazz", after: Tracks((1, 1), (3, 2)));
+        await QueueAsync(app, Tracks((7, 1)), radio: new RadioFilter { Genres = ["Jazz"] }, after: Tracks((1, 1), (3, 2)));
         await OpenDrawerAsync(app);
 
         Assert.True(Find<StackPanel>(app, "RadioSection").IsVisible);
@@ -398,7 +399,7 @@ public sealed class QueueDrawerTests
     public async Task Snapshot_of_the_drawer_on_radio(AppTheme theme)
     {
         await using var app = await OpenAsync(theme);
-        await QueueAsync(app, Nine, radio: "Whole library", after: Tracks((1, 1), (3, 2), (4, 3), (5, 1)));
+        await QueueAsync(app, Nine, radio: new RadioFilter(), after: Tracks((1, 1), (3, 2), (4, 3), (5, 1)));
         await OpenDrawerAsync(app);
         Snapshots.Match(app.Window, $"queue-radio-{theme.ToString().ToLowerInvariant()}");
     }

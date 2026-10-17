@@ -75,7 +75,7 @@ public sealed class AlbumsPageTests
         Assert.Equal(["Sort: ", "Artist"], Texts(Gui.Find<Button>(app.Window, "SortButton")));
         Assert.Equal(["Group: ", "Genre"], Texts(Gui.Find<Button>(app.Window, "GroupButton")));
         Assert.Equal(["AMBIENT · 2", "CLASSICAL · 3", "ELECTRONIC · 1"],
-            Gui.All<Grid>(app.Window).Where(g => g.Classes.Contains("groupHeader")).Take(3).Select(g => Texts(g).Single()));
+            Gui.All<Grid>(app.Window).Where(g => g.Classes.Contains("groupHeader")).Take(3).Select(g => g.Children.OfType<TextBlock>().Single().Text));
     }
 
     [AvaloniaFact]

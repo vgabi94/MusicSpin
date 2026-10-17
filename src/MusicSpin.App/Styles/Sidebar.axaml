@@ -36,7 +36,7 @@
         <Setter Property="Orientation" Value="Horizontal" />
         <Setter Property="Spacing" Value="{StaticResource NavIconGap}" />
     </Style>
-    <Style Selector="Button.nav controls|Icon">
+    <Style Selector="Button.nav controls|Icon, Button.nav controls|RadioIcon">
         <Setter Property="Width" Value="{StaticResource NavIconSize}" />
         <Setter Property="Height" Value="{StaticResource NavIconSize}" />
         <Setter Property="VerticalAlignment" Value="Center" />
@@ -44,6 +44,10 @@
     <Style Selector="Button.nav TextBlock">
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <!-- Radio while a station is on air (mockup: body.radio-on #nav [data-page="radio"]). -->
+    <Style Selector="Button.nav.onAir">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
     </Style>
     <!-- Favorites' track count, quieter than the name. -->
     <Style Selector="Button.nav TextBlock.navCount">

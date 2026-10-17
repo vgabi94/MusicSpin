@@ -119,6 +119,37 @@
     <sys:Double x:Key="GroupHeaderMinHeight">24</sys:Double>
     <Thickness x:Key="GroupHeaderMargin">0,30,0,12</Thickness>
     <Thickness x:Key="FirstGroupHeaderMargin">0,0,0,12</Thickness>
+    <sys:Double x:Key="GroupHeaderGap">12</sys:Double>
+
+    <!--
+      Radio (#41, #23, #24). A group's Play and Radio pills (mockup: .group-acts, .radio-btn, .group-play): 6 apart,
+      padded 3 10 3 8, in 11.5 type, with a 15 icon 5 from the label. The mockup's icons are lines 2 wide in a 24 box,
+      so 1.25 at 15. On a grouped crate's label they are icons only, laid out at the crate's full size (÷ .62): padded 6,
+      2 apart, 8 in from the box's end. The waves fade to 25% as they pulse (@keyframes onair).
+    -->
+    <sys:Double x:Key="GroupActsGap">6</sys:Double>
+    <Thickness x:Key="GroupActPadding">8,3,10,3</Thickness>
+    <CornerRadius x:Key="GroupActRadius">999</CornerRadius>
+    <sys:Double x:Key="GroupActFontSize">11.5</sys:Double>
+    <sys:Double x:Key="GroupActIconSize">15</sys:Double>
+    <sys:Double x:Key="GroupActIconGap">5</sys:Double>
+    <sys:Double x:Key="RadioIconStroke">1.25</sys:Double>
+    <Rect x:Key="RadioViewBox">0,0,24,24</Rect>
+    <Rect x:Key="GroupPlayViewBox">0,0,24,24</Rect>
+    <sys:Double x:Key="OnAirWaveDimOpacity">0.25</sys:Double>
+    <Thickness x:Key="CrateActPadding">9.7</Thickness>
+    <sys:Double x:Key="CrateActIconSize">24.2</sys:Double>
+    <sys:Double x:Key="CrateActStroke">2</sys:Double>
+    <sys:Double x:Key="CrateActsGap">3.2</sys:Double>
+    <Thickness x:Key="CrateActsMargin">0,0,12.9,0</Thickness>
+    <!-- The player bar's RADIO pill (mockup: .onair): 8 before the title, padded 1 7 1 5, 10 bold capitals 0.06em apart, a 12 icon 4 from them. -->
+    <Thickness x:Key="OnAirPillMargin">0,0,8,0</Thickness>
+    <Thickness x:Key="OnAirPillPadding">5,1,7,1</Thickness>
+    <CornerRadius x:Key="OnAirPillRadius">999</CornerRadius>
+    <sys:Double x:Key="OnAirPillFontSize">10</sys:Double>
+    <sys:Double x:Key="OnAirPillLetterSpacing">0.6</sys:Double>
+    <sys:Double x:Key="OnAirPillIconSize">12</sys:Double>
+    <sys:Double x:Key="OnAirPillIconGap">4</sys:Double>
 
     <!--
       Album cards (mockup: .grid, .card): columns at least 176 wide, 26 apart; rows 30 apart. The art is laid out at
@@ -192,7 +223,6 @@
     <!-- The crates take the view's padding (ViewPadding) on their side; the side panel on its own. -->
     <Thickness x:Key="SoleCrateMargin">28,8,0,40</Thickness>
     <Thickness x:Key="CrateScrollPadding">28,8,0,40</Thickness>
-    <sys:Double x:Key="CrateGroupNameMaxWidth">200</sys:Double>
     <CornerRadius x:Key="CrateCoverRadius">3</CornerRadius>
     <!-- A record's hover light (mockup: .crate .rec:hover::after, opacity .07). -->
     <sys:Double x:Key="CrateRecordHoverOpacity">0.07</sys:Double>
@@ -451,8 +481,9 @@
     <CornerRadius x:Key="NowPlayingCloseRadius">18</CornerRadius>
     <Thickness x:Key="NowPlayingCloseMargin">16,12,0,0</Thickness>
     <sys:Double x:Key="NowPlayingInfoMaxWidth">520</sys:Double>
-    <sys:Double x:Key="NowPlayingKickerGap">6</sys:Double>
-    <sys:Double x:Key="NowPlayingKickerIconSize">12</sys:Double>
+    <!-- The radio kicker: the mockup's 15 icon (in its 24 box), 7 before the text (.np-radio). -->
+    <sys:Double x:Key="NowPlayingKickerGap">7</sys:Double>
+    <sys:Double x:Key="NowPlayingKickerIconSize">15</sys:Double>
     <sys:Double x:Key="NowPlayingTitleFontSize">40</sys:Double>
     <!-- 6 above and 4 below, less the half-leading line-height 1.05 takes off a 40 px line (3 each side). -->
     <Thickness x:Key="NowPlayingTitleMargin">0,3,0,1</Thickness>

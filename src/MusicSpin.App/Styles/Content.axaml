@@ -101,6 +101,7 @@
     <Style Selector="Grid.groupHeader">
         <Setter Property="Margin" Value="{StaticResource GroupHeaderMargin}" />
         <Setter Property="MinHeight" Value="{StaticResource GroupHeaderMinHeight}" />
+        <Setter Property="ColumnSpacing" Value="{StaticResource GroupHeaderGap}" />
     </Style>
     <Style Selector="Grid.groupHeader.first">
         <Setter Property="Margin" Value="{StaticResource FirstGroupHeaderMargin}" />

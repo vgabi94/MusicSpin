@@ -33,10 +33,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         ArgumentNullException.ThrowIfNull(services);
         _services = services;
         Player = new PlayerViewModel(services.Player, services.Time, services.Ui);
+        Radio = new RadioViewModel(Player, services.Library, Notices);
         SpinClock = new SpinClock(services.Time, services.Ui);
         Favorites = new FavoritesViewModel(services.Library, Notices);
         Favorites.Changed += (_, _) => OnFavoritesChanged();
-        NowPlaying = new NowPlayingViewModel(Player, services.Library, services.Covers, Favorites, Notices);
+        NowPlaying = new NowPlayingViewModel(Player, Radio, services.Library, services.Covers, Favorites, Notices);
         NowPlaying.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(NowPlayingViewModel.IsSpinning))
@@ -44,7 +45,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 SpinClock.IsSpinning = NowPlaying.IsSpinning;
             }
         };
-        QueueDrawer = new QueueDrawerViewModel(Player, services.Library, services.Covers, Notices, services.Time, services.Ui);
+        QueueDrawer = new QueueDrawerViewModel(Player, Radio, services.Library, services.Covers, Notices, services.Time, services.Ui);
         QueueDrawer.PlaylistSaved += (_, playlist) => _ = Notices.GuardAsync(async () =>
         {
             await ReloadAsync().ConfigureAwait(true);
@@ -59,14 +60,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Playlists = new PlaylistActions(services.Library, Player, Sidebar, Menu, Notices, () => ReloadAsync());
         Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
         Scene = new TurntableSceneViewModel(Player, NowPlaying, services.Library, services.Covers, Settings, services.Time, services.Ui, Notices);
-        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Scene, Menu, Playlists, Notices, Settings, services.Time);
-        TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Menu, Playlists, Favorites, Notices);
+        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, Radio, SpinClock, NowPlaying, Scene, Menu, Playlists, Notices, Settings,
+            services.Time);
+        TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Radio, Menu, Playlists, Favorites, Notices);
         FavoritesPage = new FavoritesPageViewModel(services.Library, services.Covers, Player, Menu, Playlists, Favorites, Notices, () => Sidebar.Navigate(Sidebar.Radio));
         RadioPage = new RadioPageViewModel(Player, Notices);
         CurrentPage = AlbumsPage;
         AlbumsPage.IsShown = true;
         Items = new LibraryItemActions(Player, services.Library, Scene, NowPlaying, Menu, Playlists, Favorites, Notices, () => CurrentPage);
         Sidebar.Navigated += (_, item) => _ = ShowAsync(item);
+        Radio.PageRequested += (_, _) =>
+        {
+            NowPlaying.Close();
+            Sidebar.Navigate(Sidebar.Radio);
+        };
+        Radio.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RadioViewModel.IsOnAir))
+            {
+                Sidebar.Radio.IsOnAir = Radio.IsOnAir;
+            }
+        };
         Notices.Posted += (_, message) => Banner = message;
         Player.Notice += (_, message) => Notices.Post(message);
         Player.PropertyChanged += OnPlayerChanged;
@@ -86,6 +100,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public SidebarViewModel Sidebar { get; } = new();
 
     public PlayerViewModel Player { get; }
+
+    /// <summary>The station on air (#23): the player bar's RADIO pill, the On air buttons, the sidebar's Radio.</summary>
+    public RadioViewModel Radio { get; }
 
     public SpinClock SpinClock { get; }
 

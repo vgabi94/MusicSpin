@@ -1,0 +1,35 @@
+<!--
+  An artist's or a genre's Play and Radio (mockup: .group-acts, .group-play, .radio-btn): pills after a group header's
+  name, or icons only on a grouped crate's label (Styles/Radio.axaml). Radio reads "On air" in the accent while the
+  group's station plays, and its waves pulse.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             x:Class="MusicSpin.App.Views.GroupActionsView"
+             x:DataType="vm:GroupActionsViewModel">
+    <StackPanel Classes="groupActs">
+        <Button Name="GroupPlay"
+                Classes="groupAct"
+                Command="{Binding PlayCommand}"
+                ToolTip.Tip="{Binding PlayToolTip}"
+                AutomationProperties.Name="{Binding PlayToolTip}">
+            <StackPanel>
+                <controls:Icon Classes="groupPlay" Data="{StaticResource GroupPlay}" />
+                <TextBlock Classes="label" Text="Play" />
+            </StackPanel>
+        </Button>
+        <Button Name="GroupRadio"
+                Classes="groupAct radio"
+                Classes.on="{Binding IsOnAir}"
+                Command="{Binding RadioCommand}"
+                ToolTip.Tip="{Binding RadioToolTip}"
+                AutomationProperties.Name="{Binding RadioToolTip}">
+            <StackPanel>
+                <controls:RadioIcon IsOnAir="{Binding IsOnAir}" />
+                <TextBlock Classes="label" Text="{Binding RadioLabel}" />
+            </StackPanel>
+        </Button>
+    </StackPanel>
+</UserControl>
