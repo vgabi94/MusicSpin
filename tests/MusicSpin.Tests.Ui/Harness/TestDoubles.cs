@@ -68,10 +68,34 @@ internal sealed class StubLibrary : ILibraryService
 
     public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
-    public Task<IReadOnlyList<AlbumSummary>> AlbumsAsync(CancellationToken cancellationToken = default)
+    /// <summary>Set: album reads wait for it (a slow library); a faulted one fails them with its exception.</summary>
+    public TaskCompletionSource? AlbumsGate { get; set; }
+
+    /// <summary>Set: album reads fail as a busy library's do.</summary>
+    public string? AlbumsFailure { get; set; }
+
+    /// <summary>The most album and playlist reads under way at once (the library lets one reader in at a time).</summary>
+    public int MostReadsAtOnce { get; private set; }
+
+    private int _readsNow;
+
+    public async Task<IReadOnlyList<AlbumSummary>> AlbumsAsync(CancellationToken cancellationToken = default)
     {
         AlbumReads++;
-        return Task.FromResult<IReadOnlyList<AlbumSummary>>([.. Albums]);
+        MostReadsAtOnce = Math.Max(MostReadsAtOnce, ++_readsNow);
+        try
+        {
+            if (AlbumsGate is { } gate)
+            {
+                await gate.Task;
+            }
+
+            return AlbumsFailure is { } failure ? throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure) : [.. Albums];
+        }
+        finally
+        {
+            _readsNow--;
+        }
     }
 
     public Task<IReadOnlyList<TrackSummary>> TracksAsync(CancellationToken cancellationToken = default)
@@ -97,6 +121,7 @@ internal sealed class StubLibrary : ILibraryService
     {
         PlaylistReads++;
         MostPlaylistReadsAtOnce = Math.Max(MostPlaylistReadsAtOnce, ++_playlistReadsNow);
+        MostReadsAtOnce = Math.Max(MostReadsAtOnce, ++_readsNow);
         try
         {
             if (PlaylistsGate is { } gate)
@@ -109,6 +134,7 @@ internal sealed class StubLibrary : ILibraryService
         finally
         {
             _playlistReadsNow--;
+            _readsNow--;
         }
     }
 
