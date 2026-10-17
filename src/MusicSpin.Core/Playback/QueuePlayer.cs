@@ -424,12 +424,13 @@ public sealed class QueuePlayer : IDisposable
                 return StatusCore();
             }
 
-            var current = _items[_index];
+            // No current entry (everything queued was unplayable): a plain reorder; NormalizeUpNext clears any up-next mark.
+            var current = _index >= 0 ? _items[_index] : null;
             var slot = _items[from];
             _items.RemoveAt(from);
             _items.Insert(to, slot);
-            _index = _items.IndexOf(current);
-            if (!ReferenceEquals(slot, current))
+            _index = current is null ? -1 : _items.IndexOf(current);
+            if (current is not null && !ReferenceEquals(slot, current))
             {
                 slot.UpNext = to > _index && _items.Skip(_index + 1).Take(to - _index - 1).All(s => s.UpNext);
             }
@@ -496,7 +497,7 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
-            RequireQueue();
+            RequireEntries();
             if (index < 0 || index >= _items.Count)
             {
                 throw Invalid($"index {index} is outside the queue (0-{_items.Count - 1}).");
@@ -566,7 +567,7 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
-            RequireQueue();
+            RequireEntries();
             if (_player.State == PlayerState.Playing)
             {
                 _player.Pause();
@@ -595,7 +596,7 @@ public sealed class QueuePlayer : IDisposable
         {
             ThrowIfDisposed();
             TopUpRadio();
-            RequireQueue();
+            RequireEntries();
             var wrap = WrapAll;
             if (_index + 1 >= _items.Count)
             {
@@ -938,8 +939,10 @@ public sealed class QueuePlayer : IDisposable
 
         _stoppedByUser = true;
         _player.Stop();
-        throw new MusicSpinException(MusicSpinErrorCode.FileNotFound,
-            $"No playable track {(direction > 0 ? "after" : "before")} entry {index + 1 - direction}: the remaining file(s) were skipped (see 'skipped' in 'music-spin status').");
+        var from = index + 1 - direction; // 1-based entry the search started next to
+        throw new MusicSpinException(MusicSpinErrorCode.FileNotFound, wrap || from < 1 || from > count
+            ? $"No playable track in the queue: all {count} entr{(count == 1 ? "y was" : "ies were")} skipped (see 'skipped' in 'music-spin status')."
+            : $"No playable track {(direction > 0 ? "after" : "before")} entry {from}: the remaining file(s) were skipped (see 'skipped' in 'music-spin status').");
     }
 
     private bool TryLoad(QueueItem item, int index, List<SkippedItem>? into, List<Slot>? slots = null)
@@ -1333,9 +1336,23 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
+    /// <summary>The queue has entries and a current one (index &gt;= 0).</summary>
     private void RequireQueue()
     {
-        if (_items.Count == 0 || _index < 0)
+        RequireEntries();
+        if (_index < 0)
+        {
+            // Entries but none loaded: everything queued so far was unplayable (#66).
+            throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
+                $"No queue entry is loaded: none of the {_items.Count} queued entr{(_items.Count == 1 ? "y" : "ies")} could be played (see 'skipped' in 'music-spin status'). " +
+                "Use 'music-spin play' to retry, 'music-spin queue remove/move' to edit the queue, or 'music-spin queue clear'.");
+        }
+    }
+
+    /// <summary>The queue has entries; there may be no current entry (all unplayable).</summary>
+    private void RequireEntries()
+    {
+        if (_items.Count == 0)
         {
             throw new MusicSpinException(MusicSpinErrorCode.InvalidState,
                 "The queue is empty. Start something with 'music-spin play <file> | --album <title> | --artist <name>'.");
@@ -1344,7 +1361,7 @@ public sealed class QueuePlayer : IDisposable
 
     private void RequireIndex(int index)
     {
-        RequireQueue();
+        RequireEntries();
         if (index < 0 || index >= _items.Count)
         {
             throw Invalid($"index {index} is outside the queue (0-{_items.Count - 1}).");
