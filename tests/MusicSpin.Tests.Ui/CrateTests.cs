@@ -268,8 +268,8 @@ public sealed class CrateTests
 
         Gui.Click(window, Gui.Find<Button>(window, "CrateQueue"));
         await Gui.UntilAsync(() => app.ViewModel.Menu.IsOpen, "the queue menu");
-        Assert.Equal(["Play next", "Add to queue"], app.ViewModel.Menu.Entries.Select(e => e.Label));
-        Gui.Click(window, Gui.All<Button>(Gui.Find<Border>(window, "MenuBox")).Last());
+        Assert.Equal(["Play next", "Add to queue", "Add to playlist"], app.ViewModel.Menu.Entries.Select(e => e.Label));
+        Gui.Click(window, Gui.All<Button>(Gui.Find<Border>(window, "MenuBox")).Single(b => b.DataContext is MenuEntryViewModel { Label: "Add to queue" }));
         await Gui.UntilAsync(() => app.Scripted.Count("queue.add") == 1, "the album queued");
         var added = app.Scripted.Sent("queue.add")[0];
         Assert.Equal("upnext", added.GetProperty("position").GetString());

@@ -1,7 +1,7 @@
 <!--
   Now Playing (mockup: #np): the playing album's cover blurred behind, ✕ top left, the turntable (the design chosen in
   Settings, in controls:DeckHost) and the album: a kicker while radio is on air, the title, "artist · year" and the
-  tracks. Sizes and looks are in Styles/NowPlaying.axaml.
+  tracks, each with its heart (#48). Sizes and looks are in Styles/NowPlaying.axaml.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -62,10 +62,19 @@
                                             Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).NowPlaying.PlayTrackCommand}"
                                             CommandParameter="{Binding}"
                                             AutomationProperties.Name="{Binding Title}">
-                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                                             <TextBlock Classes="number" Text="{Binding Marker}" />
                                             <TextBlock Grid.Column="1" Classes="trim" Text="{Binding Title}" />
-                                            <TextBlock Grid.Column="2" Classes="duration" Text="{Binding Duration}" />
+                                            <Button Grid.Column="2"
+                                                    Classes="heart"
+                                                    Classes.on="{Binding IsFavorite}"
+                                                    Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).NowPlaying.ToggleFavoriteCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip.Tip="{Binding FavoriteLabel}"
+                                                    AutomationProperties.Name="{Binding FavoriteLabel}">
+                                                <controls:Icon Data="{StaticResource Heart}" />
+                                            </Button>
+                                            <TextBlock Grid.Column="3" Classes="duration" Text="{Binding Duration}" />
                                         </Grid>
                                     </Button>
                                 </DataTemplate>

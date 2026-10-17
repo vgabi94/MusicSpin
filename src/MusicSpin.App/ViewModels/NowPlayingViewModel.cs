@@ -35,15 +35,24 @@ public sealed partial class NowPlayingTrackViewModel(TrackSummary track, int ind
     [NotifyPropertyChangedFor(nameof(Marker))]
     public partial bool IsPlaying { get; set; }
 
+    /// <summary>A favorite: its heart is filled and always shows (#48).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FavoriteLabel))]
+    public partial bool IsFavorite { get; set; }
+
+    /// <summary>The heart's tooltip: Add to favorites, or Remove from favorites.</summary>
+    public string FavoriteLabel => FavoritesViewModel.Label(IsFavorite);
+
     /// <summary>The track number, or ♪ while it plays.</summary>
     public string Marker => IsCurrent && IsPlaying ? PlayingMark
         : (Track.TrackNumber ?? Index + 1).ToString(CultureInfo.InvariantCulture);
 }
 
 /// <summary>
-/// The Now Playing overlay (mockup: #np): the playing album on the turntable, its title, "artist · year" and tracks, over
-/// its cover blurred. The player bar's cover opens and closes it; ✕ and Esc close it. It also holds the deck's state: the
-/// arm and whether the platter spins follow play/pause from anywhere (the transport, Space, the CLI).
+/// The Now Playing overlay (mockup: #np): the playing album on the turntable, its title, "artist · year" and tracks (each
+/// with a heart, #48), over its cover blurred. The player bar's cover opens and closes it; ✕ and Esc close it. It also
+/// holds the deck's state: the arm and whether the platter spins follow play/pause from anywhere (the transport, Space,
+/// the CLI).
 /// </summary>
 public sealed partial class NowPlayingViewModel : LayerViewModel
 {
@@ -51,21 +60,25 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
     private readonly ILibraryService _library;
     private readonly ICoverService _covers;
     private readonly Notices _notices;
+    private readonly FavoritesViewModel _favorites;
     private string? _albumId;
     private bool _shown;
     private bool _deckHeld;
 
-    public NowPlayingViewModel(PlayerViewModel player, ILibraryService library, ICoverService covers, Notices notices)
+    public NowPlayingViewModel(PlayerViewModel player, ILibraryService library, ICoverService covers, FavoritesViewModel favorites, Notices notices)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(covers);
+        ArgumentNullException.ThrowIfNull(favorites);
         ArgumentNullException.ThrowIfNull(notices);
         _player = player;
         _library = library;
         _covers = covers;
         _notices = notices;
+        _favorites = favorites;
         _player.PropertyChanged += OnPlayerChanged;
+        _favorites.Changed += (_, _) => MarkFavorites();
         FollowPlayer();
         ShowKicker();
     }
@@ -152,6 +165,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
             Cover = cover.Result;
             Tracks = [.. tracks.Result.Select((t, i) => new NowPlayingTrackViewModel(t, i))];
             MarkTracks();
+            MarkFavorites();
         }).ConfigureAwait(true);
     }
 
@@ -161,6 +175,14 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
     {
         ArgumentNullException.ThrowIfNull(track);
         return _notices.GuardAsync(() => _player.PlayTracksAsync([.. Tracks.Select(t => t.Track)], track.Index));
+    }
+
+    /// <summary>A track's heart: it becomes a favorite, or stops being one.</summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task<bool> ToggleFavorite(NowPlayingTrackViewModel track)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        return _favorites.ToggleAsync(track.Track.Id);
     }
 
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)
@@ -215,6 +237,14 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
         {
             track.IsCurrent = track.Track.Id == _player.TrackId;
             track.IsPlaying = _player.IsPlaying;
+        }
+    }
+
+    private void MarkFavorites()
+    {
+        foreach (var track in Tracks)
+        {
+            track.IsFavorite = _favorites.Contains(track.Track.Id);
         }
     }
 }

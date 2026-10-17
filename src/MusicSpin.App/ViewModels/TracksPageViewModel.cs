@@ -18,11 +18,17 @@ public sealed partial class TrackItemViewModel(TrackSummary track, AlbumItemView
     /// <summary>The album's cover (the row's thumbnail).</summary>
     public AlbumArt Art { get; } = art;
 
-    /// <summary>False for a playlist entry whose file is missing: the row is dimmed, and it can't be played, queued or dragged.</summary>
-    public bool IsAvailable { get; init; } = true;
+    /// <summary>The playlist entry this row shows; null on the Tracks page.</summary>
+    public PlaylistEntryItem? Entry { get; init; }
+
+    /// <summary>
+    /// False for a playlist entry whose file is missing: the row is dimmed, and it can't be played, queued or dragged
+    /// out of its playlist (it can still be removed, or moved within it).
+    /// </summary>
+    public bool IsAvailable => Entry?.IsAvailable ?? true;
 
     /// <summary>The entry's place in its playlist (1-based); null on the Tracks page.</summary>
-    public int? Position { get; init; }
+    public int? Position => Entry?.Position;
 
     public string Title => Track.Title;
 
@@ -46,6 +52,17 @@ public sealed partial class TrackItemViewModel(TrackSummary track, AlbumItemView
     /// <summary>The loaded track is playing: its number shows ♪.</summary>
     [ObservableProperty]
     public partial bool ShowsNote { get; set; }
+
+    /// <summary>A favorite: its heart is filled and always shows (#48).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FavoriteLabel))]
+    public partial bool IsFavorite { get; set; }
+
+    /// <summary>The heart's tooltip.</summary>
+    public string FavoriteLabel => FavoritesViewModel.Label(IsFavorite);
+
+    /// <summary>A library track (a plain file in a playlist can't be a favorite: it has no heart).</summary>
+    public bool CanBeFavorite => Track.Id.Length > 0;
 }
 
 /// <summary>A track row; its type says which columns it has (the group header names the rest).</summary>
@@ -59,6 +76,9 @@ public sealed record TrackRowWithAlbum(TrackItemViewModel Item) : TrackRow(Item)
 
 /// <summary>Ungrouped: thumbnail, title and artist, album, genre, duration (mockup: m-none).</summary>
 public sealed record TrackRowWithAlbumAndGenre(TrackItemViewModel Item) : TrackRow(Item);
+
+/// <summary>On a playlist page: as <see cref="TrackRowWithAlbum"/>, with ✕ on hover to remove it; dragging it reorders (#33).</summary>
+public sealed record PlaylistTrackRow(TrackItemViewModel Item) : TrackRow(Item);
 
 /// <summary>An album's header on the Tracks page (mockup: .talbum): its cover, title, details, Play and ＋.</summary>
 public sealed class TrackAlbumHeaderViewModel(AlbumItemViewModel album, IReadOnlyList<TrackSummary> tracks, bool isFirst)
@@ -78,16 +98,27 @@ public sealed class TrackAlbumHeaderViewModel(AlbumItemViewModel album, IReadOnl
 public abstract partial class TrackListPageViewModel : PageViewModel
 {
     private List<TrackItemViewModel> _all = [];
+    private int _loads;
+    private bool _loaded;
 
-    protected TrackListPageViewModel(ICoverService covers, PlayerViewModel player, MenuViewModel menu, Notices notices)
+    protected TrackListPageViewModel(ICoverService covers, PlayerViewModel player, MenuViewModel menu, PlaylistActions playlists,
+        FavoritesViewModel favorites, Notices notices)
     {
         ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(favorites);
         Covers = covers;
         Player = player;
         Menu = menu;
+        Playlists = playlists;
+        Favorites = favorites;
         Notices = notices;
         Player.PropertyChanged += OnPlayerChanged;
+        Favorites.Changed += (_, _) => OnFavoritesChanged();
     }
+
+    /// <summary>A playlist row is dragged over the list (the window reports it): the drop line shows where it would go.</summary>
+    [ObservableProperty]
+    public partial bool IsDragOver { get; set; }
 
     /// <summary>The tracks shown, in order.</summary>
     [ObservableProperty]
@@ -103,16 +134,57 @@ public abstract partial class TrackListPageViewModel : PageViewModel
 
     protected MenuViewModel Menu { get; }
 
+    protected PlaylistActions Playlists { get; }
+
+    protected FavoritesViewModel Favorites { get; }
+
     protected Notices Notices { get; }
 
     /// <summary>Every track read, in the library's (or the playlist's) order.</summary>
     protected IReadOnlyList<TrackItemViewModel> All => _all;
 
+    /// <summary>Reads the tracks again. Of reads that overlap (a heart and a library change at once), the last started wins.</summary>
     public override async Task LoadAsync()
     {
-        _all = [.. await ReadAsync().ConfigureAwait(true)];
+        var load = ++_loads;
+        var read = await ReadAsync().ConfigureAwait(true);
+        if (load != _loads)
+        {
+            return;
+        }
+
+        // The same tracks (a heart, or a change elsewhere in the library): the rows stay, and so do hover and focus.
+        if (_loaded && read.Count == _all.Count && read.Zip(_all).All(p => p.First.Track == p.Second.Track && p.First.Entry == p.Second.Entry))
+        {
+            MarkPlaying();
+            MarkFavorites();
+            return;
+        }
+
+        _all = [.. read];
+        _loaded = true;
         MarkPlaying();
+        MarkFavorites();
         Filter();
+    }
+
+    /// <summary>A row's heart (every row's stays enabled while one is saved).</summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task<bool> ToggleFavorite(TrackItemViewModel track)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        return Favorites.ToggleAsync(track.Track.Id);
+    }
+
+    /// <summary>The favorites changed: the hearts follow (the Favorites view reads its list again).</summary>
+    protected virtual void OnFavoritesChanged() => MarkFavorites();
+
+    private void MarkFavorites()
+    {
+        foreach (var track in _all)
+        {
+            track.IsFavorite = Favorites.Contains(track.Track.Id);
+        }
     }
 
     /// <summary>The page's tracks, as items.</summary>
@@ -181,7 +253,7 @@ public abstract partial class TrackListPageViewModel : PageViewModel
     private List<TrackItemViewModel> Playable() => [.. Tracks.Where(t => t.IsAvailable)];
 
     /// <summary>The ＋ menu (mockup: queueMenu).</summary>
-    protected void ShowQueueMenu(IReadOnlyList<TrackSummary> tracks) => Menu.Show(QueueMenu.Entries(tracks, Player, Notices));
+    protected void ShowQueueMenu(IReadOnlyList<TrackSummary> tracks) => Menu.Show(QueueMenu.Entries(tracks, Player, Playlists, Notices));
 
     protected override void Filter()
     {
@@ -228,8 +300,8 @@ public abstract partial class TrackListPageViewModel : PageViewModel
 /// Tracks: every library track, by album (mockup: renderTracks). Albums come in the Sort's order, their tracks in album
 /// order; Title sorts the tracks themselves unless they are grouped by album. Grouped by album, each album has a header.
 /// </summary>
-public sealed partial class TracksPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, MenuViewModel menu, Notices notices)
-    : TrackListPageViewModel(covers, player, menu, notices)
+public sealed partial class TracksPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, MenuViewModel menu,
+    PlaylistActions playlists, FavoritesViewModel favorites, Notices notices) : TrackListPageViewModel(covers, player, menu, playlists, favorites, notices)
 {
     private List<AlbumItemViewModel> _albums = [];
     private Dictionary<string, List<TrackSummary>> _albumTracks = new(StringComparer.Ordinal);
@@ -333,10 +405,12 @@ public sealed partial class TracksPageViewModel(ILibraryService library, ICoverS
 
 /// <summary>
 /// A saved playlist's entries, in the playlist's order (mockup: renderTracks, playlist branch): the title is its name, the
-/// count its entries. An entry whose file is missing shows dimmed and is left out of ▶ Play and ＋ Queue.
+/// count its entries. An entry whose file is missing shows dimmed and is left out of ▶ Play and ＋ Queue. A row's ✕
+/// removes it, and dragging a row to another place moves it there (#33); the list is read again after each edit.
 /// </summary>
 public sealed partial class PlaylistPageViewModel(PlaylistSummaryItem playlist, ILibraryService library, ICoverService covers, PlayerViewModel player,
-    MenuViewModel menu, Notices notices) : TrackListPageViewModel(covers, player, menu, notices)
+    MenuViewModel menu, PlaylistActions playlists, FavoritesViewModel favorites, Notices notices)
+    : TrackListPageViewModel(covers, player, menu, playlists, favorites, notices)
 {
     /// <summary>The playlist (a rename elsewhere changes it, and the title with it).</summary>
     [ObservableProperty]
@@ -354,10 +428,158 @@ public sealed partial class PlaylistPageViewModel(PlaylistSummaryItem playlist, 
         return [.. entries.Select(e => new TrackItemViewModel(e.Track, null,
             art.TryGetValue(e.Track.AlbumId, out var a) ? a : art[e.Track.AlbumId] = new AlbumArt(e.Track.AlbumId, CoverSize.Small, Covers))
         {
-            IsAvailable = e.IsAvailable,
-            Position = e.Position,
+            Entry = e,
         })];
     }
 
+    protected override IReadOnlyList<object> LayOut(IReadOnlyList<TrackItemViewModel> shown) => [.. shown.Select(t => new PlaylistTrackRow(t))];
+
+    /// <summary>
+    /// A row's ✕: the entry leaves the playlist (its track stays in the library). Other rows' ✕ stay enabled meanwhile:
+    /// each removal finds its entry again by its file.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task RemoveEntry(TrackItemViewModel row) => Notices.GuardAsync(async () =>
+    {
+        if (row.Entry is { } entry)
+        {
+            await library.RemoveFromPlaylistAsync(Playlist.Id, entry).ConfigureAwait(true);
+            await LoadAsync().ConfigureAwait(true);
+        }
+    });
+
+    /// <summary>
+    /// A row dropped before the row shown at <paramref name="at"/> (after the last when <paramref name="at"/> is past
+    /// it). With a search, the rows shown are a part of the playlist: the entry lands just before (or after) the one it
+    /// was dropped next to.
+    /// </summary>
+    public Task MoveAsync(TrackItemViewModel row, int at) => Notices.GuardAsync(async () =>
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        var shown = Tracks;
+        var from = -1;
+        for (var i = 0; i < shown.Count && from < 0; i++)
+        {
+            from = ReferenceEquals(shown[i], row) ? i : -1;
+        }
+
+        if (row.Entry is not { } entry || from < 0 || at == from || at == from + 1 || shown.Count == 0)
+        {
+            return;
+        }
+
+        var before = at < shown.Count ? shown[Math.Max(0, at)].Entry!.Position : shown[^1].Entry!.Position + 1;
+        await library.MoveInPlaylistAsync(Playlist.Id, entry, entry.Position < before ? before - 1 : before).ConfigureAwait(true);
+        await LoadAsync().ConfigureAwait(true);
+    });
+}
+
+/// <summary>
+/// Favorites (#48): every favorite library track, newest favorite first, laid out like a playlist (mockup: renderTracks,
+/// playlist branch). It can't be renamed, deleted or reordered, so it has no such controls; un-hearting a row takes it
+/// off. Favorites whose files left the library aren't shown; a line says how many. Its Radio button starts a station of
+/// favorites, and while that station is on air it reads On air and opens the Radio page.
+/// </summary>
+public sealed partial class FavoritesPageViewModel : TrackListPageViewModel
+{
+    /// <summary>The station the Radio button starts: favorites only.</summary>
+    public static readonly RadioFilter Station = new() { Favorites = true };
+
+    /// <summary>Where the docs list the CLI command that names the favorites missing from the library.</summary>
+    public static readonly Uri MissingDocs = new("https://github.com/vgabi94/MusicSpin/blob/main/docs/cli-reference.md#favorite--favorites");
+
+    private readonly ILibraryService _library;
+    private readonly Action _openRadio;
+    private int _reads;
+
+    /// <param name="openRadio">Opens the Radio page (the button, while the favorites station is on air).</param>
+    public FavoritesPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, MenuViewModel menu, PlaylistActions playlists,
+        FavoritesViewModel favorites, Notices notices, Action openRadio)
+        : base(covers, player, menu, playlists, favorites, notices)
+    {
+        _library = library;
+        _openRadio = openRadio;
+        Player.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(PlayerViewModel.IsRadio) or nameof(PlayerViewModel.Station))
+            {
+                OnPropertyChanged(nameof(IsOnAir));
+                OnPropertyChanged(nameof(RadioLabel));
+                RadioCommand.NotifyCanExecuteChanged();
+            }
+        };
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(EmptyText))
+            {
+                OnPropertyChanged(nameof(ShowsHowToAdd));
+            }
+        };
+    }
+
+    public override string Title => "Favorites";
+
+    /// <summary>How many favorites aren't in the library now (their files left it).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MissingNote))]
+    public partial int Missing { get; private set; }
+
+    /// <summary>The line under the title about them, or null when there are none.</summary>
+    public string? MissingNote => Missing switch
+    {
+        0 => null,
+        1 => "1 favorite isn't in the library now.",
+        var n => $"{n:N0} favorites aren't in the library now.",
+    };
+
+    /// <summary>The favorites station is on air (and nothing narrows it): the Radio button reads On air.</summary>
+    public bool IsOnAir => Player.IsRadio && Player.Station is { Favorites: true, HasExcludes: false } station && station with { Favorites = false } is { IsEmpty: true };
+
+    /// <summary>"Radio", or "On air" while the favorites station plays.</summary>
+    public string RadioLabel => IsOnAir ? "On air" : "Radio";
+
+    /// <summary>No favorites at all (not a search that matches none): the empty view says how to add one.</summary>
+    public bool ShowsHowToAdd => EmptyText == EmptyLibraryText;
+
+    /// <summary>The empty view goes on with how to add one (<see cref="ShowsHowToAdd"/>; the view draws the heart in it).</summary>
+    protected override string EmptyLibraryText => "No favorites yet.";
+
+    /// <summary>The Radio button: a station of favorites, or, while it is on air, the Radio page. Off with no favorites.</summary>
+    [RelayCommand(CanExecute = nameof(CanStartRadio))]
+    private Task Radio()
+    {
+        if (IsOnAir)
+        {
+            _openRadio();
+            return Task.CompletedTask;
+        }
+
+        return Notices.GuardAsync(() => Player.StartRadioAsync(Station));
+    }
+
+    /// <summary>The favorites, and how many are missing (from the last read started, as the list).</summary>
+    protected override async Task<IReadOnlyList<TrackItemViewModel>> ReadAsync()
+    {
+        var read = ++_reads;
+        var favorites = await _library.FavoritesAsync().ConfigureAwait(true);
+        if (read == _reads)
+        {
+            Missing = favorites.Missing;
+        }
+
+        var art = new Dictionary<string, AlbumArt>(StringComparer.Ordinal);
+        return [.. favorites.Tracks.Select(t => new TrackItemViewModel(t, null,
+            art.TryGetValue(t.AlbumId, out var a) ? a : art[t.AlbumId] = new AlbumArt(t.AlbumId, CoverSize.Small, Covers)))];
+    }
+
     protected override IReadOnlyList<object> LayOut(IReadOnlyList<TrackItemViewModel> shown) => [.. shown.Select(t => new TrackRowWithAlbum(t))];
+
+    private bool CanStartRadio() => IsOnAir || Favorites.Count > 0;
+
+    /// <summary>A heart changed here or elsewhere: the list is read again (an un-hearted row goes).</summary>
+    protected override void OnFavoritesChanged()
+    {
+        RadioCommand.NotifyCanExecuteChanged();
+        _ = Notices.GuardAsync(LoadAsync);
+    }
 }

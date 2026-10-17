@@ -141,16 +141,7 @@
         <Setter Property="Height" Value="{StaticResource QueueRemoveIconSize}" />
     </Style>
 
-    <!-- The drop line (mockup: .qline): only while something is dragged over rows. -->
-    <Style Selector="Border.dropLine">
-        <Setter Property="Height" Value="{StaticResource QueueDropLineHeight}" />
-        <Setter Property="CornerRadius" Value="{StaticResource QueueDropLineRadius}" />
-        <Setter Property="Margin" Value="{StaticResource QueueDropLineMargin}" />
-        <Setter Property="VerticalAlignment" Value="Top" />
-        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-        <Setter Property="IsHitTestVisible" Value="False" />
-        <Setter Property="IsVisible" Value="False" />
-    </Style>
+    <!-- The drop line (mockup: .qline; its look is in Lists.axaml): only while something is dragged over rows. -->
     <Style Selector="views|QueueDrawerView.over:not(.empty) Border.dropLine">
         <Setter Property="IsVisible" Value="True" />
     </Style>

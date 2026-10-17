@@ -39,8 +39,10 @@ public partial class MainWindow : Window, IScenePlaces
         // click lands on something that can't take it). The player bar's boxes apply or drop their value then.
         AddHandler(PointerPressedEvent, OnPointerPressedAnywhere, RoutingStrategies.Tunnel, handledEventsToo: true);
 
-        // The menu opens under the button that opened it: remember the last button clicked.
-        AddHandler(Button.ClickEvent, (_, e) => _menuAnchor = e.Source as Button ?? _menuAnchor, RoutingStrategies.Bubble, handledEventsToo: true);
+        // The menu opens under the button that opened it: remember the last button clicked. Not a menu entry: a submenu or
+        // a confirmation opens in the menu's place.
+        AddHandler(Button.ClickEvent, (_, e) => _menuAnchor = e.Source is Button button && !MenuBox.IsVisualAncestorOf(button) ? button : _menuAnchor,
+            RoutingStrategies.Bubble, handledEventsToo: true);
 
         // Right-clicking an album or a track opens its menu at the pointer (mockup: the contextmenu handler).
         AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Bubble);
@@ -70,7 +72,7 @@ public partial class MainWindow : Window, IScenePlaces
         _menuAnchor = e.TryGetPosition(this, out var at) ? at
             : source is Control c && c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), this) is { } middle ? middle
             : default(Point);
-        e.Handled = _viewModel.Items.ShowMenu(item);
+        e.Handled = _viewModel.ShowMenu(item);
     }
 
     private void OnPointerPressedAnywhere(object? sender, PointerPressedEventArgs e)

@@ -15,6 +15,8 @@
     <!-- The mockup's "＋" (add to queue), "✓" (the chosen menu option) and "♪" (the track playing). -->
     <StreamGeometry x:Key="Plus">M11,5 H13 V11 H19 V13 H13 V19 H11 V13 H5 V11 H11 Z</StreamGeometry>
     <StreamGeometry x:Key="Check">M5,12.5 L9.5,17 L19,7</StreamGeometry>
+    <!-- "Add to playlist ›" (a submenu follows); drawn as a line. -->
+    <StreamGeometry x:Key="ChevronRight">M9,5 L16,12 L9,19</StreamGeometry>
     <StreamGeometry x:Key="Note">M11,17 A3,3 0 1 1 9,14.17 V4 H17 V7.5 H11 Z</StreamGeometry>
     <!-- END General -->
 
@@ -26,6 +28,9 @@
     <sys:Boolean x:Key="Radio.Stroked">True</sys:Boolean>
     <StreamGeometry x:Key="Playlist">M4,6 H16 M4,11 H16 M4,16 H11 M17,14 V20 M14,17 H20</StreamGeometry>
     <sys:Boolean x:Key="Playlist.Stroked">True</sys:Boolean>
+    <!-- Favorites (#48): one heart everywhere, drawn as a line when not a favorite and filled when it is. -->
+    <StreamGeometry x:Key="Heart">M12,20 L4.7,12.9 A4.5,4.5 0 0 1 11.1,6.6 L12,7.5 L12.9,6.6 A4.5,4.5 0 0 1 19.3,12.9 Z</StreamGeometry>
+    <sys:Boolean x:Key="Heart.Stroked">True</sys:Boolean>
     <!-- END Library (sidebar) -->
 
     <!-- BEGIN Transport -->

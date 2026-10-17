@@ -50,6 +50,22 @@
         <Setter Property="FontSize" Value="{StaticResource PlayerTitleFontSize}" />
         <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
     </Style>
+    <Style Selector="Grid.titleLine">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Grid.titleLine TextBlock.playerTitle">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- The heart sits close after the title, as small as the title's line allows. -->
+    <Style Selector="Grid.titleLine Button.heart">
+        <Setter Property="Width" Value="{StaticResource PlayerHeartSize}" />
+        <Setter Property="Height" Value="{StaticResource PlayerHeartSize}" />
+        <Setter Property="Margin" Value="{StaticResource PlayerHeartMargin}" />
+    </Style>
+    <Style Selector="Grid.titleLine Button.heart controls|Icon">
+        <Setter Property="Width" Value="{StaticResource PlayerHeartIconSize}" />
+        <Setter Property="Height" Value="{StaticResource PlayerHeartIconSize}" />
+    </Style>
     <Style Selector="TextBlock.playerArtist">
         <Setter Property="FontSize" Value="{StaticResource PlayerArtistFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />

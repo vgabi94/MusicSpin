@@ -11,6 +11,7 @@ public enum PageKind
     Tracks,
     Radio,
     Playlist,
+    Favorites,
 }
 
 /// <summary>A sidebar entry. <see cref="Icon"/> names a geometry in Icons/IconsResource.axaml ("Albums").</summary>
@@ -19,23 +20,81 @@ public sealed partial class NavItemViewModel(string title, string icon, PageKind
     [ObservableProperty]
     public partial string Title { get; set; } = title;
 
+    /// <summary>A count after the title (Favorites: how many tracks).</summary>
+    [ObservableProperty]
+    public partial string? Detail { get; set; }
+
     public string Icon { get; } = icon;
 
     public PageKind Kind { get; } = kind;
 
     /// <summary>The playlist this entry opens (a rename or an edit elsewhere updates it).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPlaylist))]
     public partial PlaylistSummaryItem? Playlist { get; set; } = playlist;
 
     [ObservableProperty]
     public partial bool IsActive { get; set; }
 
-    /// <summary>Just saved from the queue: it flashes in the accent (mockup: #plNav a.fresh).</summary>
+    /// <summary>Just saved, or just given tracks: it flashes in the accent (mockup: #plNav a.fresh).</summary>
     [ObservableProperty]
     public partial bool IsFresh { get; set; }
+
+    /// <summary>Albums or tracks dragged over it would be added to it: it lights up.</summary>
+    [ObservableProperty]
+    public partial bool IsDropTarget { get; set; }
+
+    /// <summary>Its name is being edited in place (see <see cref="PlaylistRenameViewModel"/>).</summary>
+    [ObservableProperty]
+    public partial bool IsRenaming { get; set; }
+
+    /// <summary>A playlist's entry (it has a menu, takes drops and can be renamed).</summary>
+    public bool IsPlaylist => Kind == PageKind.Playlist && Playlist is not null;
+
+    /// <summary>Albums or tracks can be dropped on it: a playlist adds them, Favorites favorites them.</summary>
+    public bool TakesDrops => IsPlaylist || Kind == PageKind.Favorites;
 }
 
-/// <summary>The sidebar: Library (Albums, Tracks, Radio), then the saved playlists. The active page is highlighted.</summary>
+/// <summary>
+/// Renaming a sidebar playlist in place: its entry becomes a text box with the name selected. Enter saves, Esc (this is a
+/// layer) or a click elsewhere cancels.
+/// </summary>
+public sealed partial class PlaylistRenameViewModel : LayerViewModel
+{
+    public override int Order => LayerOrder.PlaylistRename;
+
+    /// <summary>The entry being renamed.</summary>
+    [ObservableProperty]
+    public partial NavItemViewModel? Item { get; private set; }
+
+    [ObservableProperty]
+    public partial string Name { get; set; } = string.Empty;
+
+    /// <summary>A rename started: the view focuses the entry's text box.</summary>
+    public event EventHandler<NavItemViewModel>? Started;
+
+    public void Start(NavItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        Close();
+        Item = item;
+        Name = item.Title;
+        item.IsRenaming = true;
+        Open();
+        Started?.Invoke(this, item);
+    }
+
+    protected override void OnOpenChanged(bool isOpen)
+    {
+        if (!isOpen && Item is { } item)
+        {
+            item.IsRenaming = false;
+            Item = null;
+        }
+    }
+}
+
+/// <summary>The sidebar: Library (Albums, Tracks, Radio), then Favorites and the saved playlists. The active page is highlighted.</summary>
 public sealed partial class SidebarViewModel : ObservableObject
 {
     public SidebarViewModel()
@@ -44,6 +103,7 @@ public sealed partial class SidebarViewModel : ObservableObject
         Tracks = new NavItemViewModel("Tracks", "Tracks", PageKind.Tracks);
         Radio = new NavItemViewModel("Radio", "Radio", PageKind.Radio);
         Library = [Albums, Tracks, Radio];
+        Favorites = new NavItemViewModel("Favorites", "Heart", PageKind.Favorites);
     }
 
     /// <summary>Raised when an entry is chosen (the shell shows its page).</summary>
@@ -55,9 +115,15 @@ public sealed partial class SidebarViewModel : ObservableObject
 
     public NavItemViewModel Radio { get; }
 
+    /// <summary>Favorites (#48), pinned first among the playlists: it can't be renamed, deleted or reordered.</summary>
+    public NavItemViewModel Favorites { get; }
+
     public IReadOnlyList<NavItemViewModel> Library { get; }
 
     public ObservableCollection<NavItemViewModel> Playlists { get; } = [];
+
+    /// <summary>A playlist's name edited in place.</summary>
+    public PlaylistRenameViewModel Rename { get; } = new();
 
     [ObservableProperty]
     public partial NavItemViewModel? Active { get; private set; }
@@ -99,6 +165,11 @@ public sealed partial class SidebarViewModel : ObservableObject
         // Edits in place, not a reset: a reset would make every entry's control again (and replay a flash).
         foreach (var gone in Playlists.Except(items).ToList())
         {
+            if (Rename.Item == gone)
+            {
+                Rename.Close();
+            }
+
             Playlists.Remove(gone);
         }
 
@@ -121,12 +192,31 @@ public sealed partial class SidebarViewModel : ObservableObject
         }
     }
 
-    /// <summary>The playlist just saved from the queue flashes (mockup: renderNav(fresh)).</summary>
+    /// <summary>
+    /// The playlist just saved from the queue, or just given tracks, flashes (mockup: renderNav(fresh)); again if it was
+    /// the last to flash.
+    /// </summary>
     public void MarkFresh(string playlistId)
+    {
+        foreach (var item in Playlists.Prepend(Favorites))
+        {
+            item.IsFresh = false;
+            item.IsFresh = item.Playlist?.Id == playlistId;
+        }
+    }
+
+    /// <summary>The playlist entry with this id, if listed.</summary>
+    public NavItemViewModel? PlaylistItem(string playlistId) => Playlists.FirstOrDefault(p => p.Playlist?.Id == playlistId);
+
+    /// <summary>Favorites was just given tracks: it flashes (again, if it already was).</summary>
+    public void MarkFavoritesFresh()
     {
         foreach (var item in Playlists)
         {
-            item.IsFresh = item.Playlist?.Id == playlistId;
+            item.IsFresh = false;
         }
+
+        Favorites.IsFresh = false;
+        Favorites.IsFresh = true;
     }
 }

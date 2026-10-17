@@ -106,6 +106,76 @@ internal sealed class StubLibrary : ILibraryService
         PlaylistEntries[playlist.Id] = [.. paths.Select(p => Tracks.First(t => t.Path == p))];
         return Task.FromResult(playlist);
     }
+
+    public Task AddToPlaylistAsync(string playlistId, IReadOnlyList<TrackSummary> tracks, CancellationToken cancellationToken = default)
+    {
+        PlaylistEntries[playlistId].AddRange(tracks);
+        return Task.CompletedTask;
+    }
+
+    public Task<PlaylistSummaryItem> RenamePlaylistAsync(string playlistId, string name, CancellationToken cancellationToken = default)
+    {
+        var at = Playlists.FindIndex(p => p.Id == playlistId);
+        Playlists[at] = Playlists[at] with { Name = name };
+        return Task.FromResult(Playlists[at]);
+    }
+
+    public Task DeletePlaylistAsync(string playlistId, CancellationToken cancellationToken = default)
+    {
+        Playlists.RemoveAll(p => p.Id == playlistId);
+        PlaylistEntries.Remove(playlistId);
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveFromPlaylistAsync(string playlistId, PlaylistEntryItem entry, CancellationToken cancellationToken = default)
+    {
+        PlaylistEntries[playlistId].RemoveAt(entry.Position - 1);
+        return Task.CompletedTask;
+    }
+
+    public Task MoveInPlaylistAsync(string playlistId, PlaylistEntryItem entry, int to, CancellationToken cancellationToken = default)
+    {
+        var entries = PlaylistEntries[playlistId];
+        var track = entries[entry.Position - 1];
+        entries.RemoveAt(entry.Position - 1);
+        entries.Insert(to - 1, track);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Favorite track ids, newest first.</summary>
+    public List<string> Favorites { get; } = [];
+
+    /// <summary>Set: favorites fail as a busy library's do.</summary>
+    public string? FavoritesFailure { get; set; }
+
+    public Task<IReadOnlySet<string>> FavoriteIdsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(Favorites, StringComparer.Ordinal));
+
+    public Task<FavoritesList> FavoritesAsync(CancellationToken cancellationToken = default)
+    {
+        var tracks = Favorites.Select(id => Tracks.FirstOrDefault(t => t.Id == id)).ToList();
+        return Task.FromResult(new FavoritesList([.. tracks.OfType<TrackSummary>()], tracks.Count(t => t is null)));
+    }
+
+    public Task SetFavoritesAsync(IReadOnlyList<string> trackIds, bool favorite, CancellationToken cancellationToken = default)
+    {
+        if (FavoritesFailure is { } failure)
+        {
+            return Task.FromException(new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure));
+        }
+
+        if (favorite)
+        {
+            // As the library: a track that already is a favorite keeps its place.
+            Favorites.InsertRange(0, trackIds.Where(id => !Favorites.Contains(id)));
+        }
+        else
+        {
+            Favorites.RemoveAll(trackIds.Contains);
+        }
+
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Covers from a function, counting requests per album.</summary>

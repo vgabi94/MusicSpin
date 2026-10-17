@@ -56,6 +56,10 @@
     <CornerRadius x:Key="NavItemRadius">7</CornerRadius>
     <sys:Double x:Key="NavIconSize">14</sys:Double>
     <sys:Double x:Key="NavIconGap">8</sys:Double>
+    <!-- Favorites' track count after its name. -->
+    <sys:Double x:Key="NavCountFontSize">12</sys:Double>
+    <!-- A playlist's name box while it is renamed: the entry's height (7 + text + 7, less the 1 px border each side). -->
+    <Thickness x:Key="NavRenamePadding">9,6</Thickness>
 
     <!-- Content -->
     <Thickness x:Key="ToolbarPadding">28,18,28,10</Thickness>
@@ -68,6 +72,13 @@
     <sys:Double x:Key="SmallFontSize">12.5</sys:Double>
     <sys:Double x:Key="EmptyFontSize">14</sys:Double>
     <Thickness x:Key="EmptyMargin">0,40</Thickness>
+    <sys:Double x:Key="EmptyHintGap">6</sys:Double>
+    <sys:Double x:Key="EmptyHeartSize">14</sys:Double>
+    <sys:Double x:Key="EmptyHintWordGap">4</sys:Double>
+    <!-- Favorites' line under the title (favorites no longer in the library), lined up with the title. -->
+    <Thickness x:Key="PageNoteMargin">28,0,28,10</Thickness>
+    <sys:Double x:Key="PageNoteGap">6</sys:Double>
+    <sys:Double x:Key="PageNoteFontSize">12.5</sys:Double>
     <Thickness x:Key="BannerPadding">28,8</Thickness>
     <sys:Double x:Key="BannerGap">12</sys:Double>
     <CornerRadius x:Key="ButtonRadius">7</CornerRadius>
@@ -96,6 +107,11 @@
     <sys:Double x:Key="MenuCheckSize">12</sys:Double>
     <sys:Double x:Key="MenuAnchorGap">4</sys:Double>
     <sys:Double x:Key="MenuWindowMargin">8</sys:Double>
+    <Thickness x:Key="MenuChevronMargin">12,0,0,0</Thickness>
+    <!-- A confirmation's question (the mockup has none): an entry's inset, in the small type. -->
+    <sys:Double x:Key="MenuCaptionMaxWidth">220</sys:Double>
+    <Thickness x:Key="MenuCaptionMargin">10,6,10,6</Thickness>
+    <sys:Double x:Key="MenuCaptionFontSize">12.5</sys:Double>
 
     <!-- Group headers (mockup: .group-h, .group + .group); tall enough for the Play and Radio pills (#41, #23). -->
     <sys:Double x:Key="GroupHeaderFontSize">13</sys:Double>
@@ -220,6 +236,10 @@
     <sys:Double x:Key="AddButtonSize">28</sys:Double>
     <CornerRadius x:Key="AddButtonRadius">14</CornerRadius>
     <sys:Double x:Key="AddIconSize">13</sys:Double>
+    <!-- The heart (#48): a column of its own in track rows, before the duration. -->
+    <GridLength x:Key="RowHeartColumn">28</GridLength>
+    <sys:Double x:Key="HeartButtonSize">28</sys:Double>
+    <sys:Double x:Key="HeartIconSize">14</sys:Double>
     <Thickness x:Key="AlbumHeadPadding">10,8</Thickness>
     <Thickness x:Key="AlbumHeadMargin">0,30,0,4</Thickness>
     <Thickness x:Key="FirstAlbumHeadMargin">0,0,0,4</Thickness>
@@ -242,6 +262,11 @@
     <Thickness x:Key="MiniVinylMargin">4,3,0,0</Thickness>
     <sys:Double x:Key="PlayerTitleFontSize">14</sys:Double>
     <sys:Double x:Key="PlayerArtistFontSize">12.5</sys:Double>
+    <!-- The heart after the title: its button overhangs the title's line, so the line keeps its height. -->
+    <sys:Double x:Key="PlayerHeartSize">20</sys:Double>
+    <Thickness x:Key="PlayerHeartMargin">4,-3,0,-3</Thickness>
+    <Thickness x:Key="NowPlayingHeartMargin">0,-3</Thickness>
+    <sys:Double x:Key="PlayerHeartIconSize">13</sys:Double>
     <sys:Double x:Key="TransportGap">14</sys:Double>
     <sys:Double x:Key="TransportIconSize">13</sys:Double>
     <sys:Double x:Key="PlayButtonSize">38</sys:Double>

@@ -121,6 +121,32 @@
                                 </Button>
                             </StackPanel>
                         </DataTemplate>
+                        <!-- Favorites (#48): Play, then Radio (a station of favorites; "On air" while it plays), then Queue. -->
+                        <DataTemplate DataType="vm:FavoritesPageViewModel">
+                            <StackPanel Classes="pageActions">
+                                <Button Name="PlayAll" Classes="accent" Command="{Binding PlayAllCommand}" AutomationProperties.Name="Play">
+                                    <StackPanel>
+                                        <controls:Icon Data="{StaticResource Play}" />
+                                        <TextBlock Text="Play" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Name="FavoritesRadio"
+                                        Classes="accent ghost"
+                                        Command="{Binding RadioCommand}"
+                                        AutomationProperties.Name="{Binding RadioLabel}">
+                                    <StackPanel>
+                                        <controls:Icon Classes="stroke" Data="{StaticResource Radio}" />
+                                        <TextBlock Text="{Binding RadioLabel}" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Name="QueueAll" Classes="accent ghost" Command="{Binding QueueAllCommand}" AutomationProperties.Name="Queue">
+                                    <StackPanel>
+                                        <controls:Icon Data="{StaticResource Plus}" />
+                                        <TextBlock Text="Queue" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </DataTemplate>
                         <DataTemplate DataType="vm:TrackListPageViewModel">
                             <StackPanel Classes="pageActions">
                                 <Button Name="PlayAll" Classes="accent" Command="{Binding PlayAllCommand}" AutomationProperties.Name="Play">
@@ -144,12 +170,32 @@
                 </ContentControl>
             </Grid>
 
+            <!-- Favorites: how many favorites aren't in the library now, and where the CLI lists them. -->
+            <StackPanel Name="MissingNote"
+                        Classes="pageNote"
+                        DockPanel.Dock="Top"
+                        IsVisible="{Binding ((vm:FavoritesPageViewModel)CurrentPage).MissingNote, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
+                <TextBlock Text="{Binding ((vm:FavoritesPageViewModel)CurrentPage).MissingNote, FallbackValue={x:Null}}" />
+                <HyperlinkButton Name="MissingLink"
+                                 NavigateUri="{x:Static vm:FavoritesPageViewModel.MissingDocs}"
+                                 AutomationProperties.Name="music-spin favorites --missing">
+                    <TextBlock Text="music-spin favorites --missing" />
+                </HyperlinkButton>
+            </StackPanel>
+
             <Panel>
                 <ContentControl Name="Page" Content="{Binding CurrentPage}" />
-                <TextBlock Name="EmptyText"
-                           Classes="empty"
-                           Text="{Binding CurrentPage.EmptyText}"
-                           IsVisible="{Binding CurrentPage.EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <StackPanel Classes="emptyView" IsVisible="{Binding CurrentPage.EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock Name="EmptyText" Classes="empty" Text="{Binding CurrentPage.EmptyText}" />
+                    <!-- Favorites, empty: how to add one, with the heart itself (Inter has no ♡). -->
+                    <StackPanel Name="EmptyHint"
+                                Classes="emptyHint"
+                                IsVisible="{Binding ((vm:FavoritesPageViewModel)CurrentPage).ShowsHowToAdd, FallbackValue=False}">
+                        <TextBlock Classes="empty" Text="Click" />
+                        <controls:Icon Classes="stroke emptyHeart" Data="{StaticResource Heart}" />
+                        <TextBlock Classes="empty" Text="on a track to add it." />
+                    </StackPanel>
+                </StackPanel>
             </Panel>
         </DockPanel>
 
@@ -179,21 +225,30 @@
         <!-- The menu, over everything, under the button that opened it (MainWindow.axaml.cs places it). -->
         <Canvas Name="MenuLayer" Grid.RowSpan="3" Grid.ColumnSpan="2" IsVisible="{Binding Menu.IsOpen}">
             <Border Name="MenuBox" Classes="menu">
-                <ItemsControl Name="MenuEntries" ItemsSource="{Binding Menu.Entries}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vm:MenuEntryViewModel">
-                            <Button Classes="menuEntry"
-                                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Menu.ChooseCommand}"
-                                    CommandParameter="{Binding}"
-                                    AutomationProperties.Name="{Binding Label}">
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Text="{Binding Label}" />
-                                    <controls:Icon Grid.Column="1" Data="{StaticResource Check}" IsVisible="{Binding IsChosen}" />
-                                </Grid>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <StackPanel>
+                    <!-- A confirmation's question, over its entries. -->
+                    <TextBlock Name="MenuCaption"
+                               Classes="menuCaption"
+                               Text="{Binding Menu.Caption}"
+                               IsVisible="{Binding Menu.Caption, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    <ItemsControl Name="MenuEntries" ItemsSource="{Binding Menu.Entries}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:MenuEntryViewModel">
+                                <Button Classes="menuEntry"
+                                        Classes.destructive="{Binding IsDestructive}"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Menu.ChooseCommand}"
+                                        CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Binding Label}">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Label}" />
+                                        <controls:Icon Grid.Column="1" Data="{StaticResource Check}" IsVisible="{Binding IsChosen}" />
+                                        <controls:Icon Grid.Column="1" Classes="submenu" Data="{StaticResource ChevronRight}" IsVisible="{Binding HasSubmenu}" />
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
             </Border>
         </Canvas>
     </Grid>

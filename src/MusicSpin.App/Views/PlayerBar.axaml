@@ -1,6 +1,6 @@
 <!--
   The player bar (mockup: .player), left to right: the playing album's sleeve with its record (opens Now Playing); the
-  title and "artist · album", followed by the spectrum analyzer and the volume; the transport over the position; the
+  title (and its heart) and "artist · album", followed by the spectrum analyzer and the volume; the transport over the position; the
   format, the queue button and the settings button.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
@@ -25,7 +25,20 @@
 
             <controls:FollowPanel Name="Meta" Grid.Column="1" Classes="meta">
                 <StackPanel Classes="metaText">
-                    <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" />
+                    <!-- The title, then the playing track's heart (#48; a plain file has none). -->
+                    <Grid Classes="titleLine" ColumnDefinitions="*,Auto">
+                        <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" />
+                        <Button Name="PlayingHeart"
+                                Grid.Column="1"
+                                Classes="heart"
+                                Classes.on="{Binding IsPlayingFavorite}"
+                                IsVisible="{Binding CanFavoritePlaying}"
+                                Command="{Binding TogglePlayingFavoriteCommand}"
+                                ToolTip.Tip="{Binding PlayingFavoriteLabel}"
+                                AutomationProperties.Name="{Binding PlayingFavoriteLabel}">
+                            <controls:Icon Data="{StaticResource Heart}" />
+                        </Button>
+                    </Grid>
                     <TextBlock Name="PlayerArtist" Classes="playerArtist trim" Text="{Binding PlayerArtist}" />
                 </StackPanel>
                 <controls:SpectrumView Name="Analyzer" Frame="{Binding PlayerBar.Spectrum.Frame}" />

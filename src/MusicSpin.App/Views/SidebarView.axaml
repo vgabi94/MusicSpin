@@ -1,4 +1,4 @@
-<!-- The sidebar (mockup: .sidebar): Library (Albums, Tracks, Radio), then the saved playlists. -->
+<!-- The sidebar (mockup: .sidebar): Library (Albums, Tracks, Radio), then Favorites (pinned) and the saved playlists. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MusicSpin.App.ViewModels"
@@ -7,20 +7,33 @@
              x:Class="MusicSpin.App.Views.SidebarView"
              x:DataType="vm:SidebarViewModel">
     <UserControl.DataTemplates>
-        <!-- An entry; a playlist just saved flashes in the accent over it. -->
+        <!--
+          An entry (Favorites shows its track count). Favorites and a playlist light up while albums or tracks are dragged
+          over them and flash in the accent when they were just given tracks (or the playlist was just saved). A playlist's
+          entry also has a menu (right-click) and becomes a text box while it is renamed.
+        -->
         <DataTemplate DataType="vm:NavItemViewModel">
-            <Panel Classes="navItem">
+            <Panel Classes="navItem" Classes.dropTarget="{Binding IsDropTarget}" controls:QueueSource.Item="{Binding}">
                 <Button Classes="nav"
                         Classes.active="{Binding IsActive}"
                         Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).NavigateCommand}"
                         CommandParameter="{Binding}"
+                        IsVisible="{Binding !IsRenaming}"
                         AutomationProperties.Name="{Binding Title}">
                     <StackPanel>
                         <controls:Icon Data="{Binding Icon, Converter={x:Static theming:IconConverters.Geometry}}"
                                        IsStroked="{Binding Icon, Converter={x:Static theming:IconConverters.IsStroked}}" />
                         <TextBlock Text="{Binding Title}" />
+                        <TextBlock Classes="navCount"
+                                   Text="{Binding Detail}"
+                                   IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
                 </Button>
+                <TextBox Classes="rename"
+                         IsVisible="{Binding IsRenaming}"
+                         Text="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).Rename.Name}"
+                         MaxLength="{x:Static vm:PlaylistNameViewModel.MaxLength}"
+                         AutomationProperties.Name="Playlist name" />
                 <Border Classes="navFlash" theming:Animate.Play="NavFlashAnimation" theming:Animate.When="{Binding IsFresh}" />
             </Panel>
         </DataTemplate>
@@ -31,9 +44,8 @@
             <StackPanel>
                 <TextBlock Classes="navHeader" Text="LIBRARY" />
                 <ItemsControl Name="LibraryItems" ItemsSource="{Binding Library}" />
-                <TextBlock Classes="navHeader"
-                           Text="PLAYLISTS"
-                           IsVisible="{Binding !!Playlists.Count}" />
+                <TextBlock Classes="navHeader" Text="PLAYLISTS" />
+                <ContentControl Name="FavoritesItem" Content="{Binding Favorites}" />
                 <ItemsControl Name="PlaylistItems" ItemsSource="{Binding Playlists}" />
             </StackPanel>
         </ScrollViewer>

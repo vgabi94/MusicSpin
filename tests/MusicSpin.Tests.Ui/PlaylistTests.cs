@@ -17,35 +17,22 @@ namespace MusicSpin.Tests.Ui;
 /// <summary>Playlists in the sidebar and the playlist page (#13), over a library on disk and a scripted player.</summary>
 public sealed class PlaylistTests
 {
-    /// <summary>Two albums: Kind of Blue (3 tracks, with a cover) and Blue Train (2).</summary>
-    private static AppOptions Options(Action<MusicLibrary, IReadOnlyList<string>>? prepare = null, AppTheme theme = AppTheme.Dark) => new()
-    {
-        Scripted = true,
-        Theme = theme,
-        Music = music =>
-        {
-            TestImages.Album(music, "Kind of Blue", "Miles Davis", tracks: 3, cover: TestImages.Cover(), year: 1959);
-            TestImages.Album(music, "Blue Train", "John Coltrane", tracks: 2, year: 1957);
-        },
-        Prepare = prepare,
-    };
+    private static AppOptions Options(Action<MusicLibrary, IReadOnlyList<string>>? prepare = null, AppTheme theme = AppTheme.Dark)
+        => JazzLibrary.Options(prepare, theme);
 
-    /// <summary>The track "<paramref name="album"/> <paramref name="number"/>" of the fixture.</summary>
-    private static string TrackPath(IReadOnlyList<string> paths, string album, int number)
-        => paths.Single(p => p.EndsWith(Path.Combine(album, $"{number:00}.flac"), StringComparison.OrdinalIgnoreCase));
+    private static string TrackPath(IReadOnlyList<string> paths, string album, int number) => JazzLibrary.TrackPath(paths, album, number);
 
-    private static PlaylistInput Entry(IReadOnlyList<string> paths, string album, int number) => new(TrackPath(paths, album, number));
+    private static PlaylistInput Entry(IReadOnlyList<string> paths, string album, int number) => JazzLibrary.Entry(paths, album, number);
 
-    /// <summary>An entry for a file that is neither in the library nor on disk.</summary>
-    private static PlaylistInput Gone(IReadOnlyList<string> paths)
-        => new(Path.Combine(Path.GetDirectoryName(paths[0])!, "gone.flac"), Title: "Lost Take", Artist: "Nobody", DurationSeconds: 61);
+    private static PlaylistInput Gone(IReadOnlyList<string> paths) => JazzLibrary.Gone(paths);
 
     /// <summary>"Mix": Kind of Blue 2, a missing file, Blue Train 1, Kind of Blue 1.</summary>
     private static void Mix(MusicLibrary library, IReadOnlyList<string> paths)
         => library.CreatePlaylist("Mix", [Entry(paths, "Kind of Blue", 2), Gone(paths), Entry(paths, "Blue Train", 1), Entry(paths, "Kind of Blue", 1)]);
 
-    private static async Task<PlaylistPageViewModel> OpenPlaylistAsync(AppHarness app, string name, int entries)
+    internal static async Task<PlaylistPageViewModel> OpenPlaylistAsync(AppHarness app, string name, int entries)
     {
+        await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists.Any(p => p.Title == name), $"'{name}' in the sidebar");
         app.ViewModel.Sidebar.NavigateCommand.Execute(app.ViewModel.Sidebar.Playlists.Single(p => p.Title == name));
         var page = Assert.IsType<PlaylistPageViewModel>(app.ViewModel.CurrentPage);
         await Gui.UntilAsync(() => page.Tracks.Count == entries, $"the playlist '{name}'");
@@ -53,7 +40,7 @@ public sealed class PlaylistTests
         return page;
     }
 
-    private static Border Row(AppHarness app, string title)
+    internal static Border Row(AppHarness app, string title)
         => Gui.All<Border>(app.Window).Single(b => b.Classes.Contains("track") && b.DataContext is TrackRow { Item.Title: var t } && t == title);
 
     private static string[] Titles(PlaylistPageViewModel page) => [.. page.Tracks.Select(t => t.Title)];
@@ -145,14 +132,15 @@ public sealed class PlaylistTests
         Assert.Equal("4", Gui.Find<TextBlock>(app.Window, "PageCount").Text);
         Assert.Equal(["Kind of Blue 2", "Lost Take", "Blue Train 1", "Kind of Blue 1"], Titles(page));
         Assert.Equal([1, 2, 3, 4], page.Tracks.Select(t => t.Position));
-        Assert.All(page.Rows, r => Assert.IsType<TrackRowWithAlbum>(r));
+        Assert.All(page.Rows, r => Assert.IsType<PlaylistTrackRow>(r));
         Assert.DoesNotContain(Gui.All<Button>(app.Window), b => b.Name is "SortButton" or "GroupButton"); // no grouping
 
         // the missing entry: dimmed, says so, no ＋, its cover doesn't play
         var lost = Row(app, "Lost Take");
         Assert.Contains("unavailable", lost.Classes);
         Assert.True(Gui.All<TextBlock>(lost).Single(t => t.Classes.Contains("missing")).IsEffectivelyVisible);
-        Assert.False(Gui.All<Button>(lost).Single(b => b.Classes.Contains("add")).IsVisible);
+        Assert.False(Gui.All<Button>(lost).Single(b => b.Classes.Contains("add") && !b.Classes.Contains("remove")).IsVisible);
+        Assert.True(Gui.All<Button>(lost).Single(b => b.Classes.Contains("remove")).IsVisible); // it can still be removed
         Assert.False(Gui.All<Button>(lost).Single(b => b.Classes.Contains("thumb")).IsEnabled);
         Assert.DoesNotContain("unavailable", Row(app, "Blue Train 1").Classes);
         Assert.False(Gui.All<TextBlock>(Row(app, "Blue Train 1")).Single(t => t.Classes.Contains("missing")).IsVisible);
@@ -199,7 +187,7 @@ public sealed class PlaylistTests
 
         Gui.Click(app.Window, Gui.Find<Button>(app.Window, "QueueAll"));
         Assert.True(app.ViewModel.Menu.IsOpen);
-        Assert.Equal(["Play next", "Add to queue"], app.ViewModel.Menu.Entries.Take(2).Select(e => e.Label));
+        Assert.Equal(["Play next", "Add to queue", "Add to playlist"], app.ViewModel.Menu.Entries.Select(e => e.Label));
 
         await app.ViewModel.Menu.ChooseCommand.ExecuteAsync(app.ViewModel.Menu.Entries[1]);
         var added = await SentAsync(app, "queue.add");

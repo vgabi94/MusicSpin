@@ -36,6 +36,9 @@ internal sealed record AppOptions
     /// <summary>Replaces the library on disk (large or scripted libraries).</summary>
     public ILibraryService? Library { get; init; }
 
+    /// <summary>How long the library on disk waits to read or write while another process holds it (null: the app's default).</summary>
+    public TimeSpan? LockTimeout { get; init; }
+
     /// <summary>Replaces the covers on disk.</summary>
     public ICoverService? Covers { get; init; }
 
@@ -128,7 +131,7 @@ internal sealed class AppHarness : IAsyncDisposable
 
         Services = new AppServices(
             new SettingsService(Data),
-            Options.Library ?? new LibraryService(Data, Time),
+            Options.Library ?? new LibraryService(Data, Time, Options.LockTimeout),
             Options.Covers ?? new CoverService(Data, new SkiaCoverResizer()),
             (IPlayerConnector?)Scripted ?? Player,
             new Appearance(Application.Current!),

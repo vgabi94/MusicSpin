@@ -1,4 +1,5 @@
 using System.Globalization;
+using MusicSpin.Core;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
 
@@ -20,10 +21,14 @@ public sealed record PlaylistSummaryItem(string Id, string Name, int EntryCount)
 /// </summary>
 public sealed record PlaylistEntryItem(int Position, TrackSummary Track, bool IsAvailable);
 
+/// <summary>The Favorites view: the favorite library tracks, newest favorite first, and how many favorites aren't in the library now.</summary>
+public sealed record FavoritesList(IReadOnlyList<TrackSummary> Tracks, int Missing);
+
 /// <summary>
-/// Library reads for the app, and saving a playlist. Each call opens the library briefly (<see cref="MusicLibrary.OpenForRead"/>: it holds a
-/// cross-process lock while open) on a worker thread. <see cref="Changed"/> fires when <c>library.db</c> changes on disk
-/// (a scan, a playlist edit or a favorite, by this or another process), checked every <see cref="PollInterval"/>.
+/// Library reads for the app, and its playlist edits. Each call opens the library briefly on a worker thread (it holds a
+/// cross-process lock while open). <see cref="Changed"/> fires when <c>library.db</c> changes on disk (a scan, a playlist
+/// edit or a favorite, by this or another process), checked every <see cref="PollInterval"/> and after each edit. An edit
+/// that finds the library held by another process for too long fails with <see cref="LibraryService.BusyMessage"/>.
 /// </summary>
 public interface ILibraryService
 {
@@ -48,23 +53,58 @@ public interface ILibraryService
     /// playlist). Throws <see cref="MusicSpin.Core.MusicSpinException"/> when the name is taken or invalid, or a file is gone.
     /// </summary>
     Task<PlaylistSummaryItem> CreatePlaylistAsync(string name, IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds <paramref name="tracks"/> to the end of the playlist.</summary>
+    Task AddToPlaylistAsync(string playlistId, IReadOnlyList<TrackSummary> tracks, CancellationToken cancellationToken = default);
+
+    /// <summary>Renames the playlist; a name another playlist has (in any case) is refused.</summary>
+    Task<PlaylistSummaryItem> RenamePlaylistAsync(string playlistId, string name, CancellationToken cancellationToken = default);
+
+    Task DeletePlaylistAsync(string playlistId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes <paramref name="entry"/>. The playlist may have changed since it was read: the entry is found again by its
+    /// file, nearest its old position; when no entry has that file any more, nothing changes (NotFound).
+    /// </summary>
+    Task RemoveFromPlaylistAsync(string playlistId, PlaylistEntryItem entry, CancellationToken cancellationToken = default);
+
+    /// <summary>Moves <paramref name="entry"/> (found again as for a removal) to 1-based position <paramref name="to"/>.</summary>
+    Task MoveInPlaylistAsync(string playlistId, PlaylistEntryItem entry, int to, CancellationToken cancellationToken = default);
+
+    /// <summary>The ids of the favorite tracks in the library now (for the hearts).</summary>
+    Task<IReadOnlySet<string>> FavoriteIdsAsync(CancellationToken cancellationToken = default);
+
+    Task<FavoritesList> FavoritesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Marks the tracks as favorites, or unmarks them (a track already so is left alone).</summary>
+    Task SetFavoritesAsync(IReadOnlyList<string> trackIds, bool favorite, CancellationToken cancellationToken = default);
 }
 
 public sealed class LibraryService : ILibraryService, IDisposable
 {
-    public static TimeSpan PollInterval { get; } = TimeSpan.FromSeconds(2);
+    /// <summary>Often enough that a change made elsewhere (<c>music-spin favorite add</c>) shows within a second.</summary>
+    public static TimeSpan PollInterval { get; } = TimeSpan.FromMilliseconds(500);
 
-    /// <summary>How long a write waits for another process (a scan) to let go of the library.</summary>
-    public static TimeSpan WriteLockTimeout { get; } = TimeSpan.FromSeconds(5);
+    /// <summary>How long a read or an edit waits for another process (a scan) to let go of the library.</summary>
+    public static TimeSpan LockTimeout { get; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>What a read or an edit says when another process held the library for longer than the lock timeout.</summary>
+    public const string BusyMessage = "The library is busy: another MusicSpin process (a scan, say) is using it. Try again in a moment.";
+
+    /// <summary>What removing or moving says when the entry has left the playlist (an edit elsewhere).</summary>
+    public const string EntryGone = "That track isn't in the playlist any more.";
 
     private readonly DataDirectory _directory;
+    private readonly TimeSpan _lockTimeout;
     private readonly ITimer _poll;
     private string _stamp;
 
-    public LibraryService(DataDirectory directory, TimeProvider time)
+    /// <param name="lockTimeout">How long a read or an edit waits for the library (default <see cref="LockTimeout"/>).</param>
+    public LibraryService(DataDirectory directory, TimeProvider time, TimeSpan? lockTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(time);
         _directory = directory;
+        _lockTimeout = lockTimeout ?? LockTimeout;
         _stamp = Stamp();
         _poll = time.CreateTimer(_ => CheckForChanges(), null, PollInterval, PollInterval);
     }
@@ -113,17 +153,56 @@ public sealed class LibraryService : ILibraryService, IDisposable
     public Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default)
         => Read(library => library.TracksById([trackId]) is [var track, ..] ? track.AlbumId : null, cancellationToken);
 
-    public async Task<PlaylistSummaryItem> CreatePlaylistAsync(string name, IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    public Task<PlaylistSummaryItem> CreatePlaylistAsync(string name, IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+        => Write(library => Item(library.CreatePlaylist(name, library.PlaylistInputsForFiles(paths)).Playlist), cancellationToken);
+
+    public Task AddToPlaylistAsync(string playlistId, IReadOnlyList<TrackSummary> tracks, CancellationToken cancellationToken = default)
+        => Write(library => library.AddToPlaylist(playlistId, [.. tracks.Select(t => new PlaylistInput(t.Path, t.Id.Length == 0 ? null : t.Id))]), cancellationToken);
+
+    public Task<PlaylistSummaryItem> RenamePlaylistAsync(string playlistId, string name, CancellationToken cancellationToken = default)
+        => Write(library => Item(library.RenamePlaylist(playlistId, name).Playlist), cancellationToken);
+
+    public Task DeletePlaylistAsync(string playlistId, CancellationToken cancellationToken = default)
+        => Write(library => library.DeletePlaylist(playlistId), cancellationToken);
+
+    public Task RemoveFromPlaylistAsync(string playlistId, PlaylistEntryItem entry, CancellationToken cancellationToken = default)
+        => Write(library => library.RemoveFromPlaylist(playlistId, Find(library, playlistId, entry).ToString(CultureInfo.InvariantCulture)), cancellationToken);
+
+    public Task MoveInPlaylistAsync(string playlistId, PlaylistEntryItem entry, int to, CancellationToken cancellationToken = default) => Write(library =>
     {
-        var created = await Task.Run(() =>
+        var from = Find(library, playlistId, entry);
+        var count = library.Playlist(playlistId, new Paging(0, 1)).Entries.Total;
+        return from == Math.Clamp(to, 1, count) ? null : library.MovePlaylistEntry(playlistId, from, Math.Clamp(to, 1, count));
+    }, cancellationToken);
+
+    public Task<IReadOnlySet<string>> FavoriteIdsAsync(CancellationToken cancellationToken = default)
+        => Read(library => library.FavoriteTrackIds(), cancellationToken);
+
+    public Task<FavoritesList> FavoritesAsync(CancellationToken cancellationToken = default)
+        => Read(library => new FavoritesList([.. library.FavoritesQueue().Select(ToSummary)], library.FavoritesSummary().Missing), cancellationToken);
+
+    public Task SetFavoritesAsync(IReadOnlyList<string> trackIds, bool favorite, CancellationToken cancellationToken = default)
+        => Write(library => favorite ? library.AddFavorites(trackIds) : library.RemoveFavorites(trackIds), cancellationToken);
+
+    /// <summary>
+    /// The 1-based position of the entry with <paramref name="entry"/>'s file nearest its old position (the playlist may
+    /// have changed since it was read).
+    /// </summary>
+    private static int Find(MusicLibrary library, string playlistId, PlaylistEntryItem entry)
+    {
+        var key = LibraryKeys.PathKey(entry.Track.Path);
+        var details = library.Playlist(playlistId);
+        var entries = details.Entries.Items.ToList();
+        for (var offset = entries.Count; offset < details.Entries.Total; offset += Paging.MaxLimit)
         {
-            using var library = MusicLibrary.OpenWritable(_directory, lockTimeout: WriteLockTimeout);
-            var playlist = library.CreatePlaylist(name, library.PlaylistInputsForFiles(paths)).Playlist;
-            return new PlaylistSummaryItem(playlist.Id, playlist.Name, playlist.EntryCount);
-        }, cancellationToken).ConfigureAwait(false);
-        CheckForChanges();
-        return created;
+            entries.AddRange(library.Playlist(playlistId, new Paging(offset, Paging.MaxLimit)).Entries.Items);
+        }
+
+        return entries.Where(e => LibraryKeys.PathKey(e.Path) == key).MinBy(e => Math.Abs(e.Position - entry.Position))?.Position
+               ?? throw new MusicSpinException(MusicSpinErrorCode.NotFound, EntryGone);
     }
+
+    private static PlaylistSummaryItem Item(PlaylistSummary playlist) => new(playlist.Id, playlist.Name, playlist.EntryCount);
 
     public void Dispose() => _poll.Dispose();
 
@@ -137,11 +216,40 @@ public sealed class LibraryService : ILibraryService, IDisposable
         }
     }
 
+    /// <summary>A read: the library opened for queries (waiting up to the lock timeout for another process).</summary>
     private Task<T> Read<T>(Func<MusicLibrary, T> read, CancellationToken cancellationToken) => Task.Run(() =>
     {
-        using var library = MusicLibrary.OpenForRead(_directory);
+        using var library = Busy(() => MusicLibrary.OpenForRead(_directory, _lockTimeout));
         return read(library);
     }, cancellationToken);
+
+    /// <summary>
+    /// An edit: the library opened for writing (waiting up to the lock timeout for another process), then a check for
+    /// changes, so the app shows the edit at once.
+    /// </summary>
+    private async Task<T> Write<T>(Func<MusicLibrary, T> write, CancellationToken cancellationToken)
+    {
+        var result = await Task.Run(() =>
+        {
+            using var library = Busy(() => MusicLibrary.OpenWritable(_directory, lockTimeout: _lockTimeout));
+            return write(library);
+        }, cancellationToken).ConfigureAwait(false);
+        CheckForChanges();
+        return result;
+    }
+
+    /// <summary>Opens the library; another process holding it past the timeout is <see cref="BusyMessage"/>.</summary>
+    private static MusicLibrary Busy(Func<MusicLibrary> open)
+    {
+        try
+        {
+            return open();
+        }
+        catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.LibraryLocked && ex.InnerException is IOException)
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, BusyMessage, ex);
+        }
+    }
 
     private static List<TrackSummary> AllTracks(MusicLibrary library, TrackQuery query)
     {
