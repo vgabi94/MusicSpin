@@ -7,6 +7,7 @@ using MusicSpin.App.Controls;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
 using MusicSpin.App.Views.Pages;
+using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
 using MusicSpin.Tests.Ui.Harness;
 
@@ -55,8 +56,10 @@ public sealed class ArtworkTests
     {
         await using var app = await AppHarness.OpenAsync(new AppOptions { Music = music => TestImages.Album(music, "Plain Sleeve", "Nobody Known") });
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 1, "the album");
-        await Task.Delay(200, TestContext.Current.CancellationToken); // the cover lookup finds nothing
-        Gui.Settle();
+        var album = app.ViewModel.AlbumsPage.Albums.Single();
+        _ = album.Art.Cover; // shown, so the card has asked for its cover (reading it starts that once) …
+        Assert.Null(await app.Services.Covers.CoverAsync(album.Album.Id, CoverSize.Medium)); // … the same read: it found nothing
+        Gui.Settle(); // the card took the answer
 
         var cover = AlbumCard(app.Window, "Plain Sleeve").GetVisualDescendants().OfType<CoverView>().Single();
         Assert.False(cover.HasArt);
