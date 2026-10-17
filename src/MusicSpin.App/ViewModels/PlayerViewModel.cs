@@ -38,6 +38,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     private double _statusPosition;
     private long _statusTimestamp;
     private int _refreshing;
+    private int _refreshAgain;
 
     /// <summary>A <c>status</c> request is on its way (a poll meanwhile is skipped).</summary>
     internal bool IsRefreshing => Volatile.Read(ref _refreshing) == 1;
@@ -381,27 +382,36 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Asks the player for its <c>status</c> now (the poll timer does this while playing).</summary>
     public async Task RefreshAsync()
     {
-        if (_client is not { } client || Interlocked.Exchange(ref _refreshing, 1) == 1)
+        // Coalesced, never dropped: a request while a read is in flight marks it dirty, and the reader reads once more
+        // after it. (Dropping it lost events: a stateChanged arriving during a poll's read was answered by that read's
+        // older status, and nothing read again until the next poll.)
+        Interlocked.Exchange(ref _refreshAgain, 1);
+        while (_client is not null && Volatile.Read(ref _refreshAgain) == 1 && Interlocked.Exchange(ref _refreshing, 1) == 0)
         {
-            return;
-        }
+            try
+            {
+                while (Interlocked.Exchange(ref _refreshAgain, 0) == 1 && _client is { } client)
+                {
+                    var status = await client.StatusAsync(_life.Token).ConfigureAwait(false);
+                    _ui.Post(() => Apply(status));
+                }
+            }
+            catch (OperationCanceledException) when (_life.IsCancellationRequested)
+            {
+                return; // closing
+            }
+            catch (MusicSpinException)
+            {
+                Volatile.Write(ref _refreshAgain, 0);
+                await LostAsync().ConfigureAwait(false);
+                return;
+            }
+            finally
+            {
+                Volatile.Write(ref _refreshing, 0);
+            }
 
-        try
-        {
-            var status = await client.StatusAsync(_life.Token).ConfigureAwait(false);
-            _ui.Post(() => Apply(status));
-        }
-        catch (OperationCanceledException) when (_life.IsCancellationRequested)
-        {
-            // closing
-        }
-        catch (MusicSpinException)
-        {
-            await LostAsync().ConfigureAwait(false);
-        }
-        finally
-        {
-            Volatile.Write(ref _refreshing, 0);
+            // A request that came between the last read and the release above is ours to serve: loop.
         }
     }
 
@@ -509,16 +519,16 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
             _client = client;
             _events = events;
-            var subscribed = new TaskCompletionSource();
+            // Connected only once the player has acknowledged the subscription: from then on no event is missed, and
+            // the status in its reply is the one every later event follows (a separate status read could miss a
+            // change made between it and the subscribe).
+            var subscribed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             _ = ListenAsync(events, subscribed);
-            await subscribed.Task.ConfigureAwait(false);
-            _ui.Post(() => IsConnected = true);
-            var status = await client.StatusAsync(_life.Token).ConfigureAwait(false);
-            _ui.Post(() =>
+            if (!await subscribed.Task.ConfigureAwait(false))
             {
-                Apply(status);
-                QueueChanged?.Invoke(this, EventArgs.Empty);
-            });
+                // The player went away before acknowledging; ListenAsync drops the connection and reconnects later.
+                throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, "The player closed the connection while subscribing.");
+            }
         }
         finally
         {
@@ -530,16 +540,26 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// Reads the event stream (with spectrum levels for the analyzer); every other event triggers a status refresh. The
     /// stream ending means the player is gone.
     /// </summary>
-    private async Task ListenAsync(PlayerClient events, TaskCompletionSource subscribed)
+    private async Task ListenAsync(PlayerClient events, TaskCompletionSource<bool> subscribed)
     {
+        // Runs before the stream reads its first event, so this status is posted ahead of every event's refresh.
+        void Acknowledged(PlayerStatus status)
+        {
+            _ui.Post(() =>
+            {
+                IsConnected = true;
+                Apply(status);
+                QueueChanged?.Invoke(this, EventArgs.Empty);
+            });
+            subscribed.TrySetResult(true);
+        }
+
         try
         {
-            var stream = events.SubscribeAsync(spectrum: true, _life.Token).GetAsyncEnumerator(_life.Token);
+            var stream = events.SubscribeAsync(spectrum: true, Acknowledged, _life.Token).GetAsyncEnumerator(_life.Token);
             await using (stream.ConfigureAwait(false))
             {
-                var first = stream.MoveNextAsync();
-                subscribed.TrySetResult(); // the subscribe request was sent with the first MoveNext
-                for (var more = await first.ConfigureAwait(false); more; more = await stream.MoveNextAsync().ConfigureAwait(false))
+                while (await stream.MoveNextAsync().ConfigureAwait(false))
                 {
                     if (stream.Current.Name == "spectrum")
                     {
@@ -576,7 +596,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         }
         finally
         {
-            subscribed.TrySetResult();
+            subscribed.TrySetResult(false);
         }
 
         if (ReferenceEquals(events, _events))

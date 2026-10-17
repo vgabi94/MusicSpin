@@ -74,9 +74,7 @@ internal static class UiTime
     private static void Render()
     {
         s_scheduleRender?.Invoke();
-        Gui.RunJobs();
-        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-        Gui.RunJobs();
+        Gui.Settle();
     }
 
     private static FieldInfo Field(Type type, string name)

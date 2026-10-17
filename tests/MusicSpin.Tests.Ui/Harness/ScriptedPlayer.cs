@@ -19,6 +19,7 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 {
     private readonly ConcurrentDictionary<Connection, byte> _connections = new();
     private readonly ConcurrentDictionary<string, (int ExitCode, string Message)> _failures = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, TaskCompletionSource> _holds = new(StringComparer.Ordinal);
     private IPlayerListener? _listener;
     private CancellationTokenSource? _stop;
     private Task? _accept;
@@ -58,6 +59,17 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 
     /// <summary>Makes <paramref name="cmd"/> fail with the player's error for <paramref name="exitCode"/>.</summary>
     public void Fail(string cmd, int exitCode, string message) => _failures[cmd] = (exitCode, message);
+
+    /// <summary>
+    /// Holds the answers to <paramref name="cmd"/> until the returned source is completed. Each answer is the status as
+    /// it was when the request came in, as a real player's in-flight reply would be.
+    /// </summary>
+    public TaskCompletionSource Hold(string cmd)
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _holds[cmd] = gate;
+        return gate;
+    }
 
     /// <summary>A playing status for <paramref name="title"/> at <paramref name="position"/> seconds.</summary>
     public static PlayerStatus Playing(string title, double position = 0, double duration = 300, string? trackId = null, PlayerState state = PlayerState.Playing)
@@ -200,10 +212,10 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                 switch (cmd)
                 {
                     case "subscribe":
-                        // Acknowledge first, as the real player does: an event written before the reply is skipped by
-                        // the client (it is still waiting for its answer), so a push racing ahead of it would be lost.
-                        await connection.WriteAsync(ProtocolMessages.Ok(id, new { }));
-                        connection.Subscribed = true;
+                        // As the real player does: subscribed before acknowledging (so no event after the reply is
+                        // missed), and the reply carries the status the events follow. Events go out under the
+                        // connection's write lock, so none can overtake the reply.
+                        await connection.SubscribeAsync(id, Status);
                         break;
                     case "queue":
                         await connection.WriteAsync(ProtocolMessages.Ok(id, QueuePage(request)));
@@ -218,7 +230,13 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                             Follow(cmd, request);
                         }
 
-                        await connection.WriteAsync(ProtocolMessages.Ok(id, Status));
+                        var answer = Status;
+                        if (_holds.TryGetValue(cmd, out var gate))
+                        {
+                            await gate.Task;
+                        }
+
+                        await connection.WriteAsync(ProtocolMessages.Ok(id, answer));
                         break;
                 }
             }
@@ -292,9 +310,22 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 
         public async Task<string?> ReadLineAsync(CancellationToken cancellationToken) => await _reader.ReadLineAsync(cancellationToken);
 
+        /// <summary>Marks the connection subscribed and acknowledges with <paramref name="status"/>, both under the write lock.</summary>
+        public async Task SubscribeAsync(JsonElement id, PlayerStatus status)
+        {
+            await _write.WaitAsync();
+            Subscribed = true;
+            await WriteLockedAsync(ProtocolMessages.Ok(id, status));
+        }
+
         public async Task WriteAsync(string line)
         {
             await _write.WaitAsync();
+            await WriteLockedAsync(line);
+        }
+
+        private async Task WriteLockedAsync(string line)
+        {
             try
             {
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(line + "\n"));
