@@ -60,6 +60,7 @@ public sealed class QueuePlayer : IDisposable
     private bool _disposed;
     private RepeatMode _repeat;
     private bool _shuffle;
+    private float? _mutedLevel; // muted: the level to go back to (the player plays at 0 meanwhile)
     private int? _seed;
     private Random _random = new();
     private long _nextOrder;
@@ -142,6 +143,11 @@ public sealed class QueuePlayer : IDisposable
     public bool Shuffle
     {
         get { lock (_gate) { return _shuffle; } }
+    }
+
+    public bool Muted
+    {
+        get { lock (_gate) { return _mutedLevel is not null; } }
     }
 
     public int Count
@@ -683,7 +689,7 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
-    /// <summary>Sets the linear volume (0..1); anything else is InvalidArgument.</summary>
+    /// <summary>Sets the linear volume (0..1), unmuting; anything else is InvalidArgument.</summary>
     public PlayerStatus SetVolume(double volume)
     {
         if (!double.IsFinite(volume) || volume is < 0 or > 1)
@@ -694,12 +700,13 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            _mutedLevel = null;
             _player.Volume = (float)volume;
             return StatusCore();
         }
     }
 
-    /// <summary>Changes the volume by <paramref name="delta"/>, clamped to 0..1.</summary>
+    /// <summary>Changes the volume by <paramref name="delta"/>, clamped to 0..1, unmuting (from the level kept while muted).</summary>
     public PlayerStatus ChangeVolume(double delta)
     {
         if (!double.IsFinite(delta))
@@ -710,10 +717,41 @@ public sealed class QueuePlayer : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
-            _player.Volume = (float)Math.Clamp(Math.Round(_player.Volume + delta, 4), 0, 1);
+            var level = LevelCore();
+            _mutedLevel = null;
+            _player.Volume = (float)Math.Clamp(Math.Round(level + delta, 4), 0, 1);
             return StatusCore();
         }
     }
+
+    /// <summary>
+    /// Mutes (<paramref name="muted"/> true), unmutes (false) or toggles (null). Muted, the player plays at 0 and keeps
+    /// the level, which <c>status</c> still reports (with <c>muted</c>); unmuting, or setting a volume, goes back to it.
+    /// The mute lasts while this player runs: a new player starts unmuted.
+    /// </summary>
+    public PlayerStatus SetMuted(bool? muted)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            var mute = muted ?? _mutedLevel is null;
+            if (mute && _mutedLevel is null)
+            {
+                _mutedLevel = _player.Volume;
+                _player.Volume = 0;
+            }
+            else if (!mute && _mutedLevel is { } level)
+            {
+                _mutedLevel = null;
+                _player.Volume = level;
+            }
+
+            return StatusCore();
+        }
+    }
+
+    /// <summary>The volume level: the player's, or the one kept while muted.</summary>
+    private float LevelCore() => _mutedLevel ?? _player.Volume;
 
     /// <summary>Sets the repeat mode (off | one | all). Allowed on an empty queue (applies to the next one).</summary>
     public PlayerStatus SetRepeat(RepeatMode mode)
@@ -1079,7 +1117,7 @@ public sealed class QueuePlayer : IDisposable
             loaded ? _player.State : PlayerState.Stopped,
             loaded ? Math.Round(_player.Position.TotalSeconds, 3) : 0,
             loaded ? Math.Round(_player.Duration.TotalSeconds, 3) : 0,
-            _player.Volume,
+            LevelCore(),
             track is null ? null : TrackDto.From(track),
             has ? _index : null,
             _items.Count,
@@ -1094,7 +1132,8 @@ public sealed class QueuePlayer : IDisposable
             diagnostics?.Gapless,
             diagnostics?.Underruns,
             _radio is null ? null : new RadioInfo(_radio.Filter, _radio.Filter.Describe(), _radio.PoolSize),
-            has ? UpNextEnd() - _index - 1 : 0);
+            has ? UpNextEnd() - _index - 1 : 0,
+            _mutedLevel is not null);
     }
 
     private const int MaxNextTracks = 16;

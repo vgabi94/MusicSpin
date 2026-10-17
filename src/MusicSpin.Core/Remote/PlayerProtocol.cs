@@ -47,11 +47,11 @@ public static class ProtocolMessages
 /// <c>{"id":1,"ok":false,"error":{"code":"invalid_state","exitCode":8,"message":"..."}}</c>.
 /// Events (no id): <c>{"event":"stateChanged","data":{...}}</c>.
 /// <para>Commands: hello, status, load(path), play(index?), pause, resume, toggle, stop, next, prev,
-/// seek(seconds | delta), volume(value | delta), info(path), queue(offset?, limit?),
+/// seek(seconds | delta), volume(value | delta; unmutes), mute(mode? = on|off|toggle), info(path), queue(offset?, limit?),
 /// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.add(items, position? = end|next|upnext),
 /// queue.remove(index), queue.move(from, to), queue.clear(upNext?),
 /// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), subscribe(spectrum?), quit.
-/// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle without a mode just return the status.</para>
+/// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle/mute without a mode just return the status.</para>
 /// </summary>
 public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory decoders, Func<object>? hello = null)
 {
@@ -59,7 +59,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
 
     public static IReadOnlyList<string> Commands { get; } =
     [
-        "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "info",
+        "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "mute", "info",
         "queue", "queue.set", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "subscribe", "quit",
     ];
 
@@ -150,6 +150,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                 }
 
                 return (Player.SetVolume(RequiredNumber(root, "value")), ProtocolAction.None);
+            case "mute":
+                return (Mute(root), ProtocolAction.None);
             case "info":
                 return (TrackDto.From(decoders.Probe(RequiredString(root, "path"))), ProtocolAction.None);
             case "queue":
@@ -185,6 +187,20 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                     ? "Missing \"cmd\"."
                     : $"Unknown cmd '{cmd}'. Expected one of: {string.Join('|', Commands)}.");
         }
+    }
+
+    /// <summary><c>mode</c>: on | off | toggle; without it, just the status.</summary>
+    private PlayerStatus Mute(JsonElement root)
+    {
+        if (OptionalString(root, "mode") is not { } text)
+        {
+            return Player.Status();
+        }
+
+        bool? muted = text.Trim().Equals("toggle", StringComparison.OrdinalIgnoreCase) ? null
+            : PlaybackModes.TryParseShuffle(text, current: false, out var on) ? on
+            : throw new FormatException($"Unknown mute mode '{text}'. Use on|off|toggle.");
+        return Player.SetMuted(muted);
     }
 
     private PlayerStatus Shuffle(JsonElement root)

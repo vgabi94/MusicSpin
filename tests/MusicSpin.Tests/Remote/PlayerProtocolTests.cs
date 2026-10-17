@@ -57,6 +57,46 @@ public sealed class PlayerProtocolTests : IDisposable
     private void SetQueue(bool play = true) => Ok(new { id = 1, cmd = "queue.set", items = _paths, play });
 
     [Fact]
+    public void Mute_sets_toggles_or_reports_and_the_status_carries_it()
+    {
+        SetQueue();
+        Ok(new { cmd = "volume", value = 0.8 });
+
+        var status = Ok(new { cmd = "mute" }); // no mode: just the status
+        Assert.False(status.GetProperty("muted").GetBoolean());
+
+        status = Ok(new { cmd = "mute", mode = "on" });
+        Assert.True(status.GetProperty("muted").GetBoolean());
+        Assert.Equal(0.8, status.GetProperty("volume").GetDouble(), 3);
+        Assert.Equal(0f, _player.Volume);
+        Assert.True(Ok(new { cmd = "status" }).GetProperty("muted").GetBoolean());
+
+        Assert.False(Ok(new { cmd = "mute", mode = "toggle" }).GetProperty("muted").GetBoolean());
+        Assert.True(Ok(new { cmd = "mute", mode = "Toggle" }).GetProperty("muted").GetBoolean());
+        Assert.False(Ok(new { cmd = "mute", mode = "off" }).GetProperty("muted").GetBoolean());
+        Assert.Equal(0.8f, _player.Volume, 3);
+
+        Ok(new { cmd = "mute", mode = "on" });
+        status = Ok(new { cmd = "volume", delta = -0.3 }); // a volume unmutes
+        Assert.False(status.GetProperty("muted").GetBoolean());
+        Assert.Equal(0.5, status.GetProperty("volume").GetDouble(), 3);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void An_unknown_mute_mode_is_a_usage_error_and_changes_nothing()
+    {
+        SetQueue();
+        Ok(new { cmd = "mute", mode = "on" });
+
+        var (code, _, message) = Fail(new { cmd = "mute", mode = "loud" });
+        Assert.Equal("usage", code);
+        Assert.Contains("on|off|toggle", message, StringComparison.Ordinal);
+        Assert.True(Ok(new { cmd = "status" }).GetProperty("muted").GetBoolean());
+        Assert.Contains("mute", PlayerProtocol.Commands);
+    }
+
+    [Fact]
     public void Queue_editing_commands_for_up_next()
     {
         Ok(new { cmd = "queue.set", items = _paths[..2], play = false });
