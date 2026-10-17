@@ -373,7 +373,141 @@ public sealed class CoverTests : LibraryTestBase
         Directory.CreateDirectory(Data.CoversDirectory);
         Chmod(Data.CoversDirectory, UnixFileMode.UserRead | UnixFileMode.UserExecute);
 
-        Assert.Equal(image, Cover());
+        var path = Cover(); // a copy in this process's temp folder (the original when even that can't be written: below)
+        Assert.Equal(Red, Bytes(path));
+        Assert.DoesNotContain(Data.CoversDirectory, path, StringComparison.Ordinal);
+    }
+
+    private string? CoverWith(Lazy<string?> fallback, CoverSize size = CoverSize.Medium, ICoverResizer? resizer = null)
+    {
+        var id = AlbumId();
+        CoverSource source;
+        using (var library = OpenRead())
+        {
+            source = library.CoverSources([id])[id];
+        }
+
+        return new CoverStore(Data, resizer) { Fallback = fallback }.GetPath(source, size);
+    }
+
+    private string MakeUnwritableCache()
+    {
+        Directory.CreateDirectory(Data.CoversDirectory);
+        Chmod(Data.CoversDirectory, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        return Data.CoversDirectory;
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void An_unwritable_cache_still_shows_an_embedded_cover_from_a_copy_outside_it()
+    {
+        RequirePosixNonRoot();
+        LibraryTestData.SetPictures(WriteTrack(), (Red, PictureType.FrontCover));
+        AddAndScan();
+        MakeUnwritableCache();
+        var outside = Path.Combine(Root, "fallback");
+        var fallback = new Lazy<string?>(() => outside);
+        var resizer = new FakeResizer();
+
+        var path = CoverWith(fallback, resizer: resizer);
+
+        Assert.Equal(Red, Bytes(path)); // before: null, no cover at all
+        Assert.StartsWith(Path.Combine(outside, AlbumId()) + Path.DirectorySeparatorChar, path, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Data.CoversDirectory));
+
+        Assert.Equal(path, CoverWith(fallback, resizer: resizer)); // found again, not read and resized again
+        Assert.Equal(1, resizer.Calls);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void An_unwritable_cache_shows_a_folder_image_shrunk_outside_it_rather_than_at_full_size()
+    {
+        RequirePosixNonRoot();
+        WriteTrack();
+        System.IO.File.WriteAllBytes(Path.Combine(AlbumDir, "cover.png"), Blue);
+        AddAndScan();
+        MakeUnwritableCache();
+        var outside = Path.Combine(Root, "fallback");
+
+        var path = CoverWith(new Lazy<string?>(() => outside), resizer: new FakeResizer());
+
+        Assert.StartsWith(outside + Path.DirectorySeparatorChar, path, StringComparison.Ordinal);
+        Assert.Equal(Blue, Bytes(path));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void With_nowhere_to_write_an_embedded_cover_falls_through_to_the_folder_image_and_then_to_none()
+    {
+        RequirePosixNonRoot();
+        LibraryTestData.SetPictures(WriteTrack(), (Red, PictureType.FrontCover));
+        var image = Path.Combine(AlbumDir, "cover.jpg");
+        System.IO.File.WriteAllBytes(image, Blue);
+        AddAndScan();
+        MakeUnwritableCache();
+        var nowhere = new Lazy<string?>(() => null); // no temp folder either
+
+        Assert.Equal(image, CoverWith(nowhere)); // the original folder image, as before
+
+        System.IO.File.Delete(image);
+        Assert.Null(CoverWith(nowhere));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void An_unwritable_fallback_folder_is_no_worse_than_none()
+    {
+        RequirePosixNonRoot();
+        LibraryTestData.SetPictures(WriteTrack(), (Red, PictureType.FrontCover));
+        AddAndScan();
+        MakeUnwritableCache();
+        var outside = Path.Combine(Root, "fallback");
+        Directory.CreateDirectory(outside);
+        Chmod(outside, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+
+        Assert.Null(CoverWith(new Lazy<string?>(() => outside)));
+    }
+
+    [Fact]
+    public void The_process_fallback_folder_is_its_own_and_private()
+    {
+        var root = CoverCache.ProcessFallback.Value;
+
+        Assert.NotNull(root);
+        Assert.True(Directory.Exists(root));
+        Assert.StartsWith(Path.GetFullPath(Path.GetTempPath()), Path.GetFullPath(root), StringComparison.Ordinal);
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, System.IO.File.GetUnixFileMode(root));
+        }
+    }
+
+    [Fact]
+    public void A_cover_file_removed_by_a_caller_with_an_older_source_is_made_again_on_the_next_request()
+    {
+        // Two callers with different views of the album (one read the library before a rescan): each store removes
+        // the other source's files, so a path one returned can be gone by the time it is opened. The next request
+        // makes it again.
+        LibraryTestData.SetPictures(WriteTrack(), (Red, PictureType.FrontCover));
+        AddAndScan();
+        var id = AlbumId();
+        CoverSource current;
+        using (var library = OpenRead())
+        {
+            current = library.CoverSources([id])[id];
+        }
+
+        var older = current with { Embedded = [current.Embedded[0] with { ModifiedUtcTicks = current.Embedded[0].ModifiedUtcTicks - 1 }] };
+        var store = new CoverStore(Data, new FakeResizer());
+
+        var path = store.GetPath(current, CoverSize.Medium);
+        var stale = store.GetPath(older, CoverSize.Medium);
+        Assert.NotEqual(path, stale);
+        Assert.False(System.IO.File.Exists(path)); // removed by the older caller's store
+
+        Assert.Equal(path, store.GetPath(current, CoverSize.Medium));
+        Assert.Equal(Red, Bytes(path));
     }
 
     [Fact]
