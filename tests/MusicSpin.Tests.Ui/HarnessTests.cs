@@ -4,6 +4,8 @@ using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.Time.Testing;
 using MusicSpin.Tests.Shared;
 using MusicSpin.Tests.Ui.Harness;
@@ -97,6 +99,37 @@ public sealed class HarnessTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_dir, "missing.actual.png")));
         Assert.False(resized.Matches);
         Assert.Contains("10×10", resized.Problem);
+    }
+
+    [AvaloniaFact]
+    public void After_settling_hit_testing_sees_the_latest_layout()
+    {
+        // Hit testing reads the last rendered frame, not the layout: UI work run after the last render (a status from
+        // the player, a menu placed) used to leave clicks aimed by layout landing on what was there before.
+        var button = new Button { Width = 40, Height = 20 };
+        var canvas = new Canvas { Children = { button } };
+        var window = new Window { Width = 300, Height = 200, Content = canvas };
+        window.Show();
+        Gui.Settle();
+
+        // Work posted while rendering (as a layout handler or a thread's reply would), so it runs after the frame.
+        var moved = false;
+        window.LayoutUpdated += (_, _) =>
+        {
+            if (!moved)
+            {
+                moved = true;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => Canvas.SetLeft(button, 200));
+            }
+        };
+        button.Width = 41; // a layout pass on the next render
+        Gui.Settle();
+        Assert.True(moved);
+
+        var middle = button.TranslatePoint(new Point(20, 10), window)!.Value;
+        Assert.Equal(220, middle.X);
+        Assert.Same(button, (window.InputHitTest(middle) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
+        window.Close();
     }
 
     [AvaloniaFact]

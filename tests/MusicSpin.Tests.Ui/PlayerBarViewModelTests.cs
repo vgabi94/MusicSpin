@@ -356,7 +356,7 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
         await _player.PushAsync("spectrum", new { levels });
         await _ui.UntilAsync(() => _bar.Spectrum.Frame.Bars[15] > 0.9, "the levels");
         Assert.Equal(levels.Select(l => (double)l), _bar.Spectrum.Frame.Bars.Select(b => Math.Round(b, 4)));
-        Assert.Equal(0, _player.Count("status") - 1); // spectrum events don't ask for a status
+        Assert.Equal(0, _player.Count("status")); // spectrum events don't ask for a status (the start status comes with the subscribe reply)
 
         await ChangeAsync(Playing() with { State = PlayerState.Paused });
         for (var i = 0; i < 200 && _bar.Spectrum.IsRunning; i++)
