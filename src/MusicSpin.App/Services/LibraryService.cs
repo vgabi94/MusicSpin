@@ -296,10 +296,12 @@ public sealed class LibraryService : ILibraryService, IDisposable
 
     private string Stamp()
     {
+        // An empty log is the same as none: opening the library creates one and closing it removes it, so counting it
+        // would make every open (the app's own edits, and reads the poll happens to catch) look like a change.
         static string Of(string path)
         {
             var info = new FileInfo(path);
-            return info.Exists ? $"{info.Length}:{info.LastWriteTimeUtc.Ticks}" : "-";
+            return info is { Exists: true, Length: > 0 } ? $"{info.Length}:{info.LastWriteTimeUtc.Ticks}" : "-";
         }
 
         var db = _directory.LibraryDatabaseFile;
