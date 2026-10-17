@@ -110,8 +110,13 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial double Position { get; private set; }
 
+    /// <summary>The volume level, 0..1; while <see cref="Muted"/>, the level unmuting goes back to.</summary>
     [ObservableProperty]
     public partial double Volume { get; private set; } = 1;
+
+    /// <summary>Muted on the player: it plays at 0 and keeps <see cref="Volume"/>, across app restarts.</summary>
+    [ObservableProperty]
+    public partial bool Muted { get; private set; }
 
     [ObservableProperty]
     public partial RepeatMode Repeat { get; private set; }
@@ -190,6 +195,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [RelayCommand]
     private Task SetVolume(double value) => SendAsync("volume", new { value = Math.Clamp(value, 0, 1) });
 
+    /// <summary>Mutes or unmutes the player (never held, like the volume).</summary>
+    [RelayCommand]
+    private Task SetMuted(bool muted) => SendAsync("mute", new { mode = muted ? "on" : "off" });
+
     [RelayCommand]
     private Task SetRepeat(RepeatMode mode) => SendAsync("repeat", new { mode = mode.ToString().ToLowerInvariant() });
 
@@ -219,7 +228,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     public Task ResumeAsync() => SendAsync("resume", null, holdable: false);
 
     /// <summary>
-    /// Holds playback input (transport, queue, radio; not the volume) until <see cref="ReleaseInputAsync"/>, which sends
+    /// Holds playback input (transport, queue, radio; not the volume or mute) until <see cref="ReleaseInputAsync"/>, which sends
     /// it in order: while the turntable scene plays.
     /// </summary>
     public void HoldInput() => _held ??= [];
@@ -346,9 +355,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>
     /// Sends a command, starting the player when needed. Errors become a <see cref="Notice"/>. While input is held
-    /// (<see cref="HoldInput"/>) it waits, except the volume.
+    /// (<see cref="HoldInput"/>) it waits, except the volume and mute.
     /// </summary>
-    public Task SendAsync(string cmd, object? args = null) => SendAsync(cmd, args, holdable: cmd != "volume");
+    public Task SendAsync(string cmd, object? args = null) => SendAsync(cmd, args, holdable: cmd is not ("volume" or "mute"));
 
     private async Task<bool> SendAsync(string cmd, object? args, bool holdable)
     {
@@ -440,6 +449,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         Path = item?.Path ?? status.Track?.Path;
         Duration = status.DurationSeconds > 0 ? status.DurationSeconds : item?.DurationSeconds ?? 0;
         Volume = status.Volume;
+        Muted = status.Muted;
         Repeat = status.Repeat;
         Shuffle = status.Shuffle;
         QueueMode = status.QueueMode;

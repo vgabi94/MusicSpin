@@ -233,7 +233,8 @@ src/MusicSpin.App/
   `SeekSyntax`; the volume takes percents and the CLI's fractions); `TypedBox` connects it to a text box. `ScrubBar`
   doesn't set its own value: it runs a command with the new one, so the player stays the only source of truth. Its
   keys are its own key bindings, so on the focused bar they win over window shortcuts on the same keys. Mute is the
-  app's: the player plays at 0 and the app keeps the level.
+  player's (`mute`): it plays at 0 and keeps the level, which `status` still reports with `muted`, so a mute outlives
+  the app and a volume set anywhere (the CLI) unmutes.
 - **Analyzer.** `SpectrumViewModel` moves 16 bars and their peak dots on the app's clock while anything shows, and
   stops the clock once everything has fallen, so an idle analyzer neither ticks nor draws.
 - **Settings.** `SettingsViewModel` is a layer: the cog opens it over a light dim, and ✕, Esc or a click on the dim

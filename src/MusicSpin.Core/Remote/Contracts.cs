@@ -62,6 +62,8 @@ public sealed record OutputInfo(string Backend, string? Device, bool Exclusive);
 /// <param name="Gapless">Whether same-format tracks follow each other without a gap (settings.json "gapless").</param>
 /// <param name="Underruns">Times the output ran dry and played silence because decoding fell behind (since the player started).</param>
 /// <param name="UpNext">How many entries after the current one are up next (added to play next; see <see cref="QueueEntry.UpNext"/>).</param>
+/// <param name="Volume">The volume level, 0..1; while <paramref name="Muted"/>, the level unmuting goes back to.</param>
+/// <param name="Muted">Muted: the player plays at 0 and keeps <paramref name="Volume"/> (the <c>mute</c> command; a volume unmutes).</param>
 public sealed record PlayerStatus(
     PlayerState State,
     double PositionSeconds,
@@ -81,7 +83,8 @@ public sealed record PlayerStatus(
     bool? Gapless = null,
     long? Underruns = null,
     RadioInfo? Radio = null,
-    int UpNext = 0)
+    int UpNext = 0,
+    bool Muted = false)
 {
     /// <summary>
     /// "radio" while a radio station plays (see <see cref="Radio"/>), else "queue". (Named so it does not clash with the

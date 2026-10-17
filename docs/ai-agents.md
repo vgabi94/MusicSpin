@@ -122,7 +122,8 @@ One request per line on stdin; one response per line on stdout with the same `id
 {"id":26,"cmd":"queue.remove","index":3}  {"id":27,"cmd":"queue.move","from":4,"to":1}  {"id":28,"cmd":"queue.clear","upNext":true}   // 0-based indexes
 {"id":12,"cmd":"next"}  {"id":13,"cmd":"prev"}  {"id":14,"cmd":"play","index":2}  {"id":15,"cmd":"toggle"}
 {"id":16,"cmd":"seek","delta":-10}             // relative seeks are clamped; absolute ones must be inside the track
-{"id":17,"cmd":"volume","delta":0.1}
+{"id":17,"cmd":"volume","delta":0.1}             // a volume (absolute or relative) also unmutes
+{"id":29,"cmd":"mute","mode":"on"}             // on|off|toggle; without "mode": just the status. Muted, it plays at 0 and keeps the level: "volume" stays the level, "muted":true
 {"id":18,"cmd":"queue","offset":0,"limit":50}  {"id":19,"cmd":"queue.clear"}  {"id":20,"cmd":"hello"}
 {"id":21,"cmd":"repeat","mode":"all"}          // off|one|all; without "mode": just the status
 {"id":22,"cmd":"shuffle","mode":"on","seed":7} // on|off|toggle (or "enabled":true/false); without "mode": just the status

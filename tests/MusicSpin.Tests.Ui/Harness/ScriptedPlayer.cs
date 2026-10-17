@@ -45,7 +45,7 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
     public bool AllowStart { get; set; } = true;
 
     /// <summary>
-    /// Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would, and queue.add and
+    /// Seeks, volume changes and mutes update <see cref="Status"/> before the answer, as a real player's would, and queue.add and
     /// queue.move edit <see cref="Queue"/>.
     /// </summary>
     public bool FollowsCommands { get; set; }
@@ -293,7 +293,11 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         }
         else if (cmd == "volume" && request.TryGetProperty("value", out var value))
         {
-            Status = Status with { Volume = value.GetSingle() };
+            Status = Status with { Volume = value.GetSingle(), Muted = false }; // a volume unmutes
+        }
+        else if (cmd == "mute" && request.TryGetProperty("mode", out var mode))
+        {
+            Status = Status with { Muted = mode.GetString() switch { "on" => true, "off" => false, _ => !Status.Muted } };
         }
         else if (cmd == "queue.add" && request.TryGetProperty("items", out var items))
         {
