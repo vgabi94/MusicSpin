@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Time.Testing;
 using MusicSpin.App.Services;
+using MusicSpin.Core;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
 using MusicSpin.Tests.Shared;
@@ -8,7 +9,7 @@ namespace MusicSpin.Tests.Ui;
 
 /// <summary>
 /// The real <see cref="LibraryService"/>'s change stamp: the app's own edits raise no <see cref="LibraryService.Changed"/>,
-/// another process's writes do.
+/// another process's writes always do, however close to an edit they land.
 /// </summary>
 public sealed class LibraryServiceTests : IDisposable
 {
@@ -36,9 +37,9 @@ public sealed class LibraryServiceTests : IDisposable
     }
 
     /// <summary>A playlist written by "another process": its own writable open of the library.</summary>
-    private void WriteElsewhere(string name)
+    private void WriteElsewhere(string name, TimeSpan? lockTimeout = null)
     {
-        using var library = MusicLibrary.OpenWritable(_data);
+        using var library = MusicLibrary.OpenWritable(_data, lockTimeout: lockTimeout);
         library.CreatePlaylist(name);
     }
 
@@ -61,5 +62,32 @@ public sealed class LibraryServiceTests : IDisposable
         Assert.Equal(1, _changes);
         _service.CheckForChanges();
         Assert.Equal(1, _changes); // and only once
+    }
+
+    [Fact]
+    public async Task A_write_elsewhere_waiting_for_an_edit_to_finish_is_not_taken_for_the_edits_own()
+    {
+        // Another process waiting for the lock gets it the moment the edit lets go. Had the edit let go before taking its
+        // stamp, a write landing in between would be counted as the edit's and never raise a change. Here the other
+        // process tries at exactly that moment, without waiting: it must either be refused (the edit still holds the
+        // library) or its write must show up as a change.
+        var refused = false;
+        _service.EditClosed = () =>
+        {
+            try
+            {
+                WriteElsewhere("Theirs", lockTimeout: TimeSpan.Zero);
+            }
+            catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.LibraryLocked)
+            {
+                refused = true;
+            }
+        };
+
+        await _service.CreatePlaylistAsync("Mine", [], TestContext.Current.CancellationToken);
+        _service.EditClosed = null;
+        _service.CheckForChanges();
+
+        Assert.True(refused || _changes == 1, $"refused: {refused}, changes: {_changes}");
     }
 }
