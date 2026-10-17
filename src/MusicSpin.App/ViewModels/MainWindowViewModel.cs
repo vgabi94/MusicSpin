@@ -21,6 +21,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private readonly Dictionary<string, PlaylistPageViewModel> _playlistPages = new(StringComparer.Ordinal);
     private readonly List<(int Asked, TaskCompletionSource Done)> _reloadWaiters = [];
     private CancellationTokenSource? _albumLookup;
+    private OwedReads? _owedAlbumLookup;
     private int _reloadsAsked;
     private int _reloadsDone;
     private bool _reloading;
@@ -38,7 +39,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         SpinClock = new SpinClock(services.Time, services.Ui);
         Favorites = new FavoritesViewModel(services.Library, Notices);
         Favorites.Changed += (_, _) => OnFavoritesChanged();
-        NowPlaying = new NowPlayingViewModel(Player, services.Library, services.Covers, Favorites, Notices);
+        NowPlaying = new NowPlayingViewModel(Player, services.Library, services.Covers, Favorites, Notices, services.Time, services.Ui);
         NowPlaying.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(NowPlayingViewModel.IsSpinning))
@@ -260,6 +261,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _albumLookup?.Cancel();
         _albumLookup?.Dispose();
         _reloadRetry?.Dispose();
+        _owedAlbumLookup?.Dispose();
+        NowPlaying.Dispose();
         _listsOwed = _pageOwed = false;
         Scene.Dispose();
         QueueDrawer.Dispose();
@@ -506,6 +509,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             albumId = trackId is null ? null : await _services.Library.AlbumIdOfTrackAsync(trackId, lookup.Token).ConfigureAwait(true);
         }
+        catch (Exception ex) when (OwedReads.IsBusy(ex) && !lookup.IsCancellationRequested)
+        {
+            // Another process holds the library: looked up again at the next check, if the track is still playing then.
+            (_owedAlbumLookup ??= new OwedReads(_services.Time, _services.Ui)).Owe(() =>
+            {
+                if (ReferenceEquals(_albumLookup, lookup) && Player.TrackId == trackId)
+                {
+                    _ = FindPlayingAlbumAsync(trackId);
+                }
+            });
+            return;
+        }
         catch (Exception ex) when (ex is MusicSpinException or OperationCanceledException or IOException)
         {
             // keep what we have; the next track change tries again
@@ -526,8 +541,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         await Notices.GuardAsync(async () =>
         {
-            PlayingCover = albumId is null ? null : await _services.Covers.CoverAsync(albumId, CoverSize.Small).ConfigureAwait(true);
-            _services.Appearance.SetAccent(albumId is null ? null : await _services.Covers.AccentAsync(albumId).ConfigureAwait(true));
+            // A cover waits out a busy library (see CoverService), so another album may be playing by the time it comes:
+            // only the playing album's cover and colour are shown.
+            var read = albumId is null ? Task.FromResult<Bitmap?>(null) : _services.Covers.CoverAsync(albumId, CoverSize.Small);
+            if (!read.IsCompleted)
+            {
+                PlayingCover = null; // not the last album's cover meanwhile
+            }
+
+            var cover = await read.ConfigureAwait(true);
+            if (PlayingAlbumId != albumId)
+            {
+                return;
+            }
+
+            PlayingCover = cover;
+            var accent = albumId is null ? null : await _services.Covers.AccentAsync(albumId).ConfigureAwait(true);
+            if (PlayingAlbumId == albumId)
+            {
+                _services.Appearance.SetAccent(accent);
+            }
         }).ConfigureAwait(true);
     }
 }

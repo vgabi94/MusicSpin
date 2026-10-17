@@ -54,7 +54,7 @@ public sealed partial class NowPlayingTrackViewModel(TrackSummary track, int ind
 /// holds the deck's state: the arm and whether the platter spins follow play/pause from anywhere (the transport, Space,
 /// the CLI).
 /// </summary>
-public sealed partial class NowPlayingViewModel : LayerViewModel
+public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
 {
     private readonly PlayerViewModel _player;
     private readonly ILibraryService _library;
@@ -62,10 +62,12 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
     private readonly Notices _notices;
     private readonly FavoritesViewModel _favorites;
     private string? _albumId;
+    private readonly OwedReads _owed;
     private bool _shown;
     private bool _deckHeld;
 
-    public NowPlayingViewModel(PlayerViewModel player, ILibraryService library, ICoverService covers, FavoritesViewModel favorites, Notices notices)
+    public NowPlayingViewModel(PlayerViewModel player, ILibraryService library, ICoverService covers, FavoritesViewModel favorites, Notices notices,
+        TimeProvider time, IUiDispatcher ui)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(library);
@@ -75,6 +77,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
         _player = player;
         _library = library;
         _covers = covers;
+        _owed = new OwedReads(time, ui);
         _notices = notices;
         _favorites = favorites;
         _player.PropertyChanged += OnPlayerChanged;
@@ -147,27 +150,60 @@ public sealed partial class NowPlayingViewModel : LayerViewModel
             return;
         }
 
+        // The cover is asked for now but awaited apart: it waits out a busy library on its own (see CoverService).
+        var cover = _covers.CoverAsync(albumId, CoverSize.Large);
         await _notices.GuardAsync(async () =>
         {
-            var albums = _library.AlbumsAsync();
-            var tracks = _library.AlbumTracksAsync(albumId);
-            var cover = _covers.CoverAsync(albumId, CoverSize.Large);
-            await Task.WhenAll(albums, tracks, cover).ConfigureAwait(true);
+            IReadOnlyList<AlbumSummary> albums;
+            IReadOnlyList<TrackSummary> tracks;
+            try
+            {
+                var albumsRead = _library.AlbumsAsync();
+                var tracksRead = _library.AlbumTracksAsync(albumId);
+                await Task.WhenAll(albumsRead, tracksRead).ConfigureAwait(true);
+                (albums, tracks) = (albumsRead.Result, tracksRead.Result);
+            }
+            catch (Exception ex) when (OwedReads.IsBusy(ex))
+            {
+                // Another process holds the library: nobody asked for anything, so no notice; the album is read at the
+                // next check, unless another one is shown by then.
+                _owed.Owe(() =>
+                {
+                    if (_albumId == albumId)
+                    {
+                        _ = ShowAlbumAsync(albumId);
+                    }
+                });
+                return;
+            }
+
             if (_albumId != albumId)
             {
                 return;
             }
 
-            var album = albums.Result.FirstOrDefault(a => a.Id == albumId);
+            var album = albums.FirstOrDefault(a => a.Id == albumId);
             Title = album?.Title ?? _player.Album;
             ArtistLine = string.Join(" · ", new[] { album?.Artist ?? _player.Artist, album?.Year?.ToString(CultureInfo.InvariantCulture) }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
-            Cover = cover.Result;
-            Tracks = [.. tracks.Result.Select((t, i) => new NowPlayingTrackViewModel(t, i))];
+            Tracks = [.. tracks.Select((t, i) => new NowPlayingTrackViewModel(t, i))];
             MarkTracks();
             MarkFavorites();
+            if (!cover.IsCompleted)
+            {
+                Cover = null; // not the last album's cover under this one's title meanwhile
+            }
+
+            var bitmap = await cover.ConfigureAwait(true);
+            if (_albumId == albumId)
+            {
+                Cover = bitmap;
+            }
         }).ConfigureAwait(true);
     }
+
+    /// <summary>Stops the reads owed to a busy library (the window closes).</summary>
+    public void Dispose() => _owed.Dispose();
 
     /// <summary>A click on a track: the album plays from it (which ends radio).</summary>
     [RelayCommand]
