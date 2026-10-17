@@ -25,6 +25,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private int _reloadsDone;
     private bool _reloading;
     private bool _reloadPage;
+    private bool _reloadOwed;
+    private ITimer? _reloadRetry;
 
     public MainWindowViewModel(AppServices services)
     {
@@ -254,6 +256,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         _albumLookup?.Cancel();
         _albumLookup?.Dispose();
+        _reloadRetry?.Dispose();
+        _reloadOwed = false;
         Scene.Dispose();
         QueueDrawer.Dispose();
         SpinClock.Dispose();
@@ -353,6 +357,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 var asked = _reloadsAsked;
                 var page = _reloadPage;
                 _reloadPage = false;
+                _reloadOwed = false;
                 Exception? failure = null;
                 try
                 {
@@ -389,11 +394,38 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             _reloading = false;
         }
+
+        if (_reloadOwed)
+        {
+            RetryReloadAtNextCheck();
+        }
     }
 
     /// <summary>
-    /// A read in the background: if another process holds the library (a scan, say), it says nothing and waits for the
-    /// next change, which a scan makes when it is done. Other failures are notices.
+    /// A read the busy library refused is owed: it is tried again when the library is next checked for changes, whether
+    /// or not the holder changed anything (a long read-only command doesn't), and again at each check until it lands.
+    /// </summary>
+    private void RetryReloadAtNextCheck()
+    {
+        if (_reloadRetry is not null)
+        {
+            return;
+        }
+
+        _reloadRetry = _services.Time.CreateTimer(_ => _services.Ui.Post(() =>
+        {
+            _reloadRetry?.Dispose();
+            _reloadRetry = null;
+            if (_reloadOwed)
+            {
+                _ = ReloadAsync();
+            }
+        }), null, LibraryService.PollInterval, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>
+    /// A read in the background: if another process holds the library (a scan, say), it says nothing and the reload is
+    /// owed (see <see cref="RetryReloadAtNextCheck"/>). Other failures are notices.
     /// </summary>
     private Task Quietly(Func<Task> read) => Notices.GuardAsync(async () =>
     {
@@ -403,7 +435,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.LibraryLocked)
         {
-            // busy: the next change reloads
+            _reloadOwed = true; // busy: owed, tried again at the next check (or the next change, if one comes first)
         }
     });
 

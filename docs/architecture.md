@@ -158,8 +158,11 @@ src/MusicSpin.App/
   notice that the library is busy and changes nothing. The app checks `library.db` (and its log) every 500 ms and
   reloads the playlists, the favorites and the current page when another process changed it (a scan from the CLI, a
   playlist from MCP, `music-spin favorite add`); its own edits re-read only what they changed. Reloads never overlap:
-  changes during one make exactly one more after it. A reload that finds the library held (a scan under way) says
-  nothing and waits for the next change. Favorites, when not shown, reads its list when it is next opened.
+  changes during one make exactly one more after it, and the startup read is one of them. A reload that finds the
+  library held (a scan under way) says nothing and is owed: it is tried again at the next 500 ms check, changed or not,
+  until it lands. An edit's own change is told apart by stamping `library.db` after closing it but before releasing
+  `library.lock`, so a write by a process waiting for the lock is never taken for the edit's. Favorites, when not shown,
+  reads its list when it is next opened.
 - **Covers.** `CoverService` reads covers through Core's cover cache and keeps decoded bitmaps for the session; a row
   asks for its cover only when it is first shown, and lists are virtualized.
 - **Albums and Tracks.** The pages sort, group and filter in the view model (`LibraryOrder`, as the mockup's

@@ -95,6 +95,34 @@ public sealed class LibraryReloadTests
     }
 
     [AvaloniaFact]
+    public async Task A_reload_the_busy_library_refused_is_tried_again_on_the_next_check_even_with_no_new_change()
+    {
+        var (app, library) = await OpenAsync();
+        await using var _ = app;
+        var before = library.PlaylistReads;
+        library.PlaylistsFailure = LibraryService.BusyMessage;
+        library.RaiseChanged(); // say a favorite added from the CLI, then a long read-only command holds the library
+        await Gui.UntilAsync(() => library.PlaylistReads == before + 1, "the refused reload");
+        Gui.Settle();
+
+        // The holder lets go, having changed nothing: no change comes to read it.
+        library.PlaylistsFailure = null;
+        library.Playlists.Add(new PlaylistSummaryItem("playlist0000", "Missed", 0));
+        Gui.Settle();
+        Assert.Equal(before + 1, library.PlaylistReads); // no retry before the next check
+
+        app.Advance(LibraryService.PollInterval);
+        await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists.Any(p => p.Title == "Missed"), "the reload tried again");
+        Assert.Null(app.ViewModel.Banner);
+
+        // caught up: nothing more is owed
+        var reads = library.PlaylistReads;
+        app.Advance(LibraryService.PollInterval * 3);
+        Gui.Settle();
+        Assert.Equal(reads, library.PlaylistReads);
+    }
+
+    [AvaloniaFact]
     public async Task A_reload_that_fails_for_another_reason_says_so()
     {
         var (app, library) = await OpenAsync();
