@@ -87,6 +87,32 @@ public sealed class LibraryReloadTests
     }
 
     [AvaloniaFact]
+    public async Task A_reload_that_fails_unexpectedly_fails_the_edit_waiting_on_it_and_the_next_reload_still_runs()
+    {
+        var (app, library) = await OpenAsync();
+        await using var _ = app;
+        library.Playlists.Add(new PlaylistSummaryItem("playlist0000", "Mix", 0));
+        library.PlaylistEntries["playlist0000"] = [];
+        library.RaiseChanged();
+        await Gui.UntilAsync(() => app.ViewModel.Sidebar.PlaylistItem("playlist0000") is not null, "the playlist");
+        var mix = app.ViewModel.Sidebar.PlaylistItem("playlist0000")!;
+
+        // Something no notice covers: the reload after the add throws it.
+        var gate = new TaskCompletionSource();
+        gate.SetException(new InvalidOperationException("Unexpected."));
+        library.PlaylistsGate = gate;
+        var add = app.ViewModel.Playlists.AddAsync(mix, [StubLibrary.Track(1)]);
+        await Gui.UntilAsync(() => add.IsCompleted, "the add to finish, not wait for a reload that won't come");
+        Assert.Equal("Unexpected.", Assert.IsType<InvalidOperationException>(add.Exception?.InnerException).Message);
+
+        // and the reloads go on
+        library.PlaylistsGate = null;
+        library.Playlists.Add(new PlaylistSummaryItem("playlist0001", "Later", 0));
+        library.RaiseChanged();
+        await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists.Any(p => p.Title == "Later"), "the next reload");
+    }
+
+    [AvaloniaFact]
     public async Task Favorites_reads_its_list_when_it_is_shown_not_on_every_change_while_it_is_not()
     {
         var (app, library) = await OpenAsync();

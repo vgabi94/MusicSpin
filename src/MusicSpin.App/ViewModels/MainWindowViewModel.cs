@@ -346,14 +346,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             while (_reloadsDone < _reloadsAsked)
             {
                 var asked = _reloadsAsked;
-                await Quietly(LoadPlaylistsAsync).ConfigureAwait(true);
-                await Quietly(Favorites.LoadAsync).ConfigureAwait(true);
-                await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                Exception? failure = null;
+                try
+                {
+                    await Quietly(LoadPlaylistsAsync).ConfigureAwait(true);
+                    await Quietly(Favorites.LoadAsync).ConfigureAwait(true);
+                    await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                }
+#pragma warning disable CA1031 // anything the notices don't cover goes to whoever waits for this pass, as it did before reloads were sequenced
+                catch (Exception ex)
+#pragma warning restore CA1031
+                {
+                    failure = ex;
+                }
+
                 _reloadsDone = asked;
                 foreach (var waiter in _reloadWaiters.Where(w => w.Asked <= asked).ToList())
                 {
                     _reloadWaiters.Remove(waiter);
-                    waiter.Done.SetResult();
+                    if (failure is null)
+                    {
+                        waiter.Done.SetResult();
+                    }
+                    else
+                    {
+                        waiter.Done.SetException(failure);
+                    }
                 }
             }
         }
