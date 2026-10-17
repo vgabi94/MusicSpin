@@ -430,6 +430,29 @@ public sealed partial class MusicLibrary : IDisposable
         return _db.Tracks.Query().Where(t => t.AlbumId == id).OrderBy(t => t.SortKey).ToList();
     });
 
+    /// <summary>
+    /// The tracks of the albums <paramref name="albumIds"/>, read in one query: album after album in the order given, each
+    /// in disc and track order (as <see cref="AlbumQueue"/>). Ids not in the library add nothing; a repeated id counts once.
+    /// </summary>
+    public IReadOnlyList<TrackRecord> AlbumsQueue(IReadOnlyList<string> albumIds) => Guard(() =>
+    {
+        ArgumentNullException.ThrowIfNull(albumIds);
+        var order = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var id in albumIds)
+        {
+            order.TryAdd(id, order.Count);
+        }
+
+        if (order.Count == 0)
+        {
+            return (IReadOnlyList<TrackRecord>)[];
+        }
+
+        var ids = new BsonArray(order.Keys.Select(id => new BsonValue(id)));
+        return _db.Tracks.Find(BsonExpression.Create("$.AlbumId IN @0", ids))
+            .OrderBy(t => order[t.AlbumId]).ThenBy(t => t.SortKey, StringComparer.Ordinal).ToList();
+    });
+
     /// <summary>All tracks by an artist (as track artist or album artist), albums by year then disc/track order.</summary>
     public IReadOnlyList<TrackRecord> ArtistQueue(string artist) => Guard(() =>
     {
