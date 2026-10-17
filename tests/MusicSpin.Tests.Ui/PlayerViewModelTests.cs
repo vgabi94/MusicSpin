@@ -58,6 +58,18 @@ public sealed class PlayerViewModelTests : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// No poll since the player had <paramref name="count"/> status reads. Without waiting: the fake clock fires a poll
+    /// inside <see cref="Advance"/>, and a poll marks its read in flight before its first await and clears it only once
+    /// answered, and the player counts a read before answering it. So with no read in flight, a poll would show in the
+    /// count.
+    /// </summary>
+    private void AssertNoStatusReadSince(int count)
+    {
+        Assert.False(_vm.IsRefreshing, "a status read in flight");
+        Assert.Equal(count, _player.Count("status"));
+    }
+
     [Fact]
     public async Task Starting_starts_the_player_when_none_runs()
     {
@@ -157,9 +169,7 @@ public sealed class PlayerViewModelTests : IAsyncDisposable
         }
 
         Advance(PlayerViewModel.PollInterval - TimeSpan.FromMilliseconds(20));
-        await Task.Delay(100, TestContext.Current.CancellationToken);
-        _ui.Run();
-        Assert.Equal(before + 4, _player.Count("status"));
+        AssertNoStatusReadSince(before + 4);
     }
 
     [Fact]
@@ -208,10 +218,8 @@ public sealed class PlayerViewModelTests : IAsyncDisposable
         var before = _player.Count("status");
 
         Advance(TimeSpan.FromSeconds(2));
-        await Task.Delay(100, TestContext.Current.CancellationToken);
-        _ui.Run();
 
-        Assert.Equal(before, _player.Count("status"));
+        AssertNoStatusReadSince(before);
     }
 
     [Fact]
@@ -425,5 +433,102 @@ public sealed class PlayerViewModelTests : IAsyncDisposable
         await _vm.DisposeAsync();
         await _player.DisposeAsync();
         TempDir.TryDelete(_root);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_command_whose_connection_is_lost_before_it_is_sent_fails_as_unavailable_not_with_a_crash()
+    {
+        _player.Start();
+        await StartAsync();
+        _vm.Step = async step =>
+        {
+            if (step == "command connected")
+            {
+                // The player goes away after the command has its connection and before it sends on it.
+                await _player.StopAsync();
+                await _ui.UntilAsync(() => !_vm.IsConnected, "the player lost");
+            }
+        };
+
+        await _vm.SendAsync("next"); // before: a NullReferenceException, the connection being dropped meanwhile
+
+        _vm.Step = null;
+        await _ui.UntilAsync(() => Notices().Length == 1, "the notice");
+        Assert.Equal(0, _player.Count("next"));
+
+        // and it is still looking for the player
+        _player.Start();
+        Advance(PlayerViewModel.ReconnectInterval);
+        await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1, "reconnected");
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Losing_the_player_again_right_after_reconnecting_keeps_looking_for_it()
+    {
+        await StartAsync();
+        await _player.StopAsync();
+        await _ui.UntilAsync(() => !_vm.IsConnected, "the player lost");
+        var lostAgain = 0;
+        _vm.Step = async step =>
+        {
+            if (step == "reconnected" && Interlocked.Increment(ref lostAgain) == 1)
+            {
+                // Lost again between the reconnect tick connecting and it stopping its timer: that loss found the
+                // timer running, so the tick must not stop it.
+                await _player.StopAsync();
+                await _ui.UntilAsync(() => !_vm.IsConnected, "the player lost again");
+            }
+        };
+        _player.Start();
+        Advance(PlayerViewModel.ReconnectInterval);
+        await _ui.UntilAsync(() => Volatile.Read(ref lostAgain) == 1 && !_vm.IsConnected, "reconnected and lost again");
+
+        _player.Start();
+        Advance(PlayerViewModel.ReconnectInterval);
+
+        await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1, "reconnected once more");
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_status_read_the_player_answers_with_an_error_keeps_the_connection()
+    {
+        _player.Start();
+        _player.Status = ScriptedPlayer.Playing("Before");
+        await StartAsync();
+        _player.Fail("status", 1, "Something went wrong.");
+
+        Advance(PlayerViewModel.PollInterval);
+        await _ui.UntilAsync(() => _player.Count("status") == 1 && !_vm.IsRefreshing, "the refused poll");
+        _ui.Run();
+        Assert.True(_vm.IsConnected); // before: dropped and reconnected for an answer from a player that is there
+        Assert.Equal(1, _player.Subscribers);
+
+        _player.Succeed("status");
+        _player.Status = ScriptedPlayer.Playing("After");
+        Advance(PlayerViewModel.PollInterval);
+        await _ui.UntilAsync(() => _vm.Title == "After", "the next poll's status");
+        Assert.Equal(1, _player.Subscribers);
+        Assert.Equal(0, _player.AppStarts);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_status_read_the_player_does_not_answer_drops_the_connection_and_reconnects()
+    {
+        _player.Start();
+        _player.Status = ScriptedPlayer.Playing("Before");
+        await StartAsync();
+        var subscribes = _player.Count("subscribe");
+        _player.Fail("status", 14, "The player did not answer 'status' within 15s.");
+
+        Advance(PlayerViewModel.PollInterval);
+        await _ui.UntilAsync(() => !_vm.IsConnected, "the connection dropped");
+
+        _player.Succeed("status");
+        Advance(PlayerViewModel.ReconnectInterval);
+        await _ui.UntilAsync(() => _vm.IsConnected && _player.Count("subscribe") == subscribes + 1, "reconnected");
     }
 }

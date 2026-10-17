@@ -262,6 +262,10 @@ internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<strin
     }
 
     public Task<Rgb?> AccentAsync(string albumId) => Task.FromResult(accent?.Invoke(albumId));
+
+    public void Observe(string albumId, ICoverObserver observer)
+    {
+    }
 }
 
 /// <summary>Records what the view models ask of the appearance (no Application needed).</summary>

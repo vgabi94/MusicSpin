@@ -129,14 +129,16 @@ internal sealed class AppHarness : IAsyncDisposable
             Player.Start();
         }
 
+        var ui = new AvaloniaUiDispatcher();
+        var libraryService = Options.Library ?? new LibraryService(Data, Time, Options.LockTimeout);
         Services = new AppServices(
             new SettingsService(Data),
-            Options.Library ?? new LibraryService(Data, Time, Options.LockTimeout),
-            Options.Covers ?? new CoverService(Data, new SkiaCoverResizer()),
+            libraryService,
+            Options.Covers ?? new CoverService(Data, new SkiaCoverResizer(), Time, library: libraryService, ui: ui),
             (IPlayerConnector?)Scripted ?? Player,
             new Appearance(Application.Current!),
             Time,
-            new AvaloniaUiDispatcher(),
+            ui,
             Options.StartupWarning);
         Window = AppComposition.CreateMainWindow(Services);
         Window.Width = Options.Width;

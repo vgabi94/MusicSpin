@@ -15,14 +15,16 @@ public static class AppComposition
     {
         ArgumentNullException.ThrowIfNull(application);
         var time = TimeProvider.System;
+        var ui = new AvaloniaUiDispatcher();
+        var library = new LibraryService(directory, time);
         return new AppServices(
             new SettingsService(directory),
-            new LibraryService(directory, time),
-            new CoverService(directory, new SkiaCoverResizer()),
+            library,
+            new CoverService(directory, new SkiaCoverResizer(), time, library: library, ui: ui),
             new BackgroundPlayerConnector(directory),
             new Appearance(application),
             time,
-            new AvaloniaUiDispatcher(),
+            ui,
             startupWarning);
     }
 
