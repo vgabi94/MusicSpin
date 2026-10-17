@@ -154,6 +154,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         {
             await EnsureConnectedAsync(start: true).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (_life.IsCancellationRequested)
+        {
+            // closing while still connecting
+        }
         catch (MusicSpinException ex)
         {
             Raise(ex.Message);
@@ -333,8 +337,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         StopTimers();
         _reconnect?.Dispose();
         await DropConnectionAsync().ConfigureAwait(false);
-        _life.Dispose();
-        _connectLock.Dispose();
+
+        // _life and _connectLock are left undisposed on purpose: work still unwinding on other tasks (a connect, a
+        // refresh, a reconnect tick) reads _life.Token and releases _connectLock after this returns, and disposing them
+        // would turn its clean cancellation into an ObjectDisposedException. Neither holds anything to free here (no
+        // timer on the source, no wait handle on the semaphore).
     }
 
     /// <summary>
@@ -520,6 +527,14 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             {
                 await client.DisposeAsync().ConfigureAwait(false);
                 throw;
+            }
+
+            if (_life.IsCancellationRequested)
+            {
+                // Disposed while connecting: DisposeAsync has already dropped the connection, so these would leak.
+                await client.DisposeAsync().ConfigureAwait(false);
+                await events.DisposeAsync().ConfigureAwait(false);
+                _life.Token.ThrowIfCancellationRequested();
             }
 
             _client = client;
