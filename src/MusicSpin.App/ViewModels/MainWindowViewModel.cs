@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -18,7 +19,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 {
     private readonly AppServices _services;
     private readonly Dictionary<string, PlaylistPageViewModel> _playlistPages = new(StringComparer.Ordinal);
+    private readonly List<(int Asked, TaskCompletionSource Done)> _reloadWaiters = [];
     private CancellationTokenSource? _albumLookup;
+    private int _reloadsAsked;
+    private int _reloadsDone;
+    private bool _reloading;
 
     public MainWindowViewModel(AppServices services)
     {
@@ -26,7 +31,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _services = services;
         Player = new PlayerViewModel(services.Player, services.Time, services.Ui);
         SpinClock = new SpinClock(services.Time, services.Ui);
-        NowPlaying = new NowPlayingViewModel(Player, services.Library, services.Covers, Notices);
+        Favorites = new FavoritesViewModel(services.Library, Notices);
+        Favorites.Changed += (_, _) => OnFavoritesChanged();
+        NowPlaying = new NowPlayingViewModel(Player, services.Library, services.Covers, Favorites, Notices);
         NowPlaying.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(NowPlayingViewModel.IsSpinning))
@@ -35,19 +42,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             }
         };
         QueueDrawer = new QueueDrawerViewModel(Player, services.Library, services.Covers, Notices, services.Time, services.Ui);
-        QueueDrawer.PlaylistSaved += (_, _) => _ = Notices.GuardAsync(LoadPlaylistsAsync);
+        QueueDrawer.PlaylistSaved += (_, playlist) => _ = Notices.GuardAsync(async () =>
+        {
+            await ReloadAsync().ConfigureAwait(true);
+            Sidebar.MarkFresh(playlist.Id);
+        });
         PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
         Layers.Register(QueueDrawer.SaveForm);
         Layers.Register(Menu);
+        Layers.Register(Sidebar.Rename);
+        Playlists = new PlaylistActions(services.Library, Player, Sidebar, Menu, Notices, ReloadAsync);
         Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
         Scene = new TurntableSceneViewModel(Player, NowPlaying, services.Library, services.Covers, Settings, services.Time, services.Ui, Notices);
-        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Scene, Menu, Notices, Settings, services.Time);
-        TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Menu, Notices);
+        AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Scene, Menu, Playlists, Notices, Settings, services.Time);
+        TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Menu, Playlists, Favorites, Notices);
+        FavoritesPage = new FavoritesPageViewModel(services.Library, services.Covers, Player, Menu, Playlists, Favorites, Notices, () => Sidebar.Navigate(Sidebar.Radio));
         RadioPage = new RadioPageViewModel(Player, Notices);
         CurrentPage = AlbumsPage;
-        Items = new LibraryItemActions(Player, services.Library, Scene, NowPlaying, Menu, Notices, () => CurrentPage);
+        AlbumsPage.IsShown = true;
+        Items = new LibraryItemActions(Player, services.Library, Scene, NowPlaying, Menu, Playlists, Favorites, Notices, () => CurrentPage);
         Sidebar.Navigated += (_, item) => _ = ShowAsync(item);
         Notices.Posted += (_, message) => Banner = message;
         Player.Notice += (_, message) => Notices.Post(message);
@@ -84,6 +99,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// <summary>Right-clicking and dragging albums and tracks (the window finds the item under the pointer).</summary>
     public LibraryItemActions Items { get; }
 
+    /// <summary>Managing playlists: the sidebar's menus, rename and drops, and Add to playlist ›.</summary>
+    public PlaylistActions Playlists { get; }
+
+    /// <summary>Which tracks are favorites (#48): every heart, the menus' entry, the sidebar's count and the Favorites view.</summary>
+    public FavoritesViewModel Favorites { get; }
+
     /// <summary>The Sort and Group dropdowns, the ＋ menus and the right-click menus.</summary>
     public MenuViewModel Menu { get; } = new();
 
@@ -95,6 +116,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public AlbumsPageViewModel AlbumsPage { get; }
 
     public TracksPageViewModel TracksPage { get; }
+
+    public FavoritesPageViewModel FavoritesPage { get; }
 
     public RadioPageViewModel RadioPage { get; }
 
@@ -120,6 +143,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// <summary>"—" when nothing is loaded.</summary>
     public string PlayerTitle => Player.Title ?? "—";
 
+    /// <summary>The playing track is a favorite: the player bar's heart is filled.</summary>
+    public bool IsPlayingFavorite => Favorites.Contains(Player.TrackId);
+
+    /// <summary>The player bar's heart's tooltip.</summary>
+    public string PlayingFavoriteLabel => FavoritesViewModel.Label(IsPlayingFavorite);
+
+    /// <summary>A library track is loaded (a plain file can't be a favorite, so the heart is hidden).</summary>
+    public bool CanFavoritePlaying => Player.TrackId is { Length: > 0 };
+
     /// <summary>"Artist · Album" (whichever is known).</summary>
     public string? PlayerArtist => string.Join(" · ", new[] { Player.Artist, Player.Album }.Where(s => !string.IsNullOrWhiteSpace(s))) is { Length: > 0 } text ? text : null;
 
@@ -137,7 +169,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public async Task InitializeAsync()
     {
         Sidebar.Navigate(Sidebar.Albums);
-        await Task.WhenAll(Player.StartAsync(), Notices.GuardAsync(LoadPlaylistsAsync)).ConfigureAwait(true);
+        await Task.WhenAll(Player.StartAsync(), Notices.GuardAsync(LoadPlaylistsAsync), Notices.GuardAsync(Favorites.LoadAsync)).ConfigureAwait(true);
     }
 
     /// <summary>Esc: closes the topmost open layer (a menu, Settings, the queue drawer, Now Playing).</summary>
@@ -190,8 +222,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     [RelayCommand]
     private Task TogglePlay() => Player.TogglePlayCommand.ExecuteAsync(null);
 
+    /// <summary>The player bar's heart: the playing track becomes a favorite, or stops being one.</summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task<bool> TogglePlayingFavorite() => Favorites.ToggleAsync(Player.TrackId);
+
     [RelayCommand]
     private void DismissBanner() => Banner = null;
+
+    /// <summary>
+    /// Right-click on <paramref name="item"/>: a sidebar playlist's menu, or a library item's. False when it has none.
+    /// </summary>
+    public bool ShowMenu(object item) => item is NavItemViewModel entry ? Playlists.ShowMenu(entry) : Items.ShowMenu(item);
+
+    /// <summary>Albums or tracks dropped on Favorites in the sidebar: their library tracks become favorites, and it flashes.</summary>
+    public async Task AddToFavoritesAsync(IReadOnlyList<TrackSummary> tracks)
+    {
+        ArgumentNullException.ThrowIfNull(tracks);
+        if (await Favorites.SetAsync(tracks.Select(t => t.Id), true).ConfigureAwait(true))
+        {
+            Sidebar.MarkFavoritesFresh();
+        }
+    }
 
     /// <summary>Closing the window: the music stops; a player the app started is shut down.</summary>
     public Task ShutdownAsync() => Player.ShutdownAsync();
@@ -225,12 +276,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             PageKind.Tracks => TracksPage,
             PageKind.Radio => RadioPage,
+            PageKind.Favorites => FavoritesPage,
             PageKind.Playlist when item.Playlist is { } playlist => PlaylistPage(playlist),
             _ => AlbumsPage,
         };
         page.SearchText = SearchText;
         page.PlayingAlbumId = PlayingAlbumId;
         page.PlayingTrackId = Player.TrackId;
+        CurrentPage.IsShown = false;
+        page.IsShown = true;
         CurrentPage = page;
         await Notices.GuardAsync(page.LoadAsync).ConfigureAwait(true);
     }
@@ -239,22 +293,91 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         if (!_playlistPages.TryGetValue(playlist.Id, out var page))
         {
-            page = new PlaylistPageViewModel(playlist, _services.Library, _services.Covers, Player, Menu, Notices);
+            page = new PlaylistPageViewModel(playlist, _services.Library, _services.Covers, Player, Menu, Playlists, Favorites, Notices);
             _playlistPages[playlist.Id] = page;
         }
 
         return page;
     }
 
+    /// <summary>The sidebar's playlists; an open page follows its playlist's new name, and a deleted one's page goes.</summary>
     private async Task LoadPlaylistsAsync()
-        => Sidebar.SetPlaylists(await _services.Library.PlaylistsAsync().ConfigureAwait(true));
-
-    /// <summary>The library changed on disk (a scan, a playlist edit): re-read the playlists and the current page.</summary>
-    private async Task ReloadAsync()
     {
-        await Notices.GuardAsync(LoadPlaylistsAsync).ConfigureAwait(true);
-        await Notices.GuardAsync(CurrentPage.LoadAsync).ConfigureAwait(true);
+        var playlists = await _services.Library.PlaylistsAsync().ConfigureAwait(true);
+        var byId = playlists.ToDictionary(p => p.Id, StringComparer.Ordinal);
+        foreach (var (id, page) in _playlistPages.ToList())
+        {
+            if (byId.TryGetValue(id, out var playlist))
+            {
+                page.Playlist = playlist;
+            }
+            else
+            {
+                _playlistPages.Remove(id);
+                page.Dispose();
+            }
+        }
+
+        Sidebar.SetPlaylists(playlists);
     }
+
+    /// <summary>
+    /// The library changed (on disk, or by an edit here): re-reads the playlists, the favorites and the current page.
+    /// Reloads never overlap: asked for while one runs, exactly one more runs after it, however often it was asked (a scan
+    /// from the CLI changes the library many times). The task completes once a reload begun after the ask has finished.
+    /// </summary>
+    private Task ReloadAsync()
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _reloadWaiters.Add((++_reloadsAsked, done));
+        if (!_reloading)
+        {
+            _ = ReloadUntilCurrentAsync();
+        }
+
+        return done.Task;
+    }
+
+    private async Task ReloadUntilCurrentAsync()
+    {
+        _reloading = true;
+        try
+        {
+            while (_reloadsDone < _reloadsAsked)
+            {
+                var asked = _reloadsAsked;
+                await Quietly(LoadPlaylistsAsync).ConfigureAwait(true);
+                await Quietly(Favorites.LoadAsync).ConfigureAwait(true);
+                await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                _reloadsDone = asked;
+                foreach (var waiter in _reloadWaiters.Where(w => w.Asked <= asked).ToList())
+                {
+                    _reloadWaiters.Remove(waiter);
+                    waiter.Done.SetResult();
+                }
+            }
+        }
+        finally
+        {
+            _reloading = false;
+        }
+    }
+
+    /// <summary>
+    /// A read in the background: if another process holds the library (a scan, say), it says nothing and waits for the
+    /// next change, which a scan makes when it is done. Other failures are notices.
+    /// </summary>
+    private Task Quietly(Func<Task> read) => Notices.GuardAsync(async () =>
+    {
+        try
+        {
+            await read().ConfigureAwait(true);
+        }
+        catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.LibraryLocked)
+        {
+            // busy: the next change reloads
+        }
+    });
 
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -269,9 +392,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 break;
             case nameof(PlayerViewModel.TrackId):
                 CurrentPage.PlayingTrackId = Player.TrackId;
+                OnPropertyChanged(nameof(CanFavoritePlaying));
+                NotifyPlayingFavorite();
                 _ = FindPlayingAlbumAsync(Player.TrackId);
                 break;
         }
+    }
+
+    private void OnFavoritesChanged()
+    {
+        Sidebar.Favorites.Detail = Favorites.Count > 0 ? Favorites.Count.ToString("N0", CultureInfo.CurrentCulture) : null;
+        NotifyPlayingFavorite();
+    }
+
+    private void NotifyPlayingFavorite()
+    {
+        OnPropertyChanged(nameof(IsPlayingFavorite));
+        OnPropertyChanged(nameof(PlayingFavoriteLabel));
     }
 
     /// <summary>The playing track's album: marks it on the pages, shows its cover and takes its accent colour.</summary>
@@ -298,7 +435,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         PlayingAlbumId = albumId;
         _ = NowPlaying.ShowAlbumAsync(albumId);
-        foreach (var page in new PageViewModel[] { AlbumsPage, TracksPage }.Concat(_playlistPages.Values))
+        foreach (var page in new PageViewModel[] { AlbumsPage, TracksPage, FavoritesPage }.Concat(_playlistPages.Values))
         {
             page.PlayingAlbumId = albumId;
         }

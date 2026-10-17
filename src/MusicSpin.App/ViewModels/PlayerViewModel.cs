@@ -128,6 +128,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial string? RadioDescription { get; private set; }
 
+    /// <summary>What the station on air plays (null when no station is on).</summary>
+    [ObservableProperty]
+    public partial RadioFilter? Station { get; private set; }
+
     [ObservableProperty]
     public partial int QueueLength { get; private set; }
 
@@ -433,6 +437,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         Shuffle = status.Shuffle;
         QueueMode = status.QueueMode;
         RadioDescription = status.Radio?.Description;
+        Station = status.Radio?.Filter;
         QueueLength = status.QueueLength;
         QueueIndex = status.QueueIndex;
         UpNext = status.UpNext;
@@ -685,5 +690,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         return result;
     }
 
-    private static QueueItem ToItem(TrackSummary t) => new(t.Path, t.Title, t.Artist, t.Album, null, t.TrackNumber, t.DurationSeconds, t.Id);
+    /// <summary>A plain file (a playlist entry outside the library) has no track id.</summary>
+    private static QueueItem ToItem(TrackSummary t)
+        => new(t.Path, t.Title, t.Artist, t.Album, null, t.TrackNumber, t.DurationSeconds, t.Id.Length == 0 ? null : t.Id);
 }

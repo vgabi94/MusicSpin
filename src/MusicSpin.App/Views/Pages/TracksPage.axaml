@@ -1,8 +1,9 @@
 <!--
-  Tracks, and a playlist's tracks (mockup: renderTracks): headers and rows, virtualized. A row leaves out the column its
-  header names: under an album, number, title, duration; under a genre (and in playlists), the thumbnail, title and
-  artist, album, duration; ungrouped, the genre too. Double-click a row, or click its number or thumbnail, to play it
-  (TracksPage.axaml.cs); ＋ opens Play next / Add to queue.
+  Tracks, a playlist's tracks and Favorites (mockup: renderTracks): headers and rows, virtualized. A row leaves out the
+  column its header names: under an album, number, title, duration; under a genre (and in playlists), the thumbnail,
+  title and artist, album, duration; ungrouped, the genre too. Double-click a row, or click its number or thumbnail, to
+  play it (TracksPage.axaml.cs); ＋ opens Play next / Add to queue. A library track's heart, before the duration, makes
+  it a favorite (#48).
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -52,6 +53,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="{StaticResource RowNumberColumn}" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="{StaticResource RowHeartColumn}" />
                         <ColumnDefinition Width="{StaticResource RowDurationColumn}" />
                         <ColumnDefinition Width="{StaticResource RowAddColumn}" />
                     </Grid.ColumnDefinitions>
@@ -67,8 +69,18 @@
                         </Panel>
                     </Button>
                     <TextBlock Grid.Column="1" Classes="title" Text="{Binding Item.Title}" />
-                    <TextBlock Grid.Column="2" Classes="secondary duration" Text="{Binding Item.Duration}" />
-                    <Button Grid.Column="3"
+                    <Button Grid.Column="2"
+                            Classes="heart"
+                            Classes.on="{Binding Item.IsFavorite}"
+                            IsVisible="{Binding Item.CanBeFavorite}"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).ToggleFavoriteCommand}"
+                            CommandParameter="{Binding Item}"
+                            ToolTip.Tip="{Binding Item.FavoriteLabel}"
+                            AutomationProperties.Name="{Binding Item.FavoriteLabel}">
+                        <controls:Icon Data="{StaticResource Heart}" />
+                    </Button>
+                    <TextBlock Grid.Column="3" Classes="secondary duration" Text="{Binding Item.Duration}" />
+                    <Button Grid.Column="4"
                             Classes="add"
                             Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenTrackMenuCommand}"
                             CommandParameter="{Binding Item}"
@@ -87,6 +99,7 @@
                         <ColumnDefinition Width="{StaticResource RowThumbColumn}" />
                         <ColumnDefinition Width="2*" />
                         <ColumnDefinition Width="1.4*" />
+                        <ColumnDefinition Width="{StaticResource RowHeartColumn}" />
                         <ColumnDefinition Width="{StaticResource RowDurationColumn}" />
                         <ColumnDefinition Width="{StaticResource RowAddColumn}" />
                     </Grid.ColumnDefinitions>
@@ -106,14 +119,93 @@
                         <TextBlock Classes="secondary small" Text="{Binding Item.Artist}" />
                     </StackPanel>
                     <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding Item.Album}" />
-                    <TextBlock Grid.Column="3" Classes="secondary duration" Text="{Binding Item.Duration}" />
-                    <Button Grid.Column="4"
+                    <Button Grid.Column="3"
+                            Classes="heart"
+                            Classes.on="{Binding Item.IsFavorite}"
+                            IsVisible="{Binding Item.CanBeFavorite}"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).ToggleFavoriteCommand}"
+                            CommandParameter="{Binding Item}"
+                            ToolTip.Tip="{Binding Item.FavoriteLabel}"
+                            AutomationProperties.Name="{Binding Item.FavoriteLabel}">
+                        <controls:Icon Data="{StaticResource Heart}" />
+                    </Button>
+                    <TextBlock Grid.Column="4" Classes="secondary duration" Text="{Binding Item.Duration}" />
+                    <Button Grid.Column="5"
                             Classes="add"
                             Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenTrackMenuCommand}"
                             CommandParameter="{Binding Item}"
                             ToolTip.Tip="Add to queue"
                             AutomationProperties.Name="Add to queue">
                         <controls:Icon Data="{StaticResource Plus}" />
+                    </Button>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!--
+          A playlist entry: as under a genre, with ✕ over the ＋ column on hover to remove it (like a queue row); dragging
+          it reorders. An entry whose file is missing is dimmed and says so; it has no play or ＋, only ✕.
+        -->
+        <DataTemplate DataType="vm:PlaylistTrackRow">
+            <Border Classes="track"
+                    Classes.current="{Binding Item.IsPlaying}"
+                    Classes.unavailable="{Binding !Item.IsAvailable}"
+                    controls:QueueSource.Item="{Binding Item}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource RowThumbColumn}" />
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="1.4*" />
+                        <ColumnDefinition Width="{StaticResource RowHeartColumn}" />
+                        <ColumnDefinition Width="{StaticResource RowDurationColumn}" />
+                        <ColumnDefinition Width="{StaticResource RowAddColumn}" />
+                        <ColumnDefinition Width="{StaticResource RowAddColumn}" />
+                    </Grid.ColumnDefinitions>
+                    <Button Classes="thumb"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).PlayTrackCommand}"
+                            CommandParameter="{Binding Item}"
+                            IsEnabled="{Binding Item.IsAvailable}"
+                            AutomationProperties.Name="Play">
+                        <Panel>
+                            <controls:CoverView Classes="flat" Source="{Binding Item.Art.Cover}" Title="{Binding Item.Album}" Artist="{Binding Item.AlbumArtist}" />
+                            <Border>
+                                <controls:Icon Data="{StaticResource Play}" />
+                            </Border>
+                        </Panel>
+                    </Button>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Classes="title" Text="{Binding Item.Title}" />
+                        <TextBlock Classes="secondary small" Text="{Binding Item.Artist}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding Item.Album}" IsVisible="{Binding Item.IsAvailable}" />
+                    <TextBlock Grid.Column="2" Classes="secondary missing" Text="File not found" IsVisible="{Binding !Item.IsAvailable}" />
+                    <Button Grid.Column="3"
+                            Classes="heart"
+                            Classes.on="{Binding Item.IsFavorite}"
+                            IsVisible="{Binding Item.CanBeFavorite}"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).ToggleFavoriteCommand}"
+                            CommandParameter="{Binding Item}"
+                            ToolTip.Tip="{Binding Item.FavoriteLabel}"
+                            AutomationProperties.Name="{Binding Item.FavoriteLabel}">
+                        <controls:Icon Data="{StaticResource Heart}" />
+                    </Button>
+                    <TextBlock Grid.Column="4" Classes="secondary duration" Text="{Binding Item.Duration}" />
+                    <Button Grid.Column="5"
+                            Classes="add"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenTrackMenuCommand}"
+                            CommandParameter="{Binding Item}"
+                            IsVisible="{Binding Item.IsAvailable}"
+                            ToolTip.Tip="Add to queue"
+                            AutomationProperties.Name="Add to queue">
+                        <controls:Icon Data="{StaticResource Plus}" />
+                    </Button>
+                    <Button Grid.Column="6"
+                            Classes="add remove"
+                            Command="{Binding $parent[UserControl].((vm:PlaylistPageViewModel)DataContext).RemoveEntryCommand}"
+                            CommandParameter="{Binding Item}"
+                            ToolTip.Tip="Remove from playlist"
+                            AutomationProperties.Name="Remove from playlist">
+                        <controls:Icon Data="{StaticResource Close}" />
                     </Button>
                 </Grid>
             </Border>
@@ -127,6 +219,7 @@
                         <ColumnDefinition Width="2*" />
                         <ColumnDefinition Width="1.4*" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="{StaticResource RowHeartColumn}" />
                         <ColumnDefinition Width="{StaticResource RowDurationColumn}" />
                         <ColumnDefinition Width="{StaticResource RowAddColumn}" />
                     </Grid.ColumnDefinitions>
@@ -147,8 +240,18 @@
                     </StackPanel>
                     <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding Item.Album}" />
                     <TextBlock Grid.Column="3" Classes="secondary" Text="{Binding Item.Genre}" />
-                    <TextBlock Grid.Column="4" Classes="secondary duration" Text="{Binding Item.Duration}" />
-                    <Button Grid.Column="5"
+                    <Button Grid.Column="4"
+                            Classes="heart"
+                            Classes.on="{Binding Item.IsFavorite}"
+                            IsVisible="{Binding Item.CanBeFavorite}"
+                            Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).ToggleFavoriteCommand}"
+                            CommandParameter="{Binding Item}"
+                            ToolTip.Tip="{Binding Item.FavoriteLabel}"
+                            AutomationProperties.Name="{Binding Item.FavoriteLabel}">
+                        <controls:Icon Data="{StaticResource Heart}" />
+                    </Button>
+                    <TextBlock Grid.Column="5" Classes="secondary duration" Text="{Binding Item.Duration}" />
+                    <Button Grid.Column="6"
                             Classes="add"
                             Command="{Binding $parent[UserControl].((vm:TrackListPageViewModel)DataContext).OpenTrackMenuCommand}"
                             CommandParameter="{Binding Item}"
@@ -162,12 +265,16 @@
     </UserControl.DataTemplates>
 
     <ScrollViewer Name="Scroller" Classes="view">
-        <ItemsControl Name="TrackList" ItemsSource="{Binding Rows}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <VirtualizingStackPanel />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-        </ItemsControl>
+        <!-- On a playlist page, the drop line shows where a dragged row would go (placed by the code-behind). -->
+        <Panel Classes="trackList" Classes.over="{Binding IsDragOver}">
+            <ItemsControl Name="TrackList" ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+            <Border Name="DropLine" Classes="dropLine" />
+        </Panel>
     </ScrollViewer>
 </UserControl>

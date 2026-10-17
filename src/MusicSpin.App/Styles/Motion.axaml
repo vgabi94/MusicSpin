@@ -84,6 +84,17 @@
         </KeyFrame>
     </Animation>
 
+    <!-- A playlist just saved, in the sidebar: its accent wash fading out (mockup: @keyframes navflash, 1.8s ease-out). -->
+    <sys:TimeSpan x:Key="NavFlashAnimation.Duration">0:0:1.8</sys:TimeSpan>
+    <Animation x:Key="NavFlashAnimation" x:SetterTargetType="Visual" Duration="0:0:1.8" Easing="0,0,0.58,1">
+        <KeyFrame Cue="0%">
+            <Setter Property="Opacity" Value="1" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="0" />
+        </KeyFrame>
+    </Animation>
+
     <!-- A dialog opening (mockup: @keyframes dlg-in, .18s ease-out: from transparent, 8 px lower, at 98%). -->
     <sys:TimeSpan x:Key="DialogInAnimation.Duration">0:0:0.18</sys:TimeSpan>
     <Animation x:Key="DialogInAnimation" x:SetterTargetType="Visual" Duration="0:0:0.18" Easing="0,0,0.58,1">

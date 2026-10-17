@@ -235,8 +235,9 @@ public sealed class LibraryPagesViewModelTests : IAsyncDisposable
         var track = vm.TracksPage.Tracks[4];
 
         vm.TracksPage.OpenTrackMenuCommand.Execute(track);
-        Assert.Equal(["Play next", "Add to queue"], vm.Menu.Entries.Select(e => e.Label));
+        Assert.Equal(["Play next", "Add to queue", "Add to playlist"], vm.Menu.Entries.Select(e => e.Label));
         Assert.All(vm.Menu.Entries, e => Assert.False(e.IsChosen));
+        Assert.Equal([false, false, true], vm.Menu.Entries.Select(e => e.HasSubmenu));
         await vm.Menu.ChooseCommand.ExecuteAsync(vm.Menu.Entries[0]);
         vm.TracksPage.OpenTrackMenuCommand.Execute(track);
         await vm.Menu.ChooseCommand.ExecuteAsync(vm.Menu.Entries[1]);

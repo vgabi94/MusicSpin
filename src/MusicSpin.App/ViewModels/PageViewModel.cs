@@ -28,6 +28,9 @@ public abstract partial class PageViewModel : ObservableObject
     [ObservableProperty]
     public partial string? PlayingTrackId { get; set; }
 
+    /// <summary>The page is the one shown (the shell sets it): a page not shown reads the library only when opened.</summary>
+    public bool IsShown { get; set; }
+
     /// <summary>(Re)reads the page's data from the library.</summary>
     public abstract Task LoadAsync();
 

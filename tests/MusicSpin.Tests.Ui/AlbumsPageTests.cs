@@ -94,7 +94,7 @@ public sealed class AlbumsPageTests
         Assert.True(at.Right <= window.Bounds.Width - 8, $"menu right {at.Right}");
         var entries = Gui.All<Button>(menu).ToList();
         Assert.Equal(["Artist", "Title", "Year"], entries.Select(e => Texts(e).Single()));
-        Assert.Equal([true, false, false], entries.Select(e => e.GetVisualDescendants().OfType<Icon>().Single().IsVisible));
+        Assert.Equal([true, false, false], entries.Select(e => e.GetVisualDescendants().OfType<Icon>().Single(i => !i.Classes.Contains("submenu")).IsVisible));
 
         Gui.Click(window, entries[1]);
         Assert.False(menu.IsEffectivelyVisible);

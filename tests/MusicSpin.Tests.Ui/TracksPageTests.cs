@@ -162,7 +162,7 @@ public sealed class TracksPageTests
         var menu = Gui.Find<Border>(window, "MenuBox");
         Assert.True(menu.IsEffectivelyVisible);
         var entries = Gui.All<Button>(menu).ToList();
-        Assert.Equal(["Play next", "Add to queue"], entries.Select(e => Texts(e).Single()));
+        Assert.Equal(["Play next", "Add to queue", "Add to playlist"], entries.Select(e => Texts(e).Single()));
         Gui.Click(window, entries[0]);
         await Gui.UntilAsync(() => app.Scripted!.Count("queue.add") == 1, "Play next");
         Assert.Equal("next", app.Scripted!.Sent("queue.add")[0].GetProperty("position").GetString());
@@ -174,7 +174,7 @@ public sealed class TracksPageTests
         await Gui.UntilAsync(() => app.Scripted.Count("queue.set") == 1, "the album played");
         Assert.Equal(3, app.Scripted.Sent("queue.set")[0].GetProperty("items").GetArrayLength());
         Gui.Click(window, plus);
-        Gui.Click(window, Gui.All<Button>(menu).Last());
+        Gui.Click(window, Gui.All<Button>(menu).Single(b => Texts(b).Single() == "Add to queue"));
         await Gui.UntilAsync(() => app.Scripted.Count("queue.add") == 2, "Add to queue");
         Assert.Equal("upnext", app.Scripted.Sent("queue.add")[1].GetProperty("position").GetString());
         Assert.Equal(3, app.Scripted.Sent("queue.add")[1].GetProperty("items").GetArrayLength());

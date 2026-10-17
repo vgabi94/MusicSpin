@@ -18,6 +18,7 @@ public static class LayerOrder
     public const int QueueDrawer = 20;
     public const int QueueSave = 25;
     public const int Settings = 30;
+    public const int PlaylistRename = 35;
     public const int Menu = 40;
 }
 

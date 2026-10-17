@@ -80,11 +80,44 @@ internal sealed class StubLibrary : ILibraryService
     public Task<IReadOnlyList<TrackSummary>> AlbumTracksAsync(string albumId, CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<TrackSummary>>([.. Tracks.Where(t => t.AlbumId == albumId)]);
 
-    public Task<IReadOnlyList<PlaylistSummaryItem>> PlaylistsAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<PlaylistSummaryItem>>([.. Playlists]);
+    /// <summary>Set: playlist reads wait for it (a slow library).</summary>
+    public TaskCompletionSource? PlaylistsGate { get; set; }
 
-    public Task<IReadOnlyList<TrackSummary>> PlaylistTracksAsync(string playlistId, CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<TrackSummary>>([.. PlaylistEntries.GetValueOrDefault(playlistId) ?? []]);
+    /// <summary>Set: playlist reads fail as a busy library's do.</summary>
+    public string? PlaylistsFailure { get; set; }
+
+    public int PlaylistReads { get; private set; }
+
+    /// <summary>The most playlist reads under way at once.</summary>
+    public int MostPlaylistReadsAtOnce { get; private set; }
+
+    private int _playlistReadsNow;
+
+    public async Task<IReadOnlyList<PlaylistSummaryItem>> PlaylistsAsync(CancellationToken cancellationToken = default)
+    {
+        PlaylistReads++;
+        MostPlaylistReadsAtOnce = Math.Max(MostPlaylistReadsAtOnce, ++_playlistReadsNow);
+        try
+        {
+            if (PlaylistsGate is { } gate)
+            {
+                await gate.Task;
+            }
+
+            return PlaylistsFailure is { } failure ? throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure) : [.. Playlists];
+        }
+        finally
+        {
+            _playlistReadsNow--;
+        }
+    }
+
+    /// <summary>Playlist entries at these paths are missing files.</summary>
+    public HashSet<string> MissingPaths { get; } = new(StringComparer.Ordinal);
+
+    public Task<IReadOnlyList<PlaylistEntryItem>> PlaylistEntriesAsync(string playlistId, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<PlaylistEntryItem>>([.. (PlaylistEntries.GetValueOrDefault(playlistId) ?? [])
+            .Select((t, i) => new PlaylistEntryItem(i + 1, t, !MissingPaths.Contains(t.Path)))]);
 
     public Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default)
         => Task.FromResult(Tracks.FirstOrDefault(t => t.Id == trackId)?.AlbumId);
@@ -101,6 +134,79 @@ internal sealed class StubLibrary : ILibraryService
         Playlists.Add(playlist);
         PlaylistEntries[playlist.Id] = [.. paths.Select(p => Tracks.First(t => t.Path == p))];
         return Task.FromResult(playlist);
+    }
+
+    public Task AddToPlaylistAsync(string playlistId, IReadOnlyList<TrackSummary> tracks, CancellationToken cancellationToken = default)
+    {
+        PlaylistEntries[playlistId].AddRange(tracks);
+        return Task.CompletedTask;
+    }
+
+    public Task<PlaylistSummaryItem> RenamePlaylistAsync(string playlistId, string name, CancellationToken cancellationToken = default)
+    {
+        var at = Playlists.FindIndex(p => p.Id == playlistId);
+        Playlists[at] = Playlists[at] with { Name = name };
+        return Task.FromResult(Playlists[at]);
+    }
+
+    public Task DeletePlaylistAsync(string playlistId, CancellationToken cancellationToken = default)
+    {
+        Playlists.RemoveAll(p => p.Id == playlistId);
+        PlaylistEntries.Remove(playlistId);
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveFromPlaylistAsync(string playlistId, PlaylistEntryItem entry, CancellationToken cancellationToken = default)
+    {
+        PlaylistEntries[playlistId].RemoveAt(entry.Position - 1);
+        return Task.CompletedTask;
+    }
+
+    public Task MoveInPlaylistAsync(string playlistId, PlaylistEntryItem entry, int to, CancellationToken cancellationToken = default)
+    {
+        var entries = PlaylistEntries[playlistId];
+        var track = entries[entry.Position - 1];
+        entries.RemoveAt(entry.Position - 1);
+        entries.Insert(to - 1, track);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Favorite track ids, newest first.</summary>
+    public List<string> Favorites { get; } = [];
+
+    /// <summary>Set: favorites fail as a busy library's do.</summary>
+    public string? FavoritesFailure { get; set; }
+
+    public Task<IReadOnlySet<string>> FavoriteIdsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(Favorites, StringComparer.Ordinal));
+
+    public int FavoritesReads { get; private set; }
+
+    public Task<FavoritesList> FavoritesAsync(CancellationToken cancellationToken = default)
+    {
+        FavoritesReads++;
+        var tracks = Favorites.Select(id => Tracks.FirstOrDefault(t => t.Id == id)).ToList();
+        return Task.FromResult(new FavoritesList([.. tracks.OfType<TrackSummary>()], tracks.Count(t => t is null)));
+    }
+
+    public Task SetFavoritesAsync(IReadOnlyList<string> trackIds, bool favorite, CancellationToken cancellationToken = default)
+    {
+        if (FavoritesFailure is { } failure)
+        {
+            return Task.FromException(new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure));
+        }
+
+        if (favorite)
+        {
+            // As the library: a track that already is a favorite keeps its place.
+            Favorites.InsertRange(0, trackIds.Where(id => !Favorites.Contains(id)));
+        }
+        else
+        {
+            Favorites.RemoveAll(trackIds.Contains);
+        }
+
+        return Task.CompletedTask;
     }
 }
 

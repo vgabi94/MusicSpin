@@ -9,47 +9,61 @@ namespace MusicSpin.App.ViewModels;
 /// <param name="Detail">"8 tracks" for an album, the artist for a track.</param>
 public sealed record DragGhostViewModel(IImage? Cover, string Album, string Artist, string Title, string Detail);
 
-/// <summary>The queue choices every menu offers (mockup: queueMenu): Play next and Add to queue.</summary>
+/// <summary>
+/// The queue choices every menu offers (mockup: queueMenu): Play next and Add to queue, then Add to playlist › (#33).
+/// </summary>
 public static class QueueMenu
 {
     /// <summary>
-    /// Play next and Add to queue for <paramref name="tracks"/>, read when one is chosen (an album's tracks need a
-    /// library read).
+    /// Play next, Add to queue and Add to playlist › for <paramref name="tracks"/>, read when one is chosen (an album's
+    /// tracks need a library read).
     /// </summary>
-    public static IReadOnlyList<MenuEntryViewModel> Entries(Func<Task<IReadOnlyList<TrackSummary>>> tracks, PlayerViewModel player, Notices notices)
+    public static IReadOnlyList<MenuEntryViewModel> Entries(Func<Task<IReadOnlyList<TrackSummary>>> tracks, PlayerViewModel player, PlaylistActions playlists,
+        Notices notices)
     {
         ArgumentNullException.ThrowIfNull(tracks);
         ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(playlists);
         ArgumentNullException.ThrowIfNull(notices);
         return
         [
             new MenuEntryViewModel("Play next", () => notices.GuardAsync(async () => await player.AddToQueueAsync(await tracks().ConfigureAwait(true), QueuePosition.Next).ConfigureAwait(true))),
             new MenuEntryViewModel("Add to queue", () => notices.GuardAsync(async () => await player.AddToQueueAsync(await tracks().ConfigureAwait(true), QueuePosition.UpNext).ConfigureAwait(true))),
+            playlists.AddToPlaylistEntry(tracks),
         ];
     }
 
-    public static IReadOnlyList<MenuEntryViewModel> Entries(IReadOnlyList<TrackSummary> tracks, PlayerViewModel player, Notices notices)
-        => Entries(() => Task.FromResult(tracks), player, notices);
+    public static IReadOnlyList<MenuEntryViewModel> Entries(IReadOnlyList<TrackSummary> tracks, PlayerViewModel player, PlaylistActions playlists, Notices notices)
+        => Entries(() => Task.FromResult(tracks), player, playlists, notices);
 }
 
 /// <summary>
 /// What can be done with something the library shows, whatever page it is on: an album (a card, a shelf sleeve), a
-/// crate record, a Tracks page album header, a track row or a Now Playing track. Right-clicking one offers Play, Play
-/// next and Add to queue (mockup: the contextmenu handler); dragging one drops its tracks into the queue drawer, under
-/// a ghost of it (the dragstart handler). A queue row only drags, to move it.
+/// crate record, a Tracks page album header, a track row or a Now Playing track. Right-clicking one opens its menu
+/// (<see cref="ShowMenu"/>; mockup: the contextmenu handler); dragging one drops its tracks into the queue drawer, under a
+/// ghost of it (the dragstart handler). A queue row only drags, to move it.
 /// </summary>
 public sealed class LibraryItemActions(
     PlayerViewModel player, ILibraryService library, TurntableSceneViewModel scene, NowPlayingViewModel nowPlaying, MenuViewModel menu,
-    Notices notices, Func<PageViewModel> currentPage)
+    PlaylistActions playlists, FavoritesViewModel favorites, Notices notices, Func<PageViewModel> currentPage)
 {
-    /// <summary>Whether <paramref name="item"/> is a library album or track (it has a menu and drops into the queue).</summary>
+    /// <summary>
+    /// Whether <paramref name="item"/> is a library album or track (it has a menu and drops into the queue). A playlist
+    /// entry whose file is missing isn't.
+    /// </summary>
     public static bool IsLibraryItem(object? item)
-        => item is AlbumItemViewModel or CrateRecordViewModel or TrackAlbumHeaderViewModel or TrackItemViewModel or NowPlayingTrackViewModel;
+        => item is AlbumItemViewModel or CrateRecordViewModel or TrackAlbumHeaderViewModel or TrackItemViewModel { IsAvailable: true } or NowPlayingTrackViewModel;
 
-    /// <summary>Whether <paramref name="item"/> can be dragged: a library item, or a queue row (to move it).</summary>
-    public static bool CanDrag(object? item) => IsLibraryItem(item) || item is QueueRowViewModel;
+    /// <summary>
+    /// Whether <paramref name="item"/> can be dragged: a library item, a queue row (to move it), or a playlist entry (to
+    /// move it in its playlist, even one whose file is missing).
+    /// </summary>
+    public static bool CanDrag(object? item) => IsLibraryItem(item) || item is QueueRowViewModel or TrackItemViewModel { Entry: not null };
 
-    /// <summary>Opens the menu for <paramref name="item"/>: Play, Play next, Add to queue. False when it has none.</summary>
+    /// <summary>
+    /// Opens the menu for <paramref name="item"/>: Play, Play next, Add to queue, Add to playlist ›, and for a library track
+    /// Add to (or Remove from) favorites (#48; an album isn't one favorite). False when it has none.
+    /// </summary>
     public bool ShowMenu(object? item)
     {
         if (!IsLibraryItem(item))
@@ -57,9 +71,23 @@ public sealed class LibraryItemActions(
             return false;
         }
 
-        menu.Show([new MenuEntryViewModel("Play", () => PlayAsync(item!)), .. QueueMenu.Entries(() => TracksAsync(item!), player, notices)]);
+        List<MenuEntryViewModel> entries = [new MenuEntryViewModel("Play", () => PlayAsync(item!)), .. QueueMenu.Entries(() => TracksAsync(item!), player, playlists, notices)];
+        if (TrackId(item) is { Length: > 0 } id)
+        {
+            entries.Add(new MenuEntryViewModel(FavoritesViewModel.Label(favorites.Contains(id)), () => favorites.ToggleAsync(id)));
+        }
+
+        menu.Show(entries);
         return true;
     }
+
+    /// <summary>The library track <paramref name="item"/> is, if it is one track.</summary>
+    private static string? TrackId(object? item) => item switch
+    {
+        TrackItemViewModel track => track.Track.Id,
+        NowPlayingTrackViewModel track => track.Track.Id,
+        _ => null,
+    };
 
     /// <summary>Plays <paramref name="item"/> as clicking it would: an album on the turntable, a track with its list after it.</summary>
     public Task PlayAsync(object item) => item switch

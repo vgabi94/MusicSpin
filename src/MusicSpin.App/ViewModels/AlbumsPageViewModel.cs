@@ -55,6 +55,11 @@ public sealed class AlbumArt(string albumId, CoverSize size, ICoverService cover
 
     private async Task LoadAsync()
     {
+        if (albumId.Length == 0)
+        {
+            return; // a plain file: no album, the placeholder stays
+        }
+
         try
         {
             Cover = await covers.CoverAsync(albumId, size).ConfigureAwait(true);
@@ -187,6 +192,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private readonly LayerViewModel _nowPlaying;
     private readonly TurntableSceneViewModel _scene;
     private readonly MenuViewModel _menu;
+    private readonly PlaylistActions _playlists;
     private readonly Notices _notices;
     private readonly TimeProvider _time;
     private readonly Dictionary<string, string> _crateFronts = new(StringComparer.Ordinal);
@@ -198,8 +204,8 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private long? _lastFlip;
 
     public AlbumsPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, SpinClock clock,
-        LayerViewModel nowPlaying, TurntableSceneViewModel scene, MenuViewModel menu, Notices notices, SettingsViewModel settings,
-        TimeProvider time)
+        LayerViewModel nowPlaying, TurntableSceneViewModel scene, MenuViewModel menu, PlaylistActions playlists, Notices notices,
+        SettingsViewModel settings, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(clock);
@@ -210,6 +216,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         _nowPlaying = nowPlaying;
         _scene = scene;
         _menu = menu;
+        _playlists = playlists;
         _notices = notices;
         _time = time;
         Settings = settings;
@@ -354,7 +361,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private Task QueueFront() => ActiveCrate?.Front is { } front ? _notices.GuardAsync(async () =>
     {
         var tracks = await _library.AlbumTracksAsync(front.Album.Id).ConfigureAwait(true);
-        _menu.Show(QueueMenu.Entries(tracks, _player, _notices));
+        _menu.Show(QueueMenu.Entries(tracks, _player, _playlists, _notices));
     }) : Task.CompletedTask;
 
     /// <summary>

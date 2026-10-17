@@ -278,6 +278,20 @@
     <Style Selector="Button.npTrack.current TextBlock.number">
         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
     </Style>
+    <!-- A track's heart (#48): filled ones always show, an outline on hover or keyboard focus; it overhangs the row's line. -->
+    <Style Selector="Button.npTrack Button.heart">
+        <Setter Property="Width" Value="{StaticResource PlayerHeartSize}" />
+        <Setter Property="Height" Value="{StaticResource PlayerHeartSize}" />
+        <Setter Property="Margin" Value="{StaticResource NowPlayingHeartMargin}" />
+        <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Button.npTrack Button.heart controls|Icon">
+        <Setter Property="Width" Value="{StaticResource PlayerHeartIconSize}" />
+        <Setter Property="Height" Value="{StaticResource PlayerHeartIconSize}" />
+    </Style>
+    <Style Selector="Button.npTrack:pointerover Button.heart, Button.npTrack Button.heart:focus-visible, Button.npTrack Button.heart.on">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
     <Style Selector="Button.npTrack TextBlock.duration">
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
         <Setter Property="FontFeatures" Value="+tnum" />

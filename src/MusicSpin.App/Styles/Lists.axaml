@@ -39,6 +39,17 @@
     <Style Selector="Border.track.current TextBlock.title">
         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
     </Style>
+    <!-- A playlist entry whose file is missing: dimmed, no hover, its cover's ▶ never shows. -->
+    <Style Selector="Border.track.unavailable">
+        <Setter Property="Opacity" Value="{StaticResource UnavailableOpacity}" />
+        <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+    <Style Selector="Border.track.unavailable:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.track.unavailable Button.thumb > Panel > Border">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
 
     <!-- The thumbnail: ▶ over a dimmed cover while the row is hovered. -->
     <Style Selector="Button.thumb">
@@ -124,6 +135,58 @@
     </Style>
     <Style Selector="Border.track:pointerover Button.add">
         <Setter Property="Opacity" Value="1" />
+    </Style>
+    <!-- A playlist row's ✕ (as a queue row's, mockup: .qx): the ＋'s button, with the queue's smaller cross. -->
+    <Style Selector="Button.add.remove controls|Icon">
+        <Setter Property="Width" Value="{StaticResource QueueRemoveIconSize}" />
+        <Setter Property="Height" Value="{StaticResource QueueRemoveIconSize}" />
+    </Style>
+    <!--
+      The heart (#48): an outline when the track isn't a favorite, filled in the accent when it is. In a row a filled heart
+      always shows, and an outline only on hover or keyboard focus.
+    -->
+    <Style Selector="Button.heart">
+        <Setter Property="Width" Value="{StaticResource HeartButtonSize}" />
+        <Setter Property="Height" Value="{StaticResource HeartButtonSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource AddButtonRadius}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.heart controls|Icon">
+        <Setter Property="Width" Value="{StaticResource HeartIconSize}" />
+        <Setter Property="Height" Value="{StaticResource HeartIconSize}" />
+        <Setter Property="IsStroked" Value="True" />
+    </Style>
+    <Style Selector="Button.heart:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="Button.heart.on">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="Button.heart.on controls|Icon">
+        <Setter Property="IsStroked" Value="False" />
+    </Style>
+    <Style Selector="Border.track Button.heart">
+        <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Border.track:pointerover Button.heart, Border.track Button.heart:focus-visible, Border.track Button.heart.on">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <!--
+      The drop line (mockup: .qline), in the queue drawer and on a playlist page: hidden unless something is dragged over
+      the rows (Queue.axaml shows the drawer's).
+    -->
+    <Style Selector="Border.dropLine">
+        <Setter Property="Height" Value="{StaticResource QueueDropLineHeight}" />
+        <Setter Property="CornerRadius" Value="{StaticResource QueueDropLineRadius}" />
+        <Setter Property="Margin" Value="{StaticResource QueueDropLineMargin}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <!-- A playlist row dragged over its list. -->
+    <Style Selector="Panel.trackList.over Border.dropLine">
+        <Setter Property="IsVisible" Value="True" />
     </Style>
 
     <!-- An album's header on the Tracks page. -->

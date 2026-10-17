@@ -58,6 +58,19 @@ public sealed partial class PlaylistNameViewModel : LayerViewModel
 
     /// <summary>The name to save under: what was typed, trimmed, or the default.</summary>
     public string Chosen => string.IsNullOrWhiteSpace(Name) ? DefaultName : Name.Trim();
+
+    /// <summary>"New playlist", or "New playlist 2" and so on: the first that isn't <paramref name="taken"/> (in any case).</summary>
+    public static string Unused(IEnumerable<string> taken)
+    {
+        var names = new HashSet<string>(taken, StringComparer.OrdinalIgnoreCase);
+        var name = DefaultName;
+        for (var n = 2; names.Contains(name); n++)
+        {
+            name = string.Create(CultureInfo.InvariantCulture, $"{DefaultName} {n}");
+        }
+
+        return name;
+    }
 }
 
 /// <summary>
@@ -204,15 +217,9 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(HasRows))]
     private async Task StartSave()
     {
-        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        await _notices.GuardAsync(async () => taken.UnionWith((await _library.PlaylistsAsync().ConfigureAwait(true)).Select(p => p.Name))).ConfigureAwait(true);
-        var name = PlaylistNameViewModel.DefaultName;
-        for (var n = 2; taken.Contains(name); n++)
-        {
-            name = string.Create(CultureInfo.InvariantCulture, $"{PlaylistNameViewModel.DefaultName} {n}");
-        }
-
-        SaveForm.Name = name;
+        var taken = new List<string>();
+        await _notices.GuardAsync(async () => taken.AddRange((await _library.PlaylistsAsync().ConfigureAwait(true)).Select(p => p.Name))).ConfigureAwait(true);
+        SaveForm.Name = PlaylistNameViewModel.Unused(taken);
         SaveForm.Open();
     }
 

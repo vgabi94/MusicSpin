@@ -45,4 +45,33 @@
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
+    <!-- Favorites' track count, quieter than the name. -->
+    <Style Selector="Button.nav TextBlock.navCount">
+        <Setter Property="FontSize" Value="{StaticResource NavCountFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <!-- Albums or tracks dragged over a playlist (the mockup has none): it lights up like the queue's empty box. -->
+    <Style Selector="Panel.navItem.dropTarget Button.nav">
+        <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <!-- A playlist renamed in place: the name in a box the size of the entry (like the queue's name field). -->
+    <Style Selector="TextBox.rename">
+        <Setter Property="Theme" Value="{StaticResource TypedBox}" />
+        <Setter Property="Padding" Value="{StaticResource NavRenamePadding}" />
+        <Setter Property="FontSize" Value="{StaticResource NavFontSize}" />
+        <Setter Property="CornerRadius" Value="{StaticResource NavItemRadius}" />
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <!-- A playlist just saved (mockup: #plNav a.fresh): an accent wash over the entry, fading out. -->
+    <Style Selector="Panel.navItem > Border.navFlash">
+        <Setter Property="CornerRadius" Value="{StaticResource NavItemRadius}" />
+        <Setter Property="Background" Value="{DynamicResource AccentHighlightBrush}" />
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
 </Styles>

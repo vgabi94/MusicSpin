@@ -82,6 +82,8 @@
     <SolidColorBrush x:Key="AccentTintBrush" Color="#2EE86A3C" />
     <!-- The accent at 32%: a row just added to the queue flashes from it (mockup: @keyframes qflash). -->
     <SolidColorBrush x:Key="AccentFlashBrush" Color="#52E86A3C" />
+    <!-- The accent at 40%: a playlist just saved flashes from it in the sidebar (mockup: @keyframes navflash). -->
+    <SolidColorBrush x:Key="AccentHighlightBrush" Color="#66E86A3C" />
     <!-- The accent at 8%: the queue's empty box while something is dragged over it (mockup: .queue.over .qempty). -->
     <SolidColorBrush x:Key="AccentWashBrush" Color="#14E86A3C" />
 

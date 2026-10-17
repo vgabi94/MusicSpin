@@ -102,11 +102,13 @@ src/MusicSpin.App/
 │                          the scene's timeline
 ├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
 │                          layers (Settings, Now Playing, the queue drawer and its name form, the menu),
-│                          LibraryItemActions (right-click and drag of albums and tracks), pages (Albums, Tracks,
-│                          playlists, Radio), Crate (a crate and its records), LibraryOrder (sort and grouping) and
-│                          the turntable scene
+│                          LibraryItemActions (right-click and drag of albums and tracks), PlaylistActions (the
+│                          sidebar's playlists, Add to playlist ›), Favorites (the hearts), pages (Albums, Tracks,
+│                          playlists, Favorites, Radio), Crate (a crate and its records), LibraryOrder (sort and
+│                          grouping) and the turntable scene
 ├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, NowPlayingView, SceneView,
-│                          QueueDrawerView, DragGhostView, LibraryDrag (drags into the queue), MenuPlacement,
+│                          QueueDrawerView, DragGhostView, LibraryDrag (drags into the queue, onto the sidebar, and
+│                          within a playlist), MenuPlacement,
 │                          Pages/ — structure and bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
@@ -142,8 +144,8 @@ src/MusicSpin.App/
   computed once per session.
 - **View models don't know controls.** Services come in through constructors from `AppComposition`. The window
   reports one thing back: whether a text box has focus, so the Space key binding (play/pause) declines and the text
-  box gets the space. Esc closes the topmost open layer registered with `LayerRegistry` (menu, Settings, the queue
-  drawer's playlist name, the queue drawer, Now Playing, in that order).
+  box gets the space. Esc closes the topmost open layer registered with `LayerRegistry` (menu, a sidebar playlist
+  renamed in place, Settings, the queue drawer's playlist name, the queue drawer, Now Playing, in that order).
 - **Player.** `PlayerViewModel` uses two connections: one for requests and polling, one for the `subscribe` event
   stream (with `spectrum` levels for the analyzer). Every other event triggers a `status` refresh, so the state follows
   the player whoever changed it. While playing,
@@ -151,9 +153,13 @@ src/MusicSpin.App/
   reconnects every second. Closing the window pauses the music; a player the app started is also shut down (`quit`).
   Published builds are self-contained: `MusicSpin` starts the `music-spin` executable next to it. In a development
   build the CLI is in its own output folder, so `MUSICSPIN_CLI` names its `music-spin` executable.
-- **Library.** Each read opens the library briefly on a worker thread (it holds a cross-process lock while open).
-  The app checks `library.db` (and its log) every 2 seconds and reloads the playlists and the current page when it
-  changed, whoever changed it (a scan from the CLI, a playlist from MCP).
+- **Library.** Each read or edit opens the library briefly on a worker thread (it holds a cross-process lock while
+  open, and waits up to 5 seconds for it). When another process holds it longer (a scan, say), the action fails with a
+  notice that the library is busy and changes nothing. The app checks `library.db` (and its log) every 500 ms and
+  reloads the playlists, the favorites and the current page when another process changed it (a scan from the CLI, a
+  playlist from MCP, `music-spin favorite add`); its own edits re-read only what they changed. Reloads never overlap:
+  changes during one make exactly one more after it. A reload that finds the library held (a scan under way) says
+  nothing and waits for the next change. Favorites, when not shown, reads its list when it is next opened.
 - **Covers.** `CoverService` reads covers through Core's cover cache and keeps decoded bitmaps for the session; a row
   asks for its cover only when it is first shown, and lists are virtualized.
 - **Albums and Tracks.** The pages sort, group and filter in the view model (`LibraryOrder`, as the mockup's
@@ -178,7 +184,10 @@ src/MusicSpin.App/
   a right-click, always 8 px inside the window (`MenuPlacement`). A press anywhere else, a scroll (not the queue drawer's) and
   the window losing the focus close it. What a right-click acts on is the nearest control marked with `QueueSource.Item`: an album (a
   card, a sleeve, a crate record), a Tracks page album header, a track row or a Now Playing track.
-  `LibraryItemActions` turns it into Play (as clicking it would), Play next and Add to queue.
+  `LibraryItemActions` turns it into Play (as clicking it would), Play next, Add to queue and Add to playlist › (a
+  submenu shown in the menu's place: the playlists, then New playlist…); a track also gets Add to (or Remove from)
+  favorites. `PlaylistActions` makes a sidebar playlist's menu: Play, Rename, Delete… (which asks first, in the
+  menu's place).
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
@@ -193,7 +202,26 @@ src/MusicSpin.App/
   a `QueueSource` item. The window then holds the pointer, so the press clicks nothing, and a `DragGhostView` in the
   overlay layer follows it. Over the drawer the view says where the drop goes and shows the drop line. A drag from the
   library opens the drawer, which then closes at once without a drop, or 1.4 s after one once the pointer has left it.
-  Since these drags never leave the window, no text box or other app can take them.
+  Over the sidebar, a playlist or Favorites lights up (`SidebarView.DropTargetAt`): a drop adds the tracks to the end of
+  the playlist, or favorites them, and the entry flashes. On a playlist page its own rows move: the drop line shows
+  where, and the entry moves to that place in the playlist (`playlist move`). Since these drags never leave the window,
+  no text box or other app can take them.
+- **Playlists.** The sidebar lists them under Favorites; `SidebarViewModel.SetPlaylists` edits its list in place, so an
+  entry keeps its control (and a flash under way) across a reload. A playlist page reads every entry (paging through
+  Core's `Playlist`); an entry whose file is neither in the library nor on disk is dimmed, says "File not found", and
+  can only be removed or moved. Each edit (`PlaylistActions`, the page's ✕ and moves) writes the library at once, then
+  the sidebar and the page are read again. An edit names its entry by position and file, so if the playlist changed
+  elsewhere since it was read, the entry is found again by its file nearest its old place, or the notice says it is gone.
+  Rename is a text box in the sidebar entry's place (a layer: Enter saves, Esc or a click elsewhere cancels; a name
+  another playlist has, in any case, is refused with a notice). New playlist… takes the first free "New playlist" name
+  and opens that rename.
+- **Favorites.** `FavoritesViewModel` holds the favorite track ids, read at start and whenever the library changed.
+  Every heart (the player bar's, Now Playing's, the track rows') and the menus' entry ask it and toggle through it; it
+  takes a change only once the library has, so a busy library leaves the heart as it was. A plain file has no heart.
+  Favorites, pinned first under Playlists with its count, opens `FavoritesPageViewModel`: the favorites newest first,
+  laid out like a playlist (no rename, delete or ✕); its Radio button starts a favorites station and, while that is on
+  air, reads On air and opens the Radio page. Favorites whose files left the library are counted in a line under the
+  title, which links to `music-spin favorites --missing` in the docs.
 - **Spin clock.** One `SpinClock` drives every visible record of the playing album, at Settings › Speed (33⅓, 45 or
   16⅔ rpm), spinning up and down like a platter. It runs in every Motion mode; None only skips the ramp.
 - **Player bar.** `PlayerBarViewModel` holds the transport (⏮ restarts after 3 seconds), the format label and the

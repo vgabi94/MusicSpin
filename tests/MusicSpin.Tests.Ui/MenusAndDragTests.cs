@@ -195,7 +195,9 @@ public sealed class MenusAndDragTests
 
         RightClick(app.Window, at);
         Assert.True(MenuBox(app).IsEffectivelyVisible);
-        Assert.Equal(["Play", "Play next", "Add to queue"], Labels(app));
+        // a single track can also be a favorite (an album can't: it is never one favorite)
+        string[] queue = ["Play", "Play next", "Add to queue", "Add to playlist"];
+        Assert.Equal(kind is Kind.TrackRow or Kind.NowPlayingTrack ? [.. queue, FavoritesViewModel.AddLabel] : queue, Labels(app));
         var menu = Gui.BoundsIn(app.Window, MenuBox(app));
         Assert.Equal(at.X, menu.Left, 0.5);
         Assert.Equal(at.Y, menu.Top, 0.5);
@@ -268,7 +270,7 @@ public sealed class MenusAndDragTests
         Gui.Settle();
 
         Gui.Click(app.Window, Gui.Find<Button>(app.Window, "QueueAll"));
-        Assert.Equal(["Play next", "Add to queue"], Labels(app));
+        Assert.Equal(["Play next", "Add to queue", "Add to playlist"], Labels(app));
         Gui.Click(app.Window, Entries(app)[1]);
         var added = await SentAsync(app, "queue.add");
         Assert.Equal("upnext", added.GetProperty("position").GetString());

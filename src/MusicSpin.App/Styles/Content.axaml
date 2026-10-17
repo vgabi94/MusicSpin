@@ -141,19 +141,70 @@
         <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- "Add to playlist ›": the chevron says a submenu follows. -->
+    <Style Selector="Button.menuEntry controls|Icon.submenu">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Margin" Value="{StaticResource MenuChevronMargin}" />
+    </Style>
+    <Style Selector="Button.menuEntry.destructive">
+        <Setter Property="Foreground" Value="{StaticResource InvalidBrush}" />
+    </Style>
+    <!-- A confirmation's question ("Delete “Evening”? …"), over its entries. -->
+    <Style Selector="TextBlock.menuCaption">
+        <Setter Property="MaxWidth" Value="{StaticResource MenuCaptionMaxWidth}" />
+        <Setter Property="Margin" Value="{StaticResource MenuCaptionMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource MenuCaptionFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
 
     <Style Selector="ScrollViewer.view">
         <Setter Property="Padding" Value="{StaticResource ViewPadding}" />
         <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
     </Style>
+    <!-- A page with nothing to show: what to do about it, centred near the top. -->
+    <Style Selector="StackPanel.emptyView">
+        <Setter Property="Margin" Value="{StaticResource EmptyMargin}" />
+        <Setter Property="Spacing" Value="{StaticResource EmptyHintGap}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
     <Style Selector="TextBlock.empty">
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
         <Setter Property="FontSize" Value="{StaticResource EmptyFontSize}" />
-        <Setter Property="Margin" Value="{StaticResource EmptyMargin}" />
         <Setter Property="HorizontalAlignment" Value="Center" />
-        <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Favorites, empty: "Click ♡ on a track to add it.", the heart an icon in the line. -->
+    <Style Selector="StackPanel.emptyHint">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Spacing" Value="{StaticResource EmptyHintWordGap}" />
+    </Style>
+    <Style Selector="StackPanel.emptyHint controls|Icon.emptyHeart">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Width" Value="{StaticResource EmptyHeartSize}" />
+        <Setter Property="Height" Value="{StaticResource EmptyHeartSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <!-- Favorites: the line under the title about favorites no longer in the library, and its link to the docs. -->
+    <Style Selector="StackPanel.pageNote">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource PageNoteGap}" />
+        <Setter Property="Margin" Value="{StaticResource PageNoteMargin}" />
+    </Style>
+    <Style Selector="StackPanel.pageNote TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource PageNoteFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.pageNote HyperlinkButton">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.pageNote HyperlinkButton TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
     </Style>
 
     <!-- The accent button (mockup: .btn): black text on the album colour. -->
