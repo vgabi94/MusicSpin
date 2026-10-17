@@ -117,10 +117,12 @@ public sealed class PlaylistManagementTests
         Gui.Settle();
 
         // let go over Albums (no playlist): nothing is written, at once
+        var drops = app.Window.Drag.Drops;
         Mouse.StartDrag(app.Window, PlaylistTests.Row(app, "Kind of Blue 3"));
         var albums = Mouse.Middle(app.Window, Gui.All<Panel>(app.Window).Single(p => p.Classes.Contains("navItem") && p.DataContext == app.ViewModel.Sidebar.Albums));
         Mouse.MoveTo(app.Window, albums);
         Mouse.Release(app.Window, albums);
+        Assert.Equal(drops, app.Window.Drag.Drops); // no drop started
         Assert.Equal(Mix, Show(app, "Mix"));
         Assert.Equal(["Blue Train 2"], Show(app, "Other"));
 
@@ -128,6 +130,7 @@ public sealed class PlaylistManagementTests
         var at = Mouse.Middle(app.Window, NavPanel(app, "Other"));
         Mouse.MoveTo(app.Window, at);
         Mouse.Release(app.Window, at);
+        Assert.Equal(drops + 1, app.Window.Drag.Drops); // a drop on a playlist counts as one started, as one on the drawer does
         await Gui.UntilAsync(() => Nav(app, "Other").IsFresh, "the playlist flashed");
         Assert.Equal(["Blue Train 2", "Kind of Blue 3"], Show(app, "Other"));
         Assert.Equal(Mix, Show(app, "Mix")); // still nothing from the drop over Albums (a write from it would have landed before the later drop on Other)

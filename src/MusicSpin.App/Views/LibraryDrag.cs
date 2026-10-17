@@ -56,7 +56,10 @@ internal sealed class LibraryDrag
 
     public bool IsDragging => _dragged is not null;
 
-    /// <summary>Drags let go over the drawer (tests check that a release anywhere else dropped nothing).</summary>
+    /// <summary>
+    /// Drops started, on any target: the drawer, a sidebar playlist, Favorites or a playlist's own list (tests check that
+    /// a release over nothing that takes it started none).
+    /// </summary>
     internal int Drops { get; private set; }
 
     private MainWindowViewModel? ViewModel => _window.DataContext as MainWindowViewModel;
@@ -227,12 +230,15 @@ internal sealed class LibraryDrag
                     : viewModel.Notices.GuardAsync(async () => await drawer.InsertAsync(await viewModel.Items.TracksAsync(item).ConfigureAwait(true), at).ConfigureAwait(true));
                 break;
             case Target.Playlist when playlist is { Kind: PageKind.Favorites }:
+                Drops++;
                 _ = viewModel.Notices.GuardAsync(async () => await viewModel.AddToFavoritesAsync(await viewModel.Items.TracksAsync(item).ConfigureAwait(true)).ConfigureAwait(true));
                 break;
             case Target.Playlist when playlist is not null:
+                Drops++;
                 _ = viewModel.Notices.GuardAsync(async () => await viewModel.Playlists.AddAsync(playlist, await viewModel.Items.TracksAsync(item).ConfigureAwait(true)).ConfigureAwait(true));
                 break;
             case Target.List when page is not null && item is TrackItemViewModel row:
+                Drops++;
                 _ = page.MoveAsync(row, at);
                 break;
         }

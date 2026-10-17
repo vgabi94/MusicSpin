@@ -24,6 +24,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private int _reloadsAsked;
     private int _reloadsDone;
     private bool _reloading;
+    private bool _reloadPage;
+    private bool _reloadOwed;
+    private ITimer? _reloadRetry;
 
     public MainWindowViewModel(AppServices services)
     {
@@ -53,7 +56,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Layers.Register(QueueDrawer.SaveForm);
         Layers.Register(Menu);
         Layers.Register(Sidebar.Rename);
-        Playlists = new PlaylistActions(services.Library, Player, Sidebar, Menu, Notices, ReloadAsync);
+        Playlists = new PlaylistActions(services.Library, Player, Sidebar, Menu, Notices, () => ReloadAsync());
         Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
         Scene = new TurntableSceneViewModel(Player, NowPlaying, services.Library, services.Covers, Settings, services.Time, services.Ui, Notices);
         AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, SpinClock, NowPlaying, Scene, Menu, Playlists, Notices, Settings, services.Time);
@@ -169,7 +172,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public async Task InitializeAsync()
     {
         Sidebar.Navigate(Sidebar.Albums);
-        await Task.WhenAll(Player.StartAsync(), Notices.GuardAsync(LoadPlaylistsAsync), Notices.GuardAsync(Favorites.LoadAsync)).ConfigureAwait(true);
+        // The first read of the playlists and favorites is a reload like any other (the page loads as it is shown), so a
+        // change seen while the app opens waits for it rather than racing it.
+        await Task.WhenAll(Player.StartAsync(), ReloadAsync(page: false)).ConfigureAwait(true);
     }
 
     /// <summary>Esc: closes the topmost open layer (a menu, Settings, the queue drawer, Now Playing).</summary>
@@ -251,6 +256,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         _albumLookup?.Cancel();
         _albumLookup?.Dispose();
+        _reloadRetry?.Dispose();
+        _reloadOwed = false;
         Scene.Dispose();
         QueueDrawer.Dispose();
         SpinClock.Dispose();
@@ -326,8 +333,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// Reloads never overlap: asked for while one runs, exactly one more runs after it, however often it was asked (a scan
     /// from the CLI changes the library many times). The task completes once a reload begun after the ask has finished.
     /// </summary>
-    private Task ReloadAsync()
+    /// <param name="page">Read the current page too (not at startup: showing it loads it).</param>
+    private Task ReloadAsync(bool page = true)
     {
+        _reloadPage |= page;
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _reloadWaiters.Add((++_reloadsAsked, done));
         if (!_reloading)
@@ -346,14 +355,38 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             while (_reloadsDone < _reloadsAsked)
             {
                 var asked = _reloadsAsked;
-                await Quietly(LoadPlaylistsAsync).ConfigureAwait(true);
-                await Quietly(Favorites.LoadAsync).ConfigureAwait(true);
-                await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                var page = _reloadPage;
+                _reloadPage = false;
+                _reloadOwed = false;
+                Exception? failure = null;
+                try
+                {
+                    await Quietly(LoadPlaylistsAsync).ConfigureAwait(true);
+                    await Quietly(Favorites.LoadAsync).ConfigureAwait(true);
+                    if (page)
+                    {
+                        await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                    }
+                }
+#pragma warning disable CA1031 // anything the notices don't cover goes to whoever waits for this pass, as it did before reloads were sequenced
+                catch (Exception ex)
+#pragma warning restore CA1031
+                {
+                    failure = ex;
+                }
+
                 _reloadsDone = asked;
                 foreach (var waiter in _reloadWaiters.Where(w => w.Asked <= asked).ToList())
                 {
                     _reloadWaiters.Remove(waiter);
-                    waiter.Done.SetResult();
+                    if (failure is null)
+                    {
+                        waiter.Done.SetResult();
+                    }
+                    else
+                    {
+                        waiter.Done.SetException(failure);
+                    }
                 }
             }
         }
@@ -361,11 +394,38 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             _reloading = false;
         }
+
+        if (_reloadOwed)
+        {
+            RetryReloadAtNextCheck();
+        }
     }
 
     /// <summary>
-    /// A read in the background: if another process holds the library (a scan, say), it says nothing and waits for the
-    /// next change, which a scan makes when it is done. Other failures are notices.
+    /// A read the busy library refused is owed: it is tried again when the library is next checked for changes, whether
+    /// or not the holder changed anything (a long read-only command doesn't), and again at each check until it lands.
+    /// </summary>
+    private void RetryReloadAtNextCheck()
+    {
+        if (_reloadRetry is not null)
+        {
+            return;
+        }
+
+        _reloadRetry = _services.Time.CreateTimer(_ => _services.Ui.Post(() =>
+        {
+            _reloadRetry?.Dispose();
+            _reloadRetry = null;
+            if (_reloadOwed)
+            {
+                _ = ReloadAsync();
+            }
+        }), null, LibraryService.PollInterval, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>
+    /// A read in the background: if another process holds the library (a scan, say), it says nothing and the reload is
+    /// owed (see <see cref="RetryReloadAtNextCheck"/>). Other failures are notices.
     /// </summary>
     private Task Quietly(Func<Task> read) => Notices.GuardAsync(async () =>
     {
@@ -375,7 +435,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.LibraryLocked)
         {
-            // busy: the next change reloads
+            _reloadOwed = true; // busy: owed, tried again at the next check (or the next change, if one comes first)
         }
     });
 

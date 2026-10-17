@@ -13,6 +13,7 @@ internal sealed class LibraryDatabase : IDisposable
     private static readonly byte[] LiteDbSignature = "** This is a LiteDB file **"u8.ToArray();
 
     private readonly FileStream? _lock;
+    private bool _closed;
 
     private LibraryDatabase(LiteDatabase db, FileStream? lockFile, bool readOnly, string? file = null)
     {
@@ -177,10 +178,30 @@ internal sealed class LibraryDatabase : IDisposable
             "Delete it (your music files are untouched; playlists saved in the library are lost), then re-add folders with 'music-spin library add' and run 'music-spin library scan'.");
     }
 
-    public void Dispose()
+    public void Dispose() => Close(null);
+
+    /// <summary>
+    /// Closes the database, then runs <paramref name="whileLocked"/> still holding <c>library.lock</c>, then releases it:
+    /// what <paramref name="whileLocked"/> sees on disk is this connection's last state, with no other process's write
+    /// mixed in yet.
+    /// </summary>
+    public void Close(Action? whileLocked)
     {
-        Db.Dispose();
-        _lock?.Dispose();
+        if (_closed)
+        {
+            return;
+        }
+
+        _closed = true;
+        try
+        {
+            Db.Dispose();
+            whileLocked?.Invoke();
+        }
+        finally
+        {
+            _lock?.Dispose();
+        }
     }
 
     /// <summary>Runs <paramref name="action"/> translating LiteDB failures into <see cref="MusicSpinException"/>.</summary>

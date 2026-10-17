@@ -21,6 +21,27 @@ public sealed class LibraryReloadTests
     }
 
     [AvaloniaFact]
+    public async Task A_change_while_the_app_starts_reloads_after_the_first_read_not_alongside_it()
+    {
+        var library = new StubLibrary { Tracks = { StubLibrary.Track(1) } };
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Library = library, Initialize = false });
+        var gate = library.PlaylistsGate = new TaskCompletionSource();
+        var start = app.ViewModel.InitializeAsync();
+        await Gui.UntilAsync(() => library.PlaylistReads == 1, "the first read under way");
+
+        library.RaiseChanged(); // a scan from the CLI, say, while the app opens
+        Gui.Settle();
+        Assert.Equal(1, library.PlaylistReads); // it waits for the first read
+
+        library.Playlists.Add(new PlaylistSummaryItem("playlist0000", "During startup", 0));
+        library.PlaylistsGate = null;
+        gate.SetResult();
+        await Gui.UntilAsync(() => start.IsCompleted && app.ViewModel.Sidebar.Playlists.Any(p => p.Title == "During startup"), "the reload after it");
+        Assert.Equal(2, library.PlaylistReads);
+        Assert.Equal(1, library.MostPlaylistReadsAtOnce);
+    }
+
+    [AvaloniaFact]
     public async Task Changes_during_a_slow_reload_make_one_more_reload_after_it_never_one_alongside()
     {
         var (app, library) = await OpenAsync();
@@ -74,6 +95,34 @@ public sealed class LibraryReloadTests
     }
 
     [AvaloniaFact]
+    public async Task A_reload_the_busy_library_refused_is_tried_again_on_the_next_check_even_with_no_new_change()
+    {
+        var (app, library) = await OpenAsync();
+        await using var _ = app;
+        var before = library.PlaylistReads;
+        library.PlaylistsFailure = LibraryService.BusyMessage;
+        library.RaiseChanged(); // say a favorite added from the CLI, then a long read-only command holds the library
+        await Gui.UntilAsync(() => library.PlaylistReads == before + 1, "the refused reload");
+        Gui.Settle();
+
+        // The holder lets go, having changed nothing: no change comes to read it.
+        library.PlaylistsFailure = null;
+        library.Playlists.Add(new PlaylistSummaryItem("playlist0000", "Missed", 0));
+        Gui.Settle();
+        Assert.Equal(before + 1, library.PlaylistReads); // no retry before the next check
+
+        app.Advance(LibraryService.PollInterval);
+        await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists.Any(p => p.Title == "Missed"), "the reload tried again");
+        Assert.Null(app.ViewModel.Banner);
+
+        // caught up: nothing more is owed
+        var reads = library.PlaylistReads;
+        app.Advance(LibraryService.PollInterval * 3);
+        Gui.Settle();
+        Assert.Equal(reads, library.PlaylistReads);
+    }
+
+    [AvaloniaFact]
     public async Task A_reload_that_fails_for_another_reason_says_so()
     {
         var (app, library) = await OpenAsync();
@@ -84,6 +133,32 @@ public sealed class LibraryReloadTests
         library.RaiseChanged();
         await Gui.UntilAsync(() => app.ViewModel.Banner is not null, "the notice");
         Assert.Equal("The disk went away.", app.ViewModel.Banner);
+    }
+
+    [AvaloniaFact]
+    public async Task A_reload_that_fails_unexpectedly_fails_the_edit_waiting_on_it_and_the_next_reload_still_runs()
+    {
+        var (app, library) = await OpenAsync();
+        await using var _ = app;
+        library.Playlists.Add(new PlaylistSummaryItem("playlist0000", "Mix", 0));
+        library.PlaylistEntries["playlist0000"] = [];
+        library.RaiseChanged();
+        await Gui.UntilAsync(() => app.ViewModel.Sidebar.PlaylistItem("playlist0000") is not null, "the playlist");
+        var mix = app.ViewModel.Sidebar.PlaylistItem("playlist0000")!;
+
+        // Something no notice covers: the reload after the add throws it.
+        var gate = new TaskCompletionSource();
+        gate.SetException(new InvalidOperationException("Unexpected."));
+        library.PlaylistsGate = gate;
+        var add = app.ViewModel.Playlists.AddAsync(mix, [StubLibrary.Track(1)]);
+        await Gui.UntilAsync(() => add.IsCompleted, "the add to finish, not wait for a reload that won't come");
+        Assert.Equal("Unexpected.", Assert.IsType<InvalidOperationException>(add.Exception?.InnerException).Message);
+
+        // and the reloads go on
+        library.PlaylistsGate = null;
+        library.Playlists.Add(new PlaylistSummaryItem("playlist0001", "Later", 0));
+        library.RaiseChanged();
+        await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists.Any(p => p.Title == "Later"), "the next reload");
     }
 
     [AvaloniaFact]

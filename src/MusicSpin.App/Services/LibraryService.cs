@@ -112,6 +112,9 @@ public sealed class LibraryService : ILibraryService, IDisposable
 
     public event EventHandler? Changed;
 
+    /// <summary>For tests: runs once an edit's library is closed, still locked, just before its stamp is taken.</summary>
+    internal Action? EditClosed { get; set; }
+
     public Task<IReadOnlyList<AlbumSummary>> AlbumsAsync(CancellationToken cancellationToken = default) => Read(library =>
     {
         var albums = library.Albums(new AlbumQuery { Paging = new Paging(0, Paging.MaxLimit) });
@@ -234,15 +237,22 @@ public sealed class LibraryService : ILibraryService, IDisposable
         var (result, before, after) = await Task.Run(() =>
         {
             T result;
-            string before;
+            string before, after = string.Empty;
             using (var library = Busy(() => MusicLibrary.OpenWritable(_directory, lockTimeout: _lockTimeout)))
             {
                 before = Stamp();
                 result = write(library);
+
+                // After closing it (closing writes its log back) but before letting go of the lock: a process waiting
+                // for the library can't write in between, which this stamp would take for the edit's own change.
+                library.Close(() =>
+                {
+                    EditClosed?.Invoke();
+                    after = Stamp();
+                });
             }
 
-            // (after closing it: closing writes its log back)
-            return (result, before, Stamp());
+            return (result, before, after);
         }, cancellationToken).ConfigureAwait(false);
         if (Interlocked.Exchange(ref _stamp, after) != before)
         {
@@ -296,10 +306,12 @@ public sealed class LibraryService : ILibraryService, IDisposable
 
     private string Stamp()
     {
+        // An empty log is the same as none: opening the library creates one and closing it removes it, so counting it
+        // would make every open (the app's own edits, and reads the poll happens to catch) look like a change.
         static string Of(string path)
         {
             var info = new FileInfo(path);
-            return info.Exists ? $"{info.Length}:{info.LastWriteTimeUtc.Ticks}" : "-";
+            return info is { Exists: true, Length: > 0 } ? $"{info.Length}:{info.LastWriteTimeUtc.Ticks}" : "-";
         }
 
         var db = _directory.LibraryDatabaseFile;

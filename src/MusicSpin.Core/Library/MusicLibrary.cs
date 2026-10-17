@@ -42,6 +42,12 @@ public sealed partial class MusicLibrary : IDisposable
 
     public void Dispose() => _db.Dispose();
 
+    /// <summary>
+    /// Closes the library (its log written back) and runs <paramref name="whileLocked"/> before releasing the
+    /// cross-process lock, so no other process can have changed <c>library.db</c> by then. Disposing afterwards does nothing.
+    /// </summary>
+    public void Close(Action whileLocked) => _db.Close(whileLocked);
+
     // ---------------------------------------------------------------- folders
 
     public IReadOnlyList<FolderInfo> Folders() => Guard(() => _db.Folders.FindAll()
