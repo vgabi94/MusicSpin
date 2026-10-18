@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using System.Text.Json;
+using Microsoft.Extensions.Time.Testing;
 using MusicSpin.Core;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Remote;
@@ -287,14 +288,18 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
     [Fact]
     public async Task Playing_or_paused_or_subscribed_players_do_not_idle_out()
     {
-        var host = StartHost(Options(idle: TimeSpan.FromMilliseconds(200)));
+        // The idle timer runs on a fake clock, so each "did not exit" check covers several whole timeouts of idle checks
+        // (they run inside Advance) instead of hoping a real-time wait was long enough. The last step proves the same
+        // clock does make an idle player exit, so the earlier checks can't pass just because the timer never ran.
+        var time = new FakeTimeProvider();
+        var host = StartHost(Options(idle: TimeSpan.FromMilliseconds(200)) with { Time = time });
         var client = await ConnectAsync();
         await client.SendAsync("queue.set", QueueSet(Paths), Ct);
-        await Task.Delay(600, Ct);
-        Assert.False(host.Completion.IsCompleted, "playing");
+        AdvanceThroughIdleChecks(time);
+        Assert.False(IdleExitStarted(host), "playing");
         await client.SendAsync("pause", null, Ct);
-        await Task.Delay(600, Ct);
-        Assert.False(host.Completion.IsCompleted, "paused");
+        AdvanceThroughIdleChecks(time);
+        Assert.False(IdleExitStarted(host), "paused");
 
         var subscriber = await ConnectAsync();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(Ct);
@@ -306,14 +311,30 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
         }, Ct);
         await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 1, "subscription active");
         await client.SendAsync("stop", null, Ct);
-        await Task.Delay(600, Ct);
-        Assert.False(host.Completion.IsCompleted, "stopped but an app is attached");
+        AdvanceThroughIdleChecks(time);
+        Assert.False(IdleExitStarted(host), "stopped but an app is attached");
 
         await cts.CancelAsync();
         await events.ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
         await subscriber.DisposeAsync();
+        await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 0, "subscription ended");
+        AdvanceThroughIdleChecks(time);
+        Assert.True(IdleExitStarted(host), "stopped with nobody attached");
         Assert.Equal("idle", await host.Completion.WaitAsync(TimeSpan.FromSeconds(5), Ct));
     }
+
+    /// <summary>Five idle timeouts' worth of 50 ms idle checks (a quarter of the 200 ms timeout), each run inside Advance.</summary>
+    private static void AdvanceThroughIdleChecks(FakeTimeProvider time)
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(50));
+        }
+    }
+
+    /// <summary>The idle check logs before it starts shutting down, on the thread that advanced the clock.</summary>
+    private bool IdleExitStarted(PlayerHost host)
+        => host.Completion.IsCompleted || Log.ToString().Contains("exiting", StringComparison.Ordinal);
 
     [Fact]
     public async Task Commands_racing_shutdown_fail_cleanly()
