@@ -308,9 +308,14 @@ public sealed class PlaylistManagementTests
             cli.AddToPlaylist("Mix", [JazzLibrary.Entry(app.TrackPaths, "Kind of Blue", 3)], position: 1);
         }
 
+        var reloads = app.ViewModel.ReloadsAsked;
         Gui.Click(app.Window, Gui.All<Button>(PlaylistTests.Row(app, "Blue Train 1")).Single(b => b.Classes.Contains("remove")));
-        await Gui.UntilAsync(() => page.Tracks.Count == 4 && page.Tracks[0].Title == "Kind of Blue 3", "the page read again");
+        // The removal reads the page again, and so does the reload the CLI's change (found by the removal) starts: wait for
+        // both, or the later one would read the CLI's next edit below and replace the rows in the middle of the next click.
+        await Gui.UntilAsync(() => page.Tracks.Count == 4 && page.Tracks[0].Title == "Kind of Blue 3" && !page.RemoveEntryCommand.IsRunning
+                                   && app.ViewModel.ReloadsAsked > reloads && app.ViewModel.ReloadsDone == app.ViewModel.ReloadsAsked, "the page read again");
         Assert.Equal(["Kind of Blue 3", "Kind of Blue 1", "Kind of Blue 2", "Lost Take"], Show(app, "Mix"));
+        Assert.Equal(["Kind of Blue 3", "Kind of Blue 1", "Kind of Blue 2", "Lost Take"], Titles(page));
 
         // and the CLI removes the one the page is about to remove
         using (var cli = app.OpenLibrary())
