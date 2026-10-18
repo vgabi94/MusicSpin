@@ -38,6 +38,8 @@ public sealed partial class SettingsViewModel : LayerViewModel
     private readonly SpinClock _spinClock;
     private readonly Notices _notices;
     private readonly bool _ready;
+    private bool _tiltPending;
+    private bool _depthPending;
 
     public SettingsViewModel(ISettingsService settings, IAppearance appearance, SpinClock spinClock, Notices notices)
     {
@@ -175,9 +177,60 @@ public sealed partial class SettingsViewModel : LayerViewModel
     [RelayCommand]
     public void SetShelfDepth(double depth) => ShelfDepth = Whole(depth, MinDepth, MaxDepth, ShelfDepth);
 
-    partial void OnShelfTiltChanged(double value) => Save(s => s with { ShelfTilt = value });
+    /// <summary>
+    /// The tilt bar's value while it is dragged, null otherwise (the bar sets it). A drag applies every step at once but
+    /// saves only its last value, when it ends: a drag is dozens of steps, and each save re-reads and rewrites the file.
+    /// </summary>
+    [ObservableProperty]
+    public partial double? TiltScrub { get; set; }
 
-    partial void OnShelfDepthChanged(double value) => Save(s => s with { ShelfDepth = value });
+    /// <summary>The depth bar's value while it is dragged (see <see cref="TiltScrub"/>).</summary>
+    [ObservableProperty]
+    public partial double? DepthScrub { get; set; }
+
+    /// <summary>Saves a slider value a drag left unsaved (the dialog or the window closing mid-drag). Nothing else is ever pending.</summary>
+    public void SavePending()
+    {
+        if (_tiltPending || _depthPending)
+        {
+            var (tilt, depth, saveTilt, saveDepth) = (ShelfTilt, ShelfDepth, _tiltPending, _depthPending);
+            _tiltPending = _depthPending = false;
+            Save(s => s with { ShelfTilt = saveTilt ? tilt : s.ShelfTilt, ShelfDepth = saveDepth ? depth : s.ShelfDepth });
+        }
+    }
+
+    protected override void OnOpenChanged(bool isOpen)
+    {
+        if (!isOpen)
+        {
+            SavePending();
+        }
+    }
+
+    partial void OnTiltScrubChanged(double? value) => SaveUnlessDragging();
+
+    partial void OnDepthScrubChanged(double? value) => SaveUnlessDragging();
+
+    partial void OnShelfTiltChanged(double value)
+    {
+        _tiltPending = _ready;
+        SaveUnlessDragging();
+    }
+
+    partial void OnShelfDepthChanged(double value)
+    {
+        _depthPending = _ready;
+        SaveUnlessDragging();
+    }
+
+    /// <summary>A key, the wheel or a click is one step: saved at once. A drag's steps wait for it to end (latest wins).</summary>
+    private void SaveUnlessDragging()
+    {
+        if (TiltScrub is null && DepthScrub is null)
+        {
+            SavePending();
+        }
+    }
 
     private static Choice<T> Pick<T>(IReadOnlyList<Choice<T>> choices, T value)
         => choices.FirstOrDefault(c => EqualityComparer<T>.Default.Equals(c.Value, value)) ?? choices[0];
