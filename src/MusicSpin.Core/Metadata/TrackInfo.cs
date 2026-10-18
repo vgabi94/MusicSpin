@@ -1,3 +1,5 @@
+using MusicSpin.Core.Library;
+
 namespace MusicSpin.Core.Metadata;
 
 /// <summary>Stream properties and tags of an audio file.</summary>
@@ -33,9 +35,18 @@ public sealed record TrackInfo
     public bool IsLossless { get; init; }
 
     /// <summary>
-    /// Hi-res: lossless and either more than 16 bits per sample or a sample rate above 48 kHz (DSD always counts).
+    /// Hi-res by the library's rule (<see cref="AudioFileTypes.IsHiRes"/>), so <c>info</c>, the player and the library
+    /// always label a file the same way: lossless and either more than 16 bits per sample or a sample rate above 48 kHz;
+    /// DSD always counts.
     /// </summary>
-    public bool IsHiRes => IsLossless && ((BitsPerSample is > 16 or 1) || SampleRate > 48_000);
+    public bool IsHiRes
+    {
+        get
+        {
+            var format = AudioFileTypes.FormatId(Codec, System.IO.Path.GetExtension(Path));
+            return AudioFileTypes.IsHiRes(format, IsLossless || AudioFileTypes.IsLosslessFormat(format), BitsPerSample, SampleRate);
+        }
+    }
 
     public string? Title => Tag("title");
     public string? Artist => Tag("artist");
