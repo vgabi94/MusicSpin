@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Time.Testing;
 using MusicSpin.App.Services;
@@ -229,6 +230,33 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await _player.PushAsync("stateChanged");
         await _ui.UntilAsync(() => _drawer.Rows.Count == 2, "the rows after the track moved on");
         Assert.Equal(["q2", "q3"], TitlesOf(_drawer.Rows));
+    }
+
+    [Fact]
+    public async Task Reads_finish_on_the_ui_thread_even_when_two_are_under_way_at_once()
+    {
+        // Connecting starts two reads (one for the subscription's reply, one for its status) and each push one more; they
+        // resume after the player's answer. In the app that is on the UI thread; here it must be the test's dispatcher,
+        // or two finishing together would race on the drawer's state (a lost count left the reads never settled).
+        var off = new ConcurrentQueue<string>();
+        void Check(string what)
+        {
+            if (!_ui.IsCurrent)
+            {
+                off.Enqueue(what);
+            }
+        }
+
+        _drawer.PropertyChanged += (_, e) => Check(e.PropertyName ?? "?");
+        _drawer.RowsAdded += (_, _) => Check(nameof(_drawer.RowsAdded));
+        await StartAsync(upNext: 2);
+        await _ui.UntilAsync(ReadsSettled, "the first reads settled");
+        Assert.True(_drawer.ReadsStarted >= 2, $"{_drawer.ReadsStarted} reads at connect");
+
+        _player.SetQueue(Titles("q1", "q2", "q3"), upNext: 3);
+        await PushQueueChangedAsync();
+        Assert.Equal(["q1", "q2", "q3"], TitlesOf(_drawer.Rows));
+        Assert.Empty(off);
     }
 
     [Fact]
