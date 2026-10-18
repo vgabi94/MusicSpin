@@ -65,7 +65,8 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 
     /// <summary>
     /// Holds the answers to <paramref name="cmd"/> until the returned source is completed. Each answer is the status as
-    /// it was when the request came in, as a real player's in-flight reply would be.
+    /// it was when the request came in, as a real player's in-flight reply would be; a <see cref="Fail"/>ed command's
+    /// error is held the same way.
     /// </summary>
     public TaskCompletionSource Hold(string cmd)
     {
@@ -231,6 +232,11 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                 Requests.Enqueue((cmd, request));
                 if (_failures.TryGetValue(cmd, out var failure))
                 {
+                    if (_holds.TryGetValue(cmd, out var held))
+                    {
+                        await held.Task; // a held failure: the error comes once the test lets it
+                    }
+
                     await connection.WriteAsync(ProtocolMessages.Fail(id, failure.ExitCode, failure.Message));
                     continue;
                 }

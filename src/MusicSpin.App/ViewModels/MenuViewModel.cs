@@ -67,7 +67,14 @@ public sealed partial class MenuViewModel : LayerViewModel
         Open();
     }
 
-    [RelayCommand]
+    /// <summary>
+    /// Chooses <paramref name="entry"/>. Concurrent: a choice can still be waiting on the player (its request, the answer,
+    /// the status read after it) when the next menu opens, and a plain async command would report every entry of every
+    /// menu disabled until then (#93). The menu closes on choosing, so one menu can't be chosen from twice; choices still
+    /// reach the player in the order made, as each starts its request at once and the player connection sends them one at
+    /// a time, first come first served. A choice that fails says so itself (a notice), so it can't affect another.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task Choose(MenuEntryViewModel entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
