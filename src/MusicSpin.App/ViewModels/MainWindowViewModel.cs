@@ -21,11 +21,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private readonly Dictionary<string, PlaylistPageViewModel> _playlistPages = new(StringComparer.Ordinal);
     private readonly List<(int Asked, TaskCompletionSource Done)> _reloadWaiters = [];
     private CancellationTokenSource? _albumLookup;
+    private OwedReads? _owedAlbumLookup;
     private int _reloadsAsked;
     private int _reloadsDone;
     private bool _reloading;
+    private bool _reloadLists;
     private bool _reloadPage;
-    private bool _reloadOwed;
+    private bool _listsOwed;
+    private bool _pageOwed;
     private ITimer? _reloadRetry;
 
     public MainWindowViewModel(AppServices services)
@@ -37,7 +40,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         SpinClock = new SpinClock(services.Time, services.Ui);
         Favorites = new FavoritesViewModel(services.Library, Notices);
         Favorites.Changed += (_, _) => OnFavoritesChanged();
-        NowPlaying = new NowPlayingViewModel(Player, Radio, services.Library, services.Covers, Favorites, Notices);
+        NowPlaying = new NowPlayingViewModel(Player, Radio, services.Library, services.Covers, Favorites, Notices, services.Time, services.Ui);
         NowPlaying.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(NowPlayingViewModel.IsSpinning))
@@ -188,9 +191,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// <summary>Connects to the player and loads the library.</summary>
     public async Task InitializeAsync()
     {
+        // Showing the Albums page reads it, and the first read of the playlists and favorites follows it: both are reloads
+        // like any other, so they take turns with each other and with a change seen while the app opens. (The library
+        // lets one reader in at a time, even within this process: side by side, one could find it busy and be refused.)
         Sidebar.Navigate(Sidebar.Albums);
-        // The first read of the playlists and favorites is a reload like any other (the page loads as it is shown), so a
-        // change seen while the app opens waits for it rather than racing it.
         await Task.WhenAll(Player.StartAsync(), ReloadAsync(page: false)).ConfigureAwait(true);
     }
 
@@ -274,7 +278,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _albumLookup?.Cancel();
         _albumLookup?.Dispose();
         _reloadRetry?.Dispose();
-        _reloadOwed = false;
+        _owedAlbumLookup?.Dispose();
+        NowPlaying.Dispose();
+        _listsOwed = _pageOwed = false;
         Scene.Dispose();
         QueueDrawer.Dispose();
         RadioPage.Dispose();
@@ -311,7 +317,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         CurrentPage.IsShown = false;
         page.IsShown = true;
         CurrentPage = page;
-        await Notices.GuardAsync(page.LoadAsync).ConfigureAwait(true);
+        // Read in turn with the reloads (never alongside one); a busy library leaves the read owed, not lost.
+        await ReloadAsync(lists: false).ConfigureAwait(true);
     }
 
     private PlaylistPageViewModel PlaylistPage(PlaylistSummaryItem playlist)
@@ -346,14 +353,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Sidebar.SetPlaylists(playlists);
     }
 
+    /// <summary>Reloads asked for so far (tests wait on these, not on time).</summary>
+    internal int ReloadsAsked => _reloadsAsked;
+
+    /// <summary>The reloads asked for up to this one have finished (each pass covers every ask before it began).</summary>
+    internal int ReloadsDone => _reloadsDone;
+
     /// <summary>
     /// The library changed (on disk, or by an edit here): re-reads the playlists, the favorites and the current page.
     /// Reloads never overlap: asked for while one runs, exactly one more runs after it, however often it was asked (a scan
     /// from the CLI changes the library many times). The task completes once a reload begun after the ask has finished.
+    /// Showing a page is a reload of the page alone. A read the busy library refused is owed (see <see cref="Quietly"/>).
     /// </summary>
-    /// <param name="page">Read the current page too (not at startup: showing it loads it).</param>
-    private Task ReloadAsync(bool page = true)
+    /// <param name="lists">Read the sidebar's playlists and the favorites (not when a page is shown).</param>
+    /// <param name="page">Read the current page (not at startup: showing it reads it).</param>
+    private Task ReloadAsync(bool lists = true, bool page = true)
     {
+        _reloadLists |= lists;
         _reloadPage |= page;
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _reloadWaiters.Add((++_reloadsAsked, done));
@@ -373,17 +389,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             while (_reloadsDone < _reloadsAsked)
             {
                 var asked = _reloadsAsked;
+                var lists = _reloadLists;
                 var page = _reloadPage;
+                _reloadLists = false;
                 _reloadPage = false;
-                _reloadOwed = false;
+                // What this pass reads is no longer owed (the busy library may refuse it again); what it skips still is.
+                _listsOwed &= !lists;
+                _pageOwed &= !page;
                 Exception? failure = null;
                 try
                 {
-                    await Quietly(LoadPlaylistsAsync).ConfigureAwait(true);
-                    await Quietly(Favorites.LoadAsync).ConfigureAwait(true);
+                    if (lists)
+                    {
+                        await Quietly(LoadPlaylistsAsync, page: false).ConfigureAwait(true);
+                        await Quietly(Favorites.LoadAsync, page: false).ConfigureAwait(true);
+                    }
+
                     if (page)
                     {
-                        await Quietly(CurrentPage.LoadAsync).ConfigureAwait(true);
+                        await Quietly(CurrentPage.LoadAsync, page: true).ConfigureAwait(true);
                     }
                 }
 #pragma warning disable CA1031 // anything the notices don't cover goes to whoever waits for this pass, as it did before reloads were sequenced
@@ -413,7 +437,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             _reloading = false;
         }
 
-        if (_reloadOwed)
+        if (_listsOwed || _pageOwed)
         {
             RetryReloadAtNextCheck();
         }
@@ -434,18 +458,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             _reloadRetry?.Dispose();
             _reloadRetry = null;
-            if (_reloadOwed)
+            if (_listsOwed || _pageOwed)
             {
-                _ = ReloadAsync();
+                _ = ReloadAsync(lists: _listsOwed, page: _pageOwed);
             }
         }), null, LibraryService.PollInterval, Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>
-    /// A read in the background: if another process holds the library (a scan, say), it says nothing and the reload is
-    /// owed (see <see cref="RetryReloadAtNextCheck"/>). Other failures are notices.
+    /// A read in the background: if another process holds the library (a scan, say), it says nothing and the read is
+    /// owed (see <see cref="RetryReloadAtNextCheck"/>): the current page's, or the playlists' and favorites'. Other
+    /// failures are notices.
     /// </summary>
-    private Task Quietly(Func<Task> read) => Notices.GuardAsync(async () =>
+    private Task Quietly(Func<Task> read, bool page) => Notices.GuardAsync(async () =>
     {
         try
         {
@@ -453,7 +478,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
         catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.LibraryLocked)
         {
-            _reloadOwed = true; // busy: owed, tried again at the next check (or the next change, if one comes first)
+            // busy: owed, tried again at the next check (or the next change, if one comes first)
+            if (page)
+            {
+                _pageOwed = true;
+            }
+            else
+            {
+                _listsOwed = true;
+            }
         }
     });
 
@@ -500,6 +533,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             albumId = trackId is null ? null : await _services.Library.AlbumIdOfTrackAsync(trackId, lookup.Token).ConfigureAwait(true);
         }
+        catch (Exception ex) when (OwedReads.IsBusy(ex) && !lookup.IsCancellationRequested)
+        {
+            // Another process holds the library: looked up again at the next check, if the track is still playing then.
+            (_owedAlbumLookup ??= new OwedReads(_services.Time, _services.Ui)).Owe(() =>
+            {
+                if (ReferenceEquals(_albumLookup, lookup) && Player.TrackId == trackId)
+                {
+                    _ = FindPlayingAlbumAsync(trackId);
+                }
+            });
+            return;
+        }
         catch (Exception ex) when (ex is MusicSpinException or OperationCanceledException or IOException)
         {
             // keep what we have; the next track change tries again
@@ -520,8 +565,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
         await Notices.GuardAsync(async () =>
         {
-            PlayingCover = albumId is null ? null : await _services.Covers.CoverAsync(albumId, CoverSize.Small).ConfigureAwait(true);
-            _services.Appearance.SetAccent(albumId is null ? null : await _services.Covers.AccentAsync(albumId).ConfigureAwait(true));
+            // A cover waits out a busy library (see CoverService), so another album may be playing by the time it comes:
+            // only the playing album's cover and colour are shown.
+            var read = albumId is null ? Task.FromResult<Bitmap?>(null) : _services.Covers.CoverAsync(albumId, CoverSize.Small);
+            if (!read.IsCompleted)
+            {
+                PlayingCover = null; // not the last album's cover meanwhile
+            }
+
+            var cover = await read.ConfigureAwait(true);
+            if (PlayingAlbumId != albumId)
+            {
+                return;
+            }
+
+            PlayingCover = cover;
+            var accent = albumId is null ? null : await _services.Covers.AccentAsync(albumId).ConfigureAwait(true);
+            if (PlayingAlbumId == albumId)
+            {
+                _services.Appearance.SetAccent(accent);
+            }
         }).ConfigureAwait(true);
     }
 }

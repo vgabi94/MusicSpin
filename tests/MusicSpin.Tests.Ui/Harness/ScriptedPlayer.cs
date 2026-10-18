@@ -45,7 +45,7 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
     public bool AllowStart { get; set; } = true;
 
     /// <summary>
-    /// Seeks and volume changes update <see cref="Status"/> before the answer, as a real player's would, queue.add and
+    /// Seeks, volume changes and mutes update <see cref="Status"/> before the answer, as a real player's would, queue.add and
     /// queue.move edit <see cref="Queue"/>, queue.set replaces it (ending radio), and radio puts the station on air.
     /// </summary>
     public bool FollowsCommands { get; set; }
@@ -60,9 +60,13 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
     /// <summary>Makes <paramref name="cmd"/> fail with the player's error for <paramref name="exitCode"/>.</summary>
     public void Fail(string cmd, int exitCode, string message) => _failures[cmd] = (exitCode, message);
 
+    /// <summary>Undoes <see cref="Fail"/>: <paramref name="cmd"/> is answered again.</summary>
+    public void Succeed(string cmd) => _failures.TryRemove(cmd, out _);
+
     /// <summary>
     /// Holds the answers to <paramref name="cmd"/> until the returned source is completed. Each answer is the status as
-    /// it was when the request came in, as a real player's in-flight reply would be.
+    /// it was when the request came in, as a real player's in-flight reply would be; a <see cref="Fail"/>ed command's
+    /// error is held the same way.
     /// </summary>
     public TaskCompletionSource Hold(string cmd)
     {
@@ -228,6 +232,11 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                 Requests.Enqueue((cmd, request));
                 if (_failures.TryGetValue(cmd, out var failure))
                 {
+                    if (_holds.TryGetValue(cmd, out var held))
+                    {
+                        await held.Task; // a held failure: the error comes once the test lets it
+                    }
+
                     await connection.WriteAsync(ProtocolMessages.Fail(id, failure.ExitCode, failure.Message));
                     continue;
                 }
@@ -293,7 +302,11 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         }
         else if (cmd == "volume" && request.TryGetProperty("value", out var value))
         {
-            Status = Status with { Volume = value.GetSingle() };
+            Status = Status with { Volume = value.GetSingle(), Muted = false }; // a volume unmutes
+        }
+        else if (cmd == "mute" && request.TryGetProperty("mode", out var mode))
+        {
+            Status = Status with { Muted = mode.GetString() switch { "on" => true, "off" => false, _ => !Status.Muted } };
         }
         else if (cmd == "queue.add" && request.TryGetProperty("items", out var items))
         {

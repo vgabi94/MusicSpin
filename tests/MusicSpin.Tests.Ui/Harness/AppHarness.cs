@@ -132,14 +132,16 @@ internal sealed class AppHarness : IAsyncDisposable
             Player.Start();
         }
 
+        var ui = new AvaloniaUiDispatcher();
+        var libraryService = Options.Library ?? new LibraryService(Data, Time, Options.LockTimeout);
         Services = new AppServices(
             new SettingsService(Data),
-            Options.Library ?? new LibraryService(Data, Time, Options.LockTimeout),
-            Options.Covers ?? new CoverService(Data, new SkiaCoverResizer()),
+            libraryService,
+            Options.Covers ?? new CoverService(Data, new SkiaCoverResizer(), Time, library: libraryService, ui: ui),
             (IPlayerConnector?)Scripted ?? Player,
             new Appearance(Application.Current!),
             Time,
-            new AvaloniaUiDispatcher(),
+            ui,
             Options.StartupWarning);
         Window = AppComposition.CreateMainWindow(Services);
         Window.Width = Options.Width;
@@ -181,6 +183,19 @@ internal sealed class AppHarness : IAsyncDisposable
         }
 
         Advance(LibraryService.PollInterval);
+        return result;
+    }
+
+    /// <summary>
+    /// <see cref="Edit"/>, then waits until the app has read all of the library again: the sidebar, the favorites and the
+    /// page shown (one reload reads them in turn). Waiting only for the sidebar would leave the page's read in flight, to
+    /// land in the middle of whatever the test does next.
+    /// </summary>
+    public async Task<T> EditAndReloadAsync<T>(Func<MusicLibrary, T> edit)
+    {
+        var asked = ViewModel.ReloadsAsked;
+        var result = Edit(edit);
+        await Gui.UntilAsync(() => ViewModel.ReloadsAsked > asked && ViewModel.ReloadsDone == ViewModel.ReloadsAsked, "the app's reload after the edit");
         return result;
     }
 

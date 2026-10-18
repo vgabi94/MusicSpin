@@ -7,8 +7,9 @@ namespace MusicSpin.App.ViewModels;
 
 /// <summary>
 /// The volume (mockup: "Player bar: volume"), in percent to 0.1; the player's volume is the percent divided by 100, and
-/// 100% is its bit-perfect path. The bar moves in whole percents, the box takes exact values. Mute keeps the level (the
-/// player plays at 0 meanwhile); setting a level unmutes. Changes made elsewhere (the CLI) show up here.
+/// 100% is its bit-perfect path. The bar moves in whole percents, the box takes exact values. Mute is the player's: it
+/// plays at 0 and keeps the level, so a mute outlives the app (the next session shows it muted at that level, and
+/// unmuting goes back to it); setting a level unmutes. Changes made elsewhere (the CLI) show up here.
 /// </summary>
 public sealed partial class VolumeViewModel : ObservableObject
 {
@@ -32,7 +33,7 @@ public sealed partial class VolumeViewModel : ObservableObject
     public const string TypeTip = "Type a volume: 37, 37.5, +5, -10%";
 
     private readonly PlayerViewModel _player;
-    private double? _sent;
+    private (double Volume, bool Muted)? _sent;
     private bool _answered;
     private int _sends;
 
@@ -83,7 +84,7 @@ public sealed partial class VolumeViewModel : ObservableObject
         IsMuted = false;
         Level = TypedValues.RoundVolume(Math.Clamp(percent, 0, 100));
         Number.Refresh();
-        return SendAsync(Level / 100);
+        return SendAsync(Level / 100, muted: false, () => _player.SetVolumeCommand.ExecuteAsync(Level / 100)); // a volume unmutes
     }
 
     /// <summary>Ctrl+↑/↓: one step to the next round number (by 1: 37.5 goes to 38 or 37).</summary>
@@ -99,17 +100,18 @@ public sealed partial class VolumeViewModel : ObservableObject
         await task.ConfigureAwait(true);
     }
 
-    /// <summary>The speaker: mutes, keeping the level; unmutes (at 0%, to <see cref="UnmuteLevel"/>).</summary>
+    /// <summary>The speaker: mutes, keeping the level; unmutes, back to it (at 0%, to <see cref="UnmuteLevel"/>).</summary>
     [RelayCommand(AllowConcurrentExecutions = true)]
     private Task ToggleMute()
     {
-        if (IsSilent)
+        if (Level == 0)
         {
-            return SetLevel(Level == 0 ? UnmuteLevel : Level);
+            return SetLevel(UnmuteLevel);
         }
 
-        IsMuted = true;
-        return SendAsync(0);
+        IsMuted = !IsMuted;
+        var muted = IsMuted;
+        return SendAsync(Level / 100, muted, () => _player.SetMutedCommand.ExecuteAsync(muted));
     }
 
     private bool ApplyTyped(string text)
@@ -125,33 +127,34 @@ public sealed partial class VolumeViewModel : ObservableObject
 
 
     /// <summary>
-    /// Sends a volume. Until a status carries it, statuses with another volume (a poll already on its way) are ignored, so
-    /// they can't undo a mute or make a drag jump back. Once the player has answered, the next status counts whatever it
-    /// says (something else may have changed the volume meanwhile).
+    /// Sends a volume or a mute that leaves the player at <paramref name="volume"/>, <paramref name="muted"/>. Until a
+    /// status says so, statuses saying otherwise (a poll already on its way) are ignored, so they can't undo a mute or
+    /// make a drag jump back. Once the player has answered, the next status counts whatever it says (something else may
+    /// have changed the volume meanwhile).
     /// </summary>
-    private async Task SendAsync(double volume)
+    private async Task SendAsync(double volume, bool muted, Func<Task> send)
     {
-        var send = ++_sends;
-        (_sent, _answered) = (volume, false);
+        var sending = ++_sends;
+        (_sent, _answered) = ((volume, muted), false);
         try
         {
-            await _player.SetVolumeCommand.ExecuteAsync(volume).ConfigureAwait(true);
+            await send().ConfigureAwait(true);
         }
         finally
         {
-            if (send == _sends)
+            if (sending == _sends)
             {
                 _answered = true;
             }
         }
     }
 
-    /// <summary>Follows the player: while muted it plays at 0, and anything louder (the CLI) unmutes.</summary>
+    /// <summary>Follows the player: its level, and its mute (a volume set elsewhere, the CLI's, unmutes it).</summary>
     private void Sync()
     {
         if (_sent is { } sent)
         {
-            if (Math.Abs(_player.Volume - sent) > TypedValues.VolumeResolution / 200 && !_answered)
+            if ((Math.Abs(_player.Volume - sent.Volume) > TypedValues.VolumeResolution / 200 || _player.Muted != sent.Muted) && !_answered)
             {
                 return;
             }
@@ -159,14 +162,8 @@ public sealed partial class VolumeViewModel : ObservableObject
             _sent = null;
         }
 
-        var level = TypedValues.RoundVolume(_player.Volume * 100);
-        if (IsMuted && level == 0)
-        {
-            return;
-        }
-
-        IsMuted = false;
-        Level = level;
+        IsMuted = _player.Muted;
+        Level = TypedValues.RoundVolume(_player.Volume * 100);
         Number.Refresh();
     }
 }

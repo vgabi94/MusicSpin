@@ -110,6 +110,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     private readonly IUiDispatcher _ui;
     private readonly Dictionary<string, string?> _albumOfTrack = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AlbumArt> _art = new(StringComparer.Ordinal);
+    private readonly OwedReads _owed;
     private (int? Index, int Length, int UpNext, string Mode, string? Path)? _readFor;
     private QueueItem? _current;
     private int _reads;
@@ -129,6 +130,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         _notices = notices;
         _time = time;
         _ui = ui;
+        _owed = new OwedReads(time, ui);
         _player.QueueChanged += OnQueueChanged;
         _player.StatusApplied += OnStatusApplied;
         _player.PropertyChanged += OnPlayerChanged;
@@ -195,6 +197,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         _player.StatusApplied -= OnStatusApplied;
         _player.PropertyChanged -= OnPlayerChanged;
         _closeTimer?.Dispose();
+        _owed.Dispose();
     }
 
     // ---- actions --------------------------------------------------------------------------------------------------
@@ -541,6 +544,19 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
             try
             {
                 albumId = await _library.AlbumIdOfTrackAsync(trackId).ConfigureAwait(true);
+            }
+            catch (Exception ex) when (OwedReads.IsBusy(ex))
+            {
+                // Another process holds the library: the placeholder stays until the next check finds the album, as long
+                // as the row is still shown then (a row read again later keeps this object, so it would never ask again).
+                _owed.Owe(() =>
+                {
+                    if (row.Art is null && (IndexOf(Rows, row) >= 0 || IndexOf(Picks, row) >= 0))
+                    {
+                        _ = FindArtAsync(row);
+                    }
+                });
+                return;
             }
             catch (Exception ex) when (ex is MusicSpinException or IOException or UnauthorizedAccessException)
             {

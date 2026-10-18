@@ -179,8 +179,15 @@ public sealed class ShellTests
         Gui.Press(app.Window, Key.A, PhysicalKey.A, "a");
         Gui.Press(app.Window, Key.Space, PhysicalKey.Space, " ");
         Gui.Press(app.Window, Key.B, PhysicalKey.B, "b");
-        await Task.Delay(300, TestContext.Current.CancellationToken);
         Gui.Settle();
+
+        // A toggle from that Space would have been sent on the app's connection before this read, which the player
+        // answers in order: so it would have been played by the time the read is answered.
+        Assert.NotNull(await player.QueueAsync(0, 1));
+        await using (var cli = await app.Player.ConnectOtherAsync())
+        {
+            Assert.Equal(PlayerState.Paused, (await cli.StatusAsync(TestContext.Current.CancellationToken)).State);
+        }
 
         Assert.Equal("a b", search.Text);
         Assert.Equal("a b", app.ViewModel.SearchText);

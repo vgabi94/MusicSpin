@@ -42,6 +42,120 @@ public sealed class LibraryReloadTests
     }
 
     [AvaloniaFact]
+    public async Task At_startup_the_albums_read_and_the_first_playlists_read_take_turns_never_side_by_side()
+    {
+        var library = new StubLibrary { Albums = { StubLibrary.Album(1) }, Tracks = { StubLibrary.Track(1) } };
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Library = library, Initialize = false });
+        var albums = library.AlbumsGate = new TaskCompletionSource();
+        var start = app.ViewModel.InitializeAsync();
+        await Gui.UntilAsync(() => library.AlbumReads == 1, "the albums read under way");
+        Gui.Settle();
+        Assert.Equal(0, library.PlaylistReads); // side by side, one of them could find the library busy and be refused
+
+        albums.SetResult();
+        await Gui.UntilAsync(() => start.IsCompleted && library.PlaylistReads == 1, "the playlists read after it");
+        Assert.Single(app.ViewModel.AlbumsPage.Albums);
+        Assert.Equal(1, library.AlbumReads);
+        Assert.Equal(1, library.MostReadsAtOnce);
+        Assert.Null(app.ViewModel.Banner);
+    }
+
+    [AvaloniaFact]
+    public async Task At_startup_a_busy_library_leaves_the_albums_owed_says_nothing_and_shows_them_once_it_is_free()
+    {
+        var library = new StubLibrary { Albums = { StubLibrary.Album(1), StubLibrary.Album(2) }, Tracks = { StubLibrary.Track(1) } };
+        library.AlbumsFailure = LibraryService.BusyMessage; // a scan from the CLI holds the library as the app opens
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Library = library, Initialize = false });
+        await app.ViewModel.InitializeAsync();
+        Gui.Settle();
+        Assert.Empty(app.ViewModel.AlbumsPage.Albums);
+        Assert.Null(app.ViewModel.Banner); // nobody asked for anything: no notice
+        Assert.Equal(1, library.AlbumReads); // and no retry before the next check
+
+        // The scan lets go, having changed nothing the app would notice: the next check reads the page again.
+        library.AlbumsFailure = null;
+        app.Advance(LibraryService.PollInterval);
+        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 2, "the owed albums read");
+        Assert.Null(app.ViewModel.Banner);
+
+        // caught up: nothing more is owed
+        var reads = library.AlbumReads;
+        app.Advance(LibraryService.PollInterval * 3);
+        Gui.Settle();
+        Assert.Equal(reads, library.AlbumReads);
+    }
+
+    [AvaloniaFact]
+    public async Task A_page_shown_while_another_process_holds_the_library_is_read_once_it_is_free()
+    {
+        var library = new StubLibrary { Albums = { StubLibrary.Album(1) }, Tracks = { StubLibrary.Track(1) } };
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Library = library });
+        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 1 && library.PlaylistReads >= 1, "the library");
+        var sidebar = app.ViewModel.Sidebar;
+        sidebar.NavigateCommand.Execute(sidebar.Tracks);
+        Gui.Settle();
+
+        library.Albums.Add(StubLibrary.Album(2));
+        library.AlbumsFailure = LibraryService.BusyMessage;
+        sidebar.NavigateCommand.Execute(sidebar.Albums);
+        var refused = library.AlbumReads;
+        Gui.Settle();
+        Assert.Single(app.ViewModel.AlbumsPage.Albums); // what it showed before stays
+        Assert.Null(app.ViewModel.Banner);
+
+        library.AlbumsFailure = null;
+        app.Advance(LibraryService.PollInterval);
+        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 2, "the owed page read");
+        Assert.True(library.AlbumReads > refused);
+        Assert.Null(app.ViewModel.Banner);
+    }
+
+    [AvaloniaFact]
+    public async Task A_page_shown_during_a_slow_reload_is_read_after_it_not_alongside()
+    {
+        var (app, library) = await OpenAsync();
+        await using var _ = app;
+        library.Albums.Add(StubLibrary.Album(1));
+        var sidebar = app.ViewModel.Sidebar;
+        sidebar.NavigateCommand.Execute(sidebar.Tracks);
+        Gui.Settle();
+        var before = (library.PlaylistReads, library.AlbumReads);
+        var gate = library.PlaylistsGate = new TaskCompletionSource();
+        library.RaiseChanged();
+        await Gui.UntilAsync(() => library.PlaylistReads == before.PlaylistReads + 1, "a reload under way");
+
+        sidebar.NavigateCommand.Execute(sidebar.Albums);
+        Gui.Settle();
+        Assert.Equal(before.AlbumReads, library.AlbumReads); // it waits its turn
+
+        library.PlaylistsGate = null;
+        gate.SetResult();
+        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 1, "the page read after the reload");
+        Assert.Equal(1, library.MostReadsAtOnce);
+        Assert.Null(app.ViewModel.Banner);
+    }
+
+    [AvaloniaFact]
+    public async Task A_page_read_that_fails_for_another_reason_says_so_and_is_not_retried()
+    {
+        var (app, library) = await OpenAsync();
+        await using var _ = app;
+        var sidebar = app.ViewModel.Sidebar;
+        sidebar.NavigateCommand.Execute(sidebar.Tracks);
+        Gui.Settle();
+        library.AlbumsGate = new TaskCompletionSource();
+        library.AlbumsGate.SetException(new IOException("The disk went away."));
+
+        sidebar.NavigateCommand.Execute(sidebar.Albums);
+        await Gui.UntilAsync(() => app.ViewModel.Banner is not null, "the notice");
+        Assert.Equal("The disk went away.", app.ViewModel.Banner);
+        var reads = library.AlbumReads;
+        app.Advance(LibraryService.PollInterval * 3);
+        Gui.Settle();
+        Assert.Equal(reads, library.AlbumReads); // only a busy library's refusal is owed
+    }
+
+    [AvaloniaFact]
     public async Task Changes_during_a_slow_reload_make_one_more_reload_after_it_never_one_alongside()
     {
         var (app, library) = await OpenAsync();

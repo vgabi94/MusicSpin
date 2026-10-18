@@ -34,7 +34,8 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     private PlayerClient? _events;
     private ITimer? _poll;
     private ITimer? _tick;
-    private ITimer? _reconnect;
+    private ITimer? _reconnect; // guarded by _reconnectGate
+    private readonly Lock _reconnectGate = new();
     private double _statusPosition;
     private long _statusTimestamp;
     private int _refreshing;
@@ -42,6 +43,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>A <c>status</c> request is on its way (a poll meanwhile is skipped).</summary>
     internal bool IsRefreshing => Volatile.Read(ref _refreshing) == 1;
+
+    /// <summary>
+    /// For tests: awaited at a named step, to make something happen exactly there: "command connected" (a command has
+    /// its connection, before sending on it) and "reconnected" (a reconnect tick connected, before it stops the timer).
+    /// </summary>
+    internal Func<string, Task>? Step { get; set; }
     private bool _disposed;
 
     /// <summary>Commands held while the turntable scene plays (see <see cref="HoldInput"/>), in order.</summary>
@@ -110,8 +117,13 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial double Position { get; private set; }
 
+    /// <summary>The volume level, 0..1; while <see cref="Muted"/>, the level unmuting goes back to.</summary>
     [ObservableProperty]
     public partial double Volume { get; private set; } = 1;
+
+    /// <summary>Muted on the player: it plays at 0 and keeps <see cref="Volume"/>, across app restarts.</summary>
+    [ObservableProperty]
+    public partial bool Muted { get; private set; }
 
     [ObservableProperty]
     public partial RepeatMode Repeat { get; private set; }
@@ -191,6 +203,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [RelayCommand]
     private Task SetVolume(double value) => SendAsync("volume", new { value = Math.Clamp(value, 0, 1) });
 
+    /// <summary>Mutes or unmutes the player (never held, like the volume).</summary>
+    [RelayCommand]
+    private Task SetMuted(bool muted) => SendAsync("mute", new { mode = muted ? "on" : "off" });
+
     [RelayCommand]
     private Task SetRepeat(RepeatMode mode) => SendAsync("repeat", new { mode = mode.ToString().ToLowerInvariant() });
 
@@ -225,7 +241,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     public Task ResumeAsync() => SendAsync("resume", null, holdable: false);
 
     /// <summary>
-    /// Holds playback input (transport, queue, radio; not the volume) until <see cref="ReleaseInputAsync"/>, which sends
+    /// Holds playback input (transport, queue, radio; not the volume or mute) until <see cref="ReleaseInputAsync"/>, which sends
     /// it in order: while the turntable scene plays.
     /// </summary>
     public void HoldInput() => _held ??= [];
@@ -309,7 +325,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public async Task ShutdownAsync()
     {
-        if (_client is null)
+        if (_client is not { } client)
         {
             return;
         }
@@ -318,11 +334,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         {
             if (StartedPlayer)
             {
-                await _client.QuitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await client.QuitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             }
             else if (State == PlayerState.Playing)
             {
-                await _client.SendAsync("pause").ConfigureAwait(false);
+                await client.SendAsync("pause").ConfigureAwait(false);
             }
         }
         catch (MusicSpinException)
@@ -341,7 +357,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         _disposed = true;
         await _life.CancelAsync().ConfigureAwait(false);
         StopTimers();
-        _reconnect?.Dispose();
+        lock (_reconnectGate)
+        {
+            _reconnect?.Dispose();
+            _reconnect = null;
+        }
+
         await DropConnectionAsync().ConfigureAwait(false);
 
         // _life and _connectLock are left undisposed on purpose: work still unwinding on other tasks (a connect, a
@@ -352,9 +373,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>
     /// Sends a command, starting the player when needed. Errors become a <see cref="Notice"/>. While input is held
-    /// (<see cref="HoldInput"/>) it waits, except the volume.
+    /// (<see cref="HoldInput"/>) it waits, except the volume and mute.
     /// </summary>
-    public Task SendAsync(string cmd, object? args = null) => SendAsync(cmd, args, holdable: cmd != "volume");
+    public Task SendAsync(string cmd, object? args = null) => SendAsync(cmd, args, holdable: cmd is not ("volume" or "mute"));
 
     private async Task<bool> SendAsync(string cmd, object? args, bool holdable)
     {
@@ -366,8 +387,15 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
         try
         {
-            await EnsureConnectedAsync(start: true).ConfigureAwait(false);
-            var data = await _client!.SendAsync(cmd, args, _life.Token).ConfigureAwait(false);
+            // The connection this call made or found: _client may be dropped meanwhile (the player went away), and then
+            // sending on this one fails as unavailable, where reading _client again would find nothing.
+            var client = await EnsureConnectedAsync(start: true).ConfigureAwait(false);
+            if (Step is { } step)
+            {
+                await step("command connected").ConfigureAwait(false);
+            }
+
+            var data = await client.SendAsync(cmd, args, _life.Token).ConfigureAwait(false);
             if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("state", out _))
             {
                 var status = ProtocolJson.Deserialize<PlayerStatus>(data)!;
@@ -417,10 +445,18 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             {
                 return; // closing
             }
-            catch (MusicSpinException)
+            catch (MusicSpinException ex) when (ex.Code is MusicSpinErrorCode.PlayerNotRunning or MusicSpinErrorCode.PlayerUnavailable)
             {
+                // Gone, or not answering within the request timeout: look for it again.
                 Volatile.Write(ref _refreshAgain, 0);
                 await LostAsync().ConfigureAwait(false);
+                return;
+            }
+            catch (MusicSpinException)
+            {
+                // The player answered with an error: it is still there, and the connection with it. The next poll or
+                // event reads again.
+                Volatile.Write(ref _refreshAgain, 0);
                 return;
             }
             finally
@@ -446,6 +482,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         Path = item?.Path ?? status.Track?.Path;
         Duration = status.DurationSeconds > 0 ? status.DurationSeconds : item?.DurationSeconds ?? 0;
         Volume = status.Volume;
+        Muted = status.Muted;
         Repeat = status.Repeat;
         Shuffle = status.Shuffle;
         QueueMode = status.QueueMode;
@@ -497,26 +534,27 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     // ---- connection ------------------------------------------------------------------------------------------
 
-    private async Task EnsureConnectedAsync(bool start)
+    /// <summary>The connection for commands: the one there is, or a new one (subscribed before it is returned).</summary>
+    private async Task<PlayerClient> EnsureConnectedAsync(bool start)
     {
-        if (_client is not null)
+        if (_client is { } current)
         {
-            return;
+            return current;
         }
 
         await _connectLock.WaitAsync(_life.Token).ConfigureAwait(false);
         try
         {
-            if (_client is not null)
+            if (_client is { } connected)
             {
-                return;
+                return connected;
             }
 
             PlayerClient client;
             if (start)
             {
-                var (connected, started) = await _connector.ConnectOrStartAsync(_life.Token).ConfigureAwait(false);
-                client = connected;
+                var (made, started) = await _connector.ConnectOrStartAsync(_life.Token).ConfigureAwait(false);
+                client = made;
                 StartedPlayer |= started;
             }
             else
@@ -555,6 +593,8 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
                 // The player went away before acknowledging; ListenAsync drops the connection and reconnects later.
                 throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, "The player closed the connection while subscribing.");
             }
+
+            return client;
         }
         finally
         {
@@ -640,12 +680,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         }
 
         await DropConnectionAsync().ConfigureAwait(false);
+        ScheduleReconnect(); // before saying so: once the app shows disconnected, it is already looking for the player
         _ui.Post(() =>
         {
             IsConnected = false;
             StopTimers();
         });
-        ScheduleReconnect();
     }
 
     private async Task DropConnectionAsync()
@@ -662,27 +702,50 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Looks for the player every <see cref="ReconnectInterval"/> until it is back. One timer at most: losses, failed
+    /// starts and ticks come from several threads, so the timer is only made, and only stopped, under
+    /// <see cref="_reconnectGate"/>.
+    /// </summary>
     private void ScheduleReconnect()
     {
-        if (_life.IsCancellationRequested || _reconnect is not null)
+        lock (_reconnectGate)
         {
-            return;
-        }
+            if (_life.IsCancellationRequested || _reconnect is not null)
+            {
+                return;
+            }
 
-        _reconnect = _time.CreateTimer(_ => _ = ReconnectAsync(), null, ReconnectInterval, ReconnectInterval);
+            ITimer? timer = null;
+            timer = _time.CreateTimer(_ => _ = ReconnectAsync(timer!), null, ReconnectInterval, ReconnectInterval);
+            _reconnect = timer;
+        }
     }
 
-    private async Task ReconnectAsync()
+    private async Task ReconnectAsync(ITimer timer)
     {
         try
         {
             await EnsureConnectedAsync(start: false).ConfigureAwait(false);
-            _reconnect?.Dispose();
-            _reconnect = null;
+            if (Step is { } step)
+            {
+                await step("reconnected").ConfigureAwait(false);
+            }
         }
         catch (Exception ex) when (ex is MusicSpinException or OperationCanceledException)
         {
-            // not back yet
+            return; // not back yet
+        }
+
+        lock (_reconnectGate)
+        {
+            // Stop only while still connected: if the connection was lost again since, that loss found this timer
+            // running and left it to keep looking, so stopping it now would leave nothing looking.
+            if (ReferenceEquals(_reconnect, timer) && _client is not null)
+            {
+                _reconnect = null;
+                timer.Dispose();
+            }
         }
     }
 

@@ -356,32 +356,16 @@ internal static class LibraryCommand
                 return runner.Fail(json, "library watch", ExitCodes.NotFound, "No existing library folders to watch. Add one with 'music-spin library add <folder>'.");
             }
 
-            using var gate = new SemaphoreSlim(1, 1);
-            using var watcher = new LibraryWatcher(folders, TimeSpan.FromMilliseconds(parseResult.GetValue(debounce)), env.Time);
-            watcher.Changed += async (_, paths) =>
+            var scans = new WatchScans((paths, token) =>
             {
-                await gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                try
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
-                    using var library = runner.OpenLibraryForWrite(parseResult);
-                    var result = ScanResultDto.From(library.Scan(new ScanOptions(), cancellationToken));
-                    Emit(env.Out, json, "scan", new { changedPaths = paths.Count, result }, () => WriteScanSummary(env.Out, result));
-                }
-                catch (MusicSpinException ex)
-                {
-                    Emit(env.Out, json, "error", new { code = ExitCodes.Name(ExitCodes.From(ex.Code)), message = ex.Message },
-                        () => env.Error.WriteLine($"music-spin library watch: {ex.Message}"));
-                }
-                finally
-                {
-                    gate.Release();
-                }
-            };
+                using var library = runner.OpenLibraryForWrite(parseResult);
+                var result = ScanResultDto.From(library.Scan(new ScanOptions(), token));
+                Emit(env.Out, json, "scan", new { changedPaths = paths.Count, result }, () => WriteScanSummary(env.Out, result));
+                return Task.CompletedTask;
+            }, ex => Emit(env.Out, json, "error", new { code = ExitCodes.Name(ExitCodes.From(ex.Code)), message = ex.Message },
+                () => env.Error.WriteLine($"music-spin library watch: {ex.Message}")), cancellationToken);
+            using var watcher = new LibraryWatcher(folders, TimeSpan.FromMilliseconds(parseResult.GetValue(debounce)), env.Time);
+            watcher.Changed += async (_, paths) => await scans.ScanAsync(paths).ConfigureAwait(false);
 
             Emit(env.Out, json, "watching", new { folders, debounceMs = parseResult.GetValue(debounce) },
                 () => env.Out.WriteLine($"Watching {folders.Count} folder(s). Ctrl+C to stop."));
@@ -394,7 +378,7 @@ internal static class LibraryCommand
                 // normal shutdown
             }
 
-            await gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            await scans.StopAsync().ConfigureAwait(false); // the scan under way finishes first; a late change does nothing
             Emit(env.Out, json, "stopped", new { }, () => env.Out.WriteLine("Stopped watching."));
             return ExitCodes.Success;
         }, "library watch");

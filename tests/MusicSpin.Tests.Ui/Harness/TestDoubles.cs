@@ -9,20 +9,55 @@ using MusicSpin.Core.Library;
 
 namespace MusicSpin.Tests.Ui.Harness;
 
-/// <summary>UI work queued by background threads, run by the test (<see cref="Run"/>) on its own thread.</summary>
+/// <summary>
+/// UI work queued by background threads, run by the test (<see cref="Run"/>) on its own thread. Like Avalonia's UI thread
+/// it has a <see cref="SynchronizationContext"/>: an <c>await</c> in work it runs comes back to it, not onto a thread-pool
+/// thread, so the models' UI state is only ever touched from <see cref="Run"/>, one piece of work at a time, as in the app.
+/// </summary>
 internal sealed class QueueDispatcher : IUiDispatcher
 {
+    [ThreadStatic]
+    private static QueueDispatcher? t_running;
+
     private readonly ConcurrentQueue<Action> _queue = new();
+    private readonly Context _context;
+
+    public QueueDispatcher() => _context = new Context(this);
+
+    /// <summary>The current thread is running this dispatcher's work: it is the UI thread now.</summary>
+    public bool IsCurrent => ReferenceEquals(t_running, this);
 
     public void Post(Action action) => _queue.Enqueue(action);
 
-    /// <summary>Runs what is queued, including what that queues.</summary>
+    /// <summary>Runs what is queued, including what that queues (continuations of the awaits in it, too).</summary>
     public void Run()
     {
-        while (_queue.TryDequeue(out var action))
+        var previous = (SynchronizationContext.Current, t_running);
+        SynchronizationContext.SetSynchronizationContext(_context);
+        t_running = this;
+        try
         {
-            action();
+            while (_queue.TryDequeue(out var action))
+            {
+                action();
+            }
         }
+        finally
+        {
+            t_running = previous.t_running;
+            SynchronizationContext.SetSynchronizationContext(previous.Current);
+        }
+    }
+
+    /// <summary>Posts to the queue: what awaits on the UI thread continues there.</summary>
+    private sealed class Context(QueueDispatcher dispatcher) : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) => dispatcher.Post(() => d(state));
+
+        public override void Send(SendOrPostCallback d, object? state)
+            => throw new NotSupportedException("The test's UI thread runs queued work only; nothing waits on it synchronously.");
+
+        public override SynchronizationContext CreateCopy() => this;
     }
 
     /// <summary>Runs queued work until <paramref name="condition"/> holds (the player answers in real time).</summary>
@@ -69,10 +104,34 @@ internal sealed class StubLibrary : ILibraryService
 
     public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
-    public Task<IReadOnlyList<AlbumSummary>> AlbumsAsync(CancellationToken cancellationToken = default)
+    /// <summary>Set: album reads wait for it (a slow library); a faulted one fails them with its exception.</summary>
+    public TaskCompletionSource? AlbumsGate { get; set; }
+
+    /// <summary>Set: album reads fail as a busy library's do.</summary>
+    public string? AlbumsFailure { get; set; }
+
+    /// <summary>The most album and playlist reads under way at once (the library lets one reader in at a time).</summary>
+    public int MostReadsAtOnce { get; private set; }
+
+    private int _readsNow;
+
+    public async Task<IReadOnlyList<AlbumSummary>> AlbumsAsync(CancellationToken cancellationToken = default)
     {
         AlbumReads++;
-        return Task.FromResult<IReadOnlyList<AlbumSummary>>([.. Albums]);
+        MostReadsAtOnce = Math.Max(MostReadsAtOnce, ++_readsNow);
+        try
+        {
+            if (AlbumsGate is { } gate)
+            {
+                await gate.Task;
+            }
+
+            return AlbumsFailure is { } failure ? throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure) : [.. Albums];
+        }
+        finally
+        {
+            _readsNow--;
+        }
     }
 
     public Task<IReadOnlyList<TrackSummary>> TracksAsync(CancellationToken cancellationToken = default)
@@ -112,6 +171,7 @@ internal sealed class StubLibrary : ILibraryService
     {
         PlaylistReads++;
         MostPlaylistReadsAtOnce = Math.Max(MostPlaylistReadsAtOnce, ++_playlistReadsNow);
+        MostReadsAtOnce = Math.Max(MostReadsAtOnce, ++_readsNow);
         try
         {
             if (PlaylistsGate is { } gate)
@@ -124,6 +184,7 @@ internal sealed class StubLibrary : ILibraryService
         finally
         {
             _playlistReadsNow--;
+            _readsNow--;
         }
     }
 
@@ -134,8 +195,19 @@ internal sealed class StubLibrary : ILibraryService
         => Task.FromResult<IReadOnlyList<PlaylistEntryItem>>([.. (PlaylistEntries.GetValueOrDefault(playlistId) ?? [])
             .Select((t, i) => new PlaylistEntryItem(i + 1, t, !MissingPaths.Contains(t.Path)))]);
 
+    /// <summary>Set: album lookups (a track's album) fail with it, a busy library's refusal say.</summary>
+    public Exception? AlbumIdFailure { get; set; }
+
+    public int AlbumIdReads { get; private set; }
+
     public Task<string?> AlbumIdOfTrackAsync(string trackId, CancellationToken cancellationToken = default)
-        => Task.FromResult(Tracks.FirstOrDefault(t => t.Id == trackId)?.AlbumId);
+    {
+        AlbumIdReads++;
+        return AlbumIdFailure is { } failure ? Task.FromException<string?>(failure) : Task.FromResult(Tracks.FirstOrDefault(t => t.Id == trackId)?.AlbumId);
+    }
+
+    /// <summary>The refusal of a library another process holds.</summary>
+    public static MusicSpinException Busy() => new(MusicSpinErrorCode.LibraryLocked, LibraryService.BusyMessage);
 
     /// <summary>Adds the playlist with the tracks at <paramref name="paths"/>; a name taken (any case) fails as the library does.</summary>
     public Task<PlaylistSummaryItem> CreatePlaylistAsync(string name, IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
@@ -291,13 +363,20 @@ internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<strin
 {
     public ConcurrentDictionary<string, int> Requests { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>An album's covers wait for its gate (a cover service waiting out a busy library).</summary>
+    public ConcurrentDictionary<string, TaskCompletionSource<Bitmap?>> Gates { get; } = new(StringComparer.Ordinal);
+
     public Task<Bitmap?> CoverAsync(string albumId, CoverSize size)
     {
         Requests.AddOrUpdate(albumId, 1, (_, n) => n + 1);
-        return Task.FromResult(cover?.Invoke(albumId));
+        return Gates.TryGetValue(albumId, out var gate) ? gate.Task : Task.FromResult(cover?.Invoke(albumId));
     }
 
     public Task<Rgb?> AccentAsync(string albumId) => Task.FromResult(accent?.Invoke(albumId));
+
+    public void Observe(string albumId, ICoverObserver observer)
+    {
+    }
 }
 
 /// <summary>Records what the view models ask of the appearance (no Application needed).</summary>

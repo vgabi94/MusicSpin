@@ -139,6 +139,20 @@ public sealed class MenusAndDragTests
         return app.Scripted!.Sent(cmd)[count - 1];
     }
 
+    /// <summary>Holds the player's answers to <paramref name="cmd"/>; disposing lets them go (a failed assert can't hang the app's close).</summary>
+    private sealed class Held(TaskCompletionSource gate) : IDisposable
+    {
+        public void Release() => gate.TrySetResult();
+
+        public void Dispose() => Release();
+    }
+
+    private static Held Hold(AppHarness app, string cmd) => new(app.Scripted!.Hold(cmd));
+
+    /// <summary>Waits for every menu choice made to finish (the player's answer and what follows it).</summary>
+    private static Task ChosenAsync(AppHarness app)
+        => Gui.UntilAsync(() => !app.ViewModel.Menu.ChooseCommand.IsRunning, "the menu choices done");
+
     private static string[] TrackIds(JsonElement request) => [.. request.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("trackId").GetString() ?? string.Empty)];
 
     /// <summary>Within half a pixel each way (layout rounds positions to whole pixels).</summary>
@@ -206,12 +220,99 @@ public sealed class MenusAndDragTests
         var next = await SentAsync(app, "queue.add");
         Assert.Equal("next", next.GetProperty("position").GetString());
         Assert.Equal(expected.Ids, TrackIds(next));
+        await ChosenAsync(app); // the choice done (the answer and the status read after it), not only its request sent
 
         RightClick(app.Window, Aim(app.Window, item));
         Gui.Click(app.Window, Entries(app)[2]);
         var last = await SentAsync(app, "queue.add", 2);
         Assert.Equal("upnext", last.GetProperty("position").GetString());
         Assert.Equal(expected.Ids, TrackIds(last));
+        await ChosenAsync(app);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(Kind.Card)]
+    [InlineData(Kind.TrackRow)]
+    [InlineData(Kind.NowPlayingTrack)]
+    public async Task A_menu_opened_while_a_choice_waits_on_the_player_works_and_the_choices_go_in_order(Kind kind)
+    {
+        await using var app = await OpenAsync();
+        var item = await ShowAsync(app, kind);
+        var expected = Expected(item);
+        using var gate = Hold(app, "queue.add");
+
+        RightClick(app.Window, Aim(app.Window, item));
+        Gui.Click(app.Window, Entries(app)[1]); // Play next: its answer held
+        await SentAsync(app, "queue.add");
+        Assert.True(app.ViewModel.Menu.ChooseCommand.IsRunning);
+
+        // Another menu, the choice still waiting: every entry enabled, and choosing one works.
+        RightClick(app.Window, Aim(app.Window, item));
+        Assert.True(MenuBox(app).IsEffectivelyVisible);
+        Assert.All(Entries(app), e => Assert.True(e.IsEffectivelyEnabled, $"'{e.FindDescendantOfType<TextBlock>()?.Text}' disabled"));
+        Gui.Click(app.Window, Entries(app)[2]); // Add to queue
+        Assert.False(MenuBox(app).IsEffectivelyVisible);
+
+        gate.Release();
+        var last = await SentAsync(app, "queue.add", 2);
+        await ChosenAsync(app);
+        // in the order chosen
+        Assert.Equal(["next", "upnext"], app.Scripted!.Sent("queue.add").Select(r => r.GetProperty("position").GetString()));
+        Assert.Equal(expected.Ids, TrackIds(last));
+        Assert.Null(app.ViewModel.Banner);
+    }
+
+    [AvaloniaFact]
+    public async Task The_Sort_and_Group_dropdowns_work_while_a_choice_waits_on_the_player()
+    {
+        await using var app = await OpenAsync();
+        var item = await ShowAsync(app, Kind.Card);
+        using var gate = Hold(app, "queue.add");
+        RightClick(app.Window, Aim(app.Window, item));
+        Gui.Click(app.Window, Entries(app)[1]);
+        await SentAsync(app, "queue.add");
+
+        Gui.Click(app.Window, Gui.Find<Button>(app.Window, "SortButton"));
+        Assert.All(Entries(app), e => Assert.True(e.IsEffectivelyEnabled));
+        Gui.Click(app.Window, Entries(app)[1]); // Title
+        Assert.Equal(LibrarySort.Title, app.ViewModel.AlbumsPage.Sort);
+
+        Gui.Click(app.Window, Gui.Find<Button>(app.Window, "GroupButton"));
+        Assert.True(MenuBox(app).IsEffectivelyVisible);
+        Assert.All(Entries(app), e => Assert.True(e.IsEffectivelyEnabled));
+
+        gate.Release();
+        await ChosenAsync(app);
+    }
+
+    [AvaloniaFact]
+    public async Task A_choice_that_fails_while_another_menu_is_open_leaves_that_menu_working()
+    {
+        await using var app = await OpenAsync();
+        var item = await ShowAsync(app, Kind.TrackRow);
+        var expected = Expected(item);
+        app.Scripted!.Fail("queue.add", 1, "The queue is full.");
+        using var gate = Hold(app, "queue.add");
+
+        RightClick(app.Window, Aim(app.Window, item));
+        Gui.Click(app.Window, Entries(app)[1]); // Play next: it will fail
+        await SentAsync(app, "queue.add");
+
+        RightClick(app.Window, Aim(app.Window, item));
+        gate.Release(); // the failure arrives with this menu open
+        await ChosenAsync(app);
+        await Gui.UntilAsync(() => app.ViewModel.Banner == "The queue is full.", "the failure's notice");
+
+        // the menu is still open, its entries enabled, and the next choice goes through
+        Assert.True(MenuBox(app).IsEffectivelyVisible);
+        Assert.All(Entries(app), e => Assert.True(e.IsEffectivelyEnabled));
+        app.Scripted!.Succeed("queue.add");
+        Gui.Click(app.Window, Entries(app)[2]);
+        var last = await SentAsync(app, "queue.add", 2);
+        await ChosenAsync(app);
+        Assert.Equal("upnext", last.GetProperty("position").GetString());
+        Assert.Equal(expected.Ids, TrackIds(last));
+        Assert.Equal(2, app.Scripted.Count("queue.add")); // the failed one isn't sent again
     }
 
     [AvaloniaTheory]
