@@ -21,7 +21,8 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 
 ## Status
 
-**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (about 1,500) work. The UI design is decided ([mockup](docs/design/README.md)); the desktop app has its shell (title bar, sidebar, themes), the Albums page as Cards, a Shelf and Crates and the Tracks page (both sorted, grouped and searched as in the mockup), the playlist and Radio pages, the player bar (transport, position, volume, spectrum analyzer, format), Now Playing with the Classic turntable (an album chosen travels onto it before it plays) and Settings, and follows the background player; the rest is being built.
+**v0.1, pre-UI.** Core playback, the library, the background player, the CLI, the MCP server, portable publishing and the tests (about 1,500) work. The UI design is decided ([mockup](docs/design/README.md)); the desktop app has its shell (title bar, sidebar, themes), the Albums page as Cards, a Shelf and Crates and the Tracks page (both sorted, grouped and searched as in the mockup), the playlist pages, Play and Radio on artist and genre groups, the Radio page (stations composed from tags) and the
+on-air state across the window, the player bar (transport, position, volume, spectrum analyzer, format), Now Playing with the Classic turntable (an album chosen travels onto it before it plays) and Settings, and follows the background player; the rest is being built.
 
 | Platform | Status |
 |---|---|

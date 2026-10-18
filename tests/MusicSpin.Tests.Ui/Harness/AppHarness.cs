@@ -48,6 +48,9 @@ internal sealed record AppOptions
     /// <summary>The app talks to a <see cref="ScriptedPlayer"/> (exact statuses and events) instead of a real one.</summary>
     public bool Scripted { get; init; }
 
+    /// <summary>The in-process player reads the library (radio works).</summary>
+    public bool PlayerReadsLibrary { get; init; }
+
     /// <summary>Call <see cref="MainWindowViewModel.InitializeAsync"/> (connects the player, loads the first page).</summary>
     public bool Initialize { get; init; } = true;
 }
@@ -64,7 +67,7 @@ internal sealed class AppHarness : IAsyncDisposable
         Music = Directory.CreateDirectory(Path.Combine(root, "music")).FullName;
         Data = new DataDirectory(Path.Combine(root, "data"), DataDirectorySource.Override);
         Options = options;
-        Player = new InProcessPlayer(Data);
+        Player = new InProcessPlayer(Data) { ReadsLibrary = options.PlayerReadsLibrary };
         Scripted = options.Scripted ? new ScriptedPlayer(Data) { FollowsCommands = true } : null;
     }
 

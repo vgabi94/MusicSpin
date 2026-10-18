@@ -19,6 +19,8 @@
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0DFFFFFF" />
             <SolidColorBrush x:Key="MenuHoverBrush" Color="#14FFFFFF" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#1AFFFFFF" />
+            <!-- A radio tag's edge under the pointer: the text colour at 28% (mockup: .tag:hover). -->
+            <SolidColorBrush x:Key="TagHoverEdgeBrush" Color="#47EEF0F4" />
             <Color x:Key="CardShadowColor">#CC000000</Color>
             <!-- The Classic deck's plinth (mockup: .deck, linear-gradient(160deg, …)). -->
             <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
@@ -54,6 +56,7 @@
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0A000000" />
             <SolidColorBrush x:Key="MenuHoverBrush" Color="#0D000000" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#14000000" />
+            <SolidColorBrush x:Key="TagHoverEdgeBrush" Color="#471B1C1F" />
             <Color x:Key="CardShadowColor">#66000000</Color>
             <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
                 <GradientStop Color="#F7F5F1" Offset="0" />

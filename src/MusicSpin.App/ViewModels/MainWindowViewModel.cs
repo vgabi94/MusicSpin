@@ -64,7 +64,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             services.Time);
         TracksPage = new TracksPageViewModel(services.Library, services.Covers, Player, Radio, Menu, Playlists, Favorites, Notices);
         FavoritesPage = new FavoritesPageViewModel(services.Library, services.Covers, Player, Menu, Playlists, Favorites, Notices, () => Sidebar.Navigate(Sidebar.Radio));
-        RadioPage = new RadioPageViewModel(Player, Notices);
+        RadioPage = new RadioPageViewModel(services.Library, Radio, QueueDrawer, Notices, services.Time, services.Ui);
         CurrentPage = AlbumsPage;
         AlbumsPage.IsShown = true;
         Items = new LibraryItemActions(Player, services.Library, Scene, NowPlaying, Menu, Playlists, Favorites, Notices, () => CurrentPage);
@@ -277,6 +277,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         _reloadOwed = false;
         Scene.Dispose();
         QueueDrawer.Dispose();
+        RadioPage.Dispose();
         SpinClock.Dispose();
         PlayerBar.Dispose();
         await Player.DisposeAsync().ConfigureAwait(false);

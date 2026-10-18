@@ -4,7 +4,8 @@
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="using:MusicSpin.App.Controls">
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:theming="using:MusicSpin.App.Theming">
     <!-- The radio icon in layers; its waves fade this low as they pulse while on air. -->
     <Style Selector="controls|RadioIcon">
         <Setter Property="Dot" Value="{StaticResource RadioDot}" />
@@ -135,5 +136,212 @@
         <Setter Property="FontWeight" Value="{StaticResource TitleFontWeight}" />
         <Setter Property="LetterSpacing" Value="{StaticResource OnAirPillLetterSpacing}" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The Radio page (mockup: .radio): the tags scroll; the station card stays at the top on the right. -->
+    <Style Selector="ScrollViewer.radioTags">
+        <Setter Property="Padding" Value="{StaticResource RadioTagsPadding}" />
+    </Style>
+    <Style Selector="TextBlock.radioHint">
+        <Setter Property="Margin" Value="{StaticResource RadioHintMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource RadioHintFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <!-- A row of tags (mockup: .facet): its title, then its tags wrapping. -->
+    <Style Selector="Border.facet">
+        <Setter Property="Padding" Value="{StaticResource FacetPadding}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource HairlineTop}" />
+    </Style>
+    <Style Selector="Border.facet > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource FacetGap}" />
+    </Style>
+    <Style Selector="TextBlock.facetTitle">
+        <Setter Property="Width" Value="{StaticResource FacetTitleWidth}" />
+        <Setter Property="Margin" Value="{StaticResource FacetTitleMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource FacetTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource FacetTitleLetterSpacing}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="WrapPanel.tags">
+        <Setter Property="ItemSpacing" Value="{StaticResource TagGap}" />
+        <Setter Property="LineSpacing" Value="{StaticResource TagGap}" />
+    </Style>
+    <Style Selector="TextBlock.tagNote">
+        <Setter Property="Margin" Value="{StaticResource TagNoteMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource TagNoteFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A tag (mockup: .tag, .tag.inc, .tag.exc). -->
+    <Style Selector="Button.tag">
+        <Setter Property="CornerRadius" Value="{StaticResource TagRadius}" />
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="FontSize" Value="{StaticResource TagFontSize}" />
+        <Setter Property="theming:Animate.Transitions" Value="Background HoverDuration; BorderBrush HoverDuration" />
+    </Style>
+    <Style Selector="Button.tag:pointerover">
+        <Setter Property="BorderBrush" Value="{DynamicResource TagHoverEdgeBrush}" />
+    </Style>
+    <Style Selector="Button.tag.inc">
+        <Setter Property="Background" Value="{DynamicResource AccentChipBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentStrongRingBrush}" />
+    </Style>
+    <Style Selector="Button.tag.exc">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.tag StackPanel.tagText">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource TagTextGap}" />
+        <Setter Property="Margin" Value="{StaticResource TagPadding}" />
+    </Style>
+    <Style Selector="Button.tag TextBlock">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tag TextBlock.count">
+        <Setter Property="FontSize" Value="{StaticResource TagCountFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.tag TextBlock.mark">
+        <Setter Property="FontWeight" Value="{StaticResource TitleFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="Button.tag.exc TextBlock.mark">
+        <Setter Property="Foreground" Value="{StaticResource ExcludedMarkBrush}" />
+    </Style>
+    <Style Selector="Button.tag.exc TextBlock.label">
+        <Setter Property="TextDecorations">
+            <TextDecorationCollection>
+                <TextDecoration Location="Strikethrough" Stroke="{StaticResource ExcludedStrikeBrush}" />
+            </TextDecorationCollection>
+        </Setter>
+    </Style>
+    <!-- A left-out tag's dashed edge (a Border can't dash). -->
+    <Style Selector="Button.tag Rectangle.dash">
+        <Setter Property="Stroke" Value="{StaticResource ExcludedEdgeBrush}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource TagDashThickness}" />
+        <Setter Property="StrokeDashArray" Value="3,3" />
+        <Setter Property="RadiusX" Value="{StaticResource TagDashRadius}" />
+        <Setter Property="RadiusY" Value="{StaticResource TagDashRadius}" />
+    </Style>
+
+    <!-- The station card (mockup: .station, .station.live). -->
+    <Style Selector="Border.station">
+        <Setter Property="Width" Value="{StaticResource StationWidth}" />
+        <Setter Property="Margin" Value="{StaticResource StationMargin}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="CornerRadius" Value="{StaticResource StationRadius}" />
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.station.live">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentLiveBrush}" />
+    </Style>
+    <Style Selector="Border.stationGlow">
+        <Setter Property="Background" Value="{DynamicResource AccentGlowBrush}" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="StackPanel.stationBody">
+        <Setter Property="Margin" Value="{StaticResource StationPadding}" />
+    </Style>
+    <Style Selector="StackPanel.stationKicker">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource StationKickerGap}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Border.station.live StackPanel.stationKicker">
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentInkBrush}" />
+    </Style>
+    <Style Selector="StackPanel.stationKicker controls|RadioIcon">
+        <Setter Property="Width" Value="{StaticResource StationIconSize}" />
+        <Setter Property="Height" Value="{StaticResource StationIconSize}" />
+        <Setter Property="ViewBox" Value="{StaticResource RadioViewBox}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource RadioIconStroke}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.stationKicker > TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource StationKickerFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource StationKickerLetterSpacing}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- "Jazz or Ambient · not Kodo Arai": the names strong, the words between quiet; a name never breaks. -->
+    <Style Selector="ItemsControl.stationTitle">
+        <Setter Property="Margin" Value="{StaticResource StationTitleMargin}" />
+    </Style>
+    <Style Selector="ItemsControl.stationTitle TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource StationTitleFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource StationTitleLineHeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="ItemsControl.stationTitle TextBlock.value">
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="TextBlock.stationMeta">
+        <Setter Property="Margin" Value="{StaticResource StationMetaMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource StationMetaFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Grid.stationActs WrapPanel">
+        <Setter Property="ItemSpacing" Value="{StaticResource StationActsGap}" />
+        <Setter Property="LineSpacing" Value="{StaticResource StationActsGap}" />
+    </Style>
+    <!-- Clear tags (mockup: .link): a quiet text button at the row's end. -->
+    <Style Selector="Button.link">
+        <Setter Property="Padding" Value="{StaticResource LinkPadding}" />
+        <Setter Property="FontSize" Value="{StaticResource LinkFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.link:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <!-- The next picks (mockup: .st-next), over a line. -->
+    <Style Selector="Border.stationNext">
+        <Setter Property="Margin" Value="{StaticResource StationNextMargin}" />
+        <Setter Property="Padding" Value="{StaticResource StationNextPadding}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource HairlineTop}" />
+    </Style>
+    <Style Selector="Border.stationNext StackPanel.picks">
+        <Setter Property="Spacing" Value="{StaticResource StationNextGap}" />
+    </Style>
+    <Style Selector="TextBlock.stationNextTitle">
+        <Setter Property="Margin" Value="{StaticResource StationNextTitleMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource FacetTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource FacetTitleLetterSpacing}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Grid.stationPick">
+        <Setter Property="ColumnSpacing" Value="{StaticResource StationPickGap}" />
+    </Style>
+    <Style Selector="Grid.stationPick controls|CoverView">
+        <Setter Property="Width" Value="{StaticResource StationPickCoverSize}" />
+        <Setter Property="Height" Value="{StaticResource StationPickCoverSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Grid.stationPick > StackPanel">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Grid.stationPick TextBlock.title">
+        <Setter Property="FontSize" Value="{StaticResource StationPickFontSize}" />
+    </Style>
+    <Style Selector="Grid.stationPick TextBlock.artist">
+        <Setter Property="FontSize" Value="{StaticResource StationPickArtistFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
     </Style>
 </Styles>

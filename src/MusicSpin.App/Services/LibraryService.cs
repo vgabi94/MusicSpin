@@ -21,6 +21,12 @@ public sealed record PlaylistSummaryItem(string Id, string Name, int EntryCount)
 /// </summary>
 public sealed record PlaylistEntryItem(int Position, TrackSummary Track, bool IsAvailable);
 
+/// <summary>What a radio station would play: how many tracks, by how many artists, how long in all (none: nothing matches).</summary>
+public sealed record RadioPoolSize(int Tracks, int Artists, double Seconds)
+{
+    public static readonly RadioPoolSize None = new(0, 0, 0);
+}
+
 /// <summary>The Favorites view: the favorite library tracks, newest favorite first, and how many favorites aren't in the library now.</summary>
 public sealed record FavoritesList(IReadOnlyList<TrackSummary> Tracks, int Missing);
 
@@ -74,6 +80,15 @@ public interface ILibraryService
 
     /// <summary>Moves <paramref name="entry"/> (found again as for a removal) to 1-based position <paramref name="to"/>.</summary>
     Task MoveInPlaylistAsync(string playlistId, PlaylistEntryItem entry, int to, CancellationToken cancellationToken = default);
+
+    /// <summary>The Radio page's tags: each genre, decade, format, artist and album, and hi-res, with its track count.</summary>
+    Task<RadioTagCounts> RadioTagsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The size of the station <paramref name="filter"/> plays (<see cref="MusicLibrary.RadioPool"/>). An artist or an
+    /// album no longer in the library matches nothing: <see cref="RadioPoolSize.None"/>.
+    /// </summary>
+    Task<RadioPoolSize> RadioPoolAsync(RadioFilter filter, CancellationToken cancellationToken = default);
 
     /// <summary>The ids of the favorite tracks in the library now (for the hearts).</summary>
     Task<IReadOnlySet<string>> FavoriteIdsAsync(CancellationToken cancellationToken = default);
@@ -183,6 +198,22 @@ public sealed class LibraryService : ILibraryService, IDisposable
         var from = Find(library, playlistId, entry);
         var count = library.Playlist(playlistId, new Paging(0, 1)).Entries.Total;
         return from == Math.Clamp(to, 1, count) ? null : library.MovePlaylistEntry(playlistId, from, Math.Clamp(to, 1, count));
+    }, cancellationToken);
+
+    public Task<RadioTagCounts> RadioTagsAsync(CancellationToken cancellationToken = default)
+        => Read(library => library.RadioTags(), cancellationToken);
+
+    public Task<RadioPoolSize> RadioPoolAsync(RadioFilter filter, CancellationToken cancellationToken = default) => Read(library =>
+    {
+        try
+        {
+            var pool = library.RadioPool(filter);
+            return new RadioPoolSize(pool.Count, pool.Select(c => c.ArtistKey).Distinct(StringComparer.Ordinal).Count(), pool.Sum(c => c.DurationSeconds ?? 0));
+        }
+        catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.NotFound)
+        {
+            return RadioPoolSize.None; // an artist or an album the station names is gone
+        }
     }, cancellationToken);
 
     public Task<IReadOnlySet<string>> FavoriteIdsAsync(CancellationToken cancellationToken = default)

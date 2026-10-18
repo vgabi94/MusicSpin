@@ -150,6 +150,61 @@
     <sys:Double x:Key="OnAirPillLetterSpacing">0.6</sys:Double>
     <sys:Double x:Key="OnAirPillIconSize">12</sys:Double>
     <sys:Double x:Key="OnAirPillIconGap">4</sys:Double>
+    <!--
+      The Radio page (mockup: .radio): the tags, then 36 apart the 330 station card, below the view's top padding plus 6.
+      The hint 14 above the rows (13 type); a row (.facet) 13 above and below its top line, its 92 title 14 from its
+      tags, 7 down (11 capitals 0.08em apart). Tags (.tag) 7 apart, padded 5 11, 13 type, the count 11, 6 apart; a
+      left-out tag's dashes. The note after a row's tags 4 along, in 12.5.
+    -->
+    <Thickness x:Key="RadioTagsPadding">28,14,36,40</Thickness>
+    <Thickness x:Key="StationMargin">0,14,28,40</Thickness>
+    <sys:Double x:Key="StationWidth">330</sys:Double>
+    <Thickness x:Key="RadioHintMargin">0,0,0,14</Thickness>
+    <sys:Double x:Key="RadioHintFontSize">13</sys:Double>
+    <Thickness x:Key="FacetPadding">0,13</Thickness>
+    <sys:Double x:Key="FacetTitleWidth">92</sys:Double>
+    <sys:Double x:Key="FacetGap">14</sys:Double>
+    <Thickness x:Key="FacetTitleMargin">0,7,0,0</Thickness>
+    <sys:Double x:Key="FacetTitleFontSize">11</sys:Double>
+    <sys:Double x:Key="FacetTitleLetterSpacing">0.88</sys:Double>
+    <sys:Double x:Key="TagGap">7</sys:Double>
+    <Thickness x:Key="TagPadding">11,5</Thickness>
+    <CornerRadius x:Key="TagRadius">999</CornerRadius>
+    <sys:Double x:Key="TagDashRadius">14</sys:Double>
+    <sys:Double x:Key="TagDashThickness">1</sys:Double>
+    <sys:Double x:Key="TagFontSize">13</sys:Double>
+    <sys:Double x:Key="TagCountFontSize">11</sys:Double>
+    <sys:Double x:Key="TagTextGap">6</sys:Double>
+    <Thickness x:Key="TagNoteMargin">4,0,0,0</Thickness>
+    <sys:Double x:Key="TagNoteFontSize">12.5</sys:Double>
+    <!--
+      The station card (mockup: .station): padded 18 20 20, radius 14; the kicker (11 capitals 0.1em apart, a 15 icon 7
+      before), the description 10 below in 20 type (1.35 high), the size 6 below that in 13, the buttons 16 below and 6
+      apart, Clear tags padded 6 4 in 12.5; the next picks 18 below over a line, 12 under it, 8 apart, a 32 cover 10 from
+      the title (13) and the artist (11.5).
+    -->
+    <Thickness x:Key="StationPadding">20,18,20,20</Thickness>
+    <CornerRadius x:Key="StationRadius">14</CornerRadius>
+    <sys:Double x:Key="StationKickerGap">7</sys:Double>
+    <sys:Double x:Key="StationKickerFontSize">11</sys:Double>
+    <sys:Double x:Key="StationKickerLetterSpacing">1.1</sys:Double>
+    <sys:Double x:Key="StationIconSize">15</sys:Double>
+    <Thickness x:Key="StationTitleMargin">0,10,0,6</Thickness>
+    <sys:Double x:Key="StationTitleFontSize">20</sys:Double>
+    <sys:Double x:Key="StationTitleLineHeight">27</sys:Double>
+    <Thickness x:Key="StationMetaMargin">0,0,0,16</Thickness>
+    <sys:Double x:Key="StationMetaFontSize">13</sys:Double>
+    <sys:Double x:Key="StationActsGap">6</sys:Double>
+    <Thickness x:Key="LinkPadding">4,6</Thickness>
+    <sys:Double x:Key="LinkFontSize">12.5</sys:Double>
+    <Thickness x:Key="StationNextMargin">0,18,0,0</Thickness>
+    <Thickness x:Key="StationNextPadding">0,12,0,0</Thickness>
+    <sys:Double x:Key="StationNextGap">8</sys:Double>
+    <Thickness x:Key="StationNextTitleMargin">0,0,0,2</Thickness>
+    <sys:Double x:Key="StationPickCoverSize">32</sys:Double>
+    <sys:Double x:Key="StationPickGap">10</sys:Double>
+    <sys:Double x:Key="StationPickFontSize">13</sys:Double>
+    <sys:Double x:Key="StationPickArtistFontSize">11.5</sys:Double>
 
     <!--
       Album cards (mockup: .grid, .card): columns at least 176 wide, 26 apart; rows 30 apart. The art is laid out at
@@ -303,7 +358,6 @@
     <sys:Double x:Key="PlayIconSize">12</sys:Double>
     <CornerRadius x:Key="PlayButtonRadius">19</CornerRadius>
     <sys:Double x:Key="BannerIconSize">12</sys:Double>
-    <sys:Double x:Key="RadioGap">14</sys:Double>
     <!-- The song name, then the analyzer and the volume at this gap (mockup: .meta). -->
     <sys:Double x:Key="PlayerMetaGap">24</sys:Double>
     <!-- Shuffle and Repeat (stroked), and Repeat one's small "1". -->

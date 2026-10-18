@@ -111,6 +111,50 @@ public sealed class GroupRadioTests
     }
 
     [AvaloniaFact]
+    public async Task On_the_real_player_Play_ends_radio_shuffle_orders_the_queue_and_music_spin_queue_shows_it()
+    {
+        await using var app = await AppHarness.OpenAsync(new AppOptions
+        {
+            PlayerReadsLibrary = true,
+            Music = music =>
+            {
+                TestImages.Album(music, "Kind of Blue", "Miles Davis", tracks: 5, year: 1959);
+                TestImages.Album(music, "Doo-Bop", "Miles Davis", tracks: 4, year: 1992);
+                TestImages.Album(music, "Blue Train", "John Coltrane", tracks: 2, year: 1957);
+            },
+        });
+        var vm = app.ViewModel;
+        await Gui.UntilAsync(() => vm.AlbumsPage.Albums.Count == 3, "the albums");
+        vm.AlbumsPage.Grouping = AlbumGrouping.Artist;
+        Gui.Settle();
+        var miles = app.Read(library => library.AlbumsQueue([.. library.Albums(new AlbumQuery()).Items
+            .Where(a => a.AlbumArtist == "Miles Davis").OrderBy(a => a.Year).Select(a => a.Id)])).Select(t => t.Path).ToList();
+        await using var cli = await app.Player.ConnectOtherAsync();
+        async Task<List<string>> QueueAsync() // what music-spin queue lists
+            => [.. ProtocolJson.Deserialize<QueueListing>(await cli.SendAsync("queue", new { offset = 0, limit = 100 }, TestContext.Current.CancellationToken))!
+                .Items.Select(e => e.Item.Path)];
+
+        // Shuffle first: on air, the player refuses it (radio is already random) but keeps it for the next queue.
+        await vm.Player.SendAsync("shuffle", new { mode = "on" });
+        await Gui.UntilAsync(() => vm.Player.Shuffle, "shuffle on");
+        await vm.Player.StartRadioAsync(new RadioFilter());
+        await Gui.UntilAsync(() => vm.Radio.IsOnAir, "radio on");
+
+        Click(app, In(Header(app, "Miles Davis"), "GroupPlay"));
+        await Gui.UntilAsync(() => !vm.Radio.IsOnAir && vm.Player.QueueLength == miles.Count, "the artist's queue");
+
+        Assert.NotNull(vm.Player.Status!.ShuffleSeed); // the player shuffled the whole queue
+        var shuffled = await QueueAsync();
+        Assert.Equal(miles.Order(StringComparer.Ordinal), shuffled.Order(StringComparer.Ordinal));
+
+        await vm.Player.SendAsync("shuffle", new { mode = "off" });
+        await Gui.UntilAsync(() => !vm.Player.Shuffle, "shuffle off");
+        Click(app, In(Header(app, "Miles Davis"), "GroupPlay"));
+        await Gui.UntilAsync(() => vm.Player.Path == miles[0], "the first track playing");
+        Assert.Equal(miles, await QueueAsync()); // in the order shown: Kind of Blue, then Doo-Bop
+    }
+
+    [AvaloniaFact]
     public async Task A_genre_plays_in_the_sort_shown_and_with_a_search_only_what_matches()
     {
         await using var app = await OpenAsync(AlbumGrouping.Genre);

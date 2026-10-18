@@ -261,10 +261,4 @@
     <Style Selector="Border.chip > TextBlock">
         <Setter Property="FontSize" Value="{StaticResource ChipFontSize}" />
     </Style>
-
-    <Style Selector="StackPanel.radio">
-        <Setter Property="Spacing" Value="{StaticResource RadioGap}" />
-        <Setter Property="Margin" Value="{StaticResource ViewPadding}" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
-    </Style>
 </Styles>
