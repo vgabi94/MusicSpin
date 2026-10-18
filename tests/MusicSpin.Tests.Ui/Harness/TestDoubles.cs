@@ -8,20 +8,55 @@ using MusicSpin.Core.Library;
 
 namespace MusicSpin.Tests.Ui.Harness;
 
-/// <summary>UI work queued by background threads, run by the test (<see cref="Run"/>) on its own thread.</summary>
+/// <summary>
+/// UI work queued by background threads, run by the test (<see cref="Run"/>) on its own thread. Like Avalonia's UI thread
+/// it has a <see cref="SynchronizationContext"/>: an <c>await</c> in work it runs comes back to it, not onto a thread-pool
+/// thread, so the models' UI state is only ever touched from <see cref="Run"/>, one piece of work at a time, as in the app.
+/// </summary>
 internal sealed class QueueDispatcher : IUiDispatcher
 {
+    [ThreadStatic]
+    private static QueueDispatcher? t_running;
+
     private readonly ConcurrentQueue<Action> _queue = new();
+    private readonly Context _context;
+
+    public QueueDispatcher() => _context = new Context(this);
+
+    /// <summary>The current thread is running this dispatcher's work: it is the UI thread now.</summary>
+    public bool IsCurrent => ReferenceEquals(t_running, this);
 
     public void Post(Action action) => _queue.Enqueue(action);
 
-    /// <summary>Runs what is queued, including what that queues.</summary>
+    /// <summary>Runs what is queued, including what that queues (continuations of the awaits in it, too).</summary>
     public void Run()
     {
-        while (_queue.TryDequeue(out var action))
+        var previous = (SynchronizationContext.Current, t_running);
+        SynchronizationContext.SetSynchronizationContext(_context);
+        t_running = this;
+        try
         {
-            action();
+            while (_queue.TryDequeue(out var action))
+            {
+                action();
+            }
         }
+        finally
+        {
+            t_running = previous.t_running;
+            SynchronizationContext.SetSynchronizationContext(previous.Current);
+        }
+    }
+
+    /// <summary>Posts to the queue: what awaits on the UI thread continues there.</summary>
+    private sealed class Context(QueueDispatcher dispatcher) : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) => dispatcher.Post(() => d(state));
+
+        public override void Send(SendOrPostCallback d, object? state)
+            => throw new NotSupportedException("The test's UI thread runs queued work only; nothing waits on it synchronously.");
+
+        public override SynchronizationContext CreateCopy() => this;
     }
 
     /// <summary>Runs queued work until <paramref name="condition"/> holds (the player answers in real time).</summary>
