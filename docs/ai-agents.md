@@ -18,7 +18,7 @@
 | Goal | Command |
 |---|---|
 | What's in the library | `library stats --json`, `artists --json`, `albums --json` |
-| Free-text lookup (artist, album or track) | `search "<text>" --json`. Best match first; case/diacritic-insensitive; every word must match; `"phrases"`, `artist:`, `album:`, `title:`, `genre:`, `year:1959` |
+| Free-text lookup (artist, album or track) | `search "<text>" --json`. Best match first; case/diacritic-insensitive; every word must match; `"phrases"`, `artist:`, `album:`, `title:`, `genre:`, `year:1959`, `is:favorite` |
 | One field contains some words | `tracks --title "<words>"`, `tracks --album-contains ...`, `--artist-contains ...`, `albums --title ...`, `artists --name ...` |
 | Albums by one artist | `albums --artist "<exact name>" --json` (case-insensitive exact match; unknown: exit 12) |
 | Tracks of an album | `tracks --album "<exact title or id>" --json` |

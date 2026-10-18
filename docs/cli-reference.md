@@ -126,7 +126,7 @@ Endless random playback of the library in the background player (started if need
 | `--exclude-genre <name>` | Leave out this genre (same matching as `--genre`; a `Rock; Pop` track is left out by either) |
 | `--exclude-year <N>` / `--exclude-years <A-B>` | Leave out these years / inclusive ranges (validated like `--years`) |
 | `--exclude-format <id>` | Leave out these formats; repeat or comma-separate |
-| `--exclude-search <text>` | Leave out tracks matching this search |
+| `--exclude-search <text>` | Leave out tracks matching this search (`--exclude-search is:favorite`: radio without your favorites) |
 
 Every filter except `--hires` and `--favorites` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
 
@@ -255,8 +255,9 @@ Details: [Music library](library.md).
 - Case- and diacritic-insensitive (`bjork` finds `Björk`, `beyonce` finds `Beyoncé`); punctuation is ignored.
 - **Every word** must match somewhere (`frahm says` finds "Says" by Nils Frahm). `"quoted phrases"` must appear as a whole in one field.
 - Field prefixes: `artist:`, `album:`, `title:`, `genre:` (a word or a `"phrase"`), `year:1959` / `year:1950-1959`.
+- `is:favorite` (alias `is:fav`): only favorite tracks, ANDed with the rest (`search "miles is:fav"`). The artists and albums sections are empty then.
 - Ranking: exact field > prefix > word start > anywhere.
-- Exit 2: empty text, no letters/digits (`!!!`), a prefix without a value (`artist:`), a bad year, more than 1,000 characters or 32 terms.
+- Exit 2: empty text, no letters/digits (`!!!`), a prefix without a value (`artist:`), a bad year, an unknown `is:` value (`is:liked`; the message lists the valid ones), more than 1,000 characters or 32 terms.
 
 ```console
 $ music-spin search 'artist:"nils frahm" year:2013 hammers'

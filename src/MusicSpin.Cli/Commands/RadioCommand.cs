@@ -21,7 +21,7 @@ internal static class RadioCommand
             Description = "Format id(s): flac, alac, dsd, pcm, mp3, ... Repeat or comma-separate.",
             AllowMultipleArgumentsPerToken = true,
         };
-        var search = Many("--search", "Search text, same syntax as 'music-spin search' (words, \"phrases\", artist:/album:/title:/genre:/year:). Repeat for several (any).");
+        var search = Many("--search", "Search text, same syntax as 'music-spin search' (words, \"phrases\", artist:/album:/title:/genre:/year:, is:favorite). Repeat for several (any).");
         var hires = new Option<bool>("--hires") { Description = "Only hi-res tracks." };
         var favorites = new Option<bool>("--favorites") { Description = "Only favorite tracks (see 'music-spin favorite add'); narrows the other filters." };
         const string Ex = " Excluded even when an include filter matches; unknown names are ignored.";
@@ -37,7 +37,7 @@ internal static class RadioCommand
             Description = "Leave out format id(s). Repeat or comma-separate." + Ex,
             AllowMultipleArgumentsPerToken = true,
         };
-        var xSearch = Many("--exclude-search", "Leave out tracks matching this search text (search syntax). Repeatable." + Ex);
+        var xSearch = Many("--exclude-search", "Leave out tracks matching this search text (search syntax; is:favorite leaves out your favorites). Repeatable." + Ex);
         var backend = Options.Backend();
         var device = Options.Device();
         var exclusive = Options.Exclusive();
