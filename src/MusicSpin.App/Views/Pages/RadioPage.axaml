@@ -1,14 +1,125 @@
-<!-- Radio: start a station over the whole library. The full page (stations, filters) comes with its own issue. -->
+<!--
+  Radio (#24; mockup: renderRadioPage): on the left the tags, one row per CLI radio filter; on the right the station card
+  for the draft. A click cycles a tag (off, included, left out); a right-click leaves it out at once (RadioPage.axaml.cs).
+-->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:services="using:MusicSpin.App.Services"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:theming="using:MusicSpin.App.Theming"
              x:Class="MusicSpin.App.Views.Pages.RadioPage"
              x:DataType="vm:RadioPageViewModel">
-    <StackPanel Classes="radio">
-        <TextBlock Classes="secondary" Text="Endless random play from your library." />
-        <TextBlock Name="OnAir"
-                   Text="{Binding OnAir, StringFormat='On air: {0}'}"
-                   IsVisible="{Binding OnAir, Converter={x:Static ObjectConverters.IsNotNull}}" />
-        <Button Name="StartRadio" Classes="accent" Content="Start radio" Command="{Binding StartRadioCommand}" />
-    </StackPanel>
+    <Grid Classes="radioPage" ColumnDefinitions="*,Auto">
+        <ScrollViewer Name="TagScroller" Classes="view radioTags">
+            <StackPanel Classes="facets">
+                <TextBlock Classes="radioHint" Text="{x:Static vm:RadioPageViewModel.Hint}" />
+                <ItemsControl Name="Facets" ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:RadioFacetViewModel">
+                            <Border Classes="facet">
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Classes="facetTitle" Text="{Binding Title, Converter={x:Static theming:TextConverters.Upper}}" />
+                                    <ItemsControl Grid.Column="1" Classes="tags" ItemsSource="{Binding Items}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Classes="tags" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.DataTemplates>
+                                            <!-- A tag (mockup: .tag): included shows "+" in the accent; left out "−", dashed red, struck through. -->
+                                            <DataTemplate DataType="vm:RadioChipViewModel">
+                                                <Button Classes="tag"
+                                                        Classes.inc="{Binding IsIncluded}"
+                                                        Classes.exc="{Binding IsLeftOut}"
+                                                        Command="{Binding CycleCommand}"
+                                                        ContextRequested="OnTagContextRequested"
+                                                        ToolTip.Tip="{Binding ToolTip}"
+                                                        AutomationProperties.Name="{Binding Name}">
+                                                    <Panel>
+                                                        <Rectangle Classes="dash" IsVisible="{Binding IsLeftOut}" />
+                                                        <StackPanel Classes="tagText">
+                                                            <TextBlock Classes="mark" Text="{Binding Mark}" IsVisible="{Binding Mark, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                            <TextBlock Classes="label" Text="{Binding Label}" />
+                                                            <TextBlock Classes="count" Text="{Binding Count}" IsVisible="{Binding Count, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                        </StackPanel>
+                                                    </Panel>
+                                                </Button>
+                                            </DataTemplate>
+                                            <DataTemplate DataType="vm:RadioNote">
+                                                <TextBlock Classes="tagNote" Text="{Binding Text}" />
+                                            </DataTemplate>
+                                        </ItemsControl.DataTemplates>
+                                    </ItemsControl>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- The station card (mockup: .station): the draft, what it plays, and what can be done with it. -->
+        <Border Name="Station" Grid.Column="1" Classes="station" Classes.live="{Binding IsLive}">
+            <Panel>
+                <Border Classes="stationGlow" IsVisible="{Binding IsLive}" />
+                <StackPanel Classes="stationBody">
+                    <StackPanel Classes="stationKicker">
+                        <controls:RadioIcon IsOnAir="{Binding IsLive}" />
+                        <TextBlock Name="StationKicker" Text="{Binding Kicker, Converter={x:Static theming:TextConverters.Upper}}" />
+                    </StackPanel>
+                    <ItemsControl Name="StationDescription" Classes="stationTitle" ItemsSource="{Binding Description}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="services:DescriptionPart">
+                                <TextBlock Classes.value="{Binding IsValue}" Text="{Binding Text}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Name="PoolText" Classes="stationMeta" Text="{Binding PoolText}" />
+                    <Grid Classes="stationActs" ColumnDefinitions="*,Auto">
+                        <WrapPanel>
+                            <Button Name="StartStation" Classes="accent pill" Command="{Binding StartCommand}" IsVisible="{Binding ShowsStart}">
+                                <StackPanel>
+                                    <controls:Icon Data="{StaticResource Play}" />
+                                    <TextBlock Text="{Binding StartLabel}" />
+                                </StackPanel>
+                            </Button>
+                            <Button Name="UndoStation" Classes="ghost pill" Command="{Binding UndoCommand}" IsVisible="{Binding ShowsUndo}" Content="Undo changes" />
+                            <Button Name="EndStation" Classes="ghost pill" Command="{Binding EndCommand}" IsVisible="{Binding ShowsEnd}" Content="End radio" />
+                        </WrapPanel>
+                        <Button Name="ClearTags" Grid.Column="1" Classes="link" Command="{Binding ClearCommand}" IsVisible="{Binding CanClear}" Content="Clear tags" />
+                    </Grid>
+                    <!-- While on air, the station's next picks (mockup: .st-next). -->
+                    <Border Name="NextPicks" Classes="stationNext" IsVisible="{Binding ShowsEnd}">
+                        <StackPanel Classes="picks">
+                        <TextBlock Classes="stationNextTitle" Text="NEXT PICKS" />
+                        <ItemsControl ItemsSource="{Binding NextPicks}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Classes="picks" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:QueueRowViewModel">
+                                    <Grid Classes="stationPick" ColumnDefinitions="Auto,*">
+                                        <controls:CoverView Classes="flat" Source="{Binding Art.Cover}" Title="{Binding Album}" Artist="{Binding Artist}" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Classes="title trim" Text="{Binding Title}" />
+                                            <TextBlock Classes="artist trim" Text="{Binding Artist}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Panel>
+        </Border>
+    </Grid>
 </UserControl>

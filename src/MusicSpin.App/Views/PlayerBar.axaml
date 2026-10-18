@@ -25,11 +25,25 @@
 
             <controls:FollowPanel Name="Meta" Grid.Column="1" Classes="meta">
                 <StackPanel Classes="metaText">
-                    <!-- The title, then the playing track's heart (#48; a plain file has none). -->
-                    <Grid Classes="titleLine" ColumnDefinitions="*,Auto">
-                        <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" />
+                    <!--
+                      While a station is on air, a RADIO pill before the title (#23; it opens the Radio page). Then the title
+                      and the playing track's heart (#48; a plain file has none).
+                    -->
+                    <Grid Classes="titleLine" ColumnDefinitions="Auto,*,Auto">
+                        <Button Name="OnAirPill"
+                                Classes="onAirPill"
+                                IsVisible="{Binding Radio.IsOnAir}"
+                                Command="{Binding Radio.OpenPageCommand}"
+                                ToolTip.Tip="{Binding Radio.PillToolTip}"
+                                AutomationProperties.Name="{Binding Radio.PillToolTip}">
+                            <StackPanel>
+                                <controls:RadioIcon IsOnAir="{Binding Radio.IsOnAir}" />
+                                <TextBlock Text="RADIO" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Name="PlayerTitle" Grid.Column="1" Classes="playerTitle trim" Text="{Binding PlayerTitle}" />
                         <Button Name="PlayingHeart"
-                                Grid.Column="1"
+                                Grid.Column="2"
                                 Classes="heart"
                                 Classes.on="{Binding IsPlayingFavorite}"
                                 IsVisible="{Binding CanFavoritePlaying}"

@@ -132,8 +132,7 @@
         <Setter Property="Foreground" Value="{StaticResource CrateLabelBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Border.crateBox > StackPanel">
-        <Setter Property="Orientation" Value="Horizontal" />
+    <Style Selector="Border.crateBox > controls|TrimFirstPanel">
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
@@ -142,7 +141,7 @@
         <Setter Property="BoxShadow" Value="inset 0 1.6 0 0 #25FFFFFF, 0 32 48 -16 #FF000000" />
     </Style>
     <!-- Grouped: the group's name and count, left, with room on the right for its Play and Radio icons (#41, #23). -->
-    <Style Selector="Viewbox.crateCell Border.crateBox > StackPanel">
+    <Style Selector="Viewbox.crateCell Border.crateBox > controls|TrimFirstPanel">
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="Margin" Value="{StaticResource CrateGroupLabelPadding}" />
     </Style>
@@ -155,7 +154,6 @@
     </Style>
     <Style Selector="Viewbox.crateCell Border.crateBox TextBlock.name">
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        <Setter Property="MaxWidth" Value="{StaticResource CrateGroupNameMaxWidth}" />
     </Style>
     <Style Selector="Viewbox.crateCell Panel.crate.active Border.crateBox TextBlock">
         <Setter Property="Foreground" Value="{StaticResource CrateActiveLabelBrush}" />

@@ -58,6 +58,9 @@ public sealed partial class CrateViewModel : ObservableObject
     /// <summary>"A — Z", "1998 — 2024", or the group's count (" · 12") after its <see cref="Name"/>.</summary>
     public string Label { get; }
 
+    /// <summary>A grouped crate's Play and Radio, as icons on its label (#41, #23); null on the one crate.</summary>
+    public GroupActionsViewModel? Actions { get; init; }
+
     public IReadOnlyList<AlbumItemViewModel> Albums { get; }
 
     /// <summary>The records near the front, in no particular order (their z-index sorts them).</summary>

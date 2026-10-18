@@ -47,7 +47,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Classes="npInfo">
                     <StackPanel Name="Kicker" Classes="npKicker" IsVisible="{Binding NowPlaying.Kicker, Converter={x:Static ObjectConverters.IsNotNull}}">
-                        <controls:Icon Data="{StaticResource Radio}" />
+                        <controls:RadioIcon IsOnAir="{Binding Radio.IsOnAir}" />
                         <TextBlock Classes="kicker" Text="{Binding NowPlaying.Kicker, Converter={x:Static theming:TextConverters.Upper}}" />
                     </StackPanel>
                     <TextBlock Name="AlbumTitle" Classes="npTitle" Text="{Binding NowPlaying.Title}" />

@@ -63,7 +63,7 @@ public sealed class TracksPageTests
         Gui.Settle();
         Assert.Equal(["Aurora", "Halvard Eik", "Northern Lines", "2:37"], Texts(Row(window, "Aurora")));
         Assert.Single(Row(window, "Aurora").GetVisualDescendants().OfType<CoverView>());
-        Assert.Equal("AMBIENT · 6 TRACKS", Texts(Gui.All<Grid>(window).First(g => g.Classes.Contains("groupHeader"))).Single());
+        Assert.Equal("AMBIENT · 6 TRACKS", Gui.All<Grid>(window).First(g => g.Classes.Contains("groupHeader")).Children.OfType<TextBlock>().Single().Text);
 
         page.Grouping = TrackGrouping.None;
         Gui.Settle();

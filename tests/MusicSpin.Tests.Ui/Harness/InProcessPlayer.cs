@@ -24,6 +24,9 @@ internal sealed class InProcessPlayer(DataDirectory data) : IPlayerConnector, IA
     /// <summary>How many times the app started the player.</summary>
     public int AppStarts { get; private set; }
 
+    /// <summary>The player reads the library, as the real one does: radio works (off by default: most tests don't need it).</summary>
+    public bool ReadsLibrary { get; set; }
+
     /// <summary>False: the app can't start a player (as when the CLI is missing), only connect to a running one.</summary>
     public bool AllowStart { get; set; } = true;
 
@@ -53,7 +56,7 @@ internal sealed class InProcessPlayer(DataDirectory data) : IPlayerConnector, IA
                 Outputs = Outputs.Realtime(),
                 IdleTimeout = null,
                 PersistQueue = false,
-                ResolveFromLibrary = false,
+                ResolveFromLibrary = ReadsLibrary,
             }) ?? throw new InvalidOperationException("Another player holds the data folder.");
             return Host;
         }

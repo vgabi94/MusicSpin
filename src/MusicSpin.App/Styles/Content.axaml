@@ -101,6 +101,7 @@
     <Style Selector="Grid.groupHeader">
         <Setter Property="Margin" Value="{StaticResource GroupHeaderMargin}" />
         <Setter Property="MinHeight" Value="{StaticResource GroupHeaderMinHeight}" />
+        <Setter Property="ColumnSpacing" Value="{StaticResource GroupHeaderGap}" />
     </Style>
     <Style Selector="Grid.groupHeader.first">
         <Setter Property="Margin" Value="{StaticResource FirstGroupHeaderMargin}" />
@@ -259,11 +260,5 @@
     </Style>
     <Style Selector="Border.chip > TextBlock">
         <Setter Property="FontSize" Value="{StaticResource ChipFontSize}" />
-    </Style>
-
-    <Style Selector="StackPanel.radio">
-        <Setter Property="Spacing" Value="{StaticResource RadioGap}" />
-        <Setter Property="Margin" Value="{StaticResource ViewPadding}" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
 </Styles>

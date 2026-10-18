@@ -359,6 +359,35 @@ public sealed class MusicLibraryTests : LibraryTestBase
     }
 
     [Fact]
+    public void Several_albums_queue_in_the_order_given_each_in_its_own_order()
+    {
+        LibraryTestData.CreateSmallLibrary(Music);
+        LibraryTestData.Write(Path.Combine(Music, "Miles", "Kind of Blue", "03 Blue in Green.flac"), LibraryTestData.Tiny24, "Blue in Green", "Miles Davis", "Kind of Blue", "Miles Davis", 3, 1, 1959);
+        AddAndScan();
+        using var library = OpenRead();
+        var ids = library.Albums(new AlbumQuery()).Items.ToDictionary(a => a.Title, a => a.Id);
+
+        var queue = library.AlbumsQueue([ids["Singles"], ids["Kind of Blue"], ids["Jazz Hits"]]);
+
+        Assert.Equal(["Lossy Song", "So What", "Freddie Freeloader", "Blue in Green", "Song A", "Song B"], queue.Select(t => t.Title));
+        Assert.Equal(library.AlbumQueue(ids["Kind of Blue"]).Select(t => t.Id), library.AlbumsQueue([ids["Kind of Blue"]]).Select(t => t.Id));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Several_albums_queue_skips_unknown_ids_and_repeats()
+    {
+        LibraryTestData.CreateSmallLibrary(Music);
+        AddAndScan();
+        using var library = OpenRead();
+        var singles = library.Albums(new AlbumQuery()).Items.Single(a => a.Title == "Singles").Id;
+
+        Assert.Equal(["Lossy Song"], library.AlbumsQueue(["no-such-album", singles, singles]).Select(t => t.Title));
+        Assert.Empty(library.AlbumsQueue(["no-such-album"]));
+        Assert.Empty(library.AlbumsQueue([]));
+    }
+
+    [Fact]
     public void Queue_for_unknown_album_or_artist_is_not_found()
     {
         LibraryTestData.CreateSmallLibrary(Music);

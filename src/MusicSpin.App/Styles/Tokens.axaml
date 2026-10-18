@@ -19,6 +19,8 @@
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0DFFFFFF" />
             <SolidColorBrush x:Key="MenuHoverBrush" Color="#14FFFFFF" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#1AFFFFFF" />
+            <!-- A radio tag's edge under the pointer: the text colour at 28% (mockup: .tag:hover). -->
+            <SolidColorBrush x:Key="TagHoverEdgeBrush" Color="#47EEF0F4" />
             <Color x:Key="CardShadowColor">#CC000000</Color>
             <!-- The Classic deck's plinth (mockup: .deck, linear-gradient(160deg, …)). -->
             <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
@@ -54,6 +56,7 @@
             <SolidColorBrush x:Key="RowHoverBrush" Color="#0A000000" />
             <SolidColorBrush x:Key="MenuHoverBrush" Color="#0D000000" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#14000000" />
+            <SolidColorBrush x:Key="TagHoverEdgeBrush" Color="#471B1C1F" />
             <Color x:Key="CardShadowColor">#66000000</Color>
             <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
                 <GradientStop Color="#F7F5F1" Offset="0" />
@@ -86,6 +89,20 @@
     <SolidColorBrush x:Key="AccentHighlightBrush" Color="#66E86A3C" />
     <!-- The accent at 8%: the queue's empty box while something is dragged over it (mockup: .queue.over .qempty). -->
     <SolidColorBrush x:Key="AccentWashBrush" Color="#14E86A3C" />
+    <!--
+      Radio (#23, #24): the accent at 50%, the edge of what is on air (mockup: .radio-btn.on, .onair); at 75%, an included
+      tag's edge, and at 20% its fill over the panel (.tag.inc); at 45%, the live station's edge and a crate's Radio on
+      air; at 14%, the RADIO pill under the pointer; and the live station's wash, 16% fading out by 70% (.station.live).
+    -->
+    <SolidColorBrush x:Key="AccentRingBrush" Color="#80E86A3C" />
+    <SolidColorBrush x:Key="AccentStrongRingBrush" Color="#BFE86A3C" />
+    <SolidColorBrush x:Key="AccentChipBrush" Color="#33E86A3C" />
+    <SolidColorBrush x:Key="AccentLiveBrush" Color="#73E86A3C" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#24E86A3C" />
+    <LinearGradientBrush x:Key="AccentGlowBrush" StartPoint="33%,0%" EndPoint="67%,100%">
+        <GradientStop Color="#29E86A3C" Offset="0" />
+        <GradientStop Color="#00E86A3C" Offset="0.7" />
+    </LinearGradientBrush>
 
     <!-- A sleeve's spine when the album has no colour (mockup: .edge, background #333 by default). -->
     <SolidColorBrush x:Key="ShelfSpineBrush" Color="#333333" />
@@ -134,6 +151,13 @@
     <!-- The HI-RES badge (mockup: .hires) and a refused typed value (mockup: .bad). -->
     <SolidColorBrush x:Key="HiResBrush" Color="#D4B25A" />
     <SolidColorBrush x:Key="InvalidBrush" Color="#E5484D" />
+    <!-- A left-out radio tag (mockup: .tag.exc): its dashed edge at 60%, its "−" in full, the strike through its name at 80%. -->
+    <SolidColorBrush x:Key="ExcludedEdgeBrush" Color="#99E5484D" />
+    <SolidColorBrush x:Key="ExcludedMarkBrush" Color="#E5484D" />
+    <SolidColorBrush x:Key="ExcludedStrikeBrush" Color="#CCE5484D" />
+    <!-- A grouped crate's Play and Radio on its label (mockup: .crate-box .radio-btn): the icons, and under the pointer. -->
+    <SolidColorBrush x:Key="CrateActBrush" Color="#99FFFFFF" />
+    <SolidColorBrush x:Key="CrateActHoverBrush" Color="#1FFFFFFF" />
     <!-- The close window button while hovered (the platform convention). -->
     <SolidColorBrush x:Key="CloseHoverBrush" Color="#E81123" />
     <SolidColorBrush x:Key="CloseHoverInkBrush" Color="#FFFFFF" />

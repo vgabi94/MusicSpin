@@ -163,7 +163,7 @@ public sealed class PlaylistTests
     public async Task Play_sends_one_queue_set_with_the_entries_in_order_and_ends_a_station_on_air()
     {
         await using var app = await AppHarness.OpenAsync(Options(Mix));
-        app.Scripted!.SetQueue(["on air", "pick"], radio: "Jazz");
+        app.Scripted!.SetQueue(["on air", "pick"], radio: new RadioFilter { Genres = ["Jazz"] });
         await app.Scripted.PushAsync("stateChanged");
         await Gui.UntilAsync(() => app.ViewModel.Player.IsRadio && app.ViewModel.Sidebar.Playlists.Count == 1, "the station on air");
         await OpenPlaylistAsync(app, "Mix", 4);

@@ -191,6 +191,26 @@ public sealed record RadioFilter
     private static int Count<T>(IReadOnlyList<T>? list) => list?.Count ?? 0;
 }
 
+/// <summary>
+/// One value a station can be built from (<see cref="MusicLibrary.RadioTags"/>): <paramref name="Value"/> goes in the
+/// filter (a genre, a year range "1960-1969", a format id, an artist name, an album id), <paramref name="Name"/> is shown
+/// ("1960s", an album's title), and <paramref name="Tracks"/> is how many tracks a station of that value alone plays.
+/// <paramref name="Detail"/> tells apart values that share a name (an album's artist).
+/// </summary>
+public sealed record RadioTagCount(string Value, string Name, int Tracks, string? Detail = null);
+
+/// <summary>
+/// The library's radio values with their track counts: genres, decades, formats and albums by name, artists by track
+/// count (most first), and how many tracks are hi-res.
+/// </summary>
+public sealed record RadioTagCounts(
+    IReadOnlyList<RadioTagCount> Genres,
+    IReadOnlyList<RadioTagCount> Decades,
+    IReadOnlyList<RadioTagCount> Formats,
+    int HiRes,
+    IReadOnlyList<RadioTagCount> Artists,
+    IReadOnlyList<RadioTagCount> Albums);
+
 /// <summary>One track a station can play: what radio needs to pick (ids, artist/album for spacing) and to queue it.</summary>
 public sealed record RadioCandidate(
     string TrackId,

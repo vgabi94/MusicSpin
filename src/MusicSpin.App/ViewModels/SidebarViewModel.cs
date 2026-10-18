@@ -48,6 +48,13 @@ public sealed partial class NavItemViewModel(string title, string icon, PageKind
     [ObservableProperty]
     public partial bool IsRenaming { get; set; }
 
+    /// <summary>The Radio entry while a station is on air: it takes the accent colour and its waves pulse (#23).</summary>
+    [ObservableProperty]
+    public partial bool IsOnAir { get; set; }
+
+    /// <summary>The Radio entry (its icon's waves can pulse).</summary>
+    public bool IsRadio => Kind == PageKind.Radio;
+
     /// <summary>A playlist's entry (it has a menu, takes drops and can be renamed).</summary>
     public bool IsPlaylist => Kind == PageKind.Playlist && Playlist is not null;
 

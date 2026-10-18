@@ -308,14 +308,36 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
 
 /// <summary>
 /// Tracks: every library track, by album (mockup: renderTracks). Albums come in the Sort's order, their tracks in album
-/// order; Title sorts the tracks themselves unless they are grouped by album. Grouped by album, each album has a header.
+/// order; Title sorts the tracks themselves unless they are grouped by album. Grouped by album, each album has a header;
+/// grouped by genre, each genre's header has Play (its tracks as listed) and Radio (its station).
 /// </summary>
-public sealed partial class TracksPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, MenuViewModel menu,
-    PlaylistActions playlists, FavoritesViewModel favorites, Notices notices) : TrackListPageViewModel(covers, player, menu, playlists, favorites, notices)
+public sealed partial class TracksPageViewModel : TrackListPageViewModel
 {
+    private readonly ILibraryService _library;
+    private readonly RadioViewModel _radio;
     private List<AlbumItemViewModel> _albums = [];
     private Dictionary<string, List<TrackSummary>> _albumTracks = new(StringComparer.Ordinal);
+    private IReadOnlyList<GroupActionsViewModel> _groupActions = [];
     private AlbumItemViewModel? _playingAlbum;
+
+    public TracksPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, RadioViewModel radio, MenuViewModel menu,
+        PlaylistActions playlists, FavoritesViewModel favorites, Notices notices)
+        : base(covers, player, menu, playlists, favorites, notices)
+    {
+        ArgumentNullException.ThrowIfNull(radio);
+        _library = library;
+        _radio = radio;
+        _radio.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(RadioViewModel.OnAir) or nameof(RadioViewModel.IsOnAir))
+            {
+                foreach (var actions in _groupActions)
+                {
+                    actions.Refresh();
+                }
+            }
+        };
+    }
 
     public override string Title => "Tracks";
 
@@ -345,8 +367,8 @@ public sealed partial class TracksPageViewModel(ILibraryService library, ICoverS
     protected override async Task<IReadOnlyList<TrackItemViewModel>> ReadAsync()
     {
         // One after the other: each read holds the library's lock while it runs.
-        var albums = await library.AlbumsAsync().ConfigureAwait(true);
-        var tracks = await library.TracksAsync().ConfigureAwait(true);
+        var albums = await _library.AlbumsAsync().ConfigureAwait(true);
+        var tracks = await _library.TracksAsync().ConfigureAwait(true);
         _albums = [.. albums.Select(a => _albums.FirstOrDefault(x => x.Album == a) ?? new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Small, Covers)))];
         var byId = _albums.ToDictionary(a => a.Album.Id, StringComparer.Ordinal);
         _albumTracks = tracks.GroupBy(t => t.AlbumId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
@@ -369,6 +391,7 @@ public sealed partial class TracksPageViewModel(ILibraryService library, ICoverS
     protected override IReadOnlyList<object> LayOut(IReadOnlyList<TrackItemViewModel> shown)
     {
         var rows = new List<object>();
+        var actions = new List<GroupActionsViewModel>();
         switch (Grouping)
         {
             case TrackGrouping.Album:
@@ -389,7 +412,11 @@ public sealed partial class TracksPageViewModel(ILibraryService library, ICoverS
                 var genres = LibraryOrder.GroupBy(shown, t => t.Genre);
                 foreach (var group in genres)
                 {
-                    rows.Add(new GroupHeaderViewModel(group.Key, group.Items.Count, " tracks", rows.Count == 0));
+                    // Play: the genre's tracks as listed (what the search lets through, in the Sort's order).
+                    IReadOnlyList<TrackSummary> tracks = [.. group.Items.Select(t => t.Track)];
+                    var genre = new GroupActionsViewModel(RadioTagKind.Genre, group.Key, () => Task.FromResult(tracks), Player, _radio, Notices);
+                    actions.Add(genre);
+                    rows.Add(new GroupHeaderViewModel(group.Key, group.Items.Count, " tracks", rows.Count == 0, genre));
                     rows.AddRange(group.Items.Select(t => new TrackRowWithAlbum(t)));
                 }
 
@@ -401,6 +428,7 @@ public sealed partial class TracksPageViewModel(ILibraryService library, ICoverS
                 break;
         }
 
+        _groupActions = actions;
         return rows;
     }
 

@@ -171,8 +171,11 @@ public sealed partial class AlbumItemViewModel(AlbumSummary album, AlbumArt art)
         => string.Join(separator, new[] { a, b, c }.Where(s => !string.IsNullOrEmpty(s)));
 }
 
-/// <summary>A group's header (mockup: .group-h): "AMBIENT · 2", or "JAZZ · 12 tracks".</summary>
-public sealed class GroupHeaderViewModel(string key, int count, string unit, bool isFirst)
+/// <summary>
+/// A group's header (mockup: .group-h): "AMBIENT · 2", or "JAZZ · 12 tracks", and for an artist or a genre its Play and
+/// Radio (<see cref="Actions"/>).
+/// </summary>
+public sealed class GroupHeaderViewModel(string key, int count, string unit, bool isFirst, GroupActionsViewModel? actions = null)
 {
     public string Key { get; } = key;
 
@@ -180,6 +183,9 @@ public sealed class GroupHeaderViewModel(string key, int count, string unit, boo
 
     /// <summary>The first group has no space above it (mockup: .group + .group).</summary>
     public bool IsFirst { get; } = isFirst;
+
+    /// <summary>Play and Radio after the name (an artist's or a genre's group); null for others.</summary>
+    public GroupActionsViewModel? Actions { get; } = actions;
 }
 
 /// <summary>One row of cards: the grid is a list of rows, so it can be virtualized.</summary>
@@ -226,6 +232,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private readonly ILibraryService _library;
     private readonly ICoverService _covers;
     private readonly PlayerViewModel _player;
+    private readonly RadioViewModel _radio;
     private readonly SpinClock _clock;
     private readonly LayerViewModel _nowPlaying;
     private readonly TurntableSceneViewModel _scene;
@@ -235,6 +242,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private readonly TimeProvider _time;
     private readonly Dictionary<string, string> _crateFronts = new(StringComparer.Ordinal);
     private List<AlbumItemViewModel> _all = [];
+    private IReadOnlyList<GroupActionsViewModel> _groupActions = [];
     private bool _loaded;
     private AlbumItemViewModel? _playing;
     private string? _activeCrateKey;
@@ -242,15 +250,17 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private double _wheelSum;
     private long? _lastFlip;
 
-    public AlbumsPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, SpinClock clock,
+    public AlbumsPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, RadioViewModel radio, SpinClock clock,
         LayerViewModel nowPlaying, TurntableSceneViewModel scene, MenuViewModel menu, PlaylistActions playlists, Notices notices,
         SettingsViewModel settings, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(radio);
         ArgumentNullException.ThrowIfNull(clock);
         _library = library;
         _covers = covers;
         _player = player;
+        _radio = radio;
         _clock = clock;
         _nowPlaying = nowPlaying;
         _scene = scene;
@@ -268,6 +278,16 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
             }
         };
         _player.PropertyChanged += OnPlayerChanged;
+        _radio.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(RadioViewModel.OnAir) or nameof(RadioViewModel.IsOnAir))
+            {
+                foreach (var actions in _groupActions)
+                {
+                    actions.Refresh();
+                }
+            }
+        };
     }
 
     public override string Title => "Albums";
@@ -500,10 +520,12 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
             _ => [new Group<AlbumItemViewModel>(string.Empty, Albums)],
         };
         GroupNames = Grouping == AlbumGrouping.None ? [] : [.. groups.Select(g => g.Key)];
+        var actions = groups.ToDictionary(g => g, ActionsFor);
+        _groupActions = [.. actions.Values.OfType<GroupActionsViewModel>()];
         if (IsCrate)
         {
             Rows = [];
-            LayOutCrates(groups);
+            LayOutCrates(groups, actions);
             return;
         }
 
@@ -514,7 +536,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         {
             if (Grouping != AlbumGrouping.None)
             {
-                rows.Add(new GroupHeaderViewModel(group.Key, group.Items.Count, string.Empty, rows.Count == 0));
+                rows.Add(new GroupHeaderViewModel(group.Key, group.Items.Count, string.Empty, rows.Count == 0, actions[group]));
             }
 
             if (IsShelf)
@@ -533,14 +555,32 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     }
 
     /// <summary>
+    /// An artist's or a genre's Play and Radio: Play queues the group's albums as shown, each whole, in one read.
+    /// </summary>
+    private GroupActionsViewModel? ActionsFor(Group<AlbumItemViewModel> group)
+    {
+        if (Grouping == AlbumGrouping.None)
+        {
+            return null;
+        }
+
+        IReadOnlyList<string> albumIds = [.. group.Items.Select(a => a.Album.Id)];
+        return new GroupActionsViewModel(Grouping == AlbumGrouping.Artist ? RadioTagKind.Artist : RadioTagKind.Genre, group.Key,
+            () => _library.AlbumsTracksAsync(albumIds), _player, _radio, _notices);
+    }
+
+    /// <summary>
     /// One crate per group (one in all when ungrouped), each with the record it showed last at the front, or else the
     /// album playing (mockup: renderCrate). The active crate stays active while it is shown.
     /// </summary>
-    private void LayOutCrates(IReadOnlyList<Group<AlbumItemViewModel>> groups)
+    private void LayOutCrates(IReadOnlyList<Group<AlbumItemViewModel>> groups, Dictionary<Group<AlbumItemViewModel>, GroupActionsViewModel?> actions)
     {
         var crates = groups.Where(g => g.Items.Count > 0).Select(g => new CrateViewModel(g.Key,
             IsGrouped ? g.Key : null, IsGrouped ? CrateViewModel.GroupLabel(g.Items.Count) : CrateLabel(g.Items), g.Items,
-            FrontOf(g.Key, g.Items))).ToList();
+            FrontOf(g.Key, g.Items))
+        {
+            Actions = actions[g],
+        }).ToList();
         Crates = crates;
         foreach (var crate in crates)
         {

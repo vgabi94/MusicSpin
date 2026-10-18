@@ -228,15 +228,21 @@
     <Style Selector="StackPanel.npInfo">
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <!-- "RADIO · JAZZ" while a station is on air (mockup: .np-kicker.np-radio). -->
+    <!-- "RADIO · JAZZ" in the accent ink while a station is on air, its waves pulsing (mockup: .np-kicker.np-radio). -->
     <Style Selector="StackPanel.npKicker">
         <Setter Property="Orientation" Value="Horizontal" />
         <Setter Property="Spacing" Value="{StaticResource NowPlayingKickerGap}" />
     </Style>
-    <Style Selector="StackPanel.npKicker controls|Icon">
+    <Style Selector="StackPanel.npKicker controls|RadioIcon">
         <Setter Property="Width" Value="{StaticResource NowPlayingKickerIconSize}" />
         <Setter Property="Height" Value="{StaticResource NowPlayingKickerIconSize}" />
-        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="ViewBox" Value="{StaticResource RadioViewBox}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource RadioIconStroke}" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.npKicker > TextBlock.kicker">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
     </Style>
     <Style Selector="StackPanel.npInfo > TextBlock.npTitle">
         <Setter Property="FontSize" Value="{StaticResource NowPlayingTitleFontSize}" />

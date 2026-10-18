@@ -10,19 +10,23 @@
         <!--
           An entry (Favorites shows its track count). Favorites and a playlist light up while albums or tracks are dragged
           over them and flash in the accent when they were just given tracks (or the playlist was just saved). A playlist's
-          entry also has a menu (right-click) and becomes a text box while it is renamed.
+          entry also has a menu (right-click) and becomes a text box while it is renamed. Radio takes the accent while a
+          station is on air, and its waves pulse (#23).
         -->
         <DataTemplate DataType="vm:NavItemViewModel">
             <Panel Classes="navItem" Classes.dropTarget="{Binding IsDropTarget}" controls:QueueSource.Item="{Binding}">
                 <Button Classes="nav"
                         Classes.active="{Binding IsActive}"
+                        Classes.onAir="{Binding IsOnAir}"
                         Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).NavigateCommand}"
                         CommandParameter="{Binding}"
                         IsVisible="{Binding !IsRenaming}"
                         AutomationProperties.Name="{Binding Title}">
                     <StackPanel>
                         <controls:Icon Data="{Binding Icon, Converter={x:Static theming:IconConverters.Geometry}}"
-                                       IsStroked="{Binding Icon, Converter={x:Static theming:IconConverters.IsStroked}}" />
+                                       IsStroked="{Binding Icon, Converter={x:Static theming:IconConverters.IsStroked}}"
+                                       IsVisible="{Binding !IsRadio}" />
+                        <controls:RadioIcon IsOnAir="{Binding IsOnAir}" IsVisible="{Binding IsRadio}" />
                         <TextBlock Text="{Binding Title}" />
                         <TextBlock Classes="navCount"
                                    Text="{Binding Detail}"

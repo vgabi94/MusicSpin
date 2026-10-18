@@ -10,13 +10,19 @@
              xmlns:vm="using:MusicSpin.App.ViewModels"
              xmlns:controls="using:MusicSpin.App.Controls"
              xmlns:theming="using:MusicSpin.App.Theming"
+             xmlns:views="using:MusicSpin.App.Views"
              x:Class="MusicSpin.App.Views.Pages.TracksPage"
              x:DataType="vm:TrackListPageViewModel">
     <UserControl.DataTemplates>
+        <!-- A genre's header: its name and count, then its Play and Radio (#41, #23). -->
         <DataTemplate DataType="vm:GroupHeaderViewModel">
             <Grid Classes="groupHeader" Classes.first="{Binding IsFirst}" ColumnDefinitions="Auto,*">
                 <TextBlock Text="{Binding Text, Converter={x:Static theming:TextConverters.Upper}}" />
+                <ContentControl Grid.Column="1" Content="{Binding Actions}" />
             </Grid>
+        </DataTemplate>
+        <DataTemplate DataType="vm:GroupActionsViewModel">
+            <views:GroupActionsView />
         </DataTemplate>
 
         <DataTemplate DataType="vm:TrackAlbumHeaderViewModel">

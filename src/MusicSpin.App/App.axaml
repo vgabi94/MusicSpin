@@ -35,5 +35,6 @@
         <StyleInclude Source="avares://MusicSpin/Styles/Queue.axaml" />
         <StyleInclude Source="avares://MusicSpin/Styles/PlayerBar.axaml" />
         <StyleInclude Source="avares://MusicSpin/Styles/Dialogs.axaml" />
+        <StyleInclude Source="avares://MusicSpin/Styles/Radio.axaml" />
     </Application.Styles>
 </Application>

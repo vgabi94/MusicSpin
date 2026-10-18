@@ -39,6 +39,13 @@
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 
+    <!--
+      While a station is on air, the radio icon's waves pulse (mockup: @keyframes onair, 1.8s ease-in-out, infinite); the
+      outer pair starts .3s after the inner (.ico .w2 animation-delay). controls:RadioIcon plays it.
+    -->
+    <sys:TimeSpan x:Key="OnAirPulseDuration">0:0:1.8</sys:TimeSpan>
+    <sys:TimeSpan x:Key="OnAirFarDelay">0:0:0.3</sys:TimeSpan>
+
     <!-- A drag handle growing in on hover (mockup: scale .12s). -->
     <sys:TimeSpan x:Key="HandleDuration">0:0:0.12</sys:TimeSpan>
 
@@ -116,6 +123,8 @@
     <SplineEasing x:Key="EaseSwing" X1="0.65" Y1="0" X2="0.35" Y2="1" />
     <!-- cubic-bezier(.33,0,.2,1): the arm lowering. -->
     <SplineEasing x:Key="EaseLower" X1="0.33" Y1="0" X2="0.2" Y2="1" />
+    <!-- cubic-bezier(.42,0,.58,1): CSS ease-in-out, the on-air pulse. -->
+    <SplineEasing x:Key="EaseInOut" X1="0.42" Y1="0" X2="0.58" Y2="1" />
     <!-- cubic-bezier(.25,.1,.25,1): CSS ease. -->
     <SplineEasing x:Key="Ease" X1="0.25" Y1="0.1" X2="0.25" Y2="1" />
 </ResourceDictionary>

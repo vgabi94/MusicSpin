@@ -9,10 +9,18 @@
              xmlns:vm="using:MusicSpin.App.ViewModels"
              xmlns:controls="using:MusicSpin.App.Controls"
              xmlns:theming="using:MusicSpin.App.Theming"
+             xmlns:views="using:MusicSpin.App.Views"
              x:Class="MusicSpin.App.Views.Pages.AlbumsPage"
              x:DataType="vm:AlbumsPageViewModel">
     <UserControl.DataTemplates>
-        <!-- A crate (mockup: .crate): its records front to back, and the box they stand in with its label. -->
+        <!-- An artist's or a genre's Play and Radio, on its header or its crate's label (#41, #23). -->
+        <DataTemplate DataType="vm:GroupActionsViewModel">
+            <views:GroupActionsView />
+        </DataTemplate>
+        <!--
+          A crate (mockup: .crate): its records front to back, and the box they stand in with its label. A grouped crate's
+          Play and Radio sit over the box's right end (the box itself lets clicks through to the records behind it).
+        -->
         <DataTemplate DataType="vm:CrateViewModel">
             <Panel Classes="crate" Classes.active="{Binding IsActive}" PointerWheelChanged="OnCrateWheel">
                 <ItemsControl Classes="crateStage" ItemsSource="{Binding Records}">
@@ -38,14 +46,18 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <!-- A long group name trims; its count stays (mockup: .crate-box .nm). -->
                 <Border Classes="crateBox">
-                    <StackPanel>
+                    <controls:TrimFirstPanel>
                         <TextBlock Classes="name"
                                    Text="{Binding Name, Converter={x:Static theming:TextConverters.Upper}}"
                                    IsVisible="{Binding Name, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                        <TextBlock Text="{Binding Label, Converter={x:Static theming:TextConverters.Upper}}" />
-                    </StackPanel>
+                        <TextBlock Classes="count" Text="{Binding Label, Converter={x:Static theming:TextConverters.Upper}}" />
+                    </controls:TrimFirstPanel>
                 </Border>
+                <Panel Classes="crateActs" IsVisible="{Binding Actions, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <ContentControl Content="{Binding Actions}" />
+                </Panel>
             </Panel>
         </DataTemplate>
     </UserControl.DataTemplates>
@@ -59,10 +71,11 @@
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.DataTemplates>
-                    <!-- Room after the name for the group's Play and Radio buttons (#41, #23). -->
+                    <!-- The name, then an artist's or a genre's Play and Radio (#41, #23). -->
                     <DataTemplate DataType="vm:GroupHeaderViewModel">
                         <Grid Classes="groupHeader" Classes.first="{Binding IsFirst}" ColumnDefinitions="Auto,*">
                             <TextBlock Text="{Binding Text, Converter={x:Static theming:TextConverters.Upper}}" />
+                            <ContentControl Grid.Column="1" Content="{Binding Actions}" />
                         </Grid>
                     </DataTemplate>
                     <DataTemplate DataType="vm:AlbumCardRowViewModel">

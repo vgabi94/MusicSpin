@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Avalonia.Media.Imaging;
 using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
@@ -109,6 +110,9 @@ internal sealed class StubLibrary : ILibraryService
     /// <summary>Set: album reads fail as a busy library's do.</summary>
     public string? AlbumsFailure { get; set; }
 
+    /// <summary>How <see cref="AlbumsFailure"/> fails: busy by default; another code is a library that can't be read.</summary>
+    public MusicSpinErrorCode AlbumsFailureCode { get; set; } = MusicSpinErrorCode.LibraryLocked;
+
     /// <summary>The most album and playlist reads under way at once (the library lets one reader in at a time).</summary>
     public int MostReadsAtOnce { get; private set; }
 
@@ -125,7 +129,7 @@ internal sealed class StubLibrary : ILibraryService
                 await gate.Task;
             }
 
-            return AlbumsFailure is { } failure ? throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure) : [.. Albums];
+            return AlbumsFailure is { } failure ? throw new MusicSpinException(AlbumsFailureCode, failure) : [.. Albums];
         }
         finally
         {
@@ -138,6 +142,20 @@ internal sealed class StubLibrary : ILibraryService
 
     public Task<IReadOnlyList<TrackSummary>> AlbumTracksAsync(string albumId, CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<TrackSummary>>([.. Tracks.Where(t => t.AlbumId == albumId)]);
+
+    /// <summary>How many times several albums' tracks were read (group Play reads them once).</summary>
+    public int AlbumsTracksReads { get; private set; }
+
+    /// <summary>Set: reading several albums' tracks fails as a busy library's does.</summary>
+    public string? AlbumsTracksFailure { get; set; }
+
+    public Task<IReadOnlyList<TrackSummary>> AlbumsTracksAsync(IReadOnlyList<string> albumIds, CancellationToken cancellationToken = default)
+    {
+        AlbumsTracksReads++;
+        return AlbumsTracksFailure is { } failure
+            ? Task.FromException<IReadOnlyList<TrackSummary>>(new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure))
+            : Task.FromResult<IReadOnlyList<TrackSummary>>([.. albumIds.Distinct().SelectMany(id => Tracks.Where(t => t.AlbumId == id))]);
+    }
 
     /// <summary>Set: playlist reads wait for it (a slow library).</summary>
     public TaskCompletionSource? PlaylistsGate { get; set; }
@@ -241,6 +259,75 @@ internal sealed class StubLibrary : ILibraryService
         entries.RemoveAt(entry.Position - 1);
         entries.Insert(to - 1, track);
         return Task.CompletedTask;
+    }
+
+    public Task<RadioTagCounts> RadioTagsAsync(CancellationToken cancellationToken = default)
+    {
+        static List<RadioTagCount> By(IEnumerable<(string Value, string Name)> values)
+            => [.. values.GroupBy(v => v.Value, StringComparer.OrdinalIgnoreCase).Select(g => new RadioTagCount(g.Key, g.First().Name, g.Count()))
+                .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)];
+        var albums = Albums.ToDictionary(a => a.Id, StringComparer.Ordinal);
+        return Task.FromResult(new RadioTagCounts(
+            By(Tracks.Where(t => t.Genre is not null).Select(t => (t.Genre!, t.Genre!))),
+            By(Tracks.Where(t => albums.GetValueOrDefault(t.AlbumId)?.Year is not null)
+                .Select(t => albums[t.AlbumId].Year!.Value / 10 * 10).Select(d => (string.Create(CultureInfo.InvariantCulture, $"{d}-{d + 9}"), $"{d}s"))),
+            By(Tracks.Select(t => (t.Format.ToLowerInvariant(), t.Format.ToLowerInvariant()))),
+            Tracks.Count(t => t.HiRes),
+            [.. By(Tracks.Select(t => (t.Artist, t.Artist))).OrderByDescending(a => a.Tracks).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)],
+            [.. By(Tracks.Select(t => (t.AlbumId, t.Album))).Select(a => a with { Detail = Albums.FirstOrDefault(x => x.Id == a.Value)?.Artist })]));
+    }
+
+    /// <summary>How many times a station's size was read.</summary>
+    public int RadioPoolReads { get; private set; }
+
+    /// <summary>The filters whose sizes were read, in order.</summary>
+    public List<RadioFilter> RadioPoolFilters { get; } = [];
+
+    /// <summary>A station's size, matched as the library matches (one row ORs, rows AND, a value left out wins).</summary>
+    /// <summary>Set: a station's size fails as a busy library's does.</summary>
+    public string? RadioPoolFailure { get; set; }
+
+    /// <summary>Set: a station's size is read only once the task it returns for the filter completes (null: at once).</summary>
+    public Func<RadioFilter, Task?>? RadioPoolHold { get; set; }
+
+    public async Task<RadioPoolSize> RadioPoolAsync(RadioFilter filter, CancellationToken cancellationToken = default)
+    {
+        RadioPoolReads++;
+        RadioPoolFilters.Add(filter);
+        if (RadioPoolHold?.Invoke(filter) is { } hold)
+        {
+            await hold;
+        }
+
+        if (RadioPoolFailure is { } failure)
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure);
+        }
+
+        var years = Albums.ToDictionary(a => a.Id, a => a.Year, StringComparer.Ordinal);
+        static bool Is(string? a, string b) => string.Equals(a?.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+        bool Words(TrackSummary t, string words) => words.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .All(w => new[] { t.Title, t.Artist, t.Album }.Any(f => f.Contains(w, StringComparison.OrdinalIgnoreCase)));
+        bool Matches(TrackSummary t, IReadOnlyList<string>? genres, IReadOnlyList<YearRange>? ranges, IReadOnlyList<string>? formats,
+            IReadOnlyList<string>? artists, IReadOnlyList<string>? albums, IReadOnlyList<string>? searches, bool any)
+        {
+            var tests = new List<bool?>
+            {
+                genres is { Count: > 0 } ? genres.Any(g => Is(t.Genre, g)) : null,
+                ranges is { Count: > 0 } ? ranges.Any(r => r.Contains(years.GetValueOrDefault(t.AlbumId))) : null,
+                formats is { Count: > 0 } ? formats.Any(f => Is(t.Format, f)) : null,
+                artists is { Count: > 0 } ? artists.Any(a => Is(t.Artist, a)) : null,
+                albums is { Count: > 0 } ? albums.Any(a => a == t.AlbumId || Is(t.Album, a)) : null,
+                searches is { Count: > 0 } ? searches.Any(s => Words(t, s)) : null,
+            };
+            return any ? tests.Any(x => x == true) : tests.All(x => x != false);
+        }
+
+        var pool = Tracks.Where(t => Matches(t, filter.Genres, filter.Years, filter.Formats, filter.Artists, filter.Albums, filter.Searches, any: false)
+                                     && (!filter.HiRes || t.HiRes) && (!filter.Favorites || Favorites.Contains(t.Id))
+                                     && !Matches(t, filter.ExcludeGenres, filter.ExcludeYears, filter.ExcludeFormats, filter.ExcludeArtists,
+                                         filter.ExcludeAlbums, filter.ExcludeSearches, any: true)).ToList();
+        return new RadioPoolSize(pool.Count, pool.Select(t => t.Artist).Distinct().Count(), pool.Sum(t => t.DurationSeconds));
     }
 
     /// <summary>Favorite track ids, newest first.</summary>

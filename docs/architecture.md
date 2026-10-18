@@ -99,16 +99,17 @@ src/MusicSpin.App/
 ├── Composition/           AppServices + AppComposition: the one place that builds services and view models
 ├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers,
 │                          notices, the format label, typed values (seek and volume syntax), turntable designs,
-│                          the scene's timeline
+│                          the scene's timeline, RadioStation (radio tags, their filter and description)
 ├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
 │                          layers (Settings, Now Playing, the queue drawer and its name form, the menu),
 │                          LibraryItemActions (right-click and drag of albums and tracks), PlaylistActions (the
 │                          sidebar's playlists, Add to playlist ›), Favorites (the hearts), pages (Albums, Tracks,
 │                          playlists, Favorites, Radio), Crate (a crate and its records), LibraryOrder (sort and
-│                          grouping) and the turntable scene
+│                          grouping), GroupActions (a group's Play and Radio), Radio (the station on air) and the
+│                          turntable scene
 ├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, NowPlayingView, SceneView,
-│                          QueueDrawerView, DragGhostView, LibraryDrag (drags into the queue, onto the sidebar, and
-│                          within a playlist), MenuPlacement,
+│                          QueueDrawerView, DragGhostView, GroupActionsView, LibraryDrag (drags into the queue, onto
+│                          the sidebar, and within a playlist), MenuPlacement,
 │                          Pages/ — structure and bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
@@ -118,7 +119,8 @@ src/MusicSpin.App/
 │                          (a turntable design's deck; ClassicDeckView, PlatterView), DeckHost (builds and scales
 │                          the chosen design's deck), SlidePanel (Now Playing's slide or fade, the queue drawer's
 │                          slide), QueueSource (what a right-click or a drag acts on),
-│                          SceneFlight and SceneSource (the scene's travelling sleeve and where it starts)
+│                          SceneFlight and SceneSource (the scene's travelling sleeve and where it starts), RadioIcon
+│                          (the radio icon in layers, its waves pulsing on air)
 ├── Theming/               Appearance (theme, accent), Motion (setting + {theming:Motion} durations), Animate
 │                          (per-control transitions, animations played on a trigger), ShelfGeometry (slot widths,
 │                          sleeves per board, depth as perspective), converters
@@ -126,7 +128,8 @@ src/MusicSpin.App/
                            button, ScrubBar, TypedBox, segmented control, cards), Window,
                            Base, TitleBar, Sidebar, Content (toolbar, group headers, the menu), Lists (track rows),
                            Cards, Shelf, Crate, PlayerBar, NowPlaying (and the Classic deck), Queue (the drawer and
-                           the drag ghost), Dialogs (and Settings), Artwork
+                           the drag ghost), Dialogs (and Settings), Artwork, Radio (group buttons, on air, the Radio
+                           page)
 ```
 
 - **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
@@ -225,6 +228,26 @@ src/MusicSpin.App/
   laid out like a playlist (no rename, delete or ✕); its Radio button starts a favorites station and, while that is on
   air, reads On air and opens the Radio page. Favorites whose files left the library are counted in a line under the
   title, which links to `music-spin favorites --missing` in the docs.
+- **Groups and radio.** An artist's or a genre's header (Cards, Shelf, Tracks by genre) and a grouped crate's label get
+  `GroupActionsViewModel`'s Play and Radio. Play reads the group's albums in one query (`MusicLibrary.AlbumsQueue`; on
+  the Tracks page, the rows shown) and sends one `queue.set` without a start entry, so the player's shuffle, when on,
+  orders the whole queue; like every `queue.set` it ends radio. Radio starts the group's station. The app speaks of a
+  station as tags (`RadioStation`: one kind per CLI radio filter, included or left out), which convert to and from the
+  player's `RadioFilter` and compare as the player matches names (ignoring case and diacritics), so a station started
+  from the CLI lights the same buttons. `RadioViewModel` follows the station on air for every view: the group's button
+  reads On air and opens the Radio page, the player bar shows a RADIO pill, Now Playing's kicker and the queue drawer
+  describe it ("Jazz or Ambient · 1960s · not Kodo Arai"), and the sidebar's Radio takes the accent while its waves
+  pulse (`RadioIcon`, timed by Motion; still at None).
+- **Radio page.** `RadioPageViewModel` composes a station from tags in rows (genres, decades, formats and Hi-Res,
+  artists, albums, words), each with the count of tracks a station of it alone plays (`MusicLibrary.RadioTags`, one
+  pass over the library). A click cycles a tag (off, included, left out), a right-click leaves it out; the title bar's
+  search filters the tags (each word anywhere, as on the other pages), chosen ones first. The station card describes
+  the draft and gives its size, read with `RadioPool` 250 ms after the tags or the search last changed (on the app's
+  clock); until then it says "Counting…" and Start waits, so it never goes by another draft's size. That count runs in
+  the background: a busy library leaves it owed (`OwedReads`), with no notice, until the library's next check. It starts the draft, switches to
+  it, or, while the draft is on air, ends radio (`queue.set` with the current track at its position and the up-next
+  entries) and shows the next three picks (the queue drawer's). A new station on air, from here or the CLI, becomes
+  the draft.
 - **Spin clock.** One `SpinClock` drives every visible record of the playing album, at Settings › Speed (33⅓, 45 or
   16⅔ rpm), spinning up and down like a platter. It runs in every Motion mode; None only skips the ramp.
 - **Player bar.** `PlayerBarViewModel` holds the transport (⏮ restarts after 3 seconds), the format label and the

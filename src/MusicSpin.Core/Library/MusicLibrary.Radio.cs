@@ -27,6 +27,85 @@ public sealed partial class MusicLibrary
     }
 
     /// <summary>
+    /// The values a station can be built from, each with how many tracks a station of that value alone plays (what
+    /// <see cref="RadioPool"/> returns for it), read in one pass over the library: genres (multi-genre tags split as
+    /// <c>--genre</c> splits them), decades, formats, hi-res, artists (track or album artist) and albums.
+    /// </summary>
+    public RadioTagCounts RadioTags() => Guard(() =>
+    {
+        var genres = new Dictionary<string, (Dictionary<string, int> Spellings, int Tracks)>(StringComparer.Ordinal);
+        var decades = new Dictionary<int, int>();
+        var formats = new Dictionary<string, int>(StringComparer.Ordinal);
+        var artists = new Dictionary<string, int>(StringComparer.Ordinal);
+        var albums = new Dictionary<string, int>(StringComparer.Ordinal);
+        var hiRes = 0;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var t in _db.Tracks.Query().Select(t => new RadioRow
+                 {
+                     ArtistKey = t.ArtistKey, AlbumArtistKey = t.AlbumArtistKey, AlbumId = t.AlbumId, Format = t.Format, Year = t.Year, Genre = t.Genre,
+                     IsHiRes = t.IsHiRes,
+                 }).ToEnumerable())
+        {
+            // A genre value matches the whole tag or one of its parts (GenreMatches): offer the parts, once per track.
+            seen.Clear();
+            foreach (var part in (t.Genre ?? string.Empty).Split(GenreSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (LibrarySearch.Fold(part) is { Length: > 0 } key && seen.Add(key))
+                {
+                    var g = genres.TryGetValue(key, out var known) ? known : (Spellings: new Dictionary<string, int>(StringComparer.Ordinal), Tracks: 0);
+                    Increment(g.Spellings, part);
+                    genres[key] = (g.Spellings, g.Tracks + 1);
+                }
+            }
+
+            if (t.Year is { } year and >= YearRange.MinYear and <= YearRange.MaxYear)
+            {
+                Increment(decades, year - (year % 10));
+            }
+
+            if (t.Format?.Trim().ToLowerInvariant() is { Length: > 0 } format)
+            {
+                Increment(formats, format);
+            }
+
+            hiRes += t.IsHiRes ? 1 : 0;
+            Increment(artists, t.ArtistKey);
+            if (t.AlbumArtistKey is { Length: > 0 } albumArtist && albumArtist != t.ArtistKey)
+            {
+                Increment(artists, albumArtist);
+            }
+
+            Increment(albums, t.AlbumId);
+        }
+
+        var artistNames = _db.Artists.FindAll().ToDictionary(a => a.Key, a => a.Name, StringComparer.Ordinal);
+        var albumNames = _db.Albums.FindAll().ToDictionary(a => a.Id, a => (a.Title, a.AlbumArtist), StringComparer.Ordinal);
+        static int ByName(RadioTagCount x, RadioTagCount y) => StringComparer.OrdinalIgnoreCase.Compare(x.Name, y.Name);
+        return new RadioTagCounts(
+            [.. genres.Values.Select(g =>
+            {
+                var name = Spelling(g.Spellings);
+                return new RadioTagCount(name, name, g.Tracks);
+            }).Order(Comparer<RadioTagCount>.Create(ByName))],
+            [.. decades.OrderBy(d => d.Key).Select(d => new RadioTagCount(new YearRange(d.Key, Math.Min(d.Key + 9, YearRange.MaxYear)).ToString(),
+                string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{d.Key}s"), d.Value))],
+            [.. formats.OrderBy(f => f.Key, StringComparer.Ordinal).Select(f => new RadioTagCount(f.Key, f.Key, f.Value))],
+            hiRes,
+            [.. artists.Where(a => artistNames.ContainsKey(a.Key)).Select(a => new RadioTagCount(artistNames[a.Key], artistNames[a.Key], a.Value))
+                .OrderByDescending(a => a.Tracks).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)],
+            [.. albums.Where(a => albumNames.ContainsKey(a.Key)).Select(a => new RadioTagCount(a.Key, albumNames[a.Key].Title, a.Value, albumNames[a.Key].AlbumArtist))
+                .Order(Comparer<RadioTagCount>.Create(ByName))]);
+    });
+
+    /// <summary>A genre's name: the spelling most of its tracks use (ties: the first in ordinal order, whatever the scan order).</summary>
+    private static string Spelling(Dictionary<string, int> spellings)
+        => spellings.OrderByDescending(s => s.Value).ThenBy(s => s.Key, StringComparer.Ordinal).First().Key;
+
+    private static void Increment<TKey>(Dictionary<TKey, int> counts, TKey key)
+        where TKey : notnull
+        => counts[key] = counts.GetValueOrDefault(key) + 1;
+
+    /// <summary>
     /// Why <paramref name="filter"/> has nothing to play, more precisely than <see cref="RadioFilter.EmptyPoolMessage"/>:
     /// a favorites station tells "no favorites yet" from "none of them is in the library".
     /// </summary>
@@ -202,5 +281,6 @@ public sealed partial class MusicLibrary
         public double DurationSeconds { get; set; }
         public int? Year { get; set; }
         public string? Genre { get; set; }
+        public bool IsHiRes { get; set; }
     }
 }
