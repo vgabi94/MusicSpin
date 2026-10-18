@@ -297,6 +297,48 @@ public sealed class TrackReaderTests : IDisposable
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// <c>info</c> and the player label a file with <see cref="TrackInfo.IsHiRes"/>; the library stores what
+    /// <see cref="TrackReader"/> computes from the same probe. The two must agree, including for odd probes: DSD that
+    /// FFmpeg doesn't flag lossless or gives no bit depth, a lossless codec without FFmpeg's lossless flag, and a 1-bit
+    /// depth on something that isn't DSD.
+    /// </summary>
+    [Theory]
+    [InlineData("flac", ".flac", true, 16, 44_100, false)]
+    [InlineData("flac", ".flac", true, 24, 44_100, true)]
+    [InlineData("flac", ".flac", true, 16, 96_000, true)]
+    [InlineData("alac", ".m4a", true, 16, 48_000, false)]
+    [InlineData("pcm_s24le", ".wav", true, 24, 192_000, true)]
+    [InlineData("dsd_lsbf_planar", ".dsf", true, 1, 2_822_400, true)]
+    [InlineData("dsd_msbf", ".dff", false, null, 2_822_400, true)]
+    [InlineData("dsd_lsbf", ".dsf", false, 1, 2_822_400, true)]
+    [InlineData("wmalossless", ".wma", false, 24, 44_100, true)]
+    [InlineData("pcm_s16le", ".wav", true, 1, 44_100, false)]
+    [InlineData("mp3", ".mp3", false, null, 96_000, false)]
+    [InlineData("aac", ".m4a", false, 24, 96_000, false)]
+    [InlineData("opus", ".opus", false, null, 48_000, false)]
+    public void Info_and_the_library_agree_on_hi_res(string codec, string extension, bool ffmpegLossless, int? bits, int rate, bool expected)
+    {
+        var path = Garbage("song" + extension);
+        var info = new TrackInfo
+        {
+            Path = path,
+            Container = extension.TrimStart('.'),
+            Codec = codec,
+            SampleRate = rate,
+            Channels = 2,
+            BitsPerSample = bits,
+            Duration = TimeSpan.FromSeconds(3),
+            IsLossless = ffmpegLossless,
+        };
+
+        var record = new TrackReader(new StubFactory(_ => info)).Read(path);
+
+        Assert.Equal("ffmpeg", record.TagSource);
+        Assert.Equal(expected, info.IsHiRes);
+        Assert.Equal(expected, record.IsHiRes);
+    }
+
     private sealed class StubFactory(Func<string, TrackInfo> probe) : IAudioDecoderFactory
     {
         public string Name => "stub";

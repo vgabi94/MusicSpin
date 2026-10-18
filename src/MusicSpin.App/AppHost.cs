@@ -20,21 +20,37 @@ internal static class AppHost
     public static void Initialize(string[] args)
     {
         DataDirectory = AppPaths.Resolve(DataDirOverride(args));
-        var store = new SettingsStore(DataDirectory);
-        Settings = store.Load();
-        StartupWarning = store.LoadWarning;
+        (Settings, StartupWarning) = Start(DataDirectory);
+    }
+
+    /// <summary>
+    /// Loads the settings and makes sure the data folder can be written (saving defaults on first run). Every problem
+    /// found is kept: a corrupt settings file and an unwritable folder are separate things to fix, so the warning lists both.
+    /// </summary>
+    internal static (AppSettings Settings, string? Warning) Start(DataDirectory directory)
+    {
+        var store = new SettingsStore(directory);
+        var settings = store.Load();
+        var warnings = new List<string>(2);
+        if (store.LoadWarning is { } loadWarning)
+        {
+            warnings.Add(loadWarning);
+        }
+
         try
         {
-            AppPaths.EnsureWritable(DataDirectory); // create on first use
+            AppPaths.EnsureWritable(directory); // create on first use
             if (!File.Exists(store.FilePath) && store.LoadWarning is null)
             {
-                store.Save(Settings);
+                store.Save(settings);
             }
         }
         catch (MusicSpinException ex)
         {
-            StartupWarning = ex.Message;
+            warnings.Add(ex.Message);
         }
+
+        return (settings, warnings.Count == 0 ? null : string.Join(Environment.NewLine, warnings));
     }
 
     internal static string? DataDirOverride(string[] args)

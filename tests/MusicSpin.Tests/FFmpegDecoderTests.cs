@@ -42,6 +42,28 @@ public sealed class FFmpegDecoderTests : IDisposable
     }
 
     [Fact]
+    public void Probed_tag_keys_are_lower_cased_so_upper_case_vorbis_comments_are_found()
+    {
+        RequireFFmpeg();
+        var path = Path.Combine(_dir, "upper.flac");
+        File.Copy(Fixture("tiny-16bit-44k.flac"), path);
+        using (var file = TagLib.File.Create(path))
+        {
+            var xiph = (TagLib.Ogg.XiphComment)file.GetTag(TagLib.TagTypes.Xiph, create: true);
+            xiph.SetField("TITLE", "Upper Title");
+            xiph.SetField("ARTIST", "Upper Artist");
+            xiph.SetField("ALBUM", "Upper Album");
+            file.Save();
+        }
+
+        var track = _factory.Probe(path);
+
+        Assert.Equal(("Upper Title", "Upper Artist", "Upper Album"), (track.Title, track.Artist, track.Album));
+        Assert.All(track.Tags.Keys, key => Assert.Equal(key.ToLowerInvariant(), key));
+        Assert.Equal("Upper Title", track.Tags["TITLE"]);
+    }
+
+    [Fact]
     public void Probes_alac_fixture()
     {
         RequireFFmpeg();
