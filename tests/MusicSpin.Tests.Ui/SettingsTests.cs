@@ -176,6 +176,97 @@ public sealed class SettingsTests
         }
     }
 
+    /// <summary>The whole bar, left to right at its vertical middle, in steps of <paramref name="steps"/> moves.</summary>
+    private static IReadOnlyList<Point> Across(AppHarness app, string bar, int steps)
+    {
+        var bounds = Gui.BoundsIn(app.Window, Find<ScrubBar>(app, bar));
+        return [.. Enumerable.Range(0, steps + 1).Select(i => new Point(bounds.X + 2 + ((bounds.Width - 4) * i / steps), bounds.Center.Y))];
+    }
+
+    [AvaloniaFact]
+    public async Task Dragging_a_slider_applies_each_step_but_saves_only_where_it_is_let_go()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { ShelfDepth = 40, Volume = 0.7 });
+        OpenSettings(app);
+        var before = File.ReadAllText(app.Data.SettingsFile);
+        var points = Across(app, "DepthBar", 20);
+
+        app.Window.MouseMove(points[0]);
+        app.Window.MouseDown(points[0], MouseButton.Left);
+        var seen = new HashSet<double>();
+        foreach (var point in points.Skip(1).Take(10))
+        {
+            app.Window.MouseMove(point);
+            Gui.Settle();
+            seen.Add(app.ViewModel.Settings.ShelfDepth);
+            Assert.Equal(app.ViewModel.Settings.ShelfDepthText, Find<TextBlock>(app, "DepthText").Text); // applies live
+            Assert.Equal(before, File.ReadAllText(app.Data.SettingsFile)); // nothing written mid-drag
+        }
+
+        Assert.True(seen.Count > 5, $"the drag moved through {seen.Count} values");
+        var last = app.ViewModel.Settings.ShelfDepth;
+        app.Window.MouseUp(points[10], MouseButton.Left);
+        Gui.Settle();
+
+        var saved = new SettingsStore(app.Data).Load();
+        Assert.Equal((last, 0.7), (saved.ShelfDepth, saved.Volume));
+        Assert.InRange(last, 45, 55); // half way along
+    }
+
+    [AvaloniaFact]
+    public async Task Closing_the_window_mid_drag_saves_the_value_shown()
+    {
+        var app = await OpenAsync(settings: new AppSettings { ShelfTilt = 58 });
+        await using var _ = app;
+        OpenSettings(app);
+        var points = Across(app, "TiltBar", 10);
+        app.Window.MouseMove(points[0]);
+        app.Window.MouseDown(points[0], MouseButton.Left);
+        app.Window.MouseMove(points[3]);
+        Gui.Settle();
+        var shown = app.ViewModel.Settings.ShelfTilt;
+        Assert.NotEqual(58, shown);
+        Assert.Equal(58, new SettingsStore(app.Data).Load().ShelfTilt);
+
+        await app.CloseAsync(); // still holding the button
+
+        Assert.Equal(shown, new SettingsStore(app.Data).Load().ShelfTilt);
+    }
+
+    [AvaloniaFact]
+    public async Task Shutting_down_with_a_drag_unsaved_saves_it()
+    {
+        // However the window goes (the OS may not end the pointer capture first), shutting down saves what a drag left.
+        await using var app = await OpenAsync(settings: new AppSettings { ShelfDepth = 40 });
+        var settings = app.ViewModel.Settings;
+        settings.DepthScrub = 80; // mid-drag, as the bar reports it
+        settings.SetShelfDepth(80);
+        Assert.Equal(40, new SettingsStore(app.Data).Load().ShelfDepth);
+
+        await app.ViewModel.ShutdownAsync();
+
+        Assert.Equal(80, new SettingsStore(app.Data).Load().ShelfDepth);
+    }
+
+    [AvaloniaFact]
+    public async Task Closing_the_dialog_mid_drag_saves_the_value_shown()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { ShelfTilt = 58 });
+        OpenSettings(app);
+        var points = Across(app, "TiltBar", 10);
+        app.Window.MouseMove(points[0]);
+        app.Window.MouseDown(points[0], MouseButton.Left);
+        app.Window.MouseMove(points[8]);
+        Gui.Settle();
+        var shown = app.ViewModel.Settings.ShelfTilt;
+
+        Gui.Press(app.Window, Avalonia.Input.Key.Escape, PhysicalKey.Escape);
+        Gui.Settle();
+
+        Assert.False(app.ViewModel.Settings.IsOpen);
+        Assert.Equal(shown, new SettingsStore(app.Data).Load().ShelfTilt);
+    }
+
     [AvaloniaFact]
     public async Task A_new_window_shows_the_saved_settings()
     {
