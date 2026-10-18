@@ -15,6 +15,7 @@ public sealed class RadioTagsTests : LibraryTestBase
             Write(Path.Combine(Music, "Mixed", "01.flac"), Tiny16, "Crossover", "Artist C", "Mixed", null, 1, 1, 1995, "Rock; Pop");
             Write(Path.Combine(Music, "Mixed", "02.flac"), Tiny16, "Undated", "Artist C", "Mixed", null, 2, 1, 0, "!!!");
             Write(Path.Combine(Music, "Mixed", "03.flac"), Tiny16, "Loud", "Artist C", "Mixed", null, 3, 1, 1999, "ROCK");
+            Write(Path.Combine(Music, "Mixed", "04.flac"), Tiny16, "Louder", "Artist C", "Mixed", null, 4, 1, 1999, "Rock");
         }
 
         AddAndScan();
@@ -54,9 +55,10 @@ public sealed class RadioTagsTests : LibraryTestBase
         Scan();
         var genres = Tags().Genres;
 
-        // "Rock; Pop" counts for Rock and for Pop, "ROCK" is the same genre as "Rock", and "!!!" folds to nothing.
+        // "Rock; Pop" counts for Rock and for Pop, "ROCK" is the same genre as "Rock" (named as most of its tracks spell it),
+        // and "!!!" folds to nothing.
         Assert.Equal(["Jazz", "Pop", "Rock"], genres.Select(g => g.Name));
-        Assert.Equal([5, 2, 2], genres.Select(g => g.Tracks));
+        Assert.Equal([5, 2, 3], genres.Select(g => g.Tracks));
     }
 
     [Fact]
@@ -67,7 +69,7 @@ public sealed class RadioTagsTests : LibraryTestBase
 
         Assert.Equal(["1950s", "1970s", "1990s", "2000s", "2010s"], decades.Select(d => d.Name));
         Assert.Equal(["1950-1959", "1970-1979", "1990-1999", "2000-2009", "2010-2019"], decades.Select(d => d.Value));
-        Assert.Equal(8, decades.Sum(d => d.Tracks)); // nine tracks, one without a year
+        Assert.Equal(9, decades.Sum(d => d.Tracks)); // ten tracks, one without a year
     }
 
     [Fact]
@@ -76,8 +78,8 @@ public sealed class RadioTagsTests : LibraryTestBase
         Scan();
         var tags = Tags();
 
-        // Three tracks each ("miles davis" is Miles Davis): the tie goes by name.
-        Assert.Equal([("Artist C", 3), ("Miles Davis", 3)], tags.Artists.Take(2).Select(a => (a.Name, a.Tracks)));
+        // Most tracks first: Artist C has four, Miles Davis three ("miles davis" is the same artist).
+        Assert.Equal([("Artist C", 4), ("Miles Davis", 3)], tags.Artists.Take(2).Select(a => (a.Name, a.Tracks)));
         Assert.Equal(tags.Artists.OrderByDescending(a => a.Tracks).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase), tags.Artists);
         var kindOfBlue = tags.Albums.Single(a => a.Name == "Kind of Blue");
         Assert.Equal(AllTracks().First(t => t.Album == "Kind of Blue").AlbumId, kindOfBlue.Value);

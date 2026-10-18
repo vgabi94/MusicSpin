@@ -33,7 +33,7 @@ public sealed partial class MusicLibrary
     /// </summary>
     public RadioTagCounts RadioTags() => Guard(() =>
     {
-        var genres = new Dictionary<string, (string Name, int Tracks)>(StringComparer.Ordinal);
+        var genres = new Dictionary<string, (Dictionary<string, int> Spellings, int Tracks)>(StringComparer.Ordinal);
         var decades = new Dictionary<int, int>();
         var formats = new Dictionary<string, int>(StringComparer.Ordinal);
         var artists = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -52,7 +52,9 @@ public sealed partial class MusicLibrary
             {
                 if (LibrarySearch.Fold(part) is { Length: > 0 } key && seen.Add(key))
                 {
-                    genres[key] = genres.TryGetValue(key, out var g) ? (g.Name, g.Tracks + 1) : (part, 1);
+                    var g = genres.TryGetValue(key, out var known) ? known : (Spellings: new Dictionary<string, int>(StringComparer.Ordinal), Tracks: 0);
+                    Increment(g.Spellings, part);
+                    genres[key] = (g.Spellings, g.Tracks + 1);
                 }
             }
 
@@ -80,7 +82,11 @@ public sealed partial class MusicLibrary
         var albumTitles = _db.Albums.FindAll().ToDictionary(a => a.Id, a => a.Title, StringComparer.Ordinal);
         static int ByName(RadioTagCount x, RadioTagCount y) => StringComparer.OrdinalIgnoreCase.Compare(x.Name, y.Name);
         return new RadioTagCounts(
-            [.. genres.Values.Select(g => new RadioTagCount(g.Name, g.Name, g.Tracks)).Order(Comparer<RadioTagCount>.Create(ByName))],
+            [.. genres.Values.Select(g =>
+            {
+                var name = Spelling(g.Spellings);
+                return new RadioTagCount(name, name, g.Tracks);
+            }).Order(Comparer<RadioTagCount>.Create(ByName))],
             [.. decades.OrderBy(d => d.Key).Select(d => new RadioTagCount(new YearRange(d.Key, Math.Min(d.Key + 9, YearRange.MaxYear)).ToString(),
                 string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{d.Key}s"), d.Value))],
             [.. formats.OrderBy(f => f.Key, StringComparer.Ordinal).Select(f => new RadioTagCount(f.Key, f.Key, f.Value))],
@@ -90,6 +96,10 @@ public sealed partial class MusicLibrary
             [.. albums.Where(a => albumTitles.ContainsKey(a.Key)).Select(a => new RadioTagCount(a.Key, albumTitles[a.Key], a.Value))
                 .Order(Comparer<RadioTagCount>.Create(ByName))]);
     });
+
+    /// <summary>A genre's name: the spelling most of its tracks use (ties: the first in ordinal order, whatever the scan order).</summary>
+    private static string Spelling(Dictionary<string, int> spellings)
+        => spellings.OrderByDescending(s => s.Value).ThenBy(s => s.Key, StringComparer.Ordinal).First().Key;
 
     private static void Increment<TKey>(Dictionary<TKey, int> counts, TKey key)
         where TKey : notnull
