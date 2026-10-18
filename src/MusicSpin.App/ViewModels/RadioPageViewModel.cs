@@ -3,6 +3,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Services;
+using MusicSpin.Core;
 using MusicSpin.Core.Library;
 
 namespace MusicSpin.App.ViewModels;
@@ -19,12 +20,15 @@ public enum RadioTagState
 /// A tag on the Radio page (mockup: .tag): its name, how many tracks a station of it alone plays, and whether the draft
 /// includes it (+, the accent) or leaves it out (−, dashed red, struck through).
 /// </summary>
-public sealed partial class RadioChipViewModel(RadioPageViewModel page, RadioTag tag, string label, int? tracks, RadioTagState state)
+public sealed partial class RadioChipViewModel(RadioPageViewModel page, RadioTag tag, string label, string? detail, int? tracks, RadioTagState state)
 {
     /// <summary>The tag's value (as included).</summary>
     public RadioTag Tag { get; } = tag;
 
     public string Label { get; } = label;
+
+    /// <summary>What tells it from a tag of the same name: an album's artist (its tooltip, "Greatest Hits — Queen").</summary>
+    public string? ToolTip { get; } = detail is null ? null : $"{label} — {detail}";
 
     /// <summary>"12"; null while not known (words just typed).</summary>
     public string? Count { get; } = tracks?.ToString("N0", CultureInfo.CurrentCulture);
@@ -46,7 +50,7 @@ public sealed partial class RadioChipViewModel(RadioPageViewModel page, RadioTag
     /// <summary>"Jazz, 12 tracks, included", for screen readers.</summary>
     public string Name => string.Join(", ", new[]
     {
-        Label, Count is null ? null : $"{Count} {(tracks == 1 ? "track" : "tracks")}", State == RadioTagState.Off ? null : State == RadioTagState.Included ? "included" : "left out",
+        ToolTip ?? Label, Count is null ? null : $"{Count} {(tracks == 1 ? "track" : "tracks")}", State == RadioTagState.Off ? null : State == RadioTagState.Included ? "included" : "left out",
     }.OfType<string>());
 
     /// <summary>A click: off → included → left out → off (Hi-Res: off ↔ included).</summary>
@@ -77,6 +81,9 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
 
     public const string NothingMatches = "Nothing matches. Remove a tag or leave less out.";
 
+    /// <summary>The size line while the draft's size isn't known yet (it just changed, or the library is busy).</summary>
+    public const string Counting = "Counting…";
+
     public const string EmptyLibrary = "No music to play yet. Add a music folder with 'music-spin library add <folder>' and scan it.";
 
     /// <summary>The Artists row shows this many (the most tracks first) until a search finds the others.</summary>
@@ -95,8 +102,10 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
     private readonly TimeProvider _time;
     private readonly IUiDispatcher _ui;
     private RadioTagCounts? _counts;
+    private Dictionary<string, string?> _albumArtists = new(StringComparer.Ordinal);
     private IReadOnlyList<RadioTag> _followed = [];
     private (string Words, int Tracks)? _words;
+    private readonly OwedReads _owed;
     private ITimer? _countTimer;
     private int _counting;
 
@@ -110,6 +119,7 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
         _notices = notices;
         _time = time;
         _ui = ui;
+        _owed = new OwedReads(time, ui);
         _radio.PropertyChanged += OnRadioChanged;
         _queue.PropertyChanged += (_, e) =>
         {
@@ -132,7 +142,7 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     public partial IReadOnlyList<RadioFacetViewModel> Rows { get; private set; } = [];
 
-    /// <summary>What the draft plays, once read (null before the first read).</summary>
+    /// <summary>What the draft plays, once read (null while it isn't known: never a size of another draft).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PoolText))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
@@ -147,10 +157,10 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
     /// <summary>The draft's description, its names marked (shown strong).</summary>
     public IReadOnlyList<DescriptionPart> Description => _radio.Describe(Draft);
 
-    /// <summary>"73 tracks · 6 artists · 5 h 10 min", or <see cref="NothingMatches"/>; null before the first read.</summary>
-    public string? PoolText => Pool switch
+    /// <summary>"73 tracks · 6 artists · 5 h 10 min", <see cref="NothingMatches"/>, or <see cref="Counting"/> until it is known.</summary>
+    public string PoolText => Pool switch
     {
-        null => null,
+        null => Counting,
         { Tracks: 0 } => NothingMatches,
         var p => string.Create(CultureInfo.CurrentCulture,
             $"{p.Tracks:N0} {(p.Tracks == 1 ? "track" : "tracks")} · {p.Artists:N0} {(p.Artists == 1 ? "artist" : "artists")} · {Duration(p.Seconds)}"),
@@ -176,6 +186,7 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
     {
         var counts = await _library.RadioTagsAsync().ConfigureAwait(true);
         _counts = counts;
+        _albumArtists = counts.Albums.ToDictionary(a => a.Value, a => a.Detail, StringComparer.Ordinal);
         _radio.KnowAlbums(counts.Albums.Select(a => (a.Value, a.Name)));
         EmptyText = counts.Artists.Count == 0 ? EmptyLibrary : null;
         OnPropertyChanged(nameof(Description)); // albums by their titles now
@@ -212,6 +223,7 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
     {
         _countTimer?.Dispose();
         _countTimer = null;
+        _owed.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -235,6 +247,7 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
 
     partial void OnDraftChanged(IReadOnlyList<RadioTag> value)
     {
+        Pool = null; // the old draft's size says nothing about this one (and Start waits for this one's)
         NotifyStation();
         Filter();
         CountSoon();
@@ -248,11 +261,11 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
         }
 
         var words = SearchText.Trim();
-        bool Hit(RadioTag tag) => words.Length == 0 || _radio.Label(tag).Contains(words, StringComparison.CurrentCultureIgnoreCase);
+        bool Hit(RadioTag tag) => Matches(_radio.Label(tag)); // each word anywhere, as on the other pages
         RadioChipViewModel Chip(RadioTag tag, int? tracks)
         {
             var chosen = RadioStation.Find(Draft, tag);
-            return new RadioChipViewModel(this, tag, _radio.Label(tag), tracks,
+            return new RadioChipViewModel(this, tag, _radio.Label(tag), tag.Kind == RadioTagKind.Album ? _albumArtists.GetValueOrDefault(tag.Value) : null, tracks,
                 chosen is null ? RadioTagState.Off : chosen.Excluded ? RadioTagState.LeftOut : RadioTagState.Included);
         }
 
@@ -331,14 +344,49 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
         _countTimer = _time.CreateTimer(_ => _ui.Post(() => _ = CountAsync()), null, CountDelay, Timeout.InfiniteTimeSpan);
     }
 
-    /// <summary>The latest count started wins (a slower earlier one is dropped).</summary>
-    private Task CountAsync() => _notices.GuardAsync(async () =>
+    /// <summary>
+    /// The latest count started wins (a slower earlier one is dropped). It runs in the background, so a busy library
+    /// (a scan from the CLI, say) says nothing: the count is owed and tried again at the next library check.
+    /// </summary>
+    private async Task CountAsync()
+    {
+        try
+        {
+            await _notices.GuardAsync(CountOnceAsync).ConfigureAwait(true);
+        }
+        finally
+        {
+            CountsFinished++;
+        }
+    }
+
+    /// <summary>Counts that have finished, applied or dropped (tests wait on it).</summary>
+    internal int CountsFinished { get; private set; }
+
+    private async Task CountOnceAsync()
     {
         var count = ++_counting;
         var draft = Draft;
         var words = SearchText.Trim();
-        var pool = await _library.RadioPoolAsync(RadioStation.FilterOf(draft)).ConfigureAwait(true);
-        var typed = words.Length == 0 ? (RadioPoolSize?)null : await _library.RadioPoolAsync(RadioStation.FilterOf([new RadioTag(RadioTagKind.Words, words)])).ConfigureAwait(true);
+        RadioPoolSize pool;
+        RadioPoolSize? typed;
+        try
+        {
+            pool = await _library.RadioPoolAsync(RadioStation.FilterOf(draft)).ConfigureAwait(true);
+            typed = words.Length == 0 ? null : await _library.RadioPoolAsync(RadioStation.FilterOf([new RadioTag(RadioTagKind.Words, words)])).ConfigureAwait(true);
+        }
+        catch (MusicSpinException ex) when (OwedReads.IsBusy(ex))
+        {
+            _owed.Owe(() =>
+            {
+                if (IsShown && count == _counting)
+                {
+                    _ = CountAsync(); // still the latest count wanted
+                }
+            });
+            return;
+        }
+
         if (count != _counting)
         {
             return;
@@ -350,7 +398,7 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
             _words = (words, t.Tracks);
             Filter();
         }
-    });
+    }
 
     private void OnRadioChanged(object? sender, PropertyChangedEventArgs e)
     {

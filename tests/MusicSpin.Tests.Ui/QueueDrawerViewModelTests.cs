@@ -33,7 +33,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _vm = new PlayerViewModel(_player, _time, _ui);
         _vm.Notice += (_, message) => _notices.Post(message);
         _notices.Posted += (_, message) => _posted.Add(message);
-        _drawer = new QueueDrawerViewModel(_vm, new RadioViewModel(_vm, _library, _notices), _library, _covers, _notices, _time, _ui);
+        _drawer = new QueueDrawerViewModel(_vm, new RadioViewModel(_vm, _library, _notices, _time, _ui), _library, _covers, _notices, _time, _ui);
     }
 
     public async ValueTask DisposeAsync()

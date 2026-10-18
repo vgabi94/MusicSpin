@@ -271,7 +271,7 @@ internal sealed class StubLibrary : ILibraryService
             By(Tracks.Select(t => (t.Format.ToLowerInvariant(), t.Format.ToLowerInvariant()))),
             Tracks.Count(t => t.HiRes),
             [.. By(Tracks.Select(t => (t.Artist, t.Artist))).OrderByDescending(a => a.Tracks).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)],
-            By(Tracks.Select(t => (t.AlbumId, t.Album)))));
+            [.. By(Tracks.Select(t => (t.AlbumId, t.Album))).Select(a => a with { Detail = Albums.FirstOrDefault(x => x.Id == a.Value)?.Artist })]));
     }
 
     /// <summary>How many times a station's size was read.</summary>
@@ -284,13 +284,21 @@ internal sealed class StubLibrary : ILibraryService
     /// <summary>Set: a station's size fails as a busy library's does.</summary>
     public string? RadioPoolFailure { get; set; }
 
-    public Task<RadioPoolSize> RadioPoolAsync(RadioFilter filter, CancellationToken cancellationToken = default)
+    /// <summary>Set: a station's size is read only once the task it returns for the filter completes (null: at once).</summary>
+    public Func<RadioFilter, Task?>? RadioPoolHold { get; set; }
+
+    public async Task<RadioPoolSize> RadioPoolAsync(RadioFilter filter, CancellationToken cancellationToken = default)
     {
         RadioPoolReads++;
         RadioPoolFilters.Add(filter);
+        if (RadioPoolHold?.Invoke(filter) is { } hold)
+        {
+            await hold;
+        }
+
         if (RadioPoolFailure is { } failure)
         {
-            return Task.FromException<RadioPoolSize>(new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure));
+            throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure);
         }
 
         var years = Albums.ToDictionary(a => a.Id, a => a.Year, StringComparer.Ordinal);
@@ -316,7 +324,7 @@ internal sealed class StubLibrary : ILibraryService
                                      && (!filter.HiRes || t.HiRes) && (!filter.Favorites || Favorites.Contains(t.Id))
                                      && !Matches(t, filter.ExcludeGenres, filter.ExcludeYears, filter.ExcludeFormats, filter.ExcludeArtists,
                                          filter.ExcludeAlbums, filter.ExcludeSearches, any: true)).ToList();
-        return Task.FromResult(new RadioPoolSize(pool.Count, pool.Select(t => t.Artist).Distinct().Count(), pool.Sum(t => t.DurationSeconds)));
+        return new RadioPoolSize(pool.Count, pool.Select(t => t.Artist).Distinct().Count(), pool.Sum(t => t.DurationSeconds));
     }
 
     /// <summary>Favorite track ids, newest first.</summary>

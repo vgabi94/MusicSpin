@@ -84,6 +84,7 @@ public sealed class RadioTagsTests : LibraryTestBase
         var kindOfBlue = tags.Albums.Single(a => a.Name == "Kind of Blue");
         Assert.Equal(AllTracks().First(t => t.Album == "Kind of Blue").AlbumId, kindOfBlue.Value);
         Assert.Equal(2, kindOfBlue.Tracks);
+        Assert.Equal("Miles Davis", kindOfBlue.Detail); // two albums of one name are told apart by their artist
         Assert.Equal(tags.Albums.Select(a => a.Name).Order(StringComparer.OrdinalIgnoreCase), tags.Albums.Select(a => a.Name));
     }
 

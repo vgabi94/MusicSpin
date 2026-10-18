@@ -388,6 +388,23 @@ public sealed class GroupRadioTests
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task An_album_station_named_by_id_gets_its_title_once_a_busy_library_lets_go()
+    {
+        await using var app = await OpenAsync();
+        var library = (StubLibrary)app.Services.Library;
+        library.AlbumsFailure = LibraryService.BusyMessage;
+
+        await OnAirAsync(app, new RadioFilter { Albums = [SampleLibrary.AlbumId(3)] });
+        Assert.Equal(SampleLibrary.AlbumId(3), app.ViewModel.Radio.Description); // the title isn't known yet
+
+        library.AlbumsFailure = null;
+        app.Advance(LibraryService.PollInterval);
+        await Gui.UntilAsync(() => app.ViewModel.Radio.Description == "Cello Suites", "the title read again");
+        Assert.Null(app.ViewModel.Banner);
+    }
+
+    [AvaloniaFact]
     public async Task The_RADIO_pill_opens_the_Radio_page_and_closes_Now_Playing()
     {
         await using var app = await OpenAsync();

@@ -241,8 +241,10 @@ src/MusicSpin.App/
 - **Radio page.** `RadioPageViewModel` composes a station from tags in rows (genres, decades, formats and Hi-Res,
   artists, albums, words), each with the count of tracks a station of it alone plays (`MusicLibrary.RadioTags`, one
   pass over the library). A click cycles a tag (off, included, left out), a right-click leaves it out; the title bar's
-  search filters the tags, chosen ones first. The station card describes the draft and gives its size, read with
-  `RadioPool` 250 ms after the tags or the search last changed (on the app's clock). It starts the draft, switches to
+  search filters the tags (each word anywhere, as on the other pages), chosen ones first. The station card describes
+  the draft and gives its size, read with `RadioPool` 250 ms after the tags or the search last changed (on the app's
+  clock); until then it says "Counting…" and Start waits, so it never goes by another draft's size. That count runs in
+  the background: a busy library leaves it owed (`OwedReads`), with no notice, until the library's next check. It starts the draft, switches to
   it, or, while the draft is on air, ends radio (`queue.set` with the current track at its position and the up-next
   entries) and shows the next three picks (the queue drawer's). A new station on air, from here or the CLI, becomes
   the draft.

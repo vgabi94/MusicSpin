@@ -195,8 +195,9 @@ public sealed record RadioFilter
 /// One value a station can be built from (<see cref="MusicLibrary.RadioTags"/>): <paramref name="Value"/> goes in the
 /// filter (a genre, a year range "1960-1969", a format id, an artist name, an album id), <paramref name="Name"/> is shown
 /// ("1960s", an album's title), and <paramref name="Tracks"/> is how many tracks a station of that value alone plays.
+/// <paramref name="Detail"/> tells apart values that share a name (an album's artist).
 /// </summary>
-public sealed record RadioTagCount(string Value, string Name, int Tracks);
+public sealed record RadioTagCount(string Value, string Name, int Tracks, string? Detail = null);
 
 /// <summary>
 /// The library's radio values with their track counts: genres, decades, formats and albums by name, artists by track

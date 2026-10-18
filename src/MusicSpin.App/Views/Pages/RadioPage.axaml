@@ -34,6 +34,7 @@
                                                         Classes.exc="{Binding IsLeftOut}"
                                                         Command="{Binding CycleCommand}"
                                                         ContextRequested="OnTagContextRequested"
+                                                        ToolTip.Tip="{Binding ToolTip}"
                                                         AutomationProperties.Name="{Binding Name}">
                                                     <Panel>
                                                         <Rectangle Classes="dash" IsVisible="{Binding IsLeftOut}" />

@@ -36,7 +36,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         ArgumentNullException.ThrowIfNull(services);
         _services = services;
         Player = new PlayerViewModel(services.Player, services.Time, services.Ui);
-        Radio = new RadioViewModel(Player, services.Library, Notices);
+        Radio = new RadioViewModel(Player, services.Library, Notices, services.Time, services.Ui);
         SpinClock = new SpinClock(services.Time, services.Ui);
         Favorites = new FavoritesViewModel(services.Library, Notices);
         Favorites.Changed += (_, _) => OnFavoritesChanged();
@@ -284,6 +284,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Scene.Dispose();
         QueueDrawer.Dispose();
         RadioPage.Dispose();
+        Radio.Dispose();
         SpinClock.Dispose();
         PlayerBar.Dispose();
         await Player.DisposeAsync().ConfigureAwait(false);

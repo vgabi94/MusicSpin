@@ -12,15 +12,16 @@ namespace MusicSpin.App.ViewModels;
 /// Now Playing's kicker, the queue drawer, the sidebar's Radio, the On air buttons), starting a station, ending it,
 /// and opening the Radio page. It follows the player, so a station started from the CLI shows the same.
 /// </summary>
-public sealed partial class RadioViewModel : ObservableObject
+public sealed partial class RadioViewModel : ObservableObject, IDisposable
 {
     private readonly ILibraryService _library;
     private readonly Notices _notices;
     private readonly Dictionary<string, string> _albumTitles = new(StringComparer.Ordinal);
     private readonly HashSet<string> _lookedUp = new(StringComparer.Ordinal);
+    private readonly OwedReads _owed;
     private bool _readingAlbums;
 
-    public RadioViewModel(PlayerViewModel player, ILibraryService library, Notices notices)
+    public RadioViewModel(PlayerViewModel player, ILibraryService library, Notices notices, TimeProvider time, IUiDispatcher ui)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(library);
@@ -28,6 +29,7 @@ public sealed partial class RadioViewModel : ObservableObject
         Player = player;
         _library = library;
         _notices = notices;
+        _owed = new OwedReads(time, ui);
         Player.PropertyChanged += OnPlayerChanged;
         Follow();
     }
@@ -85,9 +87,13 @@ public sealed partial class RadioViewModel : ObservableObject
         return _notices.GuardAsync(() => Player.StartRadioAsync(RadioStation.FilterOf(tags)));
     }
 
+    /// <summary>The notice when radio can't end because the queue has no current entry to keep playing.</summary>
+    public const string NothingToKeep = "Radio can't end now: the player has no current track. Try again in a moment.";
+
     /// <summary>
     /// Ends the station (v1): a new queue of the current track, at its position, and the up-next entries after it; the
-    /// station's picks go (see <see cref="PlayerViewModel.EndRadioAsync"/>).
+    /// station's picks go (see <see cref="PlayerViewModel.EndRadioAsync"/>). With no current entry (the queue changed
+    /// meanwhile) it does nothing and says so, rather than clearing the queue and stopping the music.
     /// </summary>
     public Task EndAsync() => _notices.GuardAsync(async () =>
     {
@@ -99,8 +105,15 @@ public sealed partial class RadioViewModel : ObservableObject
         var page = await Player.QueueAsync(Player.QueueIndex ?? 0, Player.UpNext + 1).ConfigureAwait(true)
                    ?? throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, "The player isn't answering, so radio can't end now. Try again in a moment.");
         var keep = page.Items.SkipWhile(e => !e.Current).TakeWhile((e, i) => i == 0 || e.UpNext).Select(e => e.Item).ToList();
+        if (keep.Count == 0)
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.InvalidState, NothingToKeep);
+        }
+
         await Player.EndRadioAsync(keep).ConfigureAwait(true);
     });
+
+    public void Dispose() => _owed.Dispose();
 
     /// <summary>The RADIO pill and the On air buttons: open the Radio page, closing Now Playing.</summary>
     [RelayCommand]
@@ -161,7 +174,14 @@ public sealed partial class RadioViewModel : ObservableObject
         }
         catch (MusicSpinException)
         {
-            // the ids stay in the description; the next station tries again
+            // The ids stay in the description for now; the titles are asked for again at the library's next check
+            // (not at every status: that would keep knocking while a scan holds the library).
+            var albums = OnAir.Where(t => t.Kind == RadioTagKind.Album).Select(t => t.Value).ToList();
+            _owed.Owe(() =>
+            {
+                _lookedUp.ExceptWith(albums);
+                Follow();
+            });
         }
         finally
         {

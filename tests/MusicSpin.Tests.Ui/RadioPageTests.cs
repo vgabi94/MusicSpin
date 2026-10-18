@@ -176,6 +176,21 @@ public sealed class RadioPageTests
     }
 
     [AvaloniaFact]
+    public async Task The_search_finds_each_word_anywhere_as_on_the_other_pages_and_albums_name_their_artist()
+    {
+        await using var app = await OpenAsync();
+
+        app.ViewModel.SearchText = "ruth delta";
+        Gui.Settle();
+        Assert.Equal(["Delta Ruth"], Labels(app, "Artists"));
+
+        app.ViewModel.SearchText = "copper";
+        Gui.Settle();
+        Assert.Equal("Copper Sun — Delta Ruth", ToolTip.GetTip(Tag(app, "Copper Sun")));
+        Assert.StartsWith("Copper Sun — Delta Ruth, 3 tracks", Chip(app, "Copper Sun").Name, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
     public async Task Typed_words_are_a_tag_counted_a_moment_after_the_typing()
     {
         await using var app = await OpenAsync();
@@ -361,18 +376,88 @@ public sealed class RadioPageTests
 
     [AvaloniaFact]
     [Trait("Category", "Unhappy")]
-    public async Task A_busy_library_says_so_and_the_page_keeps_what_it_had()
+    public async Task A_busy_library_leaves_the_count_owed_without_a_notice_and_it_lands_at_the_next_check()
     {
         await using var app = await OpenAsync();
-        var before = Page(app).PoolText;
-        Library(app).RadioPoolFailure = LibraryService.BusyMessage;
+        var library = Library(app);
+        library.RadioPoolFailure = LibraryService.BusyMessage; // a scan from the CLI holds the library
+        var reads = library.RadioPoolReads;
 
         Click(app, Tag(app, "Jazz"));
         app.Advance(RadioPageViewModel.CountDelay);
-        await Gui.UntilAsync(() => app.ViewModel.Banner == LibraryService.BusyMessage, "the notice");
+        await Gui.UntilAsync(() => library.RadioPoolReads == reads + 1, "the refused count");
 
-        Assert.Equal(before, Page(app).PoolText);
-        Assert.Equal(RadioTagState.Included, Chip(app, "Jazz").State);
+        Assert.Equal(RadioPageViewModel.Counting, Page(app).PoolText); // not the whole library's size from before
+        Assert.False(Gui.Find<Button>(app.Window, "StartStation").IsEffectivelyEnabled);
+        Assert.Null(app.ViewModel.Banner); // the count runs in the background: no notice
+
+        library.RadioPoolFailure = null;
+        app.Advance(LibraryService.PollInterval);
+        await Gui.UntilAsync(() => Page(app).Pool is not null, "the owed count");
+        Assert.Equal("11 tracks · 5 artists · 42 min", Page(app).PoolText);
+        Assert.Null(app.ViewModel.Banner);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Until_a_new_draft_is_counted_the_card_says_so_and_Start_waits()
+    {
+        await using var app = await OpenAsync();
+        var start = Gui.Find<Button>(app.Window, "StartStation");
+        Assert.True(start.IsEffectivelyEnabled);
+
+        // Hi-Res Electronic matches nothing; Start right away must not go by the whole library's count.
+        Click(app, Tag(app, "Electronic"));
+        Click(app, Tag(app, "Hi-Res"));
+
+        Assert.Equal(RadioPageViewModel.Counting, Gui.Find<TextBlock>(app.Window, "PoolText").Text);
+        Assert.False(start.IsEffectivelyEnabled);
+        await CountedAsync(app);
+        Assert.Equal(RadioPageViewModel.NothingMatches, Page(app).PoolText);
+        Assert.False(start.IsEffectivelyEnabled);
+        Assert.Equal(0, app.Scripted!.Count("radio"));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_slow_count_that_ends_after_a_later_one_is_dropped()
+    {
+        await using var app = await OpenAsync();
+        var library = Library(app);
+        var slow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        library.RadioPoolHold = filter => filter.Genres is ["Jazz"] ? slow.Task : null;
+        var reads = library.RadioPoolReads;
+
+        Click(app, Tag(app, "Jazz"));
+        app.Advance(RadioPageViewModel.CountDelay);
+        await Gui.UntilAsync(() => library.RadioPoolReads == reads + 1, "the slow count under way");
+        Click(app, Tag(app, "Ambient"));
+        await CountedAsync(app);
+        Assert.Equal("17 tracks · 7 artists · 1 h 1 min", Page(app).PoolText); // Jazz or Ambient
+
+        var finished = Page(app).CountsFinished;
+        slow.SetResult();
+        await Gui.UntilAsync(() => Page(app).CountsFinished == finished + 1, "the slow count ended");
+        Assert.Equal("17 tracks · 7 artists · 1 h 1 min", Page(app).PoolText); // not Jazz alone
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task End_radio_with_no_current_track_does_nothing_rather_than_clear_the_queue()
+    {
+        await using var app = await OpenAsync();
+        app.Scripted!.SetQueue([SampleLibrary.Item(7, 1), SampleLibrary.Item(8, 2)], radio: new RadioFilter { Genres = ["Jazz"] });
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => Page(app).IsLive, "on air");
+        // The queue moved on between the status and the read: no entry is the current one.
+        app.Scripted.Queue = [.. app.Scripted.Queue.Select(e => e with { Current = false })];
+
+        Click(app, Gui.Find<Button>(app.Window, "EndStation"));
+        await Gui.UntilAsync(() => app.ViewModel.Banner == RadioViewModel.NothingToKeep, "the notice");
+
+        Assert.Equal(0, app.Scripted.Count("queue.set"));
+        Assert.Equal(0, app.Scripted.Count("queue.clear"));
+        Assert.True(app.ViewModel.Radio.IsOnAir);
     }
 
     [AvaloniaFact]

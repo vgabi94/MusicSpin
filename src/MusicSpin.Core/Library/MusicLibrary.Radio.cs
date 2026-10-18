@@ -79,7 +79,7 @@ public sealed partial class MusicLibrary
         }
 
         var artistNames = _db.Artists.FindAll().ToDictionary(a => a.Key, a => a.Name, StringComparer.Ordinal);
-        var albumTitles = _db.Albums.FindAll().ToDictionary(a => a.Id, a => a.Title, StringComparer.Ordinal);
+        var albumNames = _db.Albums.FindAll().ToDictionary(a => a.Id, a => (a.Title, a.AlbumArtist), StringComparer.Ordinal);
         static int ByName(RadioTagCount x, RadioTagCount y) => StringComparer.OrdinalIgnoreCase.Compare(x.Name, y.Name);
         return new RadioTagCounts(
             [.. genres.Values.Select(g =>
@@ -93,7 +93,7 @@ public sealed partial class MusicLibrary
             hiRes,
             [.. artists.Where(a => artistNames.ContainsKey(a.Key)).Select(a => new RadioTagCount(artistNames[a.Key], artistNames[a.Key], a.Value))
                 .OrderByDescending(a => a.Tracks).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)],
-            [.. albums.Where(a => albumTitles.ContainsKey(a.Key)).Select(a => new RadioTagCount(a.Key, albumTitles[a.Key], a.Value))
+            [.. albums.Where(a => albumNames.ContainsKey(a.Key)).Select(a => new RadioTagCount(a.Key, albumNames[a.Key].Title, a.Value, albumNames[a.Key].AlbumArtist))
                 .Order(Comparer<RadioTagCount>.Create(ByName))]);
     });
 
