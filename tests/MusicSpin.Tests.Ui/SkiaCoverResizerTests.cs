@@ -90,4 +90,86 @@ public class SkiaCoverResizerTests
     [Fact]
     public void The_size_must_be_positive()
         => Assert.Throws<ArgumentOutOfRangeException>(() => _resizer.Resize(Image(10, 10, SKColors.Red), 0));
+
+    private static byte[] Png(SKBitmap bitmap)
+    {
+        using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    [Theory]
+    [InlineData(64)] // kept at its size: the decoded bitmap, in the decoder's own colour type
+    [InlineData(400)] // shrunk: the resized RGBA bitmap
+    public void A_single_transparent_corner_pixel_keeps_png(int size)
+    {
+        using var bitmap = new SKBitmap(size, size, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        bitmap.Erase(SKColors.Red);
+        for (var y = size - 8; y < size; y++)
+        {
+            for (var x = size - 8; x < size; x++)
+            {
+                bitmap.SetPixel(x, y, new SKColor(255, 0, 0, 0)); // the last pixels the scan reaches
+            }
+        }
+
+        Assert.Equal(".png", _resizer.Resize(Png(bitmap), 128)!.Extension);
+    }
+
+    [Fact]
+    public void A_png_with_an_alpha_channel_but_no_transparent_pixel_becomes_jpeg()
+    {
+        using var bitmap = new SKBitmap(300, 300, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        bitmap.Erase(new SKColor(10, 200, 30, 255));
+        var png = Png(bitmap);
+        using (var decoded = Decode(png))
+        {
+            Assert.NotEqual(SKAlphaType.Opaque, decoded.AlphaType); // so the pixels really are scanned
+        }
+
+        Assert.Equal(".jpg", _resizer.Resize(png, 128)!.Extension);
+    }
+
+    [Fact]
+    public void A_16_bit_png_with_transparency_stays_png()
+    {
+        using var bitmap = new SKBitmap(new SKImageInfo(48, 48, SKColorType.RgbaF16, SKAlphaType.Unpremul));
+        bitmap.Erase(SKColors.Blue);
+        bitmap.SetPixel(47, 47, new SKColor(0, 0, 255, 100));
+
+        var result = _resizer.Resize(Png(bitmap), 128);
+
+        Assert.Equal(".png", result!.Extension);
+        using var back = Decode(result.Data);
+        Assert.InRange(back.GetPixel(47, 47).Alpha, 90, 110);
+        Assert.Equal(255, back.GetPixel(0, 0).Alpha);
+    }
+
+    [Theory]
+    [InlineData(SKColorType.Rgba8888)]
+    [InlineData(SKColorType.Bgra8888)]
+    public void Padding_at_the_end_of_rows_is_not_taken_for_pixels(SKColorType colorType)
+    {
+        // Rows of 10 pixels (40 bytes) stored 64 bytes apart: the 24 bytes of padding are zeros, which a scan of the
+        // whole buffer would read as transparent alpha.
+        var info = new SKImageInfo(10, 6, colorType, SKAlphaType.Unpremul);
+        using var bitmap = new SKBitmap();
+        Assert.True(bitmap.TryAllocPixels(info, 64));
+        Assert.Equal(64, bitmap.RowBytes);
+        bitmap.GetPixelSpan().Clear();
+        bitmap.Erase(SKColors.Green);
+
+        Assert.False(SkiaCoverResizer.HasTransparency(bitmap));
+
+        bitmap.SetPixel(9, 5, new SKColor(0, 255, 0, 254));
+        Assert.True(SkiaCoverResizer.HasTransparency(bitmap));
+    }
+
+    [Fact]
+    public void An_opaque_bitmap_and_an_empty_one_have_no_transparency()
+    {
+        using var opaque = new SKBitmap(8, 8, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        using var empty = new SKBitmap(new SKImageInfo(0, 0, SKColorType.Rgba8888, SKAlphaType.Unpremul));
+        Assert.False(SkiaCoverResizer.HasTransparency(opaque));
+        Assert.False(SkiaCoverResizer.HasTransparency(empty));
+    }
 }
