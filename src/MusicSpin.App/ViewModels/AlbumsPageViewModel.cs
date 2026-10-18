@@ -365,7 +365,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     public override async Task LoadAsync()
     {
         var albums = await _library.AlbumsAsync().ConfigureAwait(true);
-        List<AlbumItemViewModel> all = [.. albums.Select(a => _all.FirstOrDefault(x => x.Album == a) ?? new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Medium, _covers)))];
+        var all = AlbumItems.Reuse(albums, _all, a => new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Medium, _covers)));
         var same = _loaded && all.SequenceEqual(_all);
         _all = all;
         _loaded = true;
