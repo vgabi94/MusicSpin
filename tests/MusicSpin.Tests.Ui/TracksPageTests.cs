@@ -118,12 +118,13 @@ public sealed class TracksPageTests
         window.MouseMove(point);
         window.MouseDown(point, MouseButton.Left);
         window.MouseUp(point, MouseButton.Left);
-        await Task.Delay(100, TestContext.Current.CancellationToken);
-        Gui.Settle();
+        await app.PlayerRoundTripAsync();
         Assert.Equal(0, app.Scripted!.Count("queue.set"));
 
         Gui.DoubleClick(window, title);
-        await Gui.UntilAsync(() => app.Scripted.Count("queue.set") == 1, "the track played");
+        await Gui.UntilAsync(() => app.Scripted.Count("queue.set") >= 1, "the track played");
+        await app.PlayerRoundTripAsync();
+        Assert.Equal(1, app.Scripted.Count("queue.set")); // the double-click played it once
         var sent = app.Scripted.Sent("queue.set")[0];
         Assert.Equal(2, sent.GetProperty("start").GetInt32());
         Assert.Equal(30, sent.GetProperty("items").GetArrayLength());

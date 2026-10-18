@@ -157,6 +157,122 @@ public sealed class SettingsViewModelTests : IDisposable
         Assert.Equal(2, vm.Opens);
     }
 
+    [Fact]
+    public void A_drag_applies_every_step_and_saves_once_with_the_last_value_when_it_ends()
+    {
+        var settings = new CountingSettings(new SettingsService(_data));
+        var vm = new SettingsViewModel(settings, _appearance, _spinClock, _notices);
+
+        vm.TiltScrub = 30; // the bar is pressed
+        for (var tilt = 30; tilt <= 60; tilt++)
+        {
+            vm.TiltScrub = tilt;
+            vm.SetShelfTilt(tilt);
+            Assert.Equal(tilt, vm.ShelfTilt); // applies at once
+        }
+
+        Assert.Equal(0, settings.Updates);
+        vm.TiltScrub = null; // let go
+
+        Assert.Equal(1, settings.Updates);
+        Assert.Equal(60, Saved().ShelfTilt);
+    }
+
+    [Fact]
+    public void Keys_and_clicks_are_single_steps_and_save_at_once()
+    {
+        var settings = new CountingSettings(new SettingsService(_data));
+        var vm = new SettingsViewModel(settings, _appearance, _spinClock, _notices);
+
+        vm.SetShelfDepth(41);
+        vm.SetShelfDepth(42);
+
+        Assert.Equal(2, settings.Updates);
+        Assert.Equal(42, Saved().ShelfDepth);
+    }
+
+    [Fact]
+    public void Letting_go_where_the_drag_began_writes_nothing()
+    {
+        var settings = new CountingSettings(new SettingsService(_data));
+        var vm = new SettingsViewModel(settings, _appearance, _spinClock, _notices);
+
+        vm.TiltScrub = vm.ShelfTilt;
+        vm.SetShelfTilt(vm.ShelfTilt);
+        vm.TiltScrub = null;
+
+        Assert.Equal(0, settings.Updates);
+        Assert.False(File.Exists(_data.SettingsFile));
+    }
+
+    [Fact]
+    public void A_drag_saves_only_its_own_setting_so_a_change_from_the_CLI_meanwhile_stays()
+    {
+        var vm = Create(new AppSettings { ShelfTilt = 58, ShelfDepth = 40 });
+        vm.DepthScrub = 40;
+        vm.SetShelfDepth(70);
+
+        new SettingsStore(_data).Save(Saved() with { ShelfTilt = 25 }); // music-spin changes the tilt mid-drag
+        vm.DepthScrub = null;
+
+        Assert.Equal((25.0, 70.0), (Saved().ShelfTilt, Saved().ShelfDepth));
+    }
+
+    [Fact]
+    public void Closing_the_dialog_or_the_app_mid_drag_saves_the_last_value_once()
+    {
+        var settings = new CountingSettings(new SettingsService(_data));
+        var vm = new SettingsViewModel(settings, _appearance, _spinClock, _notices);
+        vm.Open();
+        vm.TiltScrub = 70;
+        vm.SetShelfTilt(70);
+
+        vm.Close();
+        Assert.Equal((1, 70.0), (settings.Updates, Saved().ShelfTilt));
+
+        vm.TiltScrub = null; // the bar lets go afterwards: nothing more to save
+        vm.SavePending(); // nor at shutdown
+        Assert.Equal(1, settings.Updates);
+    }
+
+    [Fact]
+    public void A_drag_whose_save_fails_says_so_once_and_still_applies()
+    {
+        var vm = new SettingsViewModel(new UnwritableSettings(), _appearance, _spinClock, _notices);
+        var notices = new List<string>();
+        _notices.Posted += (_, message) => notices.Add(message);
+
+        vm.DepthScrub = 10;
+        for (var depth = 10; depth <= 30; depth++)
+        {
+            vm.DepthScrub = depth;
+            vm.SetShelfDepth(depth);
+        }
+
+        Assert.Empty(notices);
+        vm.DepthScrub = null;
+
+        Assert.Equal(30, vm.ShelfDepth);
+        var notice = Assert.Single(notices);
+        Assert.StartsWith("The setting applies now but wasn't saved", notice, StringComparison.Ordinal);
+        vm.SavePending(); // the failed value isn't retried at shutdown either: it was reported
+        Assert.Single(notices);
+    }
+
+    /// <summary>Counts the saves (each one re-reads and rewrites settings.json).</summary>
+    private sealed class CountingSettings(ISettingsService inner) : ISettingsService
+    {
+        public int Updates { get; private set; }
+
+        public AppSettings Current => inner.Current;
+
+        public void Update(Func<AppSettings, AppSettings> change)
+        {
+            Updates++;
+            inner.Update(change);
+        }
+    }
+
     private sealed class UnwritableSettings : ISettingsService
     {
         public AppSettings Current { get; } = new();

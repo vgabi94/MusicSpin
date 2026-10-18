@@ -270,8 +270,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
     }
 
-    /// <summary>Closing the window: the music stops; a player the app started is shut down.</summary>
-    public Task ShutdownAsync() => Player.ShutdownAsync();
+    /// <summary>
+    /// Closing the window: a setting a drag left unsaved is saved, the music stops, and a player the app started is shut
+    /// down.
+    /// </summary>
+    public Task ShutdownAsync()
+    {
+        Settings.SavePending();
+        return Player.ShutdownAsync();
+    }
 
     public async ValueTask DisposeAsync()
     {
