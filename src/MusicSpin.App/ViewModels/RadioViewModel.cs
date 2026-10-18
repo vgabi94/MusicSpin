@@ -172,7 +172,7 @@ public sealed partial class RadioViewModel : ObservableObject, IDisposable
 
             Description = IsOnAir ? RadioStation.Describe(OnAir, AlbumTitle) : null;
         }
-        catch (MusicSpinException)
+        catch (MusicSpinException ex) when (OwedReads.IsBusy(ex))
         {
             // The ids stay in the description for now; the titles are asked for again at the library's next check
             // (not at every status: that would keep knocking while a scan holds the library).
@@ -182,6 +182,10 @@ public sealed partial class RadioViewModel : ObservableObject, IDisposable
                 _lookedUp.ExceptWith(albums);
                 Follow();
             });
+        }
+        catch (MusicSpinException)
+        {
+            // Another failure (the library can't be read at all): the ids stay, and the titles aren't asked for again.
         }
         finally
         {

@@ -405,6 +405,29 @@ public sealed class GroupRadioTests
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_library_that_cant_be_read_isnt_asked_for_album_titles_again_and_again()
+    {
+        await using var app = await OpenAsync();
+        var library = (StubLibrary)app.Services.Library;
+        library.AlbumsFailure = "The library database is damaged.";
+        library.AlbumsFailureCode = Core.MusicSpinErrorCode.LibraryCorrupt;
+        var reads = library.AlbumReads;
+
+        await OnAirAsync(app, new RadioFilter { Albums = [SampleLibrary.AlbumId(3)] });
+        await Gui.UntilAsync(() => library.AlbumReads == reads + 1, "the titles read");
+        for (var i = 0; i < 3; i++)
+        {
+            app.Advance(LibraryService.PollInterval); // checks pass, statuses come
+            await app.Scripted!.PushAsync("stateChanged");
+            Gui.Settle();
+        }
+
+        Assert.Equal(reads + 1, library.AlbumReads); // owed only when busy: a damaged library is read once
+        Assert.Equal(SampleLibrary.AlbumId(3), app.ViewModel.Radio.Description);
+    }
+
+    [AvaloniaFact]
     public async Task The_RADIO_pill_opens_the_Radio_page_and_closes_Now_Playing()
     {
         await using var app = await OpenAsync();

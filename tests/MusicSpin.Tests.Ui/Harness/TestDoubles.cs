@@ -110,6 +110,9 @@ internal sealed class StubLibrary : ILibraryService
     /// <summary>Set: album reads fail as a busy library's do.</summary>
     public string? AlbumsFailure { get; set; }
 
+    /// <summary>How <see cref="AlbumsFailure"/> fails: busy by default; another code is a library that can't be read.</summary>
+    public MusicSpinErrorCode AlbumsFailureCode { get; set; } = MusicSpinErrorCode.LibraryLocked;
+
     /// <summary>The most album and playlist reads under way at once (the library lets one reader in at a time).</summary>
     public int MostReadsAtOnce { get; private set; }
 
@@ -126,7 +129,7 @@ internal sealed class StubLibrary : ILibraryService
                 await gate.Task;
             }
 
-            return AlbumsFailure is { } failure ? throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, failure) : [.. Albums];
+            return AlbumsFailure is { } failure ? throw new MusicSpinException(AlbumsFailureCode, failure) : [.. Albums];
         }
         finally
         {
