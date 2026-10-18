@@ -232,7 +232,7 @@ internal static class McpCommand
             }));
             yield return Tool("search", "Search the music library: artists, albums and tracks, best matches first. Case- and diacritic-insensitive " +
                 "(beyonce finds Beyoncé); every word must match somewhere; \"quoted phrases\" must appear as a whole; artist:, album:, title:, genre: restrict " +
-                "a word or \"phrase\" to one field; year:1959 or year:1950-1959.",
+                "a word or \"phrase\" to one field; year:1959 or year:1950-1959; is:favorite (is:fav) keeps favorite tracks only (no artists or albums then).",
                 ([Description("Search text, e.g. miles blue, artist:\"miles davis\" year:1959, title:\"so what\".")] string text, int limit = 20) => Guard(() =>
                 {
                     using var library = runner.OpenLibraryForRead(parseResult);

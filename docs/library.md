@@ -218,7 +218,7 @@ The keys are stored per track (title, artists, album, genre, file name, and all 
 
 ### Search syntax
 
-Used by `search`, `--search` (`tracks`, `filter`, `play`, `queue add`, `playlist add`) and the MCP `search`/`tracks`/`play` tools.
+Used by `search`, `--search` (`tracks`, `filter`, `play`, `queue add`, `playlist add`, `favorite add`), `radio --search`/`--exclude-search` and the MCP `search`/`tracks`/`play`/`radio` tools.
 
 | Syntax | Meaning |
 |---|---|
@@ -227,11 +227,12 @@ Used by `search`, `--search` (`tracks`, `filter`, `play`, `queue add`, `playlist
 | `artist:davis`, `artist:"miles davis"` | restrict a word or phrase to the track artist / album artist (including "Various Artists" for compilations) |
 | `album:`, `title:`, `genre:` | the same for album title, track title, genre |
 | `year:1959`, `year:1950-1959` | year or inclusive range; several `year:` terms intersect |
+| `is:favorite`, `is:fav` | only [favorite](#favorites) tracks; ANDed with the other terms (`miles is:fav`), or on its own. With `--favorites false` nothing matches. In `radio --exclude-search`, it leaves your favorites out |
 | `foo:bar` | an unknown prefix is plain text (`foo bar`) |
 
-Errors (exit **2 `usage`**): empty text; text with no letters or digits (`!!!`, `""`); a prefix without a value (`artist:`, `title:""`); a bad year (`year:abc`, `year:2000-1990`); more than **1,000 characters** or more than **32 terms**. Stray punctuation between words (`miles & davis`) is ignored. Smart quotes work like `"`; an unterminated quote runs to the end.
+Errors (exit **2 `usage`**): empty text; text with no letters or digits (`!!!`, `""`); a prefix without a value (`artist:`, `title:""`); a bad year (`year:abc`, `year:2000-1990`); an `is:` value other than `favorite`/`fav` (`is:liked`, `is:`), with a message naming the valid ones; more than **1,000 characters** or more than **32 terms**. Stray punctuation between words (`miles & davis`) is ignored. Smart quotes work like `"`; an unterminated quote runs to the end.
 
-**Which results a query can return:** artists only match plain terms and `artist:` against the name; albums match plain terms, `album:`, `artist:` (album artist or any track artist), `genre:` and `year:`; tracks match everything. A query with `title:` therefore returns no artists or albums.
+**Which results a query can return:** artists only match plain terms and `artist:` against the name; albums match plain terms, `album:`, `artist:` (album artist or any track artist), `genre:` and `year:`; tracks match everything. A query with `title:` or `is:favorite` therefore returns no artists or albums (only tracks are favorites).
 
 ### Ranking
 

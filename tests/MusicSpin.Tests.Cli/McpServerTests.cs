@@ -144,6 +144,28 @@ public sealed class McpServerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Search_takes_is_favorite_and_reports_an_unknown_is_value_as_a_usage_error()
+    {
+        var music = LibraryTestData.CreateSmallLibrary(TempDir.Create("mcp-fav"));
+        foreach (var file in Directory.EnumerateFiles(music, "*", SearchOption.AllDirectories))
+        {
+            _cli.Decoders.With(TestAudio.Track(file, seconds: 60));
+        }
+
+        Assert.Equal(0, (await _cli.RunAsync("library", "add", music)).ExitCode);
+        Assert.Equal(0, (await _cli.RunAsync("library", "scan", "--quiet")).ExitCode);
+        Assert.Equal(0, (await _cli.RunAsync("favorite", "add", Path.Combine(music, "Miles", "Kind of Blue", "01 So What.flac"))).ExitCode);
+        await StartAsync();
+
+        var search = await Call("search", new() { ["text"] = "miles is:favorite" });
+        Assert.Equal(1, search.GetProperty("tracks").GetProperty("total").GetInt32());
+        Assert.Equal("So What", search.GetProperty("tracks").GetProperty("items")[0].GetProperty("title").GetString());
+        Assert.Equal(0, search.GetProperty("albums").GetArrayLength());
+        Assert.Equal(1, (await Call("tracks", new() { ["search"] = "is:fav" })).GetProperty("total").GetInt32());
+        Assert.Equal("usage: Unknown 'is:liked': use is:favorite (or is:fav).", await CallError("search", new() { ["text"] = "is:liked" }));
+    }
+
+    [Fact]
     public async Task Play_takes_a_genre_as_a_string_or_an_array_and_reports_bad_genres_as_tool_errors()
     {
         var music = LibraryTestData.CreateGenreLibrary(TempDir.Create("mcp-genre"));

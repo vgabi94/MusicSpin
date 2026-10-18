@@ -19,11 +19,11 @@ public sealed record SearchTerm(SearchField Field, string Text, bool Phrase);
 /// <summary>
 /// A parsed search: every term must match (AND). Plain words match anywhere, quoted phrases must appear contiguously in one
 /// field, <c>artist:</c>/<c>album:</c>/<c>title:</c>/<c>genre:</c> restrict a word or phrase to one field, <c>year:</c> takes
-/// <c>1959</c> or <c>1950-1959</c>.
+/// <c>1959</c> or <c>1950-1959</c>, and <c>is:favorite</c> (<c>is:fav</c>) keeps favorite tracks only.
 /// </summary>
-public sealed record SearchQuery(IReadOnlyList<SearchTerm> Terms, int? YearFrom, int? YearTo)
+public sealed record SearchQuery(IReadOnlyList<SearchTerm> Terms, int? YearFrom, int? YearTo, bool Favorite = false)
 {
-    public bool IsEmpty => Terms.Count == 0 && YearFrom is null && YearTo is null;
+    public bool IsEmpty => Terms.Count == 0 && YearFrom is null && YearTo is null && !Favorite;
 
     /// <summary>Terms that apply to a field (plain terms apply to all).</summary>
     internal IEnumerable<SearchTerm> For(SearchField field) => Terms.Where(t => t.Field == SearchField.Any || t.Field == field);
@@ -31,7 +31,7 @@ public sealed record SearchQuery(IReadOnlyList<SearchTerm> Terms, int? YearFrom,
     /// <summary>Combines two queries (AND).</summary>
     public SearchQuery And(SearchQuery? other)
         => other is null ? this : new SearchQuery([.. Terms, .. other.Terms],
-            Max(YearFrom, other.YearFrom), Min(YearTo, other.YearTo));
+            Max(YearFrom, other.YearFrom), Min(YearTo, other.YearTo), Favorite || other.Favorite);
 
     private static int? Max(int? a, int? b) => a is null ? b : b is null ? a : Math.Max(a.Value, b.Value);
 
@@ -162,6 +162,7 @@ public static class LibrarySearch
 
         var terms = new List<SearchTerm>();
         int? yearFrom = null, yearTo = null;
+        var favorite = false;
         var i = 0;
         while (i < text.Length)
         {
@@ -174,6 +175,7 @@ public static class LibrarySearch
             // field prefix: word characters followed by ':'
             var field = SearchField.Any;
             var isYear = false;
+            var isIs = false;
             var colon = PrefixEnd(text, i);
             string? prefix = null;
             if (colon > i)
@@ -187,6 +189,11 @@ public static class LibrarySearch
                 else if (prefix.Equals("year", StringComparison.OrdinalIgnoreCase))
                 {
                     isYear = true;
+                    i = colon + 1;
+                }
+                else if (prefix.Equals("is", StringComparison.OrdinalIgnoreCase))
+                {
+                    isIs = true;
                     i = colon + 1;
                 }
                 else
@@ -213,6 +220,12 @@ public static class LibrarySearch
                 }
 
                 raw = text[start..i];
+            }
+
+            if (isIs)
+            {
+                favorite |= IsValue(raw.Trim(), prefix!);
+                continue;
             }
 
             if (prefix is not null && string.IsNullOrWhiteSpace(raw))
@@ -248,7 +261,7 @@ public static class LibrarySearch
             }
         }
 
-        if (terms.Count == 0 && yearFrom is null && yearTo is null)
+        if (terms.Count == 0 && yearFrom is null && yearTo is null && !favorite)
         {
             throw Invalid($"'{text.Trim()}' has no letters or digits to search for.");
         }
@@ -258,8 +271,18 @@ public static class LibrarySearch
             throw Invalid($"Too many search terms ({terms.Count}; at most {MaxTerms}).");
         }
 
-        return new SearchQuery(terms, yearFrom, yearTo);
+        return new SearchQuery(terms, yearFrom, yearTo, favorite);
     }
+
+    /// <summary>The values <c>is:</c> takes (all mean a favorite track).</summary>
+    public static IReadOnlyList<string> IsValues { get; } = ["favorite", "fav"];
+
+    private static bool IsValue(string raw, string prefix)
+        => IsValues.Contains(raw, StringComparer.OrdinalIgnoreCase)
+            ? true
+            : throw Invalid(raw.Length == 0
+                ? $"'{prefix}:' needs a value: is:favorite (or is:fav)."
+                : $"Unknown '{prefix}:{raw}': use is:favorite (or is:fav).");
 
     /// <summary>Words of a per-field "contains" filter (<c>--title</c>, <c>--album-contains</c>, ...), as a query restricted to that field.</summary>
     /// <exception cref="MusicSpinException">InvalidArgument when the value is empty or has no letters/digits.</exception>
@@ -323,20 +346,27 @@ public static class LibrarySearch
     /// <summary>Match levels, best first (exact field > field prefix > word start > anywhere).</summary>
     private const int Exact = 4, Prefix = 3, WordStart = 2, Anywhere = 1;
 
-    /// <summary>Score of a track (null: no match). Keys are the stored folded fields (<see cref="TrackRecord.SearchTitle"/> ...).</summary>
-    internal static int? Score(SearchQuery query, TrackRecord t)
+    /// <summary>
+    /// Score of a track (null: no match). Keys are the stored folded fields (<see cref="TrackRecord.SearchTitle"/> ...).
+    /// <paramref name="favorites"/>: the favorite track ids, read once per search; with <c>is:favorite</c>, a track not in
+    /// them (or no set at all) doesn't match.
+    /// </summary>
+    internal static int? Score(SearchQuery query, TrackRecord t, IReadOnlySet<string>? favorites = null)
         => query.YearFrom is { } from && (t.Year is null || t.Year < from) || query.YearTo is { } to && (t.Year is null || t.Year > to)
+           || (query.Favorite && favorites?.Contains(t.Id) != true)
             ? null
             : Score(query, [(SearchField.Title, t.SearchTitle, 3), (SearchField.Artist, t.SearchArtist, 2), (SearchField.Album, t.SearchAlbum, 2),
                 (SearchField.Genre, t.SearchGenre, 1), (SearchField.Any, t.SearchFile, 0)]);
 
+    /// <summary>Score of an album; null with <c>is:favorite</c> (only tracks are favorites).</summary>
     internal static int? Score(SearchQuery query, AlbumRecord a)
-        => query.YearFrom is { } from && (a.Year is null || a.Year < from) || query.YearTo is { } to && (a.Year is null || a.Year > to)
+        => query.Favorite || query.YearFrom is { } from && (a.Year is null || a.Year < from) || query.YearTo is { } to && (a.Year is null || a.Year > to)
             ? null
             : Score(query, [(SearchField.Album, a.SearchTitle, 3), (SearchField.Artist, a.SearchArtist, 2), (SearchField.Genre, a.SearchGenre, 1)]);
 
+    /// <summary>Score of an artist; null with <c>year:</c> or <c>is:favorite</c> (artists have neither).</summary>
     internal static int? Score(SearchQuery query, ArtistRecord a)
-        => query.YearFrom is not null || query.YearTo is not null ? null : Score(query, [(SearchField.Artist, a.SearchName, 3)]);
+        => query.YearFrom is not null || query.YearTo is not null || query.Favorite ? null : Score(query, [(SearchField.Artist, a.SearchName, 3)]);
 
     /// <summary>
     /// Every term must match one of the fields it applies to (fields of other kinds, e.g. title: on an artist, never match).

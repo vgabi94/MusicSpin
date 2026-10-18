@@ -13,7 +13,7 @@ internal static class BrowseCommands
     /// <summary>Per-field "contains" filters and --search for tracks/filter.</summary>
     private sealed class TrackTextOptions
     {
-        public Option<string?> Search { get; } = new("--search") { Description = "Search syntax as 'music-spin search': words (all must match), \"phrases\", artist:/album:/title:/genre:/year:." };
+        public Option<string?> Search { get; } = new("--search") { Description = "Search syntax as 'music-spin search': words (all must match), \"phrases\", artist:/album:/title:/genre:/year:, is:favorite." };
         public Option<string?> Title { get; } = new("--title") { Description = "Title contains these words (case/diacritic-insensitive)." };
         public Option<string?> AlbumContains { get; } = new("--album-contains") { Description = "Album title contains these words." };
         public Option<string?> ArtistContains { get; } = new("--artist-contains") { Description = "Track artist or album artist contains these words." };
@@ -126,7 +126,7 @@ internal static class BrowseCommands
         var text = new Argument<string>("text")
         {
             Description = "Words to find in titles, artists, albums, genres and file names (case/diacritic-insensitive; every word must match). " +
-                          "\"Quoted phrases\" match as a whole; artist:, album:, title:, genre: restrict a word or \"phrase\" to one field; year:1959 or year:1950-1959.",
+                          "\"Quoted phrases\" match as a whole; artist:, album:, title:, genre: restrict a word or \"phrase\" to one field; year:1959 or year:1950-1959; is:favorite (is:fav) keeps favorite tracks only.",
         };
         text.Validators.Add(r =>
         {

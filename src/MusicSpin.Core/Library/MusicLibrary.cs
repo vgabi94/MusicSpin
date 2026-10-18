@@ -150,12 +150,20 @@ public sealed partial class MusicLibrary : IDisposable
             query.Title is { } title ? LibrarySearch.Contains(SearchField.Title, title, "--title") : null,
             query.AlbumContains is { } albumText ? LibrarySearch.Contains(SearchField.Album, albumText, "--album-contains") : null,
             query.ArtistContains is { } artistText ? LibrarySearch.Contains(SearchField.Artist, artistText, "--artist-contains") : null);
+        // is:favorite in the search text is --favorites; with --favorites false as well, nothing can match.
+        var favorite = search?.Favorite == true ? true : query.Favorite;
+        if (search?.Favorite == true && query.Favorite == false)
+        {
+            return new Page<TrackRecord>(0, query.Paging.Offset, query.Paging.Limit, []);
+        }
+
         return Guard(() =>
         {
             var artistKeys = query.Artist is { } artist ? ArtistKeys(artist) : null;
             var albumIds = query.Album is { } album ? AlbumIds(album) : null;
-            var favorites = query.Favorite is not null ? ResolveFavorites().Ticks : null;
-            var sort = query.Sort == TrackSort.Favorited && query.Favorite != true ? TrackSort.Default : query.Sort;
+            var favorites = favorite is not null ? ResolveFavorites().Ticks : null;
+            var favoriteIds = favorites?.Keys.ToHashSet(StringComparer.Ordinal);
+            var sort = query.Sort == TrackSort.Favorited && favorite != true ? TrackSort.Default : query.Sort;
 
             ILiteQueryable<TrackRecord> Filtered()
             {
@@ -215,7 +223,7 @@ public sealed partial class MusicLibrary : IDisposable
                 if (favorites is not null)
                 {
                     var ids = new BsonArray(favorites.Keys.Select(i => new BsonValue(i)));
-                    q = q.Where(BsonExpression.Create(query.Favorite == true ? "$._id IN @0" : "($._id IN @0) = false", ids));
+                    q = q.Where(BsonExpression.Create(favorite == true ? "$._id IN @0" : "($._id IN @0) = false", ids));
                 }
 
                 return q;
@@ -242,7 +250,7 @@ public sealed partial class MusicLibrary : IDisposable
             var matches = new List<(TrackRecord Track, int Score)>();
             foreach (var t in Filtered().ToEnumerable())
             {
-                if (LibrarySearch.Score(search, t) is { } score)
+                if (LibrarySearch.Score(search, t, favoriteIds) is { } score)
                 {
                     matches.Add((t, score));
                 }
