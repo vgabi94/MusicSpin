@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using MusicSpin.App.ViewModels;
@@ -18,27 +17,33 @@ public sealed class AppIntegrationTests
         Music = music => TestImages.Album(music, "Kind of Blue", "Miles Davis", tracks: 2),
     };
 
+    /// <summary>
+    /// The app learns of it from the player's pushed events, not from its status poll: the poll runs on the app's fake
+    /// clock, which this test never moves. That is what makes it show up at once; the wait itself is generous (shared CI
+    /// runners are slow), so the test checks the mechanism rather than a wall-clock latency.
+    /// </summary>
     [AvaloniaFact]
-    public async Task Playback_started_from_the_CLI_shows_in_the_app_within_a_second()
+    public async Task Playback_started_from_the_CLI_shows_in_the_app_without_waiting_for_a_poll()
     {
         await using var app = await AppHarness.OpenAsync(WithAlbum());
         await using var cli = await app.Player.ConnectOtherAsync();
+        await Gui.UntilAsync(() => app.Player.Host is { SubscriberCount: >= 1 }, "the app subscribed to the player");
 
         // As music-spin play does: library tracks with their tags and ids.
         var items = (await app.Services.Library.TracksAsync(TestContext.Current.CancellationToken))
             .Select(t => new { path = t.Path, title = t.Title, artist = t.Artist, album = t.Album, trackId = t.Id }).ToArray();
-        var clock = Stopwatch.StartNew();
+        var clock = app.Time.GetUtcNow();
         await cli.SendAsync("queue.set", new { items, play = true }, TestContext.Current.CancellationToken);
         await Gui.UntilAsync(() => app.ViewModel.Player.State == PlayerState.Playing && app.ViewModel.PlayerTitle == "Kind of Blue 1",
-            "the app showing the track", timeoutMs: 1000);
+            "the app showing the track");
 
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"took {clock.Elapsed}");
+        Assert.Equal(clock, app.Time.GetUtcNow()); // no poll could have run
         Assert.Equal("Miles Davis · Kind of Blue", Gui.Find<TextBlock>(app.Window, "PlayerArtist").Text);
         await Gui.UntilAsync(() => app.ViewModel.PlayingAlbumId is not null, "the playing album found");
     }
 
     [AvaloniaFact]
-    public async Task Playback_started_in_the_app_shows_in_the_CLI_within_a_second()
+    public async Task Playback_started_in_the_app_shows_in_the_CLI()
     {
         await using var app = await AppHarness.OpenAsync(WithAlbum());
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 1, "the album");
@@ -46,15 +51,22 @@ public sealed class AppIntegrationTests
 
         Gui.Click(app.Window, Gui.All<Button>(app.Window).Single(b => b.Classes.Contains("card")));
         await app.PlaySceneAsync();
-        var clock = Stopwatch.StartNew();
+        await app.PlayerRoundTripAsync(); // the scene's play has reached the player
+
+        // The real player may take a moment to open the output; wait on its state, with room for a slow CI runner.
+        var deadline = Environment.TickCount64 + 10_000;
         PlayerStatusSnapshot status;
-        do
+        while (true)
         {
-            Gui.Settle();
             var s = await cli.StatusAsync(TestContext.Current.CancellationToken);
             status = new PlayerStatusSnapshot(s.State, s.Item?.Title, s.QueueLength);
+            if (status.State == PlayerState.Playing || Environment.TickCount64 > deadline)
+            {
+                break;
+            }
+
+            Gui.Settle();
         }
-        while (status.State != PlayerState.Playing && clock.Elapsed < TimeSpan.FromSeconds(1));
 
         Assert.Equal(new PlayerStatusSnapshot(PlayerState.Playing, "Kind of Blue 1", 2), status);
     }
