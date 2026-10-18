@@ -175,6 +175,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
             {
                 // Another process holds the library: nobody asked for anything, so no notice; the album is read at the
                 // next check, unless another one is shown by then.
+                ShowPlayerOwn(albumId);
                 _owed.Owe(() =>
                 {
                     if (_albumId == albumId)
@@ -183,6 +184,11 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
                     }
                 });
                 return;
+            }
+            catch
+            {
+                ShowPlayerOwn(albumId); // not the last album's tracks under this one's playback; the notice says why
+                throw;
             }
 
             if (_albumId != albumId)
@@ -208,6 +214,18 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
                 Cover = bitmap;
             }
         }).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The album couldn't be read: until it is, show what the player says is playing, as for a file outside the library,
+    /// rather than the album shown before (unless another album is wanted by now).
+    /// </summary>
+    private void ShowPlayerOwn(string albumId)
+    {
+        if (_albumId == albumId)
+        {
+            (Title, ArtistLine, Cover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, []);
+        }
     }
 
     /// <summary>Stops the reads owed to a busy library (the window closes).</summary>

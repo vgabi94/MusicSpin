@@ -207,6 +207,16 @@ internal sealed class AppHarness : IAsyncDisposable
         return read(library);
     }
 
+    /// <summary>
+    /// A barrier for "the app sent nothing" checks: once this returns, every command the app started sending before it
+    /// has reached the player. The app sends one request at a time on its connection, in order, and this one goes last.
+    /// </summary>
+    public async Task PlayerRoundTripAsync()
+    {
+        Gui.Settle(); // UI work queued by the action under test runs first, so its sends start before ours
+        await ViewModel.Player.SendAsync("status");
+    }
+
     /// <summary>Moves the fake clock (the app's timers) and Avalonia's animations forward together.</summary>
     public void Advance(TimeSpan by) => UiTime.Advance(Time, by);
 
