@@ -183,6 +183,19 @@ internal sealed class AppHarness : IAsyncDisposable
         return result;
     }
 
+    /// <summary>
+    /// <see cref="Edit"/>, then waits until the app has read all of the library again: the sidebar, the favorites and the
+    /// page shown (one reload reads them in turn). Waiting only for the sidebar would leave the page's read in flight, to
+    /// land in the middle of whatever the test does next.
+    /// </summary>
+    public async Task<T> EditAndReloadAsync<T>(Func<MusicLibrary, T> edit)
+    {
+        var asked = ViewModel.ReloadsAsked;
+        var result = Edit(edit);
+        await Gui.UntilAsync(() => ViewModel.ReloadsAsked > asked && ViewModel.ReloadsDone == ViewModel.ReloadsAsked, "the app's reload after the edit");
+        return result;
+    }
+
     /// <summary>Reads the library afresh, as <c>music-spin playlist show</c> would.</summary>
     public T Read<T>(Func<MusicLibrary, T> read)
     {

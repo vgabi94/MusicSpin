@@ -308,9 +308,14 @@ public sealed class PlaylistManagementTests
             cli.AddToPlaylist("Mix", [JazzLibrary.Entry(app.TrackPaths, "Kind of Blue", 3)], position: 1);
         }
 
+        var reloads = app.ViewModel.ReloadsAsked;
         Gui.Click(app.Window, Gui.All<Button>(PlaylistTests.Row(app, "Blue Train 1")).Single(b => b.Classes.Contains("remove")));
-        await Gui.UntilAsync(() => page.Tracks.Count == 4 && page.Tracks[0].Title == "Kind of Blue 3", "the page read again");
+        // The removal reads the page again, and so does the reload the CLI's change (found by the removal) starts: wait for
+        // both, or the later one would read the CLI's next edit below and replace the rows in the middle of the next click.
+        await Gui.UntilAsync(() => page.Tracks.Count == 4 && page.Tracks[0].Title == "Kind of Blue 3" && !page.RemoveEntryCommand.IsRunning
+                                   && app.ViewModel.ReloadsAsked > reloads && app.ViewModel.ReloadsDone == app.ViewModel.ReloadsAsked, "the page read again");
         Assert.Equal(["Kind of Blue 3", "Kind of Blue 1", "Kind of Blue 2", "Lost Take"], Show(app, "Mix"));
+        Assert.Equal(["Kind of Blue 3", "Kind of Blue 1", "Kind of Blue 2", "Lost Take"], Titles(page));
 
         // and the CLI removes the one the page is about to remove
         using (var cli = app.OpenLibrary())
@@ -435,8 +440,8 @@ public sealed class PlaylistManagementTests
     public async Task New_playlist_makes_one_of_the_tracks_and_renames_it_in_place()
     {
         await using var app = await OpenAsync();
-        app.Edit(library => library.CreatePlaylist(PlaylistNameViewModel.DefaultName));
-        await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists.Count == 3, "the third playlist");
+        await app.EditAndReloadAsync(library => library.CreatePlaylist(PlaylistNameViewModel.DefaultName));
+        Assert.Equal(3, app.ViewModel.Sidebar.Playlists.Count);
         Mouse.RightClick(app.Window, Card(app, "Blue Train"));
         Choose(app, "Add to playlist");
         Choose(app, PlaylistActions.NewPlaylistLabel);
@@ -452,6 +457,29 @@ public sealed class PlaylistManagementTests
         await Gui.UntilAsync(() => !app.ViewModel.Sidebar.Rename.IsOpen, "the rename");
         Assert.Equal(["Coltrane", "Mix", PlaylistNameViewModel.DefaultName, "Other"], Names(app));
         Assert.Equal(["Blue Train 1", "Blue Train 2"], Show(app, "Coltrane"));
+    }
+
+    [AvaloniaFact]
+    public async Task A_playlist_made_elsewhere_mid_right_click_leaves_the_album_cards_so_the_menu_still_opens()
+    {
+        await using var app = await OpenAsync();
+        var rows = app.ViewModel.AlbumsPage.Rows;
+        var card = Card(app, "Blue Train");
+        var at = Mouse.Middle(app.Window, card);
+
+        // the right button goes down on the card, then the CLI makes a playlist and the app reads the library again
+        app.Window.MouseMove(at);
+        app.Window.MouseDown(at, MouseButton.Right);
+        await app.EditAndReloadAsync(library => library.CreatePlaylist(PlaylistNameViewModel.DefaultName));
+        Assert.Equal(3, app.ViewModel.Sidebar.Playlists.Count);
+
+        // the albums read back are the ones shown: the same rows, the same card (a new one would lose the release)
+        Assert.Same(rows, app.ViewModel.AlbumsPage.Rows);
+        Assert.Same(card, Card(app, "Blue Train"));
+        app.Window.MouseUp(at, MouseButton.Right);
+        Gui.Settle();
+        Assert.True(app.ViewModel.Menu.IsOpen);
+        Assert.Equal(["Play", "Play next", "Add to queue", "Add to playlist"], Labels(app));
     }
 
     // ---- the library busy -------------------------------------------------------------------------------------

@@ -335,6 +335,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Sidebar.SetPlaylists(playlists);
     }
 
+    /// <summary>Reloads asked for so far (tests wait on these, not on time).</summary>
+    internal int ReloadsAsked => _reloadsAsked;
+
+    /// <summary>The reloads asked for up to this one have finished (each pass covers every ask before it began).</summary>
+    internal int ReloadsDone => _reloadsDone;
+
     /// <summary>
     /// The library changed (on disk, or by an edit here): re-reads the playlists, the favorites and the current page.
     /// Reloads never overlap: asked for while one runs, exactly one more runs after it, however often it was asked (a scan

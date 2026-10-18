@@ -235,6 +235,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private readonly TimeProvider _time;
     private readonly Dictionary<string, string> _crateFronts = new(StringComparer.Ordinal);
     private List<AlbumItemViewModel> _all = [];
+    private bool _loaded;
     private AlbumItemViewModel? _playing;
     private string? _activeCrateKey;
     private CrateViewModel? _wheelCrate;
@@ -336,12 +337,23 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     /// <summary>The groups shown (empty when ungrouped).</summary>
     public IReadOnlyList<string> GroupNames { get; private set; } = [];
 
+    /// <summary>
+    /// Reads the albums again. A read that brings back the albums shown (the library changed elsewhere: a playlist, a
+    /// favorite) leaves the page as it is: laying it out again would replace every card under the pointer, and a click
+    /// pressed on the old card and released on the new one would be lost (a right-click would open no menu).
+    /// </summary>
     public override async Task LoadAsync()
     {
         var albums = await _library.AlbumsAsync().ConfigureAwait(true);
-        _all = [.. albums.Select(a => _all.FirstOrDefault(x => x.Album == a) ?? new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Medium, _covers)))];
+        List<AlbumItemViewModel> all = [.. albums.Select(a => _all.FirstOrDefault(x => x.Album == a) ?? new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Medium, _covers)))];
+        var same = _loaded && all.SequenceEqual(_all);
+        _all = all;
+        _loaded = true;
         MarkPlaying();
-        Filter();
+        if (!same)
+        {
+            Filter();
+        }
     }
 
     [RelayCommand]
