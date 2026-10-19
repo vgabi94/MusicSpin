@@ -34,5 +34,6 @@ public static class MediaControlsFactory
         });
     }
 
-    private static IMediaControlsAdapter? CreateAdapter() => null;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859", Justification = "macOS and Linux adapters join here (#35, #36).")]
+    private static IMediaControlsAdapter? CreateAdapter() => OperatingSystem.IsWindows() ? WindowsMediaControlsAdapter.Create() : null;
 }

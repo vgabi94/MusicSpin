@@ -203,6 +203,13 @@ src/MusicSpin.App/
   stops or the player goes away. Each OS's adapter only translates: Windows SMTC (#34), macOS Now Playing (#35), MPRIS
   on Linux (#36). `MediaControlsFactory` picks the one for this OS; with none, or one that fails to start (a notice),
   the app runs as before.
+  - Windows: `WindowsMediaControlsAdapter` drives the System Media Transport Controls of a
+    `Windows.Media.Playback.MediaPlayer` that never plays (its command manager off), so no window handle is needed:
+    title, artist, album, the cover as the thumbnail (a stream from `CreateRandomAccessStreamOnFile`), the timeline,
+    the status, and the play, pause, stop, next, previous buttons and the scrubber. Raw WinRT (`WinRT`: activation,
+    HSTRINGs, vtable slots from the SDK metadata, a hand-written agile `TypedEventHandler`), so the app keeps its plain
+    `net10.0` target. `WindowsSmtc` is the pure translation, tested on every OS. Clear disables the SMTC, which hides
+    MusicSpin from the flyout. No volume (the SMTC has none).
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
