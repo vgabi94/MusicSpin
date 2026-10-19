@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
@@ -26,6 +28,28 @@ public static class AppComposition
             time,
             ui,
             startupWarning);
+    }
+
+    /// <summary>
+    /// Tray-only mode (<c>MusicSpin --tray</c>, #83): the tray icon of the running background player, with no window. The
+    /// app exits when the player is gone (or was never there).
+    /// </summary>
+    public static async Task StartTrayAsync(Application application, IControlledApplicationLifetime lifetime, DataDirectory directory)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        ArgumentNullException.ThrowIfNull(lifetime);
+        var viewModel = new TrayViewModel(new BackgroundPlayerConnector(directory), new AvaloniaUiDispatcher());
+        application.DataContext = viewModel; // a TrayIcon binds to the application's DataContext
+        var icon = new TrayIconView();
+        TrayIcon.SetIcons(application, [icon]);
+        viewModel.ExitRequested += async (_, _) =>
+        {
+            icon.IsVisible = false;
+            icon.Dispose();
+            await viewModel.DisposeAsync();
+            lifetime.Shutdown();
+        };
+        await viewModel.StartAsync();
     }
 
     /// <summary>The main window and its view model over <paramref name="services"/>.</summary>

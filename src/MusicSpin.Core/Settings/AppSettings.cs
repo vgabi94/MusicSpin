@@ -40,6 +40,12 @@ public sealed record AppSettings
     /// </summary>
     public int PlaybackBufferMs { get; init; } = 2000;
 
+    /// <summary>
+    /// Show a tray icon (Play/Pause, Next, Previous, Quit) while the background player runs in a desktop session (#83).
+    /// Turned off for one player with <c>music-spin play --no-tray</c> or <c>MUSICSPIN_NO_TRAY=1</c>.
+    /// </summary>
+    public bool TrayIcon { get; init; } = true;
+
     /// <summary>Play consecutive tracks with the same sample rate, channels and bit depth without a gap.</summary>
     public bool Gapless { get; init; } = true;
 

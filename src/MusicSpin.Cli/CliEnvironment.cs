@@ -40,6 +40,12 @@ public sealed class CliEnvironment
     /// </summary>
     public Func<PlayerLaunchRequest, CancellationToken, Task<IPlayerProcess?>>? PlayerLauncher { get; init; }
 
+    /// <summary>
+    /// Starts the tray icon for a new background player (#83). Default: <see cref="TrayLauncher.ForThisProcess"/> with
+    /// <see cref="GetEnvironmentVariable"/>. Tests inject one with a fake environment and process start.
+    /// </summary>
+    public TrayLauncher? TrayLauncher { get; init; }
+
     /// <summary>How long `play` waits for a newly started background player to accept connections.</summary>
     public TimeSpan PlayerStartTimeout { get; init; } = TimeSpan.FromSeconds(20);
 

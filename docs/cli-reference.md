@@ -76,7 +76,7 @@ Decoder: FFmpeg n9.0.2-23-g27b46f0fbc-20261008 (LGPL version 3 or later)
 music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--genre <name>]... [--search <query>]
                 [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--playlist <name>] [--favorites]
                 [--shuffle] [--seed <n>] [--start <seconds>] [--volume <0..1>]
-                [--backend auto|null] [--device <id|name>] [--exclusive]
+                [--backend auto|null] [--device <id|name>] [--exclusive] [--no-tray]
                 [--foreground|--wait] [--duration <seconds>]
 ```
 
@@ -99,6 +99,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--backend auto\|null` | `auto` = SoundFlow/miniaudio (WASAPI, CoreAudio, PulseAudio/ALSA). `null` = no sound card (decodes in real time and discards). Default `auto` |
 | `--device <id\|name>` | Output device id from `devices`, or part of its name. Default: system default |
 | `--exclusive` | Open the device exclusively (WASAPI exclusive / ALSA hw / CoreAudio) |
+| `--no-tray` | A player this command starts shows no tray icon (default: `trayIcon` in settings.json; see [Tray icon](playback.md#tray-icon)) |
 | `--foreground`, `--wait` | Play in this process and block until done (Ctrl+C: exit 130) |
 | `--duration <s>` | Stop after this many seconds. Implies `--foreground`. For a library queue it applies per track |
 

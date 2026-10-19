@@ -402,9 +402,10 @@ internal static class ControlCommands
             Description = "Seconds to stay alive while stopped with no client attached (default: playerIdleTimeoutSeconds in settings.json; 0 = forever).",
         };
         Options.Validated(idle, v => v is < 0 || (v is { } d && !double.IsFinite(d)) ? "--idle-timeout must be 0 or greater." : null);
+        var noTray = Options.NoTray();
         var command = new Command("run", "Run the background player in this process (internal; 'music-spin play' starts it detached).")
         {
-            backend, device, exclusive, idle,
+            backend, device, exclusive, idle, noTray,
         };
         command.Hidden = true;
 
@@ -478,6 +479,12 @@ internal static class ControlCommands
             }
 
             await env.Out.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+
+            // The tray icon (#83): a separate app process that exits with this player. Best effort, logged either way.
+            var tray = (env.TrayLauncher ?? TrayLauncher.ForThisProcess(env.GetEnvironmentVariable))
+                .Launch(dir.Path, settings.TrayIcon, parseResult.GetValue(noTray));
+            host.Note(tray.Message);
+
             using (cancellationToken.Register(() => _ = host.StopAsync("signal")))
             {
                 var reason = await host.Completion.ConfigureAwait(false);
