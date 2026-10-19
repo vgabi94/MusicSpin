@@ -1,6 +1,7 @@
 using System.CommandLine;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
+using MusicSpin.Core.Playback;
 
 namespace MusicSpin.Cli.Commands;
 
@@ -24,6 +25,10 @@ internal static class RadioCommand
         var search = Many("--search", "Search text, same syntax as 'music-spin search' (words, \"phrases\", artist:/album:/title:/genre:/year:, is:favorite). Repeat for several (any).");
         var hires = new Option<bool>("--hires") { Description = "Only hi-res tracks." };
         var favorites = new Option<bool>("--favorites") { Description = "Only favorite tracks (see 'music-spin favorite add'); narrows the other filters." };
+        var preferFavorites = new Option<bool>("--prefer-favorites")
+        {
+            Description = $"Play favorites more often ({RadioPicker.FavoriteWeight}x as likely as other tracks) without limiting the station to them. Saved with the station.",
+        };
         const string Ex = " Excluded even when an include filter matches; unknown names are ignored.";
         var xArtist = Many("--exclude-artist", "Leave out this track or album artist (exact name). Repeatable." + Ex);
         var xAlbum = Many("--exclude-album", "Leave out this album (exact title or id). Repeatable." + Ex);
@@ -48,7 +53,7 @@ internal static class RadioCommand
             "--exclude-* options leave tracks out (any match excludes; exclude wins over include). " +
             "next/prev/pause/stop/status work as usual; 'play', 'queue clear' or 'load' end radio. Nothing matches: exit 12.")
         {
-            artist, album, genre, year, years, format, search, hires, favorites,
+            artist, album, genre, year, years, format, search, hires, favorites, preferFavorites,
             xArtist, xAlbum, xGenre, xYear, xYears, xFormat, xSearch, backend, device, exclusive,
         };
         command.Validators.Add(r =>
@@ -89,6 +94,7 @@ internal static class RadioCommand
                 Searches = List(parseResult.GetValue(search)),
                 HiRes = parseResult.GetValue(hires),
                 Favorites = parseResult.GetValue(favorites),
+                PreferFavorites = parseResult.GetValue(preferFavorites),
                 ExcludeArtists = List(parseResult.GetValue(xArtist)),
                 ExcludeAlbums = List(parseResult.GetValue(xAlbum)),
                 ExcludeGenres = List(parseResult.GetValue(xGenre)),

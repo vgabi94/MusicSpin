@@ -1258,7 +1258,7 @@ public sealed class QueuePlayer : IDisposable
             for (var round = 0; round < 3 && loaded < 0; round++)
             {
                 var first = slots.Count;
-                foreach (var pick in RadioPicker.Pick(pool, RadioLookahead, session.History, session.Random))
+                foreach (var pick in RadioPicker.Pick(pool, RadioLookahead, session.History, session.Random, filter.PreferFavorites))
                 {
                     slots.Add(new Slot(ToItem(pick), order++));
                 }
@@ -1346,7 +1346,7 @@ public sealed class QueuePlayer : IDisposable
             return;
         }
 
-        foreach (var pick in RadioPicker.Pick(pool, RadioLookahead - upcoming, radio.History, radio.Random))
+        foreach (var pick in RadioPicker.Pick(pool, RadioLookahead - upcoming, radio.History, radio.Random, radio.Filter.PreferFavorites))
         {
             _items.Add(new Slot(ToItem(pick), _nextOrder++));
         }

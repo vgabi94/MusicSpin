@@ -161,6 +161,21 @@ public sealed class RadioCliTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Prefer_favorites_is_part_of_the_station_and_its_description()
+    {
+        await WithLibraryAsync();
+
+        var radio = await Ok("radio", "--genre", "jazz", "--prefer-favorites", "--backend", "null");
+
+        var station = radio.GetProperty("radio");
+        Assert.True(station.GetProperty("filter").GetProperty("preferFavorites").GetBoolean());
+        Assert.Equal("genre jazz · favorites first", station.GetProperty("description").GetString());
+        Assert.Equal("radio", Mode(radio)); // no favorites yet: still plays, nothing to weight
+        var text = await _cli.RunAsync("status");
+        Assert.Contains("Radio: genre jazz · favorites first", text.Out, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Queue_add_during_radio_plays_next()
     {
         await WithLibraryAsync();
