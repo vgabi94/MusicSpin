@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using MusicSpin.App.Composition;
@@ -12,7 +13,12 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        if (AppHost.IsTrayMode && ApplicationLifetime is IClassicDesktopStyleApplicationLifetime tray)
+        {
+            tray.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _ = AppComposition.StartTrayAsync(this, tray, AppHost.DataDirectory);
+        }
+        else if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var services = AppComposition.CreateServices(this, AppHost.DataDirectory, AppHost.StartupWarning);
             var window = AppComposition.CreateMainWindow(services);

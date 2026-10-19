@@ -85,6 +85,22 @@ $ music-spin quit
 - **Logs:** `player.log` in the data folder (rotated to `player.log.1` above 1 MiB).
 - `--foreground` (or `--duration`) plays in the calling process instead and blocks until done.
 
+### Tray icon
+
+In a desktop session the background player shows a **tray icon** (the notification area on Windows, the menu bar on
+macOS, a StatusNotifier icon on Linux) with **Play/Pause**, **Next**, **Previous** and **Quit**. Quit shuts the player
+down like `music-spin quit`; the icon goes away whenever the player exits.
+
+- The icon is the desktop app in a tray-only mode (`MusicSpin --tray --data-dir <folder>`), started by the player,
+  because the player itself has no UI. It needs the app next to `music-spin` (as the release builds ship them; on macOS
+  `MusicSpin.app` next to it), or `MUSICSPIN_APP` pointing at it in a development build.
+- **Turn it off:** `"trayIcon": false` in settings.json, or for one player `music-spin play --no-tray` (or
+  `MUSICSPIN_NO_TRAY=1` in the environment, which every way of starting the player honours).
+- No icon without a desktop session: on Linux without `DISPLAY`/`WAYLAND_DISPLAY`, over SSH on macOS and Windows, or
+  in a Windows service. The player runs the same; `player.log` says why there is no icon.
+- One icon per data folder: a restarted player finds the icon already there. The icon never starts a player.
+- Linux: the desktop needs a StatusNotifier host (KDE, most others; GNOME only with the AppIndicator extension).
+
 How it works internally: [Architecture → Background player and IPC](architecture.md#background-player-and-ipc).
 
 ## Queue behaviour

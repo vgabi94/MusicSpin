@@ -17,8 +17,12 @@ internal static class AppHost
     /// <summary>Problems found at startup (not-writable folder, corrupt settings) for the UI to surface later.</summary>
     public static string? StartupWarning { get; private set; }
 
+    /// <summary>Tray-only mode (<c>--tray</c>, #83): the background player's tray icon, no window.</summary>
+    public static bool IsTrayMode { get; private set; }
+
     public static void Initialize(string[] args)
     {
+        IsTrayMode = args.Contains(MusicSpin.Core.Remote.TrayLauncher.TrayArgument);
         DataDirectory = AppPaths.Resolve(DataDirOverride(args));
         (Settings, StartupWarning) = Start(DataDirectory);
     }

@@ -24,6 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The tray icon's image (#83). -->
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MusicSpin.Core\MusicSpin.Core.csproj" />
   </ItemGroup>
 

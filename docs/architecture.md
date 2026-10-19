@@ -68,6 +68,7 @@ The background player lives in Core (`MusicSpin.Core.Remote`), so the CLI and, l
 | Type | Role |
 |---|---|
 | `PlayerHost` | Runs a `QueuePlayer` behind an endpoint. `TryStart` takes the per-data-folder lock |
+| `TrayLauncher`, `TrayLock` | The tray icon (#83). `player run` asks `TrayLauncher` once it serves: in a desktop session, with `trayIcon` on and no `--no-tray`/`MUSICSPIN_NO_TRAY`, it starts the desktop app as `MusicSpin --tray --data-dir …` (found next to the CLI, or `MUSICSPIN_APP`). Every reason not to is a logged result, never an error. The app in tray mode takes `TrayLock` (`tray.lock`, one icon per folder), shows `TrayIconView` bound to `TrayViewModel` (connects only, never starts a player; `toggle`/`next`/`prev`/`quit`; follows status for the Play/Pause label and the tooltip) and exits when the player's event stream ends |
 | `PlayerClient` | `SendAsync`, `StatusAsync`, `SubscribeAsync` (live events) |
 | `PlayerConnector.ConnectOrStartAsync` | Connects, or spawns `music-spin player run` and waits for it |
 | `PlayerProtocol` / `LineChannel` / `ProtocolJson` | JSON-lines protocol v1 (shared with `serve`) |

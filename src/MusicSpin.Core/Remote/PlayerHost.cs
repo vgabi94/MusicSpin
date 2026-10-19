@@ -742,6 +742,9 @@ public sealed class PlayerHost : IAsyncDisposable
         SharedFile.Replace(temp, Endpoint.InfoFile);
     }
 
+    /// <summary>Writes a line to the player log (e.g. whether the tray icon started).</summary>
+    public void Note(string message) => Log(message);
+
     private void Log(string message)
     {
         if (_options.Log is not { } log)

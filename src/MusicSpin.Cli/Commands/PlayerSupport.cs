@@ -41,7 +41,7 @@ internal static class PlayerSupport
 
     /// <summary>Connects to the running player, or starts one with the requested output.</summary>
     public static async Task<(PlayerClient Client, bool Started)> ConnectOrStartAsync(CommandRunner runner, ParseResult parseResult,
-        string backend, string? device, bool exclusive, CancellationToken cancellationToken)
+        string backend, string? device, bool exclusive, CancellationToken cancellationToken, bool noTray = false)
     {
         var env = runner.Env;
         var dir = runner.DataDirectory(parseResult);
@@ -56,6 +56,11 @@ internal static class PlayerSupport
         if (exclusive)
         {
             args.Add("--exclusive");
+        }
+
+        if (noTray)
+        {
+            args.Add("--no-tray");
         }
 
         var request = new PlayerLaunchRequest(dir, endpoint, args, backend, device, exclusive);
