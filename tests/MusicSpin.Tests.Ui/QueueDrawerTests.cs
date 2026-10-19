@@ -272,8 +272,9 @@ public sealed class QueueDrawerTests
         Assert.Equal(3, (await SentAsync(app, "play")).GetProperty("index").GetInt32());
 
         Gui.Click(app.Window, Find<Button>(app, "EndRadio"));
-        var set = await SentAsync(app, "queue.set");
-        Assert.Equal(["The Thread", "The Hollow"], set.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("title").GetString()));
+        await SentAsync(app, "radio.end");
+        Assert.Equal(0, app.Scripted!.Count("queue.set"));
+        Assert.Equal(0, app.Scripted.Count("queue.clear"));
     }
 
     [AvaloniaFact]

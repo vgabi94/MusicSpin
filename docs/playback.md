@@ -167,6 +167,7 @@ Details:
 - The player keeps the current track plus a **lookahead of 20** picked tracks in the queue and tops up to 20 whenever fewer than 10 are left. The pool itself is never put in the queue, so a 50,000-track library starts as fast as a small one apart from reading the pool (below).
 - **No repeats:** a track is not picked again within the last **100** picks. Small pools clamp this to *pool size - 1*: a pool of 2 alternates, a pool of N plays each track once per N picks.
 - **Spacing:** the next track is by a different artist and from a different album than the one before it, **when the pool has such a track** that also keeps the no-repeat rule. If not (a single-artist station), the album rule is still applied when possible, then neither. The no-repeat rule is never relaxed.
+- **Favorites first** (`--prefer-favorites`, MCP `preferFavorites`): among the tracks the two rules above allow, a [favorite](cli-reference.md#favorite--favorites) is **3× as likely** as any other track, without limiting the station to favorites. The rules still come first, so a small or one-artist pool may leave nothing to weight. It is **part of the station** (saved in `queue.json` with the filters, shown as `· favorites first` in the description) rather than a player setting, because it describes what a station is (like `--favorites`), it survives restarts with the station, and two stations can differ in it. With `--favorites` it changes nothing: every track is a favorite. Favorites marked or unmarked while the station plays count from the next top-up.
 - **A pool of one track** replays that track (radio does not stop; use `stop`, `play` or `queue clear`). An **empty pool** is exit 12 before anything starts.
 - Picks use a random generator per station; there is no seed yet (see the roadmap in the README).
 
@@ -187,7 +188,8 @@ Details:
 | `repeat one` | Replays the current track when it ends (`next`/`prev` still move) |
 | `repeat all` | Accepted (it is a global mode) but has no effect: radio never ends, and `next`/`prev` do not wrap |
 | `shuffle on/off/toggle` | Exit 8 `invalid_state`: radio is already random. The shuffle setting is kept and applies again to the next normal queue |
-| `play`, `queue clear` (without `--up-next`), `load` (serve) | End radio mode |
+| `radio end` | Ends radio and keeps playing, in one step: the current track plays on at its position (no gap), the up-next entries follow as a normal queue, and the lookahead and the played radio tracks are dropped. A no-op when no station is on air |
+| `play`, `queue clear` (without `--up-next`), `load` (serve) | End radio mode and replace (or empty) the queue |
 | `status` | `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text shows `[radio]` instead of the queue position and a `Radio: <filters> (<N> tracks) · Repeat: ...` line |
 
 - **Gapless:** the lookahead is the queue, so same-format radio tracks play back to back exactly like a normal queue ([Gapless](#gapless)).

@@ -383,10 +383,9 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await _ui.UntilAsync(() => _drawer.Rows.Count == 2 && _drawer.Picks.Count == 2, "the radio queue");
 
         await _drawer.EndRadioCommand.ExecuteAsync(null);
-        var set = await SentAsync("queue.set");
-        Assert.Equal(["now", "q1", "q2"], set.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("title").GetString()));
-        Assert.Equal(0, set.GetProperty("start").GetInt32());
-        Assert.True(set.GetProperty("play").GetBoolean());
+        await SentAsync("radio.end");
+        Assert.Equal(0, _player.Count("queue.set"));
+        Assert.Equal(0, _player.Count("queue.clear"));
     }
 
     [Fact]
