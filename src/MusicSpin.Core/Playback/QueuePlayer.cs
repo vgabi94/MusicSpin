@@ -131,6 +131,9 @@ public sealed class QueuePlayer : IDisposable
 
     public event EventHandler? QueueChanged;
 
+    /// <summary>A radio station started (<see cref="StartRadio"/> succeeded); raised outside the queue lock.</summary>
+    public event EventHandler<RadioFilter>? RadioStarted;
+
     public event EventHandler<PlayerErrorEventArgs>? Error;
 
     public PlayerState State => _player.State;
@@ -1245,6 +1248,13 @@ public sealed class QueuePlayer : IDisposable
             throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.EmptyPoolMessage());
         }
 
+        var status = StartRadioCore(filter, pool, play);
+        RadioStarted?.Invoke(this, filter);
+        return status;
+    }
+
+    private PlayerStatus StartRadioCore(RadioFilter filter, IReadOnlyList<RadioCandidate> pool, bool play)
+    {
         lock (_gate)
         {
             ThrowIfDisposed();
@@ -1258,7 +1268,7 @@ public sealed class QueuePlayer : IDisposable
             for (var round = 0; round < 3 && loaded < 0; round++)
             {
                 var first = slots.Count;
-                foreach (var pick in RadioPicker.Pick(pool, RadioLookahead, session.History, session.Random))
+                foreach (var pick in RadioPicker.Pick(pool, RadioLookahead, session.History, session.Random, filter.PreferFavorites))
                 {
                     slots.Add(new Slot(ToItem(pick), order++));
                 }
@@ -1299,6 +1309,42 @@ public sealed class QueuePlayer : IDisposable
                 PlayCurrent();
             }
 
+            return StatusCore();
+        }
+    }
+
+    /// <summary>
+    /// Ends the radio station without stopping playback: the station's lookahead and the played radio tracks are dropped,
+    /// the current track plays on (its position untouched, no gap) and the up-next entries follow, as a normal queue.
+    /// One atomic step, so nothing can change the queue between reading it and replacing it. A no-op when no station is on
+    /// air (it may have ended already), so callers can send it without checking first.
+    /// </summary>
+    public PlayerStatus EndRadio()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (_radio is null)
+            {
+                return StatusCore();
+            }
+
+            _radio = null;
+            if (_index >= 0)
+            {
+                var end = UpNextEnd();
+                _items.RemoveRange(end, _items.Count - end);
+                _items.RemoveRange(0, _index);
+                _index = 0;
+            }
+            else
+            {
+                _items.Clear();
+            }
+
+            NormalizeUpNext();
+            RenumberOrder();
+            QueueChanged?.Invoke(this, EventArgs.Empty);
             return StatusCore();
         }
     }
@@ -1346,7 +1392,7 @@ public sealed class QueuePlayer : IDisposable
             return;
         }
 
-        foreach (var pick in RadioPicker.Pick(pool, RadioLookahead - upcoming, radio.History, radio.Random))
+        foreach (var pick in RadioPicker.Pick(pool, RadioLookahead - upcoming, radio.History, radio.Random, radio.Filter.PreferFavorites))
         {
             _items.Add(new Slot(ToItem(pick), _nextOrder++));
         }

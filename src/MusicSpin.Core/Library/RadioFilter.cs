@@ -61,6 +61,14 @@ public sealed record RadioFilter
     /// <summary>Only favorite tracks (narrows the other filters, like <see cref="HiRes"/>).</summary>
     public bool Favorites { get; init; }
 
+    /// <summary>
+    /// Not a filter but a weight (#49): favorites are picked <see cref="Playback.RadioPicker.FavoriteWeight"/>× as often as
+    /// other tracks, without limiting the station to them. Part of the station, so it is saved with it and shown in its
+    /// description. No effect together with <see cref="Favorites"/> (every track is a favorite then).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool PreferFavorites { get; init; }
+
     // Excludes: a track matching ANY exclude value is left out, whatever the include filters say (exclude wins). Same
     // matching rules as the includes, except that unknown artist/album names are ignored (excluding something absent is harmless).
     public IReadOnlyList<string>? ExcludeArtists { get; init; }
@@ -185,7 +193,8 @@ public sealed record RadioFilter
         Add("format", ExcludeFormats, excluded);
         Add("search", ExcludeSearches?.Select(s => $"\"{s}\""), excluded);
         var text = parts.Count == 0 ? "whole library" : string.Join(" · ", parts);
-        return excluded.Count == 0 ? text : $"{text} · excluding {string.Join(", ", excluded)}";
+        text = excluded.Count == 0 ? text : $"{text} · excluding {string.Join(", ", excluded)}";
+        return PreferFavorites && !Favorites ? $"{text} · favorites first" : text;
     }
 
     private static int Count<T>(IReadOnlyList<T>? list) => list?.Count ?? 0;
@@ -222,4 +231,5 @@ public sealed record RadioCandidate(
     string? Album = null,
     string? AlbumArtist = null,
     int? TrackNumber = null,
-    double? DurationSeconds = null);
+    double? DurationSeconds = null,
+    bool IsFavorite = false);

@@ -207,7 +207,7 @@ src/MusicSpin.App/
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
   an index (skipping to a row drops the up-next entries above it), `queue.remove`, `queue.clear` with `upNext`, and
-  `queue.set` to end radio while keeping the current track and the rows. A drop between rows adds the tracks up next and
+  `radio.end` to end radio while keeping the current track and the rows (one atomic player command, #37; the Radio page's End radio uses it too). A drop between rows adds the tracks up next and
   then moves them into place with `queue.move`, at indices from the queue read again after the add (it may have moved
   on since the rows were read); a row dragged while the rows were read again is found by its file. Save as playlist writes a library playlist. Rows that were not there at
   the last read flash (`Animate.When`), and the first of them scrolls into view. The player bar's count is the number of

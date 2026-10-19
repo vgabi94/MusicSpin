@@ -280,16 +280,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     public Task PlayIndexAsync(int index) => SendAsync("play", new { index });
 
     /// <summary>
-    /// Ends radio and keeps <paramref name="keep"/>, the current track and the up-next entries after it: a new queue with
-    /// the current track at its position, playing if it was. The player has no command for this yet, so the switch may
-    /// leave a short gap.
+    /// Ends radio with the player's <c>radio.end</c>: in one step the station's picks go, the current track plays on (no
+    /// gap, its position untouched) and the up-next entries follow. A no-op in the player when no station is on air.
     /// </summary>
-    public Task EndRadioAsync(IReadOnlyList<QueueItem> keep)
-    {
-        ArgumentNullException.ThrowIfNull(keep);
-        return keep.Count == 0 ? ClearQueueAsync()
-            : SendAsync("queue.set", new { items = keep, start = 0, play = IsPlaying, startSeconds = Math.Max(0, Position) });
-    }
+    public Task EndRadioAsync() => SendAsync("radio.end", null);
 
     /// <summary>
     /// A page of the queue, in play order (<paramref name="offset"/> 0-based); null while there is no player. It waits for
