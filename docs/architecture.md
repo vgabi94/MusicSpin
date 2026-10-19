@@ -203,6 +203,12 @@ src/MusicSpin.App/
   stops or the player goes away. Each OS's adapter only translates: Windows SMTC (#34), macOS Now Playing (#35), MPRIS
   on Linux (#36). `MediaControlsFactory` picks the one for this OS; with none, or one that fails to start (a notice),
   the app runs as before.
+  - Linux: `MprisAdapter` is an MPRIS server (`org.mpris.MediaPlayer2.musicspin`, or `….instance<pid>` for a second
+    app) at `/org/mpris/MediaPlayer2`, written on `Tmds.DBus.Protocol` (the D-Bus library Avalonia.FreeDesktop already
+    ships). It implements the root and `.Player` interfaces with `Properties` and `PropertiesChanged`/`Seeked`;
+    `Position` is computed from the last update and the clock. It connects in the background (`Ready`); without a
+    session bus the factory makes none. No track list, no `OpenUri`, no Raise or Quit (all advertised as unsupported).
+    Its tests run a private `dbus-daemon` and a real D-Bus client (`MprisAdapterTests`).
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
