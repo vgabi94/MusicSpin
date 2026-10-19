@@ -203,6 +203,12 @@ src/MusicSpin.App/
   stops or the player goes away. Each OS's adapter only translates: Windows SMTC (#34), macOS Now Playing (#35), MPRIS
   on Linux (#36). `MediaControlsFactory` picks the one for this OS; with none, or one that fails to start (a notice),
   the app runs as before.
+  - macOS: `MacMediaControlsAdapter` writes `MPNowPlayingInfoCenter` (title, artist, album, length, elapsed time and
+    rate, so macOS runs the clock; the cover as `MPMediaItemArtwork`; the playback state) and handles
+    `MPRemoteCommandCenter`'s play, pause, toggle, stop, next, previous and scrubber commands. It calls the Objective-C
+    runtime directly (`ObjC`: `objc_msgSend` through typed function pointers, a runtime-registered handler class, a
+    hand-built global block for the artwork); what it writes and which command a handler sends is `MacNowPlaying`, pure
+    and tested on every OS. One live adapter at a time. macOS has no volume in Now Playing.
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
