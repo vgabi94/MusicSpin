@@ -338,6 +338,14 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
             // A load that doesn't play still replaces the queue, so a station on air goes off (as the player's does).
             Status = Status with { Radio = null };
         }
+        else if (cmd == "radio.end" && Status.Radio is not null && Status.QueueIndex is { } now && now < Queue.Count)
+        {
+            // As the player does: the current entry and the up-next ones stay (the current one plays on), the picks go.
+            var keep = Queue.Skip(now).TakeWhile((e, i) => i == 0 || e.UpNext).Select(e => e.Item).ToList();
+            var upNext = keep.Count - 1;
+            Queue = [.. keep.Select((item, i) => new QueueEntry(i, i == 0, item, i > 0))];
+            Status = Status with { QueueIndex = 0, QueueLength = keep.Count, UpNext = upNext, Radio = null };
+        }
         else if (cmd == "radio" && request.TryGetProperty("filter", out var filter) && ProtocolJson.Deserialize<RadioFilter>(filter) is { } station)
         {
             // As the player does: the station goes on air (described as the CLI describes it).

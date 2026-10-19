@@ -50,7 +50,7 @@ public static class ProtocolMessages
 /// seek(seconds | delta), volume(value | delta; unmutes), mute(mode? = on|off|toggle), info(path), queue(offset?, limit?),
 /// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.add(items, position? = end|next|upnext),
 /// queue.remove(index), queue.move(from, to), queue.clear(upNext?),
-/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), subscribe(spectrum?), quit.
+/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), radio.end, subscribe(spectrum?), quit.
 /// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle/mute without a mode just return the status.</para>
 /// </summary>
 public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory decoders, Func<object>? hello = null)
@@ -60,7 +60,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
     public static IReadOnlyList<string> Commands { get; } =
     [
         "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "mute", "info",
-        "queue", "queue.set", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "subscribe", "quit",
+        "queue", "queue.set", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "radio.end", "subscribe", "quit",
     ];
 
     public QueuePlayer Player { get; } = player ?? throw new ArgumentNullException(nameof(player));
@@ -178,6 +178,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                 return (Shuffle(root), ProtocolAction.None);
             case "radio":
                 return (Player.StartRadio(RadioFilterOf(root), OptionalBool(root, "play") ?? true), ProtocolAction.None);
+            case "radio.end":
+                return (Player.EndRadio(), ProtocolAction.None);
             case "subscribe":
                 return (Player.Status(), ProtocolAction.Subscribe);
             case "quit":

@@ -337,10 +337,10 @@ public sealed class RadioPageTests
         Assert.False(Gui.Find<Button>(app.Window, "UndoStation").IsVisible);
 
         Click(app, Gui.Find<Button>(app.Window, "EndStation"));
-        await Gui.UntilAsync(() => app.Scripted.Count("queue.set") == 1, "End radio sent");
-        var end = app.Scripted.Sent("queue.set")[0];
-        Assert.Equal(["The Hollow", "Aurora"], end.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("title").GetString()));
-        Assert.True(end.TryGetProperty("startSeconds", out _));
+        await Gui.UntilAsync(() => app.Scripted.Count("radio.end") == 1, "End radio sent");
+        // One atomic radio.end: the app doesn't replace or clear the queue itself.
+        Assert.Equal(0, app.Scripted.Count("queue.set"));
+        Assert.Equal(0, app.Scripted.Count("queue.clear"));
     }
 
     [AvaloniaFact]
@@ -443,21 +443,35 @@ public sealed class RadioPageTests
 
     [AvaloniaFact]
     [Trait("Category", "Unhappy")]
-    public async Task End_radio_with_no_current_track_does_nothing_rather_than_clear_the_queue()
+    public async Task End_radio_the_player_refuses_says_why_and_stays_on_air()
     {
         await using var app = await OpenAsync();
         app.Scripted!.SetQueue([SampleLibrary.Item(7, 1), SampleLibrary.Item(8, 2)], radio: new RadioFilter { Genres = ["Jazz"] });
         await app.Scripted.PushAsync("stateChanged");
         await Gui.UntilAsync(() => Page(app).IsLive, "on air");
-        // The queue moved on between the status and the read: no entry is the current one.
-        app.Scripted.Queue = [.. app.Scripted.Queue.Select(e => e with { Current = false })];
+        app.Scripted.Fail("radio.end", 13, "The player is shutting down.");
 
         Click(app, Gui.Find<Button>(app.Window, "EndStation"));
-        await Gui.UntilAsync(() => app.ViewModel.Banner == RadioViewModel.NothingToKeep, "the notice");
+        await Gui.UntilAsync(() => app.ViewModel.Banner?.Contains("shutting down", StringComparison.Ordinal) == true, "the notice");
 
         Assert.Equal(0, app.Scripted.Count("queue.set"));
         Assert.Equal(0, app.Scripted.Count("queue.clear"));
         Assert.True(app.ViewModel.Radio.IsOnAir);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task End_radio_after_the_station_went_off_air_sends_nothing()
+    {
+        await using var app = await OpenAsync();
+        app.Scripted!.SetQueue([SampleLibrary.Item(7, 1), SampleLibrary.Item(8, 2)]);
+        await app.Scripted.PushAsync("stateChanged");
+
+        await app.ViewModel.Radio.EndAsync();
+
+        Assert.Equal(0, app.Scripted.Count("radio.end"));
+        Assert.Equal(0, app.Scripted.Count("queue.set"));
+        Assert.Equal(0, app.Scripted.Count("queue.clear"));
     }
 
     [AvaloniaFact]
