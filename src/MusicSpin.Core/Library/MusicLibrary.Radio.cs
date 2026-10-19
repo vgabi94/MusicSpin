@@ -193,6 +193,9 @@ public sealed partial class MusicLibrary
             yield break;
         }
 
+        // Favorites first (#49): which pool tracks are favorites, read once, so the picker can weight them.
+        var preferred = filter.PreferFavorites && !filter.Favorites ? ResolveFavorites().Ticks.Keys.ToHashSet(StringComparer.Ordinal) : null;
+
         // is:favorite in --search or --exclude-search: the favorites, read once for the whole pool.
         var searchFavorites = searches?.Any(s => s.Favorite) == true || excludes?.Searches?.Any(s => s.Favorite) == true
             ? ResolveFavorites().Ticks.Keys.ToHashSet(StringComparer.Ordinal)
@@ -235,7 +238,7 @@ public sealed partial class MusicLibrary
                         && (seen?.Add(t.Id) ?? true))
                     {
                         yield return new RadioCandidate(t.Id, t.Path, t.ArtistKey, t.AlbumId, t.Title, t.Artist, t.Album, t.EffectiveAlbumArtist,
-                            t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null);
+                            t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null, preferred?.Contains(t.Id) == true);
                     }
                 }
 
@@ -253,7 +256,7 @@ public sealed partial class MusicLibrary
                     && (seen?.Add(t.Id) ?? true))
                 {
                     yield return new RadioCandidate(t.Id, t.Path, t.ArtistKey, t.AlbumId, t.Title, t.Artist, t.Album, t.EffectiveAlbumArtist,
-                        t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null);
+                        t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null, preferred?.Contains(t.Id) == true);
                 }
             }
         }
@@ -271,7 +274,7 @@ public sealed partial class MusicLibrary
     }
 
     /// <summary>The projection read for radio pools.</summary>
-    private sealed class RadioRow
+    internal sealed class RadioRow
     {
         public string Id { get; set; } = string.Empty;
         public string Path { get; set; } = string.Empty;

@@ -87,31 +87,11 @@ public sealed partial class RadioViewModel : ObservableObject, IDisposable
         return _notices.GuardAsync(() => Player.StartRadioAsync(RadioStation.FilterOf(tags)));
     }
 
-    /// <summary>The notice when radio can't end because the queue has no current entry to keep playing.</summary>
-    public const string NothingToKeep = "Radio can't end now: the player has no current track. Try again in a moment.";
-
     /// <summary>
-    /// Ends the station (v1): a new queue of the current track, at its position, and the up-next entries after it; the
-    /// station's picks go (see <see cref="PlayerViewModel.EndRadioAsync"/>). With no current entry (the queue changed
-    /// meanwhile) it does nothing and says so, rather than clearing the queue and stopping the music.
+    /// Ends the station with the player's <c>radio.end</c> (#37): one atomic step, so the queue can't change between a
+    /// read and a replace. The current track plays on and the up-next entries follow; the station's picks go.
     /// </summary>
-    public Task EndAsync() => _notices.GuardAsync(async () =>
-    {
-        if (!IsOnAir)
-        {
-            return;
-        }
-
-        var page = await Player.QueueAsync(Player.QueueIndex ?? 0, Player.UpNext + 1).ConfigureAwait(true)
-                   ?? throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, "The player isn't answering, so radio can't end now. Try again in a moment.");
-        var keep = page.Items.SkipWhile(e => !e.Current).TakeWhile((e, i) => i == 0 || e.UpNext).Select(e => e.Item).ToList();
-        if (keep.Count == 0)
-        {
-            throw new MusicSpinException(MusicSpinErrorCode.InvalidState, NothingToKeep);
-        }
-
-        await Player.EndRadioAsync(keep).ConfigureAwait(true);
-    });
+    public Task EndAsync() => IsOnAir ? _notices.GuardAsync(Player.EndRadioAsync) : Task.CompletedTask;
 
     public void Dispose() => _owed.Dispose();
 

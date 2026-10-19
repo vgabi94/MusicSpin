@@ -195,11 +195,39 @@ src/MusicSpin.App/
   submenu shown in the menu's place: the playlists, then New playlist…); a track also gets Add to (or Remove from)
   favorites. `PlaylistActions` makes a sidebar playlist's menu: Play, Rename, Delete… (which asks first, in the
   menu's place).
+- **OS media controls (#34, #35, #36).** `Services/MediaControls`: `MediaControlsBridge` is the platform-neutral half.
+  It follows `PlayerViewModel` (so the CLI's changes show too) and passes the track, its cached cover file
+  (`CoverSize.Medium`), the timeline and the volume to an `IMediaControlsAdapter`, only when something shown changed (a
+  position that jumps is marked `Seeked`; one that just runs on is not sent). It turns the adapter's commands (play,
+  pause, toggle, stop, next, previous, seek by, set position, volume) into player commands on the UI thread. Nothing is
+  sent before the player is connected (a media key never starts a player), and the controls are cleared when playback
+  stops or the player goes away. Each OS's adapter only translates: Windows SMTC (#34), macOS Now Playing (#35), MPRIS
+  on Linux (#36). `MediaControlsFactory` picks the one for this OS; with none, or one that fails to start (a notice),
+  the app runs as before.
+  - Windows: `WindowsMediaControlsAdapter` drives the System Media Transport Controls of a
+    `Windows.Media.Playback.MediaPlayer` that never plays (its command manager off), so no window handle is needed:
+    title, artist, album, the cover as the thumbnail (a stream from `CreateRandomAccessStreamOnFile`), the timeline,
+    the status, and the play, pause, stop, next, previous buttons and the scrubber. Raw WinRT (`WinRT`: activation,
+    HSTRINGs, vtable slots from the SDK metadata, a hand-written agile `TypedEventHandler`), so the app keeps its plain
+    `net10.0` target. `WindowsSmtc` is the pure translation, tested on every OS. Clear disables the SMTC, which hides
+    MusicSpin from the flyout. No volume (the SMTC has none).
+  - macOS: `MacMediaControlsAdapter` writes `MPNowPlayingInfoCenter` (title, artist, album, length, elapsed time and
+    rate, so macOS runs the clock; the cover as `MPMediaItemArtwork`; the playback state) and handles
+    `MPRemoteCommandCenter`'s play, pause, toggle, stop, next, previous and scrubber commands. It calls the Objective-C
+    runtime directly (`ObjC`: `objc_msgSend` through typed function pointers, a runtime-registered handler class, a
+    hand-built global block for the artwork); what it writes and which command a handler sends is `MacNowPlaying`, pure
+    and tested on every OS. One live adapter at a time. macOS has no volume in Now Playing.
+  - Linux: `MprisAdapter` is an MPRIS server (`org.mpris.MediaPlayer2.musicspin`, or `….instance<pid>` for a second
+    app) at `/org/mpris/MediaPlayer2`, written on `Tmds.DBus.Protocol` (the D-Bus library Avalonia.FreeDesktop already
+    ships). It implements the root and `.Player` interfaces with `Properties` and `PropertiesChanged`/`Seeked`;
+    `Position` is computed from the last update and the clock. It connects in the background (`Ready`); without a
+    session bus the factory makes none. No track list, no `OpenUri`, no Raise or Quit (all advertised as unsupported).
+    Its tests run a private `dbus-daemon` and a real D-Bus client (`MprisAdapterTests`).
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
   an index (skipping to a row drops the up-next entries above it), `queue.remove`, `queue.clear` with `upNext`, and
-  `queue.set` to end radio while keeping the current track and the rows. A drop between rows adds the tracks up next and
+  `radio.end` to end radio while keeping the current track and the rows (one atomic player command, #37; the Radio page's End radio uses it too). A drop between rows adds the tracks up next and
   then moves them into place with `queue.move`, at indices from the queue read again after the add (it may have moved
   on since the rows were read); a row dragged while the rows were read again is found by its file. Save as playlist writes a library playlist. Rows that were not there at
   the last read flash (`Animate.When`), and the first of them scrolls into view. The player bar's count is the number of

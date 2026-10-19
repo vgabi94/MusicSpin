@@ -26,6 +26,9 @@ public sealed record DataDirectory(string Path, DataDirectorySource Source)
 
     public string LibraryLockFile => System.IO.Path.Combine(Path, LibraryLockFileName);
 
+    /// <summary>Recent and saved radio stations (see <see cref="Library.StationStore"/>).</summary>
+    public string StationsFile => System.IO.Path.Combine(Path, "stations.json");
+
     public string LogsDirectory => System.IO.Path.Combine(Path, "logs");
 
     /// <summary>Cached album covers, one folder per album id (see <see cref="Library.MusicLibrary.CoverPath"/>).</summary>

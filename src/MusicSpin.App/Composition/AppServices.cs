@@ -15,4 +15,5 @@ public sealed record AppServices(
     IAppearance Appearance,
     TimeProvider Time,
     IUiDispatcher Ui,
-    string? StartupWarning = null);
+    string? StartupWarning = null,
+    Services.MediaControls.MediaControlsSetup? MediaControls = null);

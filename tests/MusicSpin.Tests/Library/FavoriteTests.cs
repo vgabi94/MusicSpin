@@ -1,5 +1,6 @@
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
+using MusicSpin.Core.Remote;
 using MusicSpin.Tests.Shared;
 using Microsoft.Extensions.Time.Testing;
 
@@ -322,6 +323,46 @@ public sealed class FavoriteTests : LibraryTestBase
         using var library = OpenRead();
         Assert.True(library.HasRadioTracks(new RadioFilter { Favorites = true }));
         Assert.False(library.HasRadioTracks(new RadioFilter { Favorites = true, Genres = ["Pop"], HiRes = true }));
+    }
+
+    [Fact]
+    public void Preferring_favorites_keeps_the_whole_pool_and_marks_the_favorites()
+    {
+        Favorite(SoWhat, Lossy);
+        using var library = OpenRead();
+
+        var plain = library.RadioPool(new RadioFilter());
+        var preferred = library.RadioPool(new RadioFilter { PreferFavorites = true });
+        var jazz = library.RadioPool(new RadioFilter { PreferFavorites = true, Genres = ["jazz"] });
+
+        Assert.Equal(plain.Select(c => c.TrackId).Order(StringComparer.Ordinal), preferred.Select(c => c.TrackId).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(plain, c => c.IsFavorite); // only read when the station asks for it
+        Assert.Equal(["Lossy Song", "So What"], preferred.Where(c => c.IsFavorite).Select(c => c.Title!).Order(StringComparer.Ordinal));
+        Assert.Equal(["So What"], jazz.Where(c => c.IsFavorite).Select(c => c.Title!));
+        Assert.Contains(jazz, c => !c.IsFavorite);
+        // The search path (whole records) marks them too.
+        Assert.Equal(["So What"], library.RadioPool(new RadioFilter { PreferFavorites = true, Searches = ["so what"] }).Where(c => c.IsFavorite).Select(c => c.Title!));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Preferring_favorites_with_none_or_with_favorites_only_changes_nothing_but_the_description()
+    {
+        using (var library = OpenRead())
+        {
+            Assert.DoesNotContain(library.RadioPool(new RadioFilter { PreferFavorites = true }), c => c.IsFavorite);
+            Assert.True(library.HasRadioTracks(new RadioFilter { PreferFavorites = true }));
+        }
+
+        Assert.True(new RadioFilter { PreferFavorites = true }.IsEmpty); // a weight, not a filter
+        Assert.Equal("whole library · favorites first", new RadioFilter { PreferFavorites = true }.Describe());
+        Assert.Equal("genre Jazz · excluding artist Kenny G · favorites first",
+            new RadioFilter { PreferFavorites = true, Genres = ["Jazz"], ExcludeArtists = ["Kenny G"] }.Describe());
+        Assert.Equal("favorites", new RadioFilter { Favorites = true, PreferFavorites = true }.Describe());
+        Assert.Equal(RadioFilter.NoFavoritesMessage, new RadioFilter { Favorites = true, PreferFavorites = true }.EmptyPoolMessage());
+        // Saved with the station, and left out of the JSON when off (old queue.json files read the same).
+        Assert.Contains("\"preferFavorites\":true", ProtocolJson.Serialize(new RadioFilter { PreferFavorites = true }), StringComparison.Ordinal);
+        Assert.DoesNotContain("preferFavorites", ProtocolJson.Serialize(new RadioFilter()), StringComparison.Ordinal);
     }
 
     [Fact]
