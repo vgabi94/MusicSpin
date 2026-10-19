@@ -1,5 +1,6 @@
 using Avalonia;
 using MusicSpin.App.Services;
+using MusicSpin.App.Services.MediaControls;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
 using MusicSpin.App.Views;
@@ -17,15 +18,17 @@ public static class AppComposition
         var time = TimeProvider.System;
         var ui = new AvaloniaUiDispatcher();
         var library = new LibraryService(directory, time);
+        var resizer = new SkiaCoverResizer();
         return new AppServices(
             new SettingsService(directory),
             library,
-            new CoverService(directory, new SkiaCoverResizer(), time, library: library, ui: ui),
+            new CoverService(directory, resizer, time, library: library, ui: ui),
             new BackgroundPlayerConnector(directory),
             new Appearance(application),
             time,
             ui,
-            startupWarning);
+            startupWarning,
+            MediaControlsFactory.Create(directory, library, resizer));
     }
 
     /// <summary>The main window and its view model over <paramref name="services"/>.</summary>
