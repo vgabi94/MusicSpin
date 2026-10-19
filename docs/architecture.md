@@ -203,6 +203,12 @@ src/MusicSpin.App/
   stops or the player goes away. Each OS's adapter only translates: Windows SMTC (#34), macOS Now Playing (#35), MPRIS
   on Linux (#36). `MediaControlsFactory` picks the one for this OS; with none, or one that fails to start (a notice),
   the app runs as before.
+  - macOS: `MacMediaControlsAdapter` writes `MPNowPlayingInfoCenter` (title, artist, album, length, elapsed time and
+    rate, so macOS runs the clock; the cover as `MPMediaItemArtwork`; the playback state) and handles
+    `MPRemoteCommandCenter`'s play, pause, toggle, stop, next, previous and scrubber commands. It calls the Objective-C
+    runtime directly (`ObjC`: `objc_msgSend` through typed function pointers, a runtime-registered handler class, a
+    hand-built global block for the artwork); what it writes and which command a handler sends is `MacNowPlaying`, pure
+    and tested on every OS. One live adapter at a time. macOS has no volume in Now Playing.
   - Linux: `MprisAdapter` is an MPRIS server (`org.mpris.MediaPlayer2.musicspin`, or `….instance<pid>` for a second
     app) at `/org/mpris/MediaPlayer2`, written on `Tmds.DBus.Protocol` (the D-Bus library Avalonia.FreeDesktop already
     ships). It implements the root and `.Player` interfaces with `Properties` and `PropertiesChanged`/`Seeked`;

@@ -34,7 +34,14 @@ public static class MediaControlsFactory
         });
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859", Justification = "Windows and macOS adapters join here (#34, #35).")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859", Justification = "The Windows adapter joins here (#34).")]
     private static IMediaControlsAdapter? CreateAdapter()
-        => OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Tmds.DBus.Protocol.DBusAddress.Session) ? MprisAdapter.Start() : null;
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            return MacMediaControlsAdapter.Create();
+        }
+
+        return OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Tmds.DBus.Protocol.DBusAddress.Session) ? MprisAdapter.Start() : null;
+    }
 }
