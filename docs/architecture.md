@@ -203,6 +203,13 @@ src/MusicSpin.App/
   stops or the player goes away. Each OS's adapter only translates: Windows SMTC (#34), macOS Now Playing (#35), MPRIS
   on Linux (#36). `MediaControlsFactory` picks the one for this OS; with none, or one that fails to start (a notice),
   the app runs as before.
+  - Windows: `WindowsMediaControlsAdapter` drives the System Media Transport Controls of a
+    `Windows.Media.Playback.MediaPlayer` that never plays (its command manager off), so no window handle is needed:
+    title, artist, album, the cover as the thumbnail (a stream from `CreateRandomAccessStreamOnFile`), the timeline,
+    the status, and the play, pause, stop, next, previous buttons and the scrubber. Raw WinRT (`WinRT`: activation,
+    HSTRINGs, vtable slots from the SDK metadata, a hand-written agile `TypedEventHandler`), so the app keeps its plain
+    `net10.0` target. `WindowsSmtc` is the pure translation, tested on every OS. Clear disables the SMTC, which hides
+    MusicSpin from the flyout. No volume (the SMTC has none).
   - macOS: `MacMediaControlsAdapter` writes `MPNowPlayingInfoCenter` (title, artist, album, length, elapsed time and
     rate, so macOS runs the clock; the cover as `MPMediaItemArtwork`; the playback state) and handles
     `MPRemoteCommandCenter`'s play, pause, toggle, stop, next, previous and scrubber commands. It calls the Objective-C

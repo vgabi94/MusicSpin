@@ -3,6 +3,11 @@
     App tests: view models and services as unit tests, and the views headless (Avalonia.Headless with Skia, so frames
     can be captured and compared with the approved snapshots in Snapshots/). Helpers are in Harness/.
   -->
+  <PropertyGroup>
+    <!-- The Windows media controls smoke test builds fake WinRT event args (WindowsMediaControlsTests). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless.XUnit" />
     <PackageReference Include="Avalonia.Skia" />

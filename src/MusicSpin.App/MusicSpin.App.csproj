@@ -10,7 +10,7 @@
     <RootNamespace>MusicSpin.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <!-- The macOS media controls call the Objective-C runtime through function pointers (Services/MediaControls/ObjC.cs). -->
+    <!-- The macOS and Windows media controls call the Objective-C runtime and WinRT through function pointers (Services/MediaControls/ObjC.cs, WinRT.cs). -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 

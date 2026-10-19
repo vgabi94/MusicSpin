@@ -34,9 +34,13 @@ public static class MediaControlsFactory
         });
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859", Justification = "The Windows adapter joins here (#34).")]
     private static IMediaControlsAdapter? CreateAdapter()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return WindowsMediaControlsAdapter.Create();
+        }
+
         if (OperatingSystem.IsMacOS())
         {
             return MacMediaControlsAdapter.Create();
