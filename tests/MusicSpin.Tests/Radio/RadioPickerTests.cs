@@ -12,14 +12,14 @@ public sealed class RadioPickerTests
     internal static List<RadioCandidate> Pool(int count, int artists = 1, int albumsPerArtist = 1)
         => [.. Enumerable.Range(0, count).Select(i => C(i, $"artist{i % artists}", $"album{i / artists % albumsPerArtist}"))];
 
-    private static List<RadioCandidate> PickMany(IReadOnlyList<RadioCandidate> pool, int count, int seed = 1)
+    private static List<RadioCandidate> PickMany(IReadOnlyList<RadioCandidate> pool, int count, int seed = 1, bool preferFavorites = false)
     {
         var history = new RadioPicker.History();
         var random = new Random(seed);
         var all = new List<RadioCandidate>();
         while (all.Count < count)
         {
-            all.AddRange(RadioPicker.Pick(pool, Math.Min(20, count - all.Count), history, random)); // top-ups of 20, like the player
+            all.AddRange(RadioPicker.Pick(pool, Math.Min(20, count - all.Count), history, random, preferFavorites)); // top-ups of 20, like the player
         }
 
         return all;
@@ -68,6 +68,101 @@ public sealed class RadioPickerTests
         var picks = PickMany(Pool(1), 10);
 
         Assert.All(picks, p => Assert.Equal("id0", p.TrackId));
+    }
+
+    /// <summary>A pool of <paramref name="count"/> tracks (distinct artists and albums) where every <paramref name="every"/>th one is a favorite.</summary>
+    private static List<RadioCandidate> FavoritePool(int count, int every)
+        => [.. Pool(count, artists: count).Select((c, i) => c with { IsFavorite = i % every == 0 })];
+
+    private static double FavoriteShare(List<RadioCandidate> picks) => picks.Count(p => p.IsFavorite) / (double)picks.Count;
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(42)]
+    public void Preferring_favorites_picks_them_about_three_times_as_often(int seed)
+    {
+        // 1 track in 10 is a favorite: 10% of plain picks; weighted 3:1 that is 3 / (3 + 9) = 25%.
+        var pool = FavoritePool(1000, every: 10);
+
+        var plain = FavoriteShare(PickMany(pool, 4000, seed));
+        var preferred = FavoriteShare(PickMany(pool, 4000, seed, preferFavorites: true));
+
+        Assert.InRange(plain, 0.07, 0.13);
+        Assert.InRange(preferred, 0.21, 0.29);
+    }
+
+    [Fact]
+    public void Preferring_favorites_still_never_repeats_within_the_window_or_plays_an_artist_twice_in_a_row()
+    {
+        // Every favorite is by the same artist: weighting must not break the artist spacing or the no-repeat window.
+        var pool = Pool(300, artists: 30).Select(c => c with { IsFavorite = c.ArtistKey == "artist0" }).ToList();
+
+        var picks = PickMany(pool, 3000, preferFavorites: true);
+
+        Assert.True(ShortestRepeatGap(picks) > RadioPicker.RepeatWindow, $"gap {ShortestRepeatGap(picks)}");
+        Assert.All(picks.Zip(picks.Skip(1)), p => Assert.NotEqual(p.First.ArtistKey, p.Second.ArtistKey));
+        Assert.True(FavoriteShare(picks) > 1 / 30.0); // still favored as far as the spacing allows
+    }
+
+    [Fact]
+    public void The_fallback_scan_is_weighted_too()
+    {
+        // 10,000 tracks by the artist just played, and 10 by others (5 of them favorites): the probes almost always hit
+        // the artist rule, so the scan of the eligible tracks chooses. Weighted, a favorite is 15 / 20 = 75% likely.
+        var pool = Enumerable.Range(0, 10_000).Select(i => C(i, "same")).Concat(
+            Enumerable.Range(0, 10).Select(i => C(10_000 + i, $"other{i}") with { IsFavorite = i < 5 })).ToList();
+        double Share(bool prefer)
+        {
+            var random = new Random(11);
+            var favorites = 0;
+            for (var n = 0; n < 2000; n++)
+            {
+                var pick = Assert.Single(RadioPicker.Pick(pool, 1, new RadioPicker.History(lastArtist: "same"), random, prefer));
+                Assert.NotEqual("same", pick.ArtistKey);
+                favorites += pick.IsFavorite ? 1 : 0;
+            }
+
+            return favorites / 2000.0;
+        }
+
+        Assert.InRange(Share(prefer: false), 0.42, 0.58);
+        Assert.InRange(Share(prefer: true), 0.69, 0.81);
+    }
+
+    [Fact]
+    public void Round_robin_pools_stay_round_robin_when_preferring_favorites()
+    {
+        // Ten tracks: the window (pool size - 1) forces each once per round, so there is nothing to weight.
+        var pool = Pool(10, artists: 2).Select(c => c with { IsFavorite = c.ArtistKey == "artist0" }).ToList();
+        var picks = PickMany(pool, 2000, preferFavorites: true);
+
+        Assert.Equal(10, ShortestRepeatGap(picks));
+        Assert.InRange(FavoriteShare(picks), 0.49, 0.51);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Preferring_favorites_without_any_in_the_pool_picks_exactly_as_before()
+    {
+        var pool = Pool(200, artists: 20, albumsPerArtist: 2);
+
+        var plain = PickMany(pool, 500, seed: 5).Select(p => p.TrackId);
+        var preferred = PickMany(pool, 500, seed: 5, preferFavorites: true).Select(p => p.TrackId);
+
+        Assert.Equal(plain, preferred); // no extra random draws, so the same seed gives the same station
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void An_all_favorites_pool_is_not_skewed()
+    {
+        var pool = FavoritePool(200, every: 1);
+
+        var picks = PickMany(pool, 2000, seed: 3, preferFavorites: true);
+
+        Assert.True(ShortestRepeatGap(picks) > RadioPicker.RepeatWindow);
+        Assert.Equal(200, picks.Select(p => p.TrackId).Distinct().Count());
     }
 
     [Fact]

@@ -121,6 +121,7 @@ Endless random playback of the library in the background player (started if need
 | `--search <text>` | [Search syntax](library.md#search-syntax), as `music-spin search` |
 | `--hires` | Only hi-res tracks |
 | `--favorites` | Only [favorite](#favorite--favorites) tracks; narrows the other filters (`--favorites --genre jazz` plays favorite jazz tracks). No favorites yet, or none of them in the library: exit 12 with a message saying which |
+| `--prefer-favorites` | Play favorites **3× as often** as other tracks without limiting the station to them (a weight, not a filter: see [Playback → Radio](playback.md#radio)). Saved with the station; the description ends with `· favorites first` |
 | `--exclude-artist <name>` | Leave out tracks whose track **or** album artist is this (same matching as `--artist`) |
 | `--exclude-album <title\|id>` | Leave out this album |
 | `--exclude-genre <name>` | Leave out this genre (same matching as `--genre`; a `Rock; Pop` track is left out by either) |
@@ -128,7 +129,7 @@ Endless random playback of the library in the background player (started if need
 | `--exclude-format <id>` | Leave out these formats; repeat or comma-separate |
 | `--exclude-search <text>` | Leave out tracks matching this search (`--exclude-search is:favorite`: radio without your favorites) |
 
-Every filter except `--hires` and `--favorites` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
+Every filter except `--hires`, `--favorites` and `--prefer-favorites` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
 
 **Excludes:** every `--exclude-*` option is repeatable, and a track matching **any** exclude value is left out, **even when an include filter matches it** (exclude wins). Excludes alone narrow the whole library: `music-spin radio --exclude-genre Christmas --exclude-artist "Kenny G"`. Unknown names in `--exclude-artist`/`--exclude-album` are **ignored silently** (excluding something the library does not have is harmless, and they are not errors as they are in includes). There is no `--exclude-hires`: use `--exclude-format` or `--hires` instead (a "lossy only" station is `--format mp3 --format aac ...`). The description shows excludes last: `genre jazz · year 1955-1965 · excluding artist Kenny G`.
 

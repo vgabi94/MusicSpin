@@ -366,6 +366,8 @@ public sealed class McpServerTests : IAsyncDisposable
             Assert.Contains("array", props.GetProperty(name).GetProperty("type").ToString(), StringComparison.Ordinal);
         }
 
+        Assert.Contains("boolean", props.GetProperty("preferFavorites").GetProperty("type").ToString(), StringComparison.Ordinal);
+
         Assert.StartsWith("usage:", await CallError("radio", new() { ["years"] = new[] { "1999-1990" } }), StringComparison.Ordinal);
         Assert.StartsWith("not_found: No artist named 'Nobody'", await CallError("radio", new() { ["artists"] = new[] { "Nobody" } }), StringComparison.Ordinal);
         Assert.StartsWith("not_found: No library tracks match the radio filters (genre polka)",
@@ -376,6 +378,8 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.True(status.GetProperty("playerStarted").GetBoolean());
         Assert.Equal("genre Jazz · year 1959 or 2001 · format flac", status.GetProperty("radio").GetProperty("description").GetString());
         Assert.Equal(4, status.GetProperty("radio").GetProperty("poolSize").GetInt32());
+        var preferred = await Call("radio", new() { ["genres"] = new[] { "Jazz" }, ["preferFavorites"] = true });
+        Assert.Equal("genre Jazz · favorites first", preferred.GetProperty("radio").GetProperty("description").GetString());
         Assert.Equal("radio", (await Call("next")).GetProperty("queueMode").GetString());
         Assert.StartsWith("invalid_state: Radio is already random", await CallError("shuffle", new() { ["mode"] = "on" }), StringComparison.Ordinal);
         var ended = await Call("radio_end");

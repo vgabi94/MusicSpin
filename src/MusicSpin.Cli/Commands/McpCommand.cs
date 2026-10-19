@@ -101,6 +101,7 @@ internal static class McpCommand
                  [Description("Search texts (syntax as the search tool); a track matching any of them qualifies.")] string[]? searches = null,
                  [Description("Only hi-res tracks.")] bool hires = false,
                  [Description("Only favorite tracks; narrows the other filters.")] bool favorites = false,
+                 [Description("Play favorites 3x as often as other tracks, without limiting the station to them.")] bool preferFavorites = false,
              [Description("Leave out these artists (track or album artist). Excludes win over includes; unknown names are ignored.")] string[]? excludeArtists = null,
              [Description("Leave out these albums (titles or ids; unknown ignored).")] string[]? excludeAlbums = null,
              [Description("Leave out these genres.")] string[]? excludeGenres = null,
@@ -112,7 +113,7 @@ internal static class McpCommand
                     var filter = new RadioFilter
                     {
                         Artists = RadioCommand.List(artists), Albums = RadioCommand.List(albums), Genres = RadioCommand.List(genres),
-                        Years = RadioCommand.Years(null, years), Formats = RadioCommand.List(formats), Searches = RadioCommand.List(searches), HiRes = hires, Favorites = favorites,
+                        Years = RadioCommand.Years(null, years), Formats = RadioCommand.List(formats), Searches = RadioCommand.List(searches), HiRes = hires, Favorites = favorites, PreferFavorites = preferFavorites,
                     ExcludeArtists = RadioCommand.List(excludeArtists), ExcludeAlbums = RadioCommand.List(excludeAlbums), ExcludeGenres = RadioCommand.List(excludeGenres),
                     ExcludeYears = RadioCommand.Years(null, excludeYears), ExcludeFormats = RadioCommand.List(excludeFormats), ExcludeSearches = RadioCommand.List(excludeSearches),
                     };
