@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Composition;
 using MusicSpin.App.Services;
+using MusicSpin.App.Services.MediaControls;
 using MusicSpin.App.Theming;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
@@ -55,6 +56,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             Sidebar.MarkFresh(playlist.Id);
         });
         PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
+        MediaControls = StartMediaControls(services);
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
         Layers.Register(QueueDrawer.SaveForm);
@@ -294,7 +296,33 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Radio.Dispose();
         SpinClock.Dispose();
         PlayerBar.Dispose();
+        MediaControls?.Dispose();
         await Player.DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>The OS media controls following the player (#34), or null on an OS without them.</summary>
+    public MediaControlsBridge? MediaControls { get; }
+
+    /// <summary>The OS media controls, if this OS has them. An adapter that can't start leaves the app as it was, with a notice.</summary>
+    private MediaControlsBridge? StartMediaControls(AppServices services)
+    {
+        if (services.MediaControls is not { } setup)
+        {
+            return null;
+        }
+
+        IMediaControlsAdapter? adapter;
+        try
+        {
+            adapter = setup.CreateAdapter();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Notices.Post($"The system media controls aren't available: {ex.Message}");
+            return null;
+        }
+
+        return adapter is null ? null : new MediaControlsBridge(Player, adapter, setup.CoverFile, services.Ui, services.Time);
     }
 
     partial void OnSearchTextChanged(string value) => CurrentPage.SearchText = value;

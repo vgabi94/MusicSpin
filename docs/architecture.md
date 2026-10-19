@@ -194,6 +194,15 @@ src/MusicSpin.App/
   submenu shown in the menu's place: the playlists, then New playlist…); a track also gets Add to (or Remove from)
   favorites. `PlaylistActions` makes a sidebar playlist's menu: Play, Rename, Delete… (which asks first, in the
   menu's place).
+- **OS media controls (#34, #35, #36).** `Services/MediaControls`: `MediaControlsBridge` is the platform-neutral half.
+  It follows `PlayerViewModel` (so the CLI's changes show too) and passes the track, its cached cover file
+  (`CoverSize.Medium`), the timeline and the volume to an `IMediaControlsAdapter`, only when something shown changed (a
+  position that jumps is marked `Seeked`; one that just runs on is not sent). It turns the adapter's commands (play,
+  pause, toggle, stop, next, previous, seek by, set position, volume) into player commands on the UI thread. Nothing is
+  sent before the player is connected (a media key never starts a player), and the controls are cleared when playback
+  stops or the player goes away. Each OS's adapter only translates: Windows SMTC (#34), macOS Now Playing (#35), MPRIS
+  on Linux (#36). `MediaControlsFactory` picks the one for this OS; with none, or one that fails to start (a notice),
+  the app runs as before.
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
