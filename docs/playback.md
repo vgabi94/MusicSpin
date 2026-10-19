@@ -187,7 +187,8 @@ Details:
 | `repeat one` | Replays the current track when it ends (`next`/`prev` still move) |
 | `repeat all` | Accepted (it is a global mode) but has no effect: radio never ends, and `next`/`prev` do not wrap |
 | `shuffle on/off/toggle` | Exit 8 `invalid_state`: radio is already random. The shuffle setting is kept and applies again to the next normal queue |
-| `play`, `queue clear` (without `--up-next`), `load` (serve) | End radio mode |
+| `radio end` | Ends radio and keeps playing, in one step: the current track plays on at its position (no gap), the up-next entries follow as a normal queue, and the lookahead and the played radio tracks are dropped. A no-op when no station is on air |
+| `play`, `queue clear` (without `--up-next`), `load` (serve) | End radio mode and replace (or empty) the queue |
 | `status` | `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text shows `[radio]` instead of the queue position and a `Radio: <filters> (<N> tracks) · Repeat: ...` line |
 
 - **Gapless:** the lookahead is the queue, so same-format radio tracks play back to back exactly like a normal queue ([Gapless](#gapless)).

@@ -161,6 +161,40 @@ public sealed class RadioCliTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Radio_end_keeps_the_current_track_and_the_up_next_ones()
+    {
+        await WithLibraryAsync();
+        var first = (await Ok("radio", "--backend", "null")).GetProperty("item").GetProperty("path").GetString();
+        await Ok("queue", "add", PlayerCliTests.Long[0]);
+
+        var ended = await Ok("radio", "end");
+
+        Assert.Equal("queue", Mode(ended));
+        Assert.Equal("playing", ended.GetProperty("state").GetString());
+        Assert.Equal(first, ended.GetProperty("item").GetProperty("path").GetString());
+        Assert.Equal(2, ended.GetProperty("queueLength").GetInt32());
+        var items = (await Ok("queue")).GetProperty("items");
+        Assert.Equal([first, PlayerCliTests.Long[0]], items.EnumerateArray().Select(e => e.GetProperty("item").GetProperty("path").GetString()));
+
+        // Off air it is a no-op, and the text output says the queue plays on.
+        var again = await _cli.RunAsync("radio", "end");
+        Assert.Equal(0, again.ExitCode);
+        Assert.DoesNotContain("[radio]", again.Out, StringComparison.Ordinal);
+        Assert.Equal(2, (await Ok("status")).GetProperty("queueLength").GetInt32());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Radio_end_without_a_player_is_exit_13_and_takes_no_filters()
+    {
+        var (exit, code, _) = await Fails("radio", "end");
+        Assert.Equal((ExitCodes.PlayerNotRunning, "player_not_running"), (exit, code));
+
+        var usage = await _cli.RunAsync("radio", "end", "--genre", "jazz");
+        Assert.Equal(ExitCodes.Usage, usage.ExitCode);
+    }
+
+    [Fact]
     public async Task Queue_add_during_radio_plays_next()
     {
         await WithLibraryAsync();

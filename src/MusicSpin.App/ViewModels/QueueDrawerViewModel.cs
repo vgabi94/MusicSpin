@@ -226,7 +226,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     /// <summary>End radio: the current track plays on, then the rows; the station's picks go.</summary>
     [RelayCommand]
-    private Task EndRadio() => _notices.GuardAsync(() => _player.EndRadioAsync([.. new[] { _current }.OfType<QueueItem>(), .. Rows.Select(r => r.Item)]));
+    private Task EndRadio() => _notices.GuardAsync(() => _player.EndRadioAsync());
 
     /// <summary>Save as playlist: the name field, with a name no playlist has yet.</summary>
     [RelayCommand(CanExecute = nameof(HasRows))]

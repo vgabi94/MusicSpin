@@ -46,7 +46,7 @@ internal static class RadioCommand
             "Endless random playback of the library in the background player; filters narrow it (OR within a filter, AND across filters). " +
             "No track repeats within the last 100 (or pool size - 1); the same artist/album is not played twice in a row when there is a choice. " +
             "--exclude-* options leave tracks out (any match excludes; exclude wins over include). " +
-            "next/prev/pause/stop/status work as usual; 'play', 'queue clear' or 'load' end radio. Nothing matches: exit 12.")
+            "next/prev/pause/stop/status work as usual; 'radio end' ends the station and keeps the queue; 'play', 'queue clear' or 'load' replace it. Nothing matches: exit 12.")
         {
             artist, album, genre, year, years, format, search, hires, favorites,
             xArtist, xAlbum, xGenre, xYear, xYears, xFormat, xSearch, backend, device, exclusive,
@@ -76,6 +76,12 @@ internal static class RadioCommand
                 }
             }
         });
+
+        var end = new Command("end",
+            "End the radio station and keep playing: the current track plays on (no gap) and the up-next tracks follow as a normal queue; " +
+            "the station's remaining picks are dropped. Does nothing when no station is on air. No running player: exit 13.");
+        PlayerSupport.Control(runner, end, "radio.end", name: "radio end");
+        command.Subcommands.Add(end);
 
         runner.SetAction(command, async (parseResult, json, cancellationToken) =>
         {

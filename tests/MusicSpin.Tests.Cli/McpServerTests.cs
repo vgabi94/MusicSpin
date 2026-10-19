@@ -70,7 +70,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
                      "queue_add", "queue_remove", "queue_move", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
-                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio",
+                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio", "radio_end",
                      "favorites", "favorite_add", "favorite_remove" })
         {
             Assert.Contains(name, names);
@@ -378,6 +378,11 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.Equal(4, status.GetProperty("radio").GetProperty("poolSize").GetInt32());
         Assert.Equal("radio", (await Call("next")).GetProperty("queueMode").GetString());
         Assert.StartsWith("invalid_state: Radio is already random", await CallError("shuffle", new() { ["mode"] = "on" }), StringComparison.Ordinal);
+        var ended = await Call("radio_end");
+        Assert.Equal("queue", ended.GetProperty("queueMode").GetString());
+        Assert.Equal("playing", ended.GetProperty("state").GetString());
+        Assert.Equal(1, ended.GetProperty("queueLength").GetInt32());
+        Assert.Equal("queue", (await Call("radio_end")).GetProperty("queueMode").GetString()); // off air: a no-op
 
         var all = await Call("radio", new() { ["hires"] = true, ["searches"] = new[] { "so what", "freddie" } });
         Assert.False(all.GetProperty("playerStarted").GetBoolean());

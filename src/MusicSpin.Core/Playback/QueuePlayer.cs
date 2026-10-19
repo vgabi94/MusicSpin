@@ -1304,6 +1304,42 @@ public sealed class QueuePlayer : IDisposable
     }
 
     /// <summary>
+    /// Ends the radio station without stopping playback: the station's lookahead and the played radio tracks are dropped,
+    /// the current track plays on (its position untouched, no gap) and the up-next entries follow, as a normal queue.
+    /// One atomic step, so nothing can change the queue between reading it and replacing it. A no-op when no station is on
+    /// air (it may have ended already), so callers can send it without checking first.
+    /// </summary>
+    public PlayerStatus EndRadio()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (_radio is null)
+            {
+                return StatusCore();
+            }
+
+            _radio = null;
+            if (_index >= 0)
+            {
+                var end = UpNextEnd();
+                _items.RemoveRange(end, _items.Count - end);
+                _items.RemoveRange(0, _index);
+                _index = 0;
+            }
+            else
+            {
+                _items.Clear();
+            }
+
+            NormalizeUpNext();
+            RenumberOrder();
+            QueueChanged?.Invoke(this, EventArgs.Empty);
+            return StatusCore();
+        }
+    }
+
+    /// <summary>
     /// Radio: drops played tracks beyond <see cref="RadioHistory"/> and, when fewer than <see cref="RadioLowWater"/> are
     /// left after the current one, picks more from a fresh pool (library changes since the last top-up count). Under the lock.
     /// </summary>

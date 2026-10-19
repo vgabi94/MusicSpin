@@ -92,7 +92,7 @@ internal static class McpCommand
             yield return Tool("radio", "Endless random playback of the library (or the tracks the filters select) in the background player; returns its status " +
                 "(queueMode 'radio', radio.description, radio.poolSize). Each list is ORed, different filters are ANDed; exclude* lists leave matching tracks out (exclude wins). No track repeats within the last 100 " +
                 "(or pool size - 1); the same artist/album is not played twice in a row when there is a choice. next/previous/pause/stop work as usual; " +
-                "play or queue_clear end radio; shuffle is refused (radio is random); repeat one replays the current track. Nothing matches: not_found.",
+                "radio_end ends it and keeps the queue (play or queue_clear replace it); shuffle is refused (radio is random); repeat one replays the current track. Nothing matches: not_found.",
                 ([Description("Exact artist names (track or album artist); unknown: not_found.")] string[]? artists = null,
                  [Description("Exact album titles or album ids; unknown: not_found.")] string[]? albums = null,
                  [Description("Exact genre names (case/diacritic-insensitive; multi-genre tags are split on ; / , |).")] string[]? genres = null,
@@ -119,6 +119,8 @@ internal static class McpCommand
                     var (status, started) = await RadioCommand.StartAsync(runner, parseResult, filter, backend, device, exclusive, ct).ConfigureAwait(false);
                     return With(status, started, null, null);
                 }));
+            yield return Simple("radio_end", "End the radio station and keep playing: the current track plays on without a gap and the up-next tracks follow " +
+                "as a normal queue; the station's remaining picks are dropped. Does nothing when no station is on air.", "radio.end");
             yield return Simple("pause", "Pause playback.");
             yield return Tool("resume", "Resume (or start) playback of the current queue entry. When no player runs but a saved queue exists, " +
                 "starts the player, which restores that queue and continues where it stopped.",

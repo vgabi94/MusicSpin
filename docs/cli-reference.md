@@ -136,7 +136,9 @@ Every filter except `--hires` and `--favorites` can be repeated. **Values of one
 - Bad values (`--years 1999-1990`, `--years nineties`, `--year 10000`, an empty `--artist ""`, the same for the `--exclude-*` options): exit 2.
 - The status has `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text output shows `[radio]` and a `Radio:` line. JSON adds `playerStarted`.
 
-How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` (without `--up-next`) or `load` end radio.
+How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` (without `--up-next`) or `load` replace the station.
+
+**`music-spin radio end`** ends the station and keeps playing: the current track plays on where it is (no reload, no gap), the [up-next](playback.md#up-next) tracks follow as a normal queue, and the station's remaining picks and its history are dropped. It takes no filters (exit 2). With no station on air it does nothing and prints the status. No running player: exit 13. MCP: `radio_end`; protocol: `{"cmd":"radio.end"}`.
 
 ## pause, resume, toggle, stop
 
