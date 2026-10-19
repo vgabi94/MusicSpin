@@ -131,6 +131,9 @@ public sealed class QueuePlayer : IDisposable
 
     public event EventHandler? QueueChanged;
 
+    /// <summary>A radio station started (<see cref="StartRadio"/> succeeded); raised outside the queue lock.</summary>
+    public event EventHandler<RadioFilter>? RadioStarted;
+
     public event EventHandler<PlayerErrorEventArgs>? Error;
 
     public PlayerState State => _player.State;
@@ -1245,6 +1248,13 @@ public sealed class QueuePlayer : IDisposable
             throw new MusicSpinException(MusicSpinErrorCode.NotFound, filter.EmptyPoolMessage());
         }
 
+        var status = StartRadioCore(filter, pool, play);
+        RadioStarted?.Invoke(this, filter);
+        return status;
+    }
+
+    private PlayerStatus StartRadioCore(RadioFilter filter, IReadOnlyList<RadioCandidate> pool, bool play)
+    {
         lock (_gate)
         {
             ThrowIfDisposed();

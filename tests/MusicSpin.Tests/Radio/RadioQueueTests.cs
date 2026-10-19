@@ -82,6 +82,24 @@ public sealed class RadioQueueTests : IDisposable
     }
 
     [Fact]
+    public void RadioStarted_fires_once_per_started_station_but_not_for_failures_or_restores()
+    {
+        var queue = Create(Pool(10, artists: 10));
+        var started = new List<RadioFilter>();
+        queue.RadioStarted += (_, f) => started.Add(f);
+        var jazz = new RadioFilter { Genres = ["Jazz"] };
+
+        queue.StartRadio(jazz);
+        Assert.Throws<MusicSpinException>(() => queue.StartRadio(new RadioFilter { Years = [new YearRange(1999, 1990)] }));
+        var snapshot = queue.Snapshot(DateTimeOffset.UnixEpoch);
+        queue.RadioPool = _ => [];
+        Assert.Throws<MusicSpinException>(() => queue.StartRadio(new RadioFilter()));
+        queue.Restore(snapshot);
+
+        Assert.Same(jazz, Assert.Single(started));
+    }
+
+    [Fact]
     public void Radio_can_start_without_playing()
     {
         var queue = Create(Pool(5, artists: 5));
