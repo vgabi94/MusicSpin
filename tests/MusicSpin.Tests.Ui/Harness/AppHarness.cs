@@ -48,6 +48,9 @@ internal sealed record AppOptions
     /// <summary>The app talks to a <see cref="ScriptedPlayer"/> (exact statuses and events) instead of a real one.</summary>
     public bool Scripted { get; init; }
 
+    /// <summary>The folder picker the app gets (Settings › Library, the empty library).</summary>
+    public StubFolderPicker FolderPicker { get; init; } = new();
+
     /// <summary>The in-process player reads the library (radio works).</summary>
     public bool PlayerReadsLibrary { get; init; }
 
@@ -142,7 +145,10 @@ internal sealed class AppHarness : IAsyncDisposable
             new Appearance(Application.Current!),
             Time,
             ui,
-            Options.StartupWarning);
+            Options.StartupWarning)
+        {
+            FolderPicker = Options.FolderPicker,
+        };
         Window = AppComposition.CreateMainWindow(Services);
         Window.Width = Options.Width;
         Window.Height = Options.Height;

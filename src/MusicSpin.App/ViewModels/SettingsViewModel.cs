@@ -39,8 +39,11 @@ public sealed partial class SettingsViewModel : LayerViewModel
     private readonly Notices _notices;
     private readonly bool _ready;
 
-    public SettingsViewModel(ISettingsService settings, IAppearance appearance, SpinClock spinClock, Notices notices)
+    /// <param name="library">Settings › Library (#31); none in tests of the other sections.</param>
+    public SettingsViewModel(ISettingsService settings, IAppearance appearance, SpinClock spinClock, Notices notices,
+        LibrarySettingsViewModel? library = null)
     {
+        Library = library;
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(spinClock);
@@ -63,6 +66,18 @@ public sealed partial class SettingsViewModel : LayerViewModel
     }
 
     public override int Order => LayerOrder.Settings;
+
+    /// <summary>The music folders and scanning (null: the section isn't shown).</summary>
+    public LibrarySettingsViewModel? Library { get; }
+
+    /// <summary>Opening reads the library folders afresh (a scan or the CLI may have changed them).</summary>
+    protected override void OnOpenChanged(bool isOpen)
+    {
+        if (isOpen && Library is { } library)
+        {
+            _ = library.LoadAsync();
+        }
+    }
 
     public IReadOnlyList<Choice<AppTheme>> Themes { get; } = [new("Dark", AppTheme.Dark), new("Light", AppTheme.Light)];
 

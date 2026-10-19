@@ -475,6 +475,23 @@
     <Thickness x:Key="SettingRowTallPadding">0,10</Thickness>
     <sys:Double x:Key="SettingNoteFontSize">11.5</sys:Double>
     <Thickness x:Key="SettingNoteMargin">0,1,0,0</Thickness>
+    <!--
+      Settings › Library and Audio (#31, #32; not in the mockup, so in the dialog's own look): a small button padded 12 6;
+      the folder rows padded 8 above and below; what the last scan couldn't read, 10 below the rows, each 6 apart. A switch
+      36 x 20, its knob 16, 2 in from the track's edge.
+    -->
+    <Thickness x:Key="SettingButtonPadding">12,6</Thickness>
+    <!-- The empty library's Add a music folder: 16 under the message, the scan's progress 12 under it. -->
+    <Thickness x:Key="AddMusicMargin">0,16,0,0</Thickness>
+    <sys:Double x:Key="AddMusicGap">12</sys:Double>
+    <Thickness x:Key="FolderRowPadding">0,8</Thickness>
+    <Thickness x:Key="ScanIssuesMargin">0,10,0,0</Thickness>
+    <sys:Double x:Key="ScanIssuesGap">6</sys:Double>
+    <sys:Double x:Key="SwitchWidth">36</sys:Double>
+    <sys:Double x:Key="SwitchHeight">20</sys:Double>
+    <CornerRadius x:Key="SwitchRadius">10</CornerRadius>
+    <sys:Double x:Key="SwitchKnobSize">16</sys:Double>
+    <Thickness x:Key="SwitchKnobMargin">2</Thickness>
     <sys:Double x:Key="SettingSliderWidth">170</sys:Double>
     <sys:Double x:Key="SettingSliderGap">10</sys:Double>
     <sys:Double x:Key="SettingOutputWidth">30</sys:Double>

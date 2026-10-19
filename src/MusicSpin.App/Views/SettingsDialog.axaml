@@ -141,6 +141,92 @@
                         </StackPanel>
                     </Grid>
                 </Border>
+
+                <!--
+                  Library (#31): the music folders (a missing one says so), Add folder…, the scan (its progress and Cancel
+                  while it runs, else when it last ran), Watch folders, and what the last scan couldn't read.
+                -->
+                <StackPanel Name="LibrarySection" IsVisible="{Binding Library, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock Classes="settingsSection" Text="LIBRARY" />
+                    <Border Classes="settingRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Music folders" />
+                                <TextBlock Name="AddOutcome"
+                                           Classes="settingNote"
+                                           Text="{Binding Library.Outcome, FallbackValue={x:Null}}"
+                                           IsVisible="{Binding Library.Outcome, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
+                            </StackPanel>
+                            <Button Name="AddFolder" Grid.Column="1" Classes="settingButton" Content="Add folder…" Command="{Binding Library.AddFolderCommand, FallbackValue={x:Null}}" />
+                        </Grid>
+                    </Border>
+                    <ItemsControl Name="LibraryFolders" Classes="libraryFolders" ItemsSource="{Binding Library.Folders, FallbackValue={x:Null}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:LibraryFolderViewModel">
+                                <Border Classes="settingRow next">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <StackPanel>
+                                            <TextBlock Classes="folderPath" Text="{Binding Path}" ToolTip.Tip="{Binding Path}" />
+                                            <TextBlock Classes="settingNote" Classes.missing="{Binding !IsReachable}" Text="{Binding Detail}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Classes="settingButton"
+                                                Content="Remove"
+                                                Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).Library.RemoveCommand, FallbackValue={x:Null}}"
+                                                CommandParameter="{Binding}"
+                                                AutomationProperties.Name="{Binding Path, StringFormat='Remove {0}'}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Scan" />
+                                <TextBlock Name="ScanNote" Classes="settingNote" Text="{Binding Library.ScanNote, FallbackValue={x:Null}}" />
+                            </StackPanel>
+                            <Panel Grid.Column="1">
+                                <Button Name="Rescan"
+                                        Classes="settingButton"
+                                        Content="Rescan"
+                                        Command="{Binding Library.RescanCommand, FallbackValue={x:Null}}"
+                                        IsVisible="{Binding !Library.Scan.IsScanning, FallbackValue=False}" />
+                                <Button Name="CancelScan"
+                                        Classes="settingButton"
+                                        Content="Cancel"
+                                        Command="{Binding Library.Scan.CancelCommand, FallbackValue={x:Null}}"
+                                        IsVisible="{Binding Library.Scan.IsScanning, FallbackValue=False}" />
+                            </Panel>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Watch folders" />
+                                <TextBlock Classes="settingNote" Text="Keep the library up to date while the app runs" />
+                            </StackPanel>
+                            <ToggleButton Name="WatchFolders"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Library.WatchFolders, FallbackValue=False}"
+                                          AutomationProperties.Name="Watch folders" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Name="ScanIssues" Classes="scanIssues" IsVisible="{Binding Library.HasIssues, FallbackValue=False}">
+                        <Button Name="IssuesLink" Classes="link" Content="{Binding Library.IssuesText, FallbackValue={x:Null}}" Command="{Binding Library.ToggleIssuesCommand, FallbackValue={x:Null}}" />
+                        <ItemsControl Name="IssueList" ItemsSource="{Binding Library.Issues, FallbackValue={x:Null}}" IsVisible="{Binding Library.ShowsIssues, FallbackValue=False}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:LibraryIssueViewModel">
+                                    <StackPanel Classes="scanIssue">
+                                        <TextBlock Classes="folderPath" Text="{Binding Path}" ToolTip.Tip="{Binding Path}" />
+                                        <TextBlock Classes="settingNote" Text="{Binding Message}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </Border>

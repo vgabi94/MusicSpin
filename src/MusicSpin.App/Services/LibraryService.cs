@@ -81,6 +81,27 @@ public interface ILibraryService
     /// <summary>Moves <paramref name="entry"/> (found again as for a removal) to 1-based position <paramref name="to"/>.</summary>
     Task MoveInPlaylistAsync(string playlistId, PlaylistEntryItem entry, int to, CancellationToken cancellationToken = default);
 
+    /// <summary>The library folders: path, whether it is there now, how many tracks, when it was last scanned.</summary>
+    Task<IReadOnlyList<FolderInfo>> FoldersAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds a folder (<c>music-spin library add</c>): added (taking in library folders inside it), already a library
+    /// folder, or covered by one. FileNotFound when it isn't a folder.
+    /// </summary>
+    Task<FolderAddResult> AddFolderAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a library folder and its tracks (the files stay on disk).</summary>
+    Task<FolderRemoveResult> RemoveFolderAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Scans the library folders (<c>music-spin library scan</c>), reporting <paramref name="progress"/> from the scanner's
+    /// threads; <paramref name="cancellationToken"/> stops it (what was read by then is kept).
+    /// </summary>
+    Task<ScanResult> ScanAsync(IProgress<ScanProgress>? progress, CancellationToken cancellationToken = default);
+
+    /// <summary>What the last scan couldn't use: unreadable files, folders it couldn't open.</summary>
+    Task<IReadOnlyList<ScanIssue>> IssuesAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The Radio page's tags: each genre, decade, format, artist and album, and hi-res, with its track count.</summary>
     Task<RadioTagCounts> RadioTagsAsync(CancellationToken cancellationToken = default);
 
@@ -199,6 +220,21 @@ public sealed class LibraryService : ILibraryService, IDisposable
         var count = library.Playlist(playlistId, new Paging(0, 1)).Entries.Total;
         return from == Math.Clamp(to, 1, count) ? null : library.MovePlaylistEntry(playlistId, from, Math.Clamp(to, 1, count));
     }, cancellationToken);
+
+    public Task<IReadOnlyList<FolderInfo>> FoldersAsync(CancellationToken cancellationToken = default)
+        => Read(library => library.Folders(), cancellationToken);
+
+    public Task<FolderAddResult> AddFolderAsync(string path, CancellationToken cancellationToken = default)
+        => Write(library => library.AddFolder(path), cancellationToken);
+
+    public Task<FolderRemoveResult> RemoveFolderAsync(string path, CancellationToken cancellationToken = default)
+        => Write(library => library.RemoveFolder(path), cancellationToken);
+
+    public Task<ScanResult> ScanAsync(IProgress<ScanProgress>? progress, CancellationToken cancellationToken = default)
+        => Write(library => library.Scan(new ScanOptions { Progress = progress }, cancellationToken), cancellationToken);
+
+    public Task<IReadOnlyList<ScanIssue>> IssuesAsync(CancellationToken cancellationToken = default)
+        => Read(library => library.Issues(), cancellationToken);
 
     public Task<RadioTagCounts> RadioTagsAsync(CancellationToken cancellationToken = default)
         => Read(library => library.RadioTags(), cancellationToken);

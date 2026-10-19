@@ -15,4 +15,8 @@ public sealed record AppServices(
     IAppearance Appearance,
     TimeProvider Time,
     IUiDispatcher Ui,
-    string? StartupWarning = null);
+    string? StartupWarning = null)
+{
+    /// <summary>The OS's folder picker (Settings › Library, the empty library's Add a music folder).</summary>
+    public IFolderPicker FolderPicker { get; init; } = new AvaloniaFolderPicker();
+}

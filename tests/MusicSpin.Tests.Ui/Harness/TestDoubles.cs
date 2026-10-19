@@ -330,6 +330,53 @@ internal sealed class StubLibrary : ILibraryService
         return new RadioPoolSize(pool.Count, pool.Select(t => t.Artist).Distinct().Count(), pool.Sum(t => t.DurationSeconds));
     }
 
+    /// <summary>The library folders (Settings › Library).</summary>
+    public List<FolderInfo> Folders { get; } = [];
+
+    /// <summary>What the last scan couldn't use.</summary>
+    public List<ScanIssue> Issues { get; } = [];
+
+    /// <summary>Set: a scan reports these, then waits for it (or for its cancellation) before it ends.</summary>
+    public TaskCompletionSource? ScanHold { get; set; }
+
+    public IReadOnlyList<ScanProgress> ScanReports { get; set; } = [];
+
+    public int Scans { get; private set; }
+
+    public Task<IReadOnlyList<FolderInfo>> FoldersAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<FolderInfo>>([.. Folders]);
+
+    public Task<FolderAddResult> AddFolderAsync(string path, CancellationToken cancellationToken = default)
+    {
+        Folders.Add(new FolderInfo(path, true, 0, DateTimeOffset.UnixEpoch, null));
+        return Task.FromResult(new FolderAddResult("added", path, null, []));
+    }
+
+    public Task<FolderRemoveResult> RemoveFolderAsync(string path, CancellationToken cancellationToken = default)
+    {
+        Folders.RemoveAll(f => f.Path == path);
+        return Task.FromResult(new FolderRemoveResult(path, 0));
+    }
+
+    public async Task<ScanResult> ScanAsync(IProgress<ScanProgress>? progress, CancellationToken cancellationToken = default)
+    {
+        Scans++;
+        foreach (var report in ScanReports)
+        {
+            progress?.Report(report);
+        }
+
+        if (ScanHold is { } hold)
+        {
+            await hold.Task.WaitAsync(cancellationToken);
+        }
+
+        return new ScanResult();
+    }
+
+    public Task<IReadOnlyList<ScanIssue>> IssuesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<ScanIssue>>([.. Issues]);
+
     /// <summary>Favorite track ids, newest first.</summary>
     public List<string> Favorites { get; } = [];
 
@@ -410,4 +457,18 @@ internal sealed class StubAppearance : IAppearance
 internal sealed class StubLayerViewModel : LayerViewModel
 {
     public override int Order => LayerOrder.NowPlaying;
+}
+
+/// <summary>The OS's folder picker, answering what the test says (null: the user cancelled).</summary>
+internal sealed class StubFolderPicker : IFolderPicker
+{
+    public string? Answer { get; set; }
+
+    public int Opened { get; private set; }
+
+    public Task<string?> PickFolderAsync(string title)
+    {
+        Opened++;
+        return Task.FromResult(Answer);
+    }
 }
