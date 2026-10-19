@@ -319,7 +319,8 @@ internal sealed class LibraryDatabase : IDisposable
         // LiteDB 5 builds entity mappers lazily on first use and publishes them before their member lists are complete, so two
         // databases serializing a type for the first time on different threads (MCP tool calls, parallel tests) can see a half-built
         // mapper ("Collection was modified", or members silently skipped). Build every mapper once, here, before the mapper is shared.
-        foreach (var type in new[] { typeof(LibraryFolderRecord), typeof(TrackRecord), typeof(AlbumRecord), typeof(ArtistRecord), typeof(ScanIssueRecord), typeof(PlaylistRecord), typeof(PlaylistEntryRecord), typeof(FavoriteRecord) })
+        foreach (var type in new[] { typeof(LibraryFolderRecord), typeof(TrackRecord), typeof(AlbumRecord), typeof(ArtistRecord), typeof(ScanIssueRecord), typeof(PlaylistRecord), typeof(PlaylistEntryRecord), typeof(FavoriteRecord),
+                     typeof(MusicLibrary.RadioRow), typeof(MusicLibrary.CoverRow) }) // the projections read with Select too
         {
             mapper.ToObject(type, mapper.ToDocument(type, Activator.CreateInstance(type)!));
         }

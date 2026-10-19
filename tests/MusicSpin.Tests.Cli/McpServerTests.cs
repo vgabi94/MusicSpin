@@ -70,7 +70,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var names = tools.Select(t => t.Name).ToHashSet();
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
                      "queue_add", "queue_remove", "queue_move", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
-                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio",
+                     "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio", "radio_stations", "radio_save", "radio_delete",
                      "favorites", "favorite_add", "favorite_remove" })
         {
             Assert.Contains(name, names);
@@ -378,6 +378,16 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.Equal(4, status.GetProperty("radio").GetProperty("poolSize").GetInt32());
         Assert.Equal("radio", (await Call("next")).GetProperty("queueMode").GetString());
         Assert.StartsWith("invalid_state: Radio is already random", await CallError("shuffle", new() { ["mode"] = "on" }), StringComparison.Ordinal);
+
+        var stations = await Call("radio_stations");
+        Assert.Equal("genre Jazz · year 1959 or 2001 · format flac", stations.GetProperty("recent")[0].GetProperty("description").GetString());
+        Assert.Equal("Mine", (await Call("radio_save", new() { ["name"] = "Mine" })).GetProperty("name").GetString());
+        Assert.StartsWith("invalid_state:", await CallError("radio_save", new() { ["name"] = "mine" }), StringComparison.Ordinal);
+        Assert.Equal("radio", (await Call("radio", new() { ["station"] = "mine" })).GetProperty("queueMode").GetString());
+        Assert.StartsWith("usage:", await CallError("radio", new() { ["station"] = "mine", ["genres"] = new[] { "Jazz" } }), StringComparison.Ordinal);
+        Assert.StartsWith("not_found:", await CallError("radio", new() { ["recent"] = 5 }), StringComparison.Ordinal);
+        Assert.Equal("Mine", (await Call("radio_delete", new() { ["name"] = "MINE" })).GetProperty("name").GetString());
+        Assert.StartsWith("not_found:", await CallError("radio_delete", new() { ["name"] = "mine" }), StringComparison.Ordinal);
 
         var all = await Call("radio", new() { ["hires"] = true, ["searches"] = new[] { "so what", "freddie" } });
         Assert.False(all.GetProperty("playerStarted").GetBoolean());

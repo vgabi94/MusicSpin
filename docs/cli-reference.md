@@ -106,7 +106,8 @@ Use **exactly one source kind**: files, `--album` (optionally with `--artist`), 
 
 ## radio
 
-`music-spin radio [filters] [--backend] [--device] [--exclusive]`
+`music-spin radio [filters | --recent N | --station <name>] [--backend] [--device] [--exclusive]`  
+`music-spin radio list` · `music-spin radio save <name> [--recent N] [--replace]` · `music-spin radio delete <name>`
 
 Endless random playback of the library in the background player (started if needed). Returns at once with the player status, like `play`.
 
@@ -137,6 +138,20 @@ Every filter except `--hires` and `--favorites` can be repeated. **Values of one
 - The status has `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text output shows `[radio]` and a `Radio:` line. JSON adds `playerStarted`.
 
 How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` (without `--up-next`) or `load` end radio.
+
+### Recent and saved stations
+
+The background player remembers the **last 6 stations started** (from the CLI, MCP or the app), newest first and without duplicates: starting a station that is already in the list (the same filters, in any order or case) moves it to the top. Stations can also be **saved under a name**. Both live in `stations.json` in the data folder; a station is stored as its filters (names, genres, years, album ids), never as file paths, so the file moves with a portable data folder.
+
+| Command | |
+|---|---|
+| `radio list` | The recent stations, numbered (1 = newest), and the saved ones by name, each with its description. JSON: `{recent: [{filter, description, startedAt}], saved: [{name, filter, description, savedAt}]}` |
+| `radio --recent N` | Start recent station N again. No such station: exit 12 |
+| `radio --station <name>` | Start a saved station (names are case-insensitive). Unknown: exit 12 |
+| `radio save <name>` | Save the station on air (asks the running player: none, exit 13; not on radio, exit 8). `--recent N` saves a recent station instead (no player needed). A taken name is exit 8 unless `--replace`; an empty name or more than 100 characters, exit 2 |
+| `radio delete <name>` | Delete a saved station. Unknown: exit 12 |
+
+`--recent` and `--station` start the station as it was stored: combining them with filters, or with each other, is exit 2. The filters are checked against the library as usual, so a station whose artist is gone is exit 12. An unreadable `stations.json` reads as empty (with a warning) and is moved to `stations.json.bad` at the next change. Recording a station never stops radio: if the file can't be written, the player logs it and plays on. MCP: `radio_stations`, `radio_save`, `radio_delete`, and `radio` with `recent` or `station`.
 
 ## pause, resume, toggle, stop
 

@@ -271,7 +271,7 @@ public sealed partial class MusicLibrary
     }
 
     /// <summary>The projection read for radio pools.</summary>
-    private sealed class RadioRow
+    internal sealed class RadioRow
     {
         public string Id { get; set; } = string.Empty;
         public string Path { get; set; } = string.Empty;

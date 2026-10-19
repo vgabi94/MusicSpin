@@ -107,6 +107,8 @@ internal static class McpCommand
              [Description("Leave out these years or inclusive ranges (\"1959\", \"1990-1999\").")] string[]? excludeYears = null,
              [Description("Leave out these format ids.")] string[]? excludeFormats = null,
              [Description("Leave out tracks matching any of these search texts.")] string[]? excludeSearches = null,
+                 [Description("Start recent station N again (1 = the newest, see radio_stations) instead of giving filters.")] int? recent = null,
+                 [Description("Start a saved station by name (see radio_stations) instead of giving filters.")] string? station = null,
                  CancellationToken ct = default) => Guard(async () =>
                 {
                     var filter = new RadioFilter
@@ -116,9 +118,23 @@ internal static class McpCommand
                     ExcludeArtists = RadioCommand.List(excludeArtists), ExcludeAlbums = RadioCommand.List(excludeAlbums), ExcludeGenres = RadioCommand.List(excludeGenres),
                     ExcludeYears = RadioCommand.Years(null, excludeYears), ExcludeFormats = RadioCommand.List(excludeFormats), ExcludeSearches = RadioCommand.List(excludeSearches),
                     };
+                    filter = RadioCommand.Stored(runner, parseResult, filter, recent, station, cli: false);
                     var (status, started) = await RadioCommand.StartAsync(runner, parseResult, filter, backend, device, exclusive, ct).ConfigureAwait(false);
                     return With(status, started, null, null);
                 }));
+            yield return Tool("radio_stations", $"The recent radio stations (the last {StationStore.RecentLimit} started from anywhere, newest first; start one again with " +
+                "radio and recent: N, 1-based) and the saved ones (radio with station: name). Each has its filter and description.",
+                (CancellationToken ct = default) => Guard(() => Task.FromResult(ToElement(RadioCommand.List(runner, parseResult)))), readOnly: true);
+            yield return Tool("radio_save", "Save the radio station on air, or recent station N, under a name (case-insensitive). A taken name is invalid_state unless replace; " +
+                "nothing on air: invalid_state.",
+                ([Description("Station name.")] string name,
+                 [Description("Save recent station N (1 = the newest) instead of the one on air.")] int? recent = null,
+                 [Description("Overwrite a saved station with this name.")] bool replace = false,
+                 CancellationToken ct = default) => Guard(async () =>
+                    ToElement(await RadioCommand.SaveAsync(runner, parseResult, name, recent, replace, ct).ConfigureAwait(false))));
+            yield return Tool("radio_delete", "Delete a saved radio station. Unknown name: not_found.",
+                ([Description("Saved station name (case-insensitive).")] string name, CancellationToken ct = default)
+                    => Guard(() => Task.FromResult(ToElement(RadioCommand.Stations(runner, parseResult).Delete(name)))));
             yield return Simple("pause", "Pause playback.");
             yield return Tool("resume", "Resume (or start) playback of the current queue entry. When no player runs but a saved queue exists, " +
                 "starts the player, which restores that queue and continues where it stopped.",

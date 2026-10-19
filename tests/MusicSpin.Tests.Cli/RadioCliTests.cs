@@ -161,6 +161,67 @@ public sealed class RadioCliTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Started_stations_are_recent_and_can_be_saved_listed_restarted_and_deleted()
+    {
+        await WithLibraryAsync();
+        await Ok("radio", "--genre", "jazz", "--backend", "null");
+        await Ok("radio", "--artist", "Miles Davis");
+        await Ok("radio", "--genre", "Jazz"); // the first station again: moves up, no duplicate
+
+        var list = await Ok("radio", "list");
+        Assert.Equal(["genre Jazz", "artist Miles Davis"], list.GetProperty("recent").EnumerateArray().Select(r => r.GetProperty("description").GetString()));
+        Assert.Empty(list.GetProperty("saved").EnumerateArray());
+
+        var saved = await Ok("radio", "save", "Late jazz"); // the station on air
+        Assert.Equal(("Late jazz", "genre Jazz"), (saved.GetProperty("name").GetString(), saved.GetProperty("description").GetString()));
+        await Ok("radio", "save", "Miles", "--recent", "2");
+
+        var miles = await Ok("radio", "--station", "miles");
+        Assert.Equal("artist Miles Davis", miles.GetProperty("radio").GetProperty("description").GetString());
+        var again = await Ok("radio", "--recent", "2");
+        Assert.Equal("genre Jazz", again.GetProperty("radio").GetProperty("description").GetString());
+
+        var text = await _cli.RunAsync("radio", "list");
+        Assert.Contains("  1. genre Jazz", text.Out, StringComparison.Ordinal);
+        Assert.Contains("  Late jazz: genre Jazz", text.Out, StringComparison.Ordinal);
+        Assert.Contains("  Miles: artist Miles Davis", text.Out, StringComparison.Ordinal);
+
+        Assert.Equal("Miles", (await Ok("radio", "delete", "MILES")).GetProperty("name").GetString());
+        Assert.Equal(["Late jazz"], (await Ok("radio", "list")).GetProperty("saved").EnumerateArray().Select(s => s.GetProperty("name").GetString()));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Stored_station_errors_have_exit_codes()
+    {
+        await WithLibraryAsync();
+        Assert.Equal((ExitCodes.NotFound, "not_found"), Take2(await Fails("radio", "--recent", "1")));
+        Assert.Equal((ExitCodes.NotFound, "not_found"), Take2(await Fails("radio", "--station", "Nope")));
+        Assert.Equal((ExitCodes.PlayerNotRunning, "player_not_running"), Take2(await Fails("radio", "save", "x")));
+        Assert.Equal((ExitCodes.NotFound, "not_found"), Take2(await Fails("radio", "delete", "x")));
+
+        await Ok("radio", "--genre", "jazz", "--backend", "null");
+        var usage = await Fails("radio", "--recent", "1", "--genre", "rock");
+        Assert.Equal(ExitCodes.Usage, usage.ExitCode);
+        Assert.Contains("leave out the filters", usage.Message, StringComparison.Ordinal);
+        Assert.Equal(ExitCodes.Usage, (await Fails("radio", "--recent", "1", "--station", "x")).ExitCode);
+        Assert.Equal(ExitCodes.Usage, (await Fails("radio", "--recent", "0")).ExitCode);
+        Assert.Equal(ExitCodes.Usage, (await Fails("radio", "save", " ")).ExitCode);
+
+        await Ok("radio", "save", "Jazz");
+        var taken = await Fails("radio", "save", "jazz");
+        Assert.Equal(ExitCodes.InvalidState, taken.ExitCode);
+        await Ok("radio", "save", "jazz", "--replace");
+
+        await Ok("queue", "clear"); // nothing on air any more
+        var nothing = await Fails("radio", "save", "Other");
+        Assert.Equal(ExitCodes.InvalidState, nothing.ExitCode);
+        Assert.StartsWith("No radio station is on air", nothing.Message, StringComparison.Ordinal);
+    }
+
+    private static (int, string) Take2((int ExitCode, string Code, string Message) failure) => (failure.ExitCode, failure.Code);
+
+    [Fact]
     public async Task Queue_add_during_radio_plays_next()
     {
         await WithLibraryAsync();
