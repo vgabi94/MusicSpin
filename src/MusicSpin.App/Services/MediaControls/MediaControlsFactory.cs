@@ -8,7 +8,7 @@ public static class MediaControlsFactory
 {
     /// <summary>
     /// The real setup over <paramref name="directory"/>. Each OS's adapter is added by its own change (#34 Windows, #35
-    /// macOS, #36 Linux); an OS without one yet gets none, and the app runs as before.
+    /// macOS, #36 Linux); an OS without one yet (or Linux without a session bus) gets none, and the app runs as before.
     /// </summary>
     public static MediaControlsSetup Create(DataDirectory directory, ILibraryService library, ICoverResizer resizer)
     {
@@ -34,5 +34,18 @@ public static class MediaControlsFactory
         });
     }
 
-    private static IMediaControlsAdapter? CreateAdapter() => null;
+    private static IMediaControlsAdapter? CreateAdapter()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return WindowsMediaControlsAdapter.Create();
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return MacMediaControlsAdapter.Create();
+        }
+
+        return OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Tmds.DBus.Protocol.DBusAddress.Session) ? MprisAdapter.Start() : null;
+    }
 }

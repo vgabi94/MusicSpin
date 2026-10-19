@@ -208,6 +208,20 @@ Excludes are applied while the pool is read and do not change these numbers: on 
 
 Most of a CLI call is process start and JIT (about 0.2-0.4 s for any command). The CLI checks the filters against the library before starting a player and stops at the first match, so unknown names and empty pools fail fast.
 
+## Media keys and system controls
+
+While the desktop app is open it shows the current track in the system's media controls and takes their commands
+(play/pause, next, previous, seek, volume). On Linux that is MPRIS on the session bus, so the GNOME and KDE media
+widgets, `playerctl` and the keyboard media keys work, as long as the desktop routes them to MPRIS:
+
+```sh
+playerctl -p musicspin metadata
+playerctl -p musicspin play-pause
+```
+
+The controls follow the background player, so changes made with the CLI show there too. A media key never starts a
+player: with none running they do nothing. Windows (#34) and macOS (#35) are not wired yet.
+
 ## Testing without a sound card
 
 `--backend null` decodes in real time and discards the audio. Use it on CI, in containers and on headless servers.
