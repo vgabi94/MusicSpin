@@ -117,8 +117,9 @@ src/MusicSpin.App/
 │                          ScrubBar (the position, volume and Settings sliders), SpectrumView, FollowPanel, TypedBox,
 │                          TrimFirstPanel (a text that trims before the badge after it), ShelfSleeve and CrateRecord
 │                          (the shelf's and the crates' 3D, drawn with Projection: CSS-style 4×4 transforms), DeckView
-│                          (a turntable design's deck; ClassicDeckView, PlatterView), DeckHost (builds and scales
-│                          the chosen design's deck), SlidePanel (Now Playing's slide or fade, the queue drawer's
+│                          (a turntable design's deck; ClassicDeckView, PlatterView; KitDeckView for the studies'
+│                          designs, with DeckText, TickRing and BackdropView), DeckHost (builds and scales the chosen
+│                          design's deck), SlidePanel (Now Playing's slide or fade, the queue drawer's
 │                          slide), QueueSource (what a right-click or a drag acts on),
 │                          SceneFlight and SceneSource (the scene's travelling sleeve and where it starts), RadioIcon
 │                          (the radio icon in layers, its waves pulsing on air)
@@ -130,7 +131,7 @@ src/MusicSpin.App/
                            Base, TitleBar, Sidebar, Content (toolbar, group headers, the menu), Lists (track rows),
                            Cards, Shelf, Crate, PlayerBar, NowPlaying (and the Classic deck), Queue (the drawer and
                            the drag ghost), Dialogs (and Settings), Artwork, Radio (group buttons, on air, the Radio
-                           page)
+                           page), Decks (the turntable designs from the deck studies)
 ```
 
 - **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
@@ -322,7 +323,20 @@ src/MusicSpin.App/
   cover as label, turned by the spin clock), the arm state, whether the platter spins, the accent, and the theme as any
   control. A design draws at a 400 px platter and the host scales it to `min(46% of the window's height, 34% of its
   width)`, as the mockup's `--s`. A deck animates its own arm (`ClassicDeckView` sets `Swing` and `Drop` locally, so a
-  pause mid-swing turns back from where it is); `DeckView.Record` is where a record lands on it.
+  pause mid-swing turns back from where it is); `DeckView.Record` is where a record lands on it. The host also passes
+  the speed chosen (a readout shows it) and Now Playing's blurred cover and veil (what a see-through deck shows).
+- **The studies' designs** (Walnut & Brass, Brushed Aluminium, Carbon Signal, Piano Black & Chrome, Linear Tracking,
+  Smoked Acrylic; `docs/design/mockup/decks`) are one control, `KitDeckView`, with a control theme each in
+  `Styles/Decks.axaml`. They draw on the studies' bench in its own units (the deck 1320 × 1080, the platter at
+  (40, 40), the arm's drawing around its pivot, the stylus at (0, 740)), scaled to the Classic deck's size, so the
+  numbers are the studies'. The static drawing is the studies' SVG (`Assets/Decks`, drawn by Svg.Controls.Avalonia;
+  `eng/make-deck-svgs.py` writes it from the studies); what moves, lights up or takes the album colour is XAML on top.
+  The arm turns from `RestAngle` to `PlayAngle` about its pivot, or slides `CarriageTravel` units in along rails
+  (Linear Tracking), lifted 3.5% larger until it lowers. Lights follow the deck's `:spinning`, `:armOn` and `:armDown`
+  pseudo-classes, as the studies' CSS follows `.spinning`, `.arm-on` and `.arm-down`. Names are `DeckText` (placed by
+  baseline, as SVG text) in the designs' bundled fonts. Smoked Acrylic can't blur what is behind it (Avalonia has no
+  backdrop filter), so `BackdropView` draws Now Playing's blurred cover and veil again where they are, clipped to the
+  plinth, under the smoke.
 - **Turntable scene.** Choosing an album on the albums page (a card, a shelf sleeve, a crate record) carries its record
   onto the deck before it plays (`TurntableSceneViewModel`, the mockup's `playOnTurntable`). The album is loaded paused
   at the start (`queue.set` with `play: false`) and `resume` is sent as the arm lands, so the sound starts with no

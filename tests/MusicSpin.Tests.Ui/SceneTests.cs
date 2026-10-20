@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using MusicSpin.App.Controls;
 using MusicSpin.App.Services;
@@ -274,6 +275,38 @@ public sealed class SceneTests
         Near(spot, app.ViewModel.Scene.Landing);
         new SceneClock(app).To(SceneTimeline.FlightMs + 60);
         Near(spot, InWindow(app, Flight(app).Record!));
+    }
+
+    [AvaloniaFact]
+    public async Task With_Linear_Tracking_the_record_lands_on_its_shifted_platter_and_the_carriage_not_an_arm_moves_in()
+    {
+        await using var app = await OpenAsync();
+        app.ViewModel.Settings.Design = new LinearDeck();
+        await StartAsync(app);
+        var deck = Assert.IsType<KitDeckView>(Gui.Find<DeckHost>(app.Window, "Deck").Deck);
+
+        // The record lands where the deck puts it: on the platter shifted right, its centre at 560 of 1320.
+        var spot = InWindow(app, deck.Record!);
+        Near(spot, app.ViewModel.Scene.Landing);
+        var plinth = InWindow(app, deck);
+        Assert.Equal(560.0 / 1320, (spot.Center.X - plinth.X) / plinth.Width, 2);
+        var clock = new SceneClock(app);
+        clock.To(SceneTimeline.FlightMs + 60);
+        Near(spot, InWindow(app, Flight(app).Record!));
+
+        // Then the carriage slides in along its rails (no turn) and lowers onto the lead-in.
+        clock.To(4400);
+        Gui.Settle();
+        Assert.Equal(ArmState.OverLeadIn, deck.Arm);
+        var over = Assert.IsType<MatrixTransform>(deck.ArmPart!.RenderTransform).Matrix;
+        Assert.Equal((0.0, 0.0, -105.0), (Math.Round(over.M12, 6), Math.Round(over.M21, 6), Math.Round(over.M31, 1)));
+
+        clock.To(SceneTimeline.End + 40);
+        await Gui.UntilAsync(() => !app.ViewModel.Scene.IsRunning, "the scene ended");
+        Gui.FinishAnimations();
+        Assert.Equal((ArmState.Lowered, 1.0), (deck.Arm, deck.Drop));
+        var down = Assert.IsType<MatrixTransform>(deck.ArmPart.RenderTransform).Matrix;
+        Assert.Equal((1.0, 0.0, -105.0), (Math.Round(down.M11, 6), Math.Round(down.M12, 6), Math.Round(down.M31, 1)));
     }
 
     [AvaloniaTheory]

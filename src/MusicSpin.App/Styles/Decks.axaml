@@ -1,0 +1,735 @@
+<!--
+  The turntable designs from the deck studies (docs/design/mockup/decks, #25–#30), one control theme each for
+  controls:KitDeckView. Every design draws on the studies' shared bench, in deck units (kit.css): the deck is 1320 × 1080,
+  the platter 1000 wide at (40, 40), the record 980 wide at (50, 50); an arm's drawing spans -300 -300 600 1200 around its
+  pivot (arm units), the stylus at (0, 740). The whole deck is scaled to DeckWidth (0.4 px a unit), so the numbers here
+  are the studies' own.
+
+  Each design is its static drawing (Assets/Decks/*-deck.svg, through Svg.Controls.Avalonia), then what moves or lights up
+  on top of it: the platter, the record, the lights, the engraved name and the arm (*-arm.svg). The lights follow the
+  deck's :spinning, :armOn and :armDown, as the studies' CSS follows .spinning, .arm-on and .arm-down. CSS px in the
+  studies are 2 units (the studies show the deck about 690 px wide).
+
+  The studies' platter backgrounds are `radial-gradient(circle, …)`, which CSS sizes to the farthest corner, so their rims
+  never show there. The designs (and their issues) have a rim: it is drawn where the record leaves the platter showing,
+  the outer 10 units.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:theming="using:MusicSpin.App.Theming">
+    <Styles.Resources>
+        <!-- What every design shares: the size, the arm's motion, the record, the deck's units. -->
+        <ControlTheme x:Key="KitDeck" TargetType="controls:KitDeckView">
+            <Setter Property="Width" Value="{StaticResource DeckWidth}" />
+            <Setter Property="Height" Value="{StaticResource DeckHeight}" />
+            <!-- The plinth's shadow falls outside it. -->
+            <Setter Property="ClipToBounds" Value="False" />
+            <Setter Property="theming:Animate.Transitions" Value="Swing ArmSwingDuration EaseSwing; Drop ArmDropDuration EaseLower" />
+            <Style Selector="^ /template/ Viewbox.units">
+                <Setter Property="Stretch" Value="Fill" />
+                <Setter Property="ClipToBounds" Value="False" />
+            </Style>
+            <Style Selector="^ /template/ Canvas.units">
+                <Setter Property="Width" Value="{StaticResource KitDeckUnits}" />
+                <Setter Property="Height" Value="{StaticResource KitDeckUnitsHigh}" />
+            </Style>
+            <Style Selector="^ /template/ Svg.plate">
+                <Setter Property="Width" Value="{StaticResource KitDeckUnits}" />
+                <Setter Property="Height" Value="{StaticResource KitDeckUnitsHigh}" />
+            </Style>
+            <Style Selector="^ /template/ controls|VinylView#PART_Record">
+                <Setter Property="Width" Value="980" />
+                <Setter Property="Height" Value="980" />
+                <Setter Property="Canvas.Left" Value="50" />
+                <Setter Property="Canvas.Top" Value="50" />
+                <Setter Property="GroovePitch" Value="{StaticResource KitGroovePitch}" />
+            </Style>
+            <Style Selector="^ /template/ Panel.platter">
+                <Setter Property="Width" Value="1000" />
+                <Setter Property="Height" Value="1000" />
+                <Setter Property="Canvas.Left" Value="40" />
+                <Setter Property="Canvas.Top" Value="40" />
+            </Style>
+            <Style Selector="^ /template/ Panel.platter > Border">
+                <Setter Property="CornerRadius" Value="500" />
+            </Style>
+            <!-- The middle of the platter, under the record (the rim is what shows round it). -->
+            <Style Selector="^ /template/ Panel.platter > Ellipse.top">
+                <Setter Property="Width" Value="956" />
+                <Setter Property="Height" Value="956" />
+            </Style>
+            <!-- The arm: its drawing's box, turned about the pivot 300 units in and down. -->
+            <Style Selector="^ /template/ Panel.arm">
+                <Setter Property="Width" Value="600" />
+                <Setter Property="Height" Value="1200" />
+                <Setter Property="RenderTransformOrigin" Value="300,300" />
+            </Style>
+            <Style Selector="^ /template/ Svg.armDrawing">
+                <Setter Property="Width" Value="600" />
+                <Setter Property="Height" Value="1200" />
+            </Style>
+            <Style Selector="^ /template/ Border#PART_Stylus">
+                <Setter Property="Canvas.Left" Value="300" />
+                <Setter Property="Canvas.Top" Value="1040" />
+            </Style>
+        </ControlTheme>
+
+        <!-- ================================================================ 1 · Walnut & Brass (#25) -->
+        <ControlTheme x:Key="WalnutDeck" TargetType="controls:KitDeckView" BasedOn="{StaticResource KitDeck}">
+            <Setter Property="RestAngle" Value="0" />
+            <Setter Property="PlayAngle" Value="24.5" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Viewbox Classes="units">
+                        <Canvas Classes="units">
+                            <Border Classes="plinth" />
+                            <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/walnut-deck.svg" />
+                            <!-- Engraved in the brass plate: its lit lower edge, then the cut. -->
+                            <controls:DeckText Classes="name lit" Text="Music Spin" />
+                            <controls:DeckText Classes="name" Text="Music Spin" />
+                            <Panel Classes="platter">
+                                <Border Classes="rim" />
+                                <Ellipse Classes="top" />
+                            </Panel>
+                            <controls:VinylView Name="PART_Record"
+                                                Label="{TemplateBinding Label}"
+                                                Angle="{TemplateBinding Angle}"
+                                                IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
+                            <Panel Name="PART_Arm" Classes="arm">
+                                <Svg Name="PART_ArmDrawing" Classes="armDrawing" Path="avares://MusicSpin/Assets/Decks/walnut-arm.svg" />
+                                <Canvas>
+                                    <Border Name="PART_Stylus" />
+                                </Canvas>
+                            </Panel>
+                        </Canvas>
+                    </Viewbox>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="Width" Value="1320" />
+                <Setter Property="Height" Value="1080" />
+                <Setter Property="CornerRadius" Value="22" />
+                <Setter Property="BoxShadow" Value="0 4 0 0 #FF1A0D05, 0 60 120 -40 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ Border.rim">
+                <Setter Property="BoxShadow" Value="0 0 0 3 #FF2A170B, 0 10 24 0 #AA000000" />
+                <Setter Property="Background">
+                    <ConicGradientBrush Angle="30">
+                        <GradientStop Color="#8C6A2F" Offset="0" />
+                        <GradientStop Color="#F3DEA6" Offset="0.143" />
+                        <GradientStop Color="#A47C37" Offset="0.286" />
+                        <GradientStop Color="#6D5022" Offset="0.429" />
+                        <GradientStop Color="#EAD08D" Offset="0.571" />
+                        <GradientStop Color="#9A7634" Offset="0.714" />
+                        <GradientStop Color="#C9A65F" Offset="0.857" />
+                        <GradientStop Color="#8C6A2F" Offset="1" />
+                    </ConicGradientBrush>
+                </Setter>
+            </Style>
+            <Style Selector="^ /template/ Ellipse.top">
+                <Setter Property="Fill" Value="#1B1714" />
+            </Style>
+            <Style Selector="^ /template/ Panel#PART_Arm">
+                <Setter Property="Canvas.Left" Value="880" />
+                <Setter Property="Canvas.Top" Value="-110" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name">
+                <Setter Property="FontFamily" Value="{StaticResource DeckSerifFontFamily}" />
+                <Setter Property="FontSize" Value="31" />
+                <Setter Property="LetterSpacing" Value="3" />
+                <Setter Property="Anchor" Value="Middle" />
+                <Setter Property="X" Value="161" />
+                <Setter Property="Y" Value="1025" />
+                <Setter Property="Foreground" Value="#5A3D12" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name.lit">
+                <Setter Property="Y" Value="1027" />
+                <Setter Property="Foreground" Value="#FFF6D6" />
+                <Setter Property="Opacity" Value="0.75" />
+            </Style>
+        </ControlTheme>
+
+        <!-- ================================================================ 2 · Brushed Aluminium (#26) -->
+        <ControlTheme x:Key="AluminiumDeck" TargetType="controls:KitDeckView" BasedOn="{StaticResource KitDeck}">
+            <Setter Property="RestAngle" Value="0" />
+            <Setter Property="PlayAngle" Value="25" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Viewbox Classes="units">
+                        <Canvas Classes="units">
+                            <Border Classes="plinth" />
+                            <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/aluminium-deck.svg" />
+                            <!-- The single lamp: grey, lit in the album colour while the platter turns. -->
+                            <Ellipse Classes="lamp off" />
+                            <Ellipse Name="Lamp" Classes="lamp lit" Fill="{TemplateBinding Accent}" />
+                            <controls:DeckText Classes="name lit" Text="MUSIC SPIN" />
+                            <controls:DeckText Classes="name" Text="MUSIC SPIN" />
+                            <Panel Classes="platter">
+                                <Border Classes="rim" />
+                                <Ellipse Classes="top" />
+                            </Panel>
+                            <controls:VinylView Name="PART_Record"
+                                                Label="{TemplateBinding Label}"
+                                                Angle="{TemplateBinding Angle}"
+                                                IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
+                            <Panel Name="PART_Arm" Classes="arm">
+                                <Svg Name="PART_ArmDrawing" Classes="armDrawing" Path="avares://MusicSpin/Assets/Decks/aluminium-arm.svg" />
+                                <Canvas>
+                                    <!-- The counterweight's ring, in the album colour. -->
+                                    <Rectangle Name="WeightRing" Classes="weightRing" Fill="{TemplateBinding Accent}" />
+                                    <Border Name="PART_Stylus" />
+                                </Canvas>
+                            </Panel>
+                        </Canvas>
+                    </Viewbox>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="Width" Value="1320" />
+                <Setter Property="Height" Value="1080" />
+                <Setter Property="CornerRadius" Value="16" />
+                <Setter Property="BoxShadow" Value="0 4 0 0 #FF6B6E73, 0 60 120 -40 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ Border.rim">
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF7D8187, 0 8 20 0 #66000000" />
+                <Setter Property="Background">
+                    <ConicGradientBrush Angle="10">
+                        <GradientStop Color="#8E939A" Offset="0" />
+                        <GradientStop Color="#F1F2F4" Offset="0.143" />
+                        <GradientStop Color="#A3A8AE" Offset="0.286" />
+                        <GradientStop Color="#74797F" Offset="0.429" />
+                        <GradientStop Color="#E3E5E8" Offset="0.571" />
+                        <GradientStop Color="#9AA0A6" Offset="0.714" />
+                        <GradientStop Color="#C8CBD0" Offset="0.857" />
+                        <GradientStop Color="#8E939A" Offset="1" />
+                    </ConicGradientBrush>
+                </Setter>
+            </Style>
+            <Style Selector="^ /template/ Ellipse.top">
+                <Setter Property="Fill" Value="#232427" />
+            </Style>
+            <Style Selector="^ /template/ Panel#PART_Arm">
+                <Setter Property="Canvas.Left" Value="880" />
+                <Setter Property="Canvas.Top" Value="-100" />
+            </Style>
+            <Style Selector="^ /template/ Ellipse.lamp">
+                <Setter Property="Width" Value="16" />
+                <Setter Property="Height" Value="16" />
+                <Setter Property="Canvas.Left" Value="44" />
+                <Setter Property="Canvas.Top" Value="999" />
+            </Style>
+            <!-- The off colour has its own class: on the lit copy it would outrank the accent it takes from the deck. -->
+            <Style Selector="^ /template/ Ellipse.lamp.off">
+                <Setter Property="Fill" Value="#8B8F95" />
+            </Style>
+            <Style Selector="^ /template/ Ellipse.lamp.lit">
+                <Setter Property="Opacity" Value="0" />
+                <Setter Property="theming:Animate.Transitions" Value="Opacity DeckLampDuration Ease" />
+            </Style>
+            <Style Selector="^:spinning /template/ Ellipse.lamp.lit">
+                <Setter Property="Opacity" Value="1" />
+            </Style>
+            <Style Selector="^ /template/ Rectangle.weightRing">
+                <Setter Property="Width" Value="72" />
+                <Setter Property="Height" Value="5" />
+                <Setter Property="Canvas.Left" Value="264" />
+                <Setter Property="Canvas.Top" Value="202" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name">
+                <Setter Property="FontFamily" Value="{StaticResource DeckSansFontFamily}" />
+                <Setter Property="FontWeight" Value="Medium" />
+                <Setter Property="FontSize" Value="26" />
+                <Setter Property="LetterSpacing" Value="10" />
+                <Setter Property="X" Value="76" />
+                <Setter Property="Y" Value="1016" />
+                <Setter Property="Foreground" Value="#868A90" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name.lit">
+                <Setter Property="Y" Value="1018" />
+                <Setter Property="Foreground" Value="#C0FFFFFF" />
+            </Style>
+        </ControlTheme>
+
+        <!-- ================================================================ 3 · Carbon Signal (#27) -->
+        <ControlTheme x:Key="CarbonDeck" TargetType="controls:KitDeckView" BasedOn="{StaticResource KitDeck}">
+            <Setter Property="RestAngle" Value="0" />
+            <Setter Property="PlayAngle" Value="25" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Viewbox Classes="units">
+                        <Canvas Classes="units">
+                            <!-- The carbon-fibre weave (the study's SVG pattern, which the SVG renderer doesn't draw). -->
+                            <Polygon Classes="weave" />
+                            <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/carbon-deck.svg" />
+                            <!-- The hairline edge light, faint until the platter turns. -->
+                            <Polygon Name="EdgeLight" Classes="edge" Stroke="{TemplateBinding Accent}" />
+                            <!-- The speed readout: dark segments, lit in the album colour while the platter turns. -->
+                            <controls:DeckText Classes="rpm off" Text="{TemplateBinding SpeedText}" />
+                            <controls:DeckText Name="Readout" Classes="rpm lit" Text="{TemplateBinding SpeedText}" Foreground="{TemplateBinding Accent}" />
+                            <controls:DeckText Classes="name lit" Text="MUSIC SPIN" />
+                            <controls:DeckText Classes="name" Text="MUSIC SPIN" />
+                            <!-- The platter: strobe ticks round its rim, turning with the record. -->
+                            <Panel Classes="platter">
+                                <Border Classes="rim" />
+                                <controls:TickRing Classes="ticks off" Angle="{TemplateBinding Angle}" />
+                                <controls:TickRing Name="Ticks" Classes="ticks lit" Angle="{TemplateBinding Angle}" Fill="{TemplateBinding Accent}" />
+                                <Ellipse Classes="top" />
+                            </Panel>
+                            <controls:VinylView Name="PART_Record"
+                                                Label="{TemplateBinding Label}"
+                                                Angle="{TemplateBinding Angle}"
+                                                IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
+                            <Panel Name="PART_Arm" Classes="arm">
+                                <Svg Name="PART_ArmDrawing" Classes="armDrawing" Path="avares://MusicSpin/Assets/Decks/carbon-arm.svg" />
+                                <!-- The signal line down the blade and the dot in the headshell: lit while the stylus is in the groove. -->
+                                <Canvas Name="Signal" Classes="signal">
+                                    <Path Classes="signalGlow" Stroke="{TemplateBinding Accent}" />
+                                    <Path Classes="signalLine" Stroke="{TemplateBinding Accent}" />
+                                    <Ellipse Classes="signalDot" Fill="{TemplateBinding Accent}" />
+                                </Canvas>
+                                <Canvas>
+                                    <Border Name="PART_Stylus" />
+                                </Canvas>
+                            </Panel>
+                        </Canvas>
+                    </Viewbox>
+                </ControlTemplate>
+            </Setter>
+            <!-- 16-unit tiles of four 8-unit squares (two shaded across, two down), turned 45°; the slab's shadow under it. -->
+            <Style Selector="^ /template/ Polygon.weave">
+                <Setter Property="Points" Value="60,0 1260,0 1320,60 1320,1020 1260,1080 60,1080 0,1020 0,60" />
+                <Setter Property="Effect">
+                    <DropShadowEffect OffsetX="0" OffsetY="30" BlurRadius="40" Color="Black" Opacity="0.75" />
+                </Setter>
+                <Setter Property="Fill">
+                    <DrawingBrush TileMode="Tile" Stretch="None" DestinationRect="0,0,16,16" Transform="rotate(45deg)" TransformOrigin="0,0">
+                        <DrawingBrush.Drawing>
+                            <DrawingGroup>
+                                <GeometryDrawing Geometry="M0,0 H8 V8 H0 Z M8,8 H16 V16 H8 Z">
+                                    <GeometryDrawing.Brush>
+                                        <LinearGradientBrush SpreadMethod="Repeat" StartPoint="0,0" EndPoint="8,0">
+                                            <GradientStop Color="#1A1B1E" Offset="0" />
+                                            <GradientStop Color="#2A2C30" Offset="0.5" />
+                                            <GradientStop Color="#1A1B1E" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </GeometryDrawing.Brush>
+                                </GeometryDrawing>
+                                <GeometryDrawing Geometry="M8,0 H16 V8 H8 Z M0,8 H8 V16 H0 Z">
+                                    <GeometryDrawing.Brush>
+                                        <LinearGradientBrush SpreadMethod="Repeat" StartPoint="0,0" EndPoint="0,8">
+                                            <GradientStop Color="#121315" Offset="0" />
+                                            <GradientStop Color="#1D1E21" Offset="0.5" />
+                                            <GradientStop Color="#121315" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </GeometryDrawing.Brush>
+                                </GeometryDrawing>
+                            </DrawingGroup>
+                        </DrawingBrush.Drawing>
+                    </DrawingBrush>
+                </Setter>
+            </Style>
+            <Style Selector="^ /template/ Polygon.edge">
+                <Setter Property="Points" Value="70,18 1250,18 1302,70 1302,1010 1250,1062 70,1062 18,1010 18,70" />
+                <Setter Property="StrokeThickness" Value="1.5" />
+                <Setter Property="Opacity" Value="0.12" />
+                <Setter Property="theming:Animate.Transitions" Value="Opacity DeckEdgeLightDuration Ease" />
+            </Style>
+            <Style Selector="^:spinning /template/ Polygon.edge">
+                <Setter Property="Opacity" Value="0.5" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.rpm">
+                <Setter Property="FontFamily" Value="{StaticResource DeckDinFontFamily}" />
+                <Setter Property="FontSize" Value="34" />
+                <Setter Property="LetterSpacing" Value="3" />
+                <Setter Property="Anchor" Value="Middle" />
+                <Setter Property="X" Value="127" />
+                <Setter Property="Y" Value="96" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.rpm.off">
+                <Setter Property="Foreground" Value="#26282D" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.rpm.lit">
+                <Setter Property="Opacity" Value="0" />
+                <Setter Property="theming:Animate.Transitions" Value="Opacity DeckLampDuration Ease" />
+            </Style>
+            <Style Selector="^:spinning /template/ controls|DeckText.rpm.lit">
+                <Setter Property="Opacity" Value="1" />
+            </Style>
+            <Style Selector="^ /template/ Border.rim">
+                <Setter Property="Background" Value="#0B0B0C" />
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF2A2C31, 0 10 24 0 #CC000000" />
+            </Style>
+            <!-- repeating-conic-gradient(… 0 1.2deg, #0b0b0c 1.2deg 5deg): 72 ticks; the accent mixed 35% into #2a2c31 at rest. -->
+            <Style Selector="^ /template/ controls|TickRing.ticks">
+                <Setter Property="Count" Value="72" />
+                <Setter Property="TickAngle" Value="1.2" />
+                <Setter Property="InnerRatio" Value="0.964" />
+            </Style>
+            <Style Selector="^ /template/ controls|TickRing.ticks.off">
+                <Setter Property="Fill" Value="#2A2C31" />
+            </Style>
+            <Style Selector="^ /template/ controls|TickRing.ticks.lit">
+                <Setter Property="Opacity" Value="0.35" />
+                <Setter Property="theming:Animate.Transitions" Value="Opacity DeckLampDuration Ease" />
+            </Style>
+            <Style Selector="^:spinning /template/ controls|TickRing.ticks.lit">
+                <Setter Property="Opacity" Value="1" />
+            </Style>
+            <Style Selector="^ /template/ Ellipse.top">
+                <Setter Property="Width" Value="964" />
+                <Setter Property="Height" Value="964" />
+                <Setter Property="Fill" Value="#0B0B0C" />
+            </Style>
+            <Style Selector="^ /template/ Panel#PART_Arm">
+                <Setter Property="Canvas.Left" Value="880" />
+                <Setter Property="Canvas.Top" Value="-100" />
+            </Style>
+            <Style Selector="^ /template/ Canvas.signal">
+                <Setter Property="Opacity" Value="0.12" />
+                <Setter Property="theming:Animate.Transitions" Value="Opacity DeckSignalDuration Ease" />
+            </Style>
+            <Style Selector="^:armDown /template/ Canvas.signal">
+                <Setter Property="Opacity" Value="1" />
+            </Style>
+            <!-- In arm units +300: the line from (0, 40) to (32, 628); the dot at (0, 700) turned with the headshell, 22° about the stylus. -->
+            <Style Selector="^ /template/ Path.signalLine">
+                <Setter Property="Data" Value="M300,340 L332,928" />
+                <Setter Property="StrokeThickness" Value="3" />
+                <Setter Property="StrokeLineCap" Value="Round" />
+            </Style>
+            <Style Selector="^ /template/ Path.signalGlow">
+                <Setter Property="Data" Value="M300,340 L332,928" />
+                <Setter Property="StrokeThickness" Value="6" />
+                <Setter Property="StrokeLineCap" Value="Round" />
+                <Setter Property="Opacity" Value="0" />
+                <Setter Property="Effect">
+                    <BlurEffect Radius="6" />
+                </Setter>
+            </Style>
+            <Style Selector="^:armDown /template/ Path.signalGlow">
+                <Setter Property="Opacity" Value="0.8" />
+            </Style>
+            <Style Selector="^ /template/ Ellipse.signalDot">
+                <Setter Property="Width" Value="9" />
+                <Setter Property="Height" Value="9" />
+                <Setter Property="Canvas.Left" Value="310.5" />
+                <Setter Property="Canvas.Top" Value="998.4" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name">
+                <Setter Property="FontFamily" Value="{StaticResource DeckDinFontFamily}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="26" />
+                <Setter Property="LetterSpacing" Value="12" />
+                <Setter Property="X" Value="46" />
+                <Setter Property="Y" Value="1016" />
+                <Setter Property="Foreground" Value="#08090A" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name.lit">
+                <Setter Property="Y" Value="1018" />
+                <Setter Property="Foreground" Value="#1AFFFFFF" />
+            </Style>
+        </ControlTheme>
+
+        <!-- ================================================================ 4 · Piano Black & Chrome (#28) -->
+        <ControlTheme x:Key="PianoDeck" TargetType="controls:KitDeckView" BasedOn="{StaticResource KitDeck}">
+            <Setter Property="RestAngle" Value="0" />
+            <Setter Property="PlayAngle" Value="25" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Viewbox Classes="units">
+                        <Canvas Classes="units">
+                            <Border Classes="plinth" />
+                            <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/piano-deck.svg" />
+                            <!-- Engraved through the lacquer and filled with silver. -->
+                            <controls:DeckText Classes="name cut" Text="MUSIC SPIN" />
+                            <controls:DeckText Classes="name" Text="MUSIC SPIN" />
+                            <Panel Classes="platter">
+                                <Border Classes="rim" />
+                                <Ellipse Classes="top" />
+                            </Panel>
+                            <controls:VinylView Name="PART_Record"
+                                                Label="{TemplateBinding Label}"
+                                                Angle="{TemplateBinding Angle}"
+                                                IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
+                            <Panel Name="PART_Arm" Classes="arm">
+                                <Svg Name="PART_ArmDrawing" Classes="armDrawing" Path="avares://MusicSpin/Assets/Decks/piano-arm.svg" />
+                                <Canvas>
+                                    <Border Name="PART_Stylus" />
+                                </Canvas>
+                            </Panel>
+                        </Canvas>
+                    </Viewbox>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="Width" Value="1320" />
+                <Setter Property="Height" Value="1080" />
+                <Setter Property="CornerRadius" Value="20" />
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF000000, 0 60 120 -40 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ Border.rim">
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF000000, 0 10 24 0 #FF000000" />
+                <Setter Property="Background">
+                    <ConicGradientBrush Angle="25">
+                        <GradientStop Color="#5B6068" Offset="0" />
+                        <GradientStop Color="#FFFFFF" Offset="0.143" />
+                        <GradientStop Color="#8C9198" Offset="0.286" />
+                        <GradientStop Color="#3E4248" Offset="0.429" />
+                        <GradientStop Color="#F1F3F5" Offset="0.571" />
+                        <GradientStop Color="#7B8087" Offset="0.714" />
+                        <GradientStop Color="#D8DBDF" Offset="0.857" />
+                        <GradientStop Color="#5B6068" Offset="1" />
+                    </ConicGradientBrush>
+                </Setter>
+            </Style>
+            <Style Selector="^ /template/ Ellipse.top">
+                <Setter Property="Fill" Value="#0A0A0B" />
+            </Style>
+            <Style Selector="^ /template/ Panel#PART_Arm">
+                <Setter Property="Canvas.Left" Value="880" />
+                <Setter Property="Canvas.Top" Value="-100" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name">
+                <Setter Property="FontFamily" Value="{StaticResource DeckSansFontFamily}" />
+                <Setter Property="FontWeight" Value="Light" />
+                <Setter Property="FontSize" Value="28" />
+                <Setter Property="LetterSpacing" Value="12" />
+                <Setter Property="X" Value="40" />
+                <Setter Property="Y" Value="1016" />
+                <Setter Property="Foreground">
+                    <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                        <GradientStop Color="#8D9299" Offset="0" />
+                        <GradientStop Color="#F4F5F7" Offset="0.45" />
+                        <GradientStop Color="#C7CBD0" Offset="0.55" />
+                        <GradientStop Color="#8D9299" Offset="1" />
+                    </LinearGradientBrush>
+                </Setter>
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name.cut">
+                <Setter Property="Y" Value="1018" />
+                <Setter Property="Foreground" Value="#000000" />
+                <Setter Property="Opacity" Value="0.9" />
+            </Style>
+        </ControlTheme>
+
+        <!-- ================================================================ 5 · Linear Tracking (#29) -->
+        <!--
+          No swinging arm: the carriage glides 105 units in along twin rails (x 770 to 1200) onto the lead-in, then lowers.
+          The platter and the record are shifted 20 units right, their centre at x 560.
+        -->
+        <ControlTheme x:Key="LinearDeck" TargetType="controls:KitDeckView" BasedOn="{StaticResource KitDeck}">
+            <Setter Property="CarriageTravel" Value="105" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Viewbox Classes="units">
+                        <Canvas Classes="units">
+                            <Border Classes="plinth" />
+                            <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/linear-deck.svg" />
+                            <controls:DeckText Classes="name lit" Text="MUSIC SPIN" />
+                            <controls:DeckText Classes="name" Text="MUSIC SPIN" />
+                            <Panel Classes="platter">
+                                <Border Classes="rim" />
+                                <controls:TickRing Classes="stripes" Angle="{TemplateBinding Angle}" />
+                                <Ellipse Classes="top" />
+                            </Panel>
+                            <controls:VinylView Name="PART_Record"
+                                                Label="{TemplateBinding Label}"
+                                                Angle="{TemplateBinding Angle}"
+                                                IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
+                            <!-- The rails and the housing, over the record; the line on the housing lit while playing. -->
+                            <Svg Name="Rails" Classes="plate rails" Path="avares://MusicSpin/Assets/Decks/linear-rails.svg" />
+                            <Line Name="Track" Classes="track" Stroke="{TemplateBinding Accent}" />
+                            <Panel Name="PART_Arm" Classes="arm">
+                                <Svg Name="PART_ArmDrawing" Classes="armDrawing" Path="avares://MusicSpin/Assets/Decks/linear-arm.svg" />
+                                <Canvas>
+                                    <Border Name="PART_Stylus" />
+                                </Canvas>
+                            </Panel>
+                        </Canvas>
+                    </Viewbox>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="Width" Value="1320" />
+                <Setter Property="Height" Value="1080" />
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="BoxShadow" Value="0 4 0 0 #FF5B5348, 0 60 120 -40 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ Panel.platter">
+                <Setter Property="Canvas.Left" Value="60" />
+            </Style>
+            <Style Selector="^ /template/ controls|VinylView#PART_Record">
+                <Setter Property="Canvas.Left" Value="70" />
+            </Style>
+            <!-- repeating-conic-gradient(#d6d0c4 0 2deg, #a39c8f 2deg 4deg): 90 stripes round the rim. -->
+            <Style Selector="^ /template/ Border.rim">
+                <Setter Property="Background" Value="#A39C8F" />
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF8A8377, 0 8 20 0 #66000000" />
+            </Style>
+            <Style Selector="^ /template/ controls|TickRing.stripes">
+                <Setter Property="Count" Value="90" />
+                <Setter Property="TickAngle" Value="2" />
+                <Setter Property="InnerRatio" Value="0.9" />
+                <Setter Property="Fill" Value="#D6D0C4" />
+            </Style>
+            <Style Selector="^ /template/ Ellipse.top">
+                <Setter Property="Fill" Value="#2B2A28" />
+            </Style>
+            <Style Selector="^ /template/ Svg.rails">
+                <Setter Property="Effect">
+                    <DropShadowEffect OffsetX="10" OffsetY="16" BlurRadius="6" Color="Black" Opacity="0.44" />
+                </Setter>
+            </Style>
+            <Style Selector="^ /template/ Line.track">
+                <Setter Property="StartPoint" Value="1196,566" />
+                <Setter Property="EndPoint" Value="1268,566" />
+                <Setter Property="StrokeThickness" Value="3" />
+                <Setter Property="StrokeLineCap" Value="Round" />
+                <Setter Property="Opacity" Value="0" />
+                <Setter Property="theming:Animate.Transitions" Value="Opacity DeckTrackLightDuration Ease" />
+            </Style>
+            <Style Selector="^:armDown /template/ Line.track">
+                <Setter Property="Opacity" Value="0.9" />
+            </Style>
+            <!-- The carriage's box: its stylus (the box's origin in the study) at (1130, 540). -->
+            <Style Selector="^ /template/ Panel#PART_Arm">
+                <Setter Property="Canvas.Left" Value="830" />
+                <Setter Property="Canvas.Top" Value="240" />
+            </Style>
+            <Style Selector="^ /template/ Border#PART_Stylus">
+                <Setter Property="Canvas.Top" Value="300" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name">
+                <Setter Property="FontFamily" Value="{StaticResource DeckSansFontFamily}" />
+                <Setter Property="FontSize" Value="30" />
+                <Setter Property="LetterSpacing" Value="15" />
+                <Setter Property="Anchor" Value="End" />
+                <Setter Property="X" Value="1278" />
+                <Setter Property="Y" Value="1016" />
+                <Setter Property="Foreground" Value="#7B7366" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name.lit">
+                <Setter Property="Y" Value="1018" />
+                <Setter Property="Foreground" Value="#D0FFFFFF" />
+            </Style>
+        </ControlTheme>
+
+        <!-- ================================================================ 6 · Smoked Acrylic (#30) -->
+        <!--
+          The study blurs what is behind the plinth (backdrop-filter). Behind the deck is Now Playing's blurred cover, so the
+          plinth draws that same image again where it is (controls:BackdropView), clipped to the plinth, under the smoke.
+        -->
+        <ControlTheme x:Key="AcrylicDeck" TargetType="controls:KitDeckView" BasedOn="{StaticResource KitDeck}">
+            <Setter Property="RestAngle" Value="0" />
+            <Setter Property="PlayAngle" Value="25" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Viewbox Classes="units">
+                        <Canvas Classes="units">
+                            <Border Classes="plinth" />
+                            <Border Name="Glass" Classes="glass">
+                                <Panel>
+                                    <controls:BackdropView Name="Backdrop" Source="{TemplateBinding Backdrop}" Veil="{TemplateBinding BackdropVeil}" />
+                                    <Border Classes="smoke" />
+                                    <Border Classes="sheen" />
+                                </Panel>
+                            </Border>
+                            <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/acrylic-deck.svg" />
+                            <!-- The edge light along the bottom, in the album colour while the platter spins. -->
+                            <Panel Name="EdgeLight" Classes="edgeLight">
+                                <Border Classes="glow" Background="{TemplateBinding Accent}" />
+                                <Border Classes="bar" Background="{TemplateBinding Accent}" />
+                            </Panel>
+                            <controls:DeckText Classes="name" Text="MUSIC SPIN" />
+                            <Panel Classes="platter">
+                                <Border Classes="rim" />
+                            </Panel>
+                            <controls:VinylView Name="PART_Record"
+                                                Label="{TemplateBinding Label}"
+                                                Angle="{TemplateBinding Angle}"
+                                                IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
+                            <Panel Name="PART_Arm" Classes="arm">
+                                <Svg Name="PART_ArmDrawing" Classes="armDrawing" Path="avares://MusicSpin/Assets/Decks/acrylic-arm.svg" />
+                                <Canvas>
+                                    <Border Name="PART_Stylus" />
+                                </Canvas>
+                            </Panel>
+                        </Canvas>
+                    </Viewbox>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="Width" Value="1320" />
+                <Setter Property="Height" Value="1080" />
+                <Setter Property="CornerRadius" Value="26" />
+                <Setter Property="BoxShadow" Value="0 60 120 -40 #CC000000" />
+            </Style>
+            <!-- The glass: the plinth's shape, clipping what shows through it (drawn wider, so its blur reaches the edges). -->
+            <Style Selector="^ /template/ Border.glass">
+                <Setter Property="Width" Value="1320" />
+                <Setter Property="Height" Value="1080" />
+                <Setter Property="CornerRadius" Value="26" />
+                <Setter Property="ClipToBounds" Value="True" />
+            </Style>
+            <Style Selector="^ /template/ controls|BackdropView">
+                <Setter Property="Margin" Value="-120" />
+                <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+            </Style>
+            <Style Selector="^ /template/ Border.smoke">
+                <Setter Property="Background" Value="{DynamicResource AcrylicTintBrush}" />
+            </Style>
+            <Style Selector="^ /template/ Border.sheen">
+                <Setter Property="Background" Value="{DynamicResource AcrylicSheenBrush}" />
+            </Style>
+            <!-- left 14%, right 14%, bottom -1px, 2px high, glowing 30 units round. -->
+            <Style Selector="^ /template/ Panel.edgeLight">
+                <Setter Property="Width" Value="950.4" />
+                <Setter Property="Height" Value="4" />
+                <Setter Property="Canvas.Left" Value="184.8" />
+                <Setter Property="Canvas.Top" Value="1078" />
+                <Setter Property="Opacity" Value="0.15" />
+                <Setter Property="theming:Animate.Transitions" Value="Opacity DeckEdgeLightDuration Ease" />
+            </Style>
+            <Style Selector="^:spinning /template/ Panel.edgeLight">
+                <Setter Property="Opacity" Value="0.9" />
+            </Style>
+            <Style Selector="^ /template/ Panel.edgeLight > Border">
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
+            <Style Selector="^ /template/ Panel.edgeLight > Border.glow">
+                <Setter Property="Margin" Value="-8" />
+                <Setter Property="Effect">
+                    <BlurEffect Radius="30" />
+                </Setter>
+            </Style>
+            <!-- A clear platter: rings of light near its edge. -->
+            <Style Selector="^ /template/ Border.rim">
+                <Setter Property="BoxShadow" Value="0 0 0 2 #3DFFFFFF, 0 10 24 0 #66000000" />
+                <Setter Property="Background">
+                    <RadialGradientBrush>
+                        <GradientStop Color="#0DFFFFFF" Offset="0" />
+                        <GradientStop Color="#0DFFFFFF" Offset="0.94" />
+                        <GradientStop Color="#40FFFFFF" Offset="0.955" />
+                        <GradientStop Color="#14FFFFFF" Offset="0.97" />
+                        <GradientStop Color="#33FFFFFF" Offset="0.994" />
+                        <GradientStop Color="#33FFFFFF" Offset="1" />
+                    </RadialGradientBrush>
+                </Setter>
+            </Style>
+            <Style Selector="^ /template/ Panel#PART_Arm">
+                <Setter Property="Canvas.Left" Value="880" />
+                <Setter Property="Canvas.Top" Value="-100" />
+            </Style>
+            <Style Selector="^ /template/ controls|DeckText.name">
+                <Setter Property="FontFamily" Value="{StaticResource DeckSansFontFamily}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="26" />
+                <Setter Property="LetterSpacing" Value="12" />
+                <Setter Property="X" Value="46" />
+                <Setter Property="Y" Value="1018" />
+                <Setter Property="Foreground" Value="#38FFFFFF" />
+            </Style>
+        </ControlTheme>
+    </Styles.Resources>
+</Styles>

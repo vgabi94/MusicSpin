@@ -1,7 +1,12 @@
-<!-- Bundled fonts (Avalonia.Fonts.Inter, OFL-1.1; see THIRD-PARTY-NOTICES.md). -->
+<!-- Bundled fonts (Avalonia.Fonts.Inter and Assets/Fonts, OFL-1.1; see THIRD-PARTY-NOTICES.md). -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <FontFamily x:Key="AppFontFamily">fonts:Inter#Inter, $Default</FontFamily>
+    <!-- The turntable designs' engraved names (#25, #27): Cormorant Garamond and Barlow Semi Condensed, both OFL-1.1, in
+         Assets/Fonts. Barlow stands in for the study's Bahnschrift (Windows-only, not ours to bundle). -->
+    <FontFamily x:Key="DeckSerifFontFamily">avares://MusicSpin/Assets/Fonts#Cormorant Garamond</FontFamily>
+    <FontFamily x:Key="DeckDinFontFamily">avares://MusicSpin/Assets/Fonts#Barlow Semi Condensed</FontFamily>
+    <FontFamily x:Key="DeckSansFontFamily">fonts:Inter#Inter</FontFamily>
     <FontWeight x:Key="BrandFontWeight">SemiBold</FontWeight>
     <FontWeight x:Key="TitleFontWeight">Bold</FontWeight>
     <FontWeight x:Key="StrongFontWeight">SemiBold</FontWeight>

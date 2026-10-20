@@ -141,6 +141,18 @@
     <Style Selector="StackPanel.designCard > TextBlock">
         <Setter Property="FontSize" Value="{StaticResource DesignNameFontSize}" />
         <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxWidth" Value="{StaticResource DeckPreviewWidth}" />
+    </Style>
+    <Style Selector="StackPanel.designRow">
+        <Setter Property="Spacing" Value="{StaticResource DesignRowSpacing}" />
+    </Style>
+    <!-- A design from the deck studies, small: its own deck, parked, not taking the pointer. -->
+    <Style Selector="Viewbox.deckPreview">
+        <Setter Property="Width" Value="{StaticResource DeckPreviewWidth}" />
+        <Setter Property="Height" Value="{StaticResource DeckPreviewHeight}" />
+        <Setter Property="IsHitTestVisible" Value="False" />
     </Style>
 
     <!-- The Classic deck, small (Metrics: DeckPreview*). -->

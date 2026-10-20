@@ -1,0 +1,22 @@
+<!-- Brushed Aluminium's needle: a straight matte black tube, the offset headshell and its silver cartridge, the cylinder counterweight (its ring takes the album colour, drawn on top). Arm units: the pivot at (0, 0), the stylus at (0, 740). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-300 -300 600 1200">
+  <defs>
+    <linearGradient id="blackCyl0" gradientUnits="userSpaceOnUse" x1="-36" y1="-170" x2="36" y2="-170"><stop offset="0" stop-color="#0d0e10"/><stop offset=".45" stop-color="#3a3c42"/><stop offset=".6" stop-color="#22242a"/><stop offset="1" stop-color="#0a0b0c"/></linearGradient>
+    <linearGradient id="silverCyl1" gradientUnits="userSpaceOnUse" x1="-6" y1="-84" x2="6" y2="-84"><stop offset="0" stop-color="#7c8188"/><stop offset=".45" stop-color="#f3f4f6"/><stop offset="1" stop-color="#83878e"/></linearGradient>
+    <linearGradient id="blackCyl2" gradientUnits="userSpaceOnUse" x1="-46" y1="-46" x2="46" y2="-46"><stop offset="0" stop-color="#0d0e10"/><stop offset=".45" stop-color="#3a3c42"/><stop offset=".6" stop-color="#22242a"/><stop offset="1" stop-color="#0a0b0c"/></linearGradient>
+    <linearGradient id="silverCyl3" gradientUnits="userSpaceOnUse" x1="-16" y1="-16" x2="16" y2="-16"><stop offset="0" stop-color="#7c8188"/><stop offset=".45" stop-color="#f3f4f6"/><stop offset="1" stop-color="#83878e"/></linearGradient>
+    <linearGradient id="silverCyl4" gradientUnits="userSpaceOnUse" x1="-18" y1="684" x2="18" y2="684"><stop offset="0" stop-color="#7c8188"/><stop offset=".45" stop-color="#f3f4f6"/><stop offset="1" stop-color="#83878e"/></linearGradient>
+  </defs>
+  <rect x="-36" y="-170" width="72" height="88" rx="6" fill="url(#blackCyl0)"/>
+  <rect x="-6" y="-84" width="12" height="90" fill="url(#silverCyl1)"/>
+  <path d="M0,0 L34,657" stroke="#111214" stroke-width="15" stroke-linecap="round"/>
+  <path d="M-3,10 L31,650" stroke="#ffffff" stroke-opacity=".22" stroke-width="3" stroke-linecap="round"/>
+  <circle r="46" fill="url(#blackCyl2)"/>
+  <circle r="16" fill="url(#silverCyl3)"/>
+  <g transform="rotate(22 0 740)">
+    <rect x="-24" y="648" width="48" height="112" rx="4" fill="#16171a"/>
+    <rect x="-24" y="648" width="48" height="10" rx="3" fill="#2c2e33"/>
+    <rect x="-18" y="684" width="36" height="66" rx="3" fill="url(#silverCyl4)"/>
+    <path d="M24,664 L74,642" stroke="#16171a" stroke-width="7" stroke-linecap="round"/>
+  </g>
+</svg>

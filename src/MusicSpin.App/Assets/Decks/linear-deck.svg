@@ -1,0 +1,26 @@
+<!-- Linear Tracking (docs/design/mockup/decks/5-linear-tracking.html): champagne aluminium between rosewood ends. Deck units. The rails, the housing and the carriage go over the record (linear-rails.svg, linear-arm.svg); the name is drawn on top. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1080">
+  <defs>
+    <clipPath id="plinth"><rect width="1320" height="1080" rx="10"/></clipPath>
+    <linearGradient id="light" gradientUnits="userSpaceOnUse" x1="521.65" y1="-110.88" x2="798.35" y2="1190.88"><stop offset="0.0000" stop-color="#ffffff" stop-opacity="0.251"/><stop offset="0.3000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.6500" stop-color="#000000" stop-opacity="0.078"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.180"/></linearGradient>
+    <linearGradient id="brush" gradientUnits="userSpaceOnUse" spreadMethod="repeat" x1="660.00" y1="1080.00" x2="660.00" y2="1074.00"><stop offset="0.0000" stop-color="#ffffff" stop-opacity="0.071"/><stop offset="0.3333" stop-color="#ffffff" stop-opacity="0.071"/><stop offset="0.3333" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.6667" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.6667" stop-color="#000000" stop-opacity="0.051"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.051"/></linearGradient>
+    <linearGradient id="metal" gradientUnits="userSpaceOnUse" x1="0.00" y1="540.00" x2="1320.00" y2="540.00"><stop offset="0.0000" stop-color="#b9b1a3" stop-opacity="1.000"/><stop offset="0.4000" stop-color="#d9d3c8" stop-opacity="1.000"/><stop offset="0.6000" stop-color="#c9c2b6" stop-opacity="1.000"/><stop offset="1.0000" stop-color="#b2aa9c" stop-opacity="1.000"/></linearGradient>
+    <linearGradient id="roseGrainL" gradientUnits="userSpaceOnUse" spreadMethod="repeat" x1="-0.00" y1="540.00" x2="14.00" y2="540.00"><stop offset="0.0000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.2857" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.2857" stop-color="#000000" stop-opacity="0.188"/><stop offset="0.4286" stop-color="#000000" stop-opacity="0.188"/><stop offset="0.4286" stop-color="#000000" stop-opacity="0.000"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.000"/></linearGradient>
+    <linearGradient id="roseL" gradientUnits="userSpaceOnUse" x1="-0.00" y1="540.00" x2="30.00" y2="540.00"><stop offset="0.0000" stop-color="#3e1d12" stop-opacity="1.000"/><stop offset="0.5000" stop-color="#5e2c1a" stop-opacity="1.000"/><stop offset="1.0000" stop-color="#3a1a10" stop-opacity="1.000"/></linearGradient>
+    <linearGradient id="roseGrainR" gradientUnits="userSpaceOnUse" spreadMethod="repeat" x1="1290.00" y1="540.00" x2="1304.00" y2="540.00"><stop offset="0.0000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.2857" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.2857" stop-color="#000000" stop-opacity="0.188"/><stop offset="0.4286" stop-color="#000000" stop-opacity="0.188"/><stop offset="0.4286" stop-color="#000000" stop-opacity="0.000"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.000"/></linearGradient>
+    <linearGradient id="roseR" gradientUnits="userSpaceOnUse" x1="1290.00" y1="540.00" x2="1320.00" y2="540.00"><stop offset="0.0000" stop-color="#3e1d12" stop-opacity="1.000"/><stop offset="0.5000" stop-color="#5e2c1a" stop-opacity="1.000"/><stop offset="1.0000" stop-color="#3a1a10" stop-opacity="1.000"/></linearGradient>
+  </defs>
+  <g clip-path="url(#plinth)">
+    <rect width="1320" height="1080" fill="url(#metal)"/>
+    <rect width="1320" height="1080" fill="url(#brush)"/>
+    <rect width="1320" height="1080" fill="url(#light)"/>
+    <rect width="1320" height="2" fill="#ffffff" fill-opacity=".63"/>
+    <!-- the rosewood ends -->
+    <rect width="30" height="1080" fill="url(#roseL)"/>
+    <rect width="30" height="1080" fill="url(#roseGrainL)"/>
+    <rect x="1290" width="30" height="1080" fill="url(#roseR)"/>
+    <rect x="1290" width="30" height="1080" fill="url(#roseGrainR)"/>
+    <rect width="30" height="2" fill="#ffffff" fill-opacity=".15"/>
+    <rect x="1290" width="30" height="2" fill="#ffffff" fill-opacity=".15"/>
+  </g>
+</svg>

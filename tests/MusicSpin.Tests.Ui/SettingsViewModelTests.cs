@@ -50,7 +50,9 @@ public sealed class SettingsViewModelTests : IDisposable
         Assert.Equal(["Dark", "Light"], vm.Themes.Select(c => c.Label));
         Assert.Equal(["Smooth", "Fast", "None"], vm.Motions.Select(c => c.Label));
         Assert.Equal(["33⅓", "45", "16⅔"], vm.Speeds.Select(c => c.Label));
-        Assert.Equal(["Classic"], vm.Designs.Select(d => d.Name));
+        Assert.Equal(
+            ["Classic", "Walnut & Brass", "Brushed Aluminium", "Carbon Signal", "Piano Black & Chrome", "Linear Tracking", "Smoked Acrylic"],
+            vm.Designs.Select(d => d.Name));
         Assert.False(File.Exists(_data.SettingsFile));
     }
 

@@ -31,6 +31,7 @@
         <StyleInclude Source="avares://MusicSpin/Styles/Cards.axaml" />
         <StyleInclude Source="avares://MusicSpin/Styles/Shelf.axaml" />
         <StyleInclude Source="avares://MusicSpin/Styles/Crate.axaml" />
+        <StyleInclude Source="avares://MusicSpin/Styles/Decks.axaml" />
         <StyleInclude Source="avares://MusicSpin/Styles/NowPlaying.axaml" />
         <StyleInclude Source="avares://MusicSpin/Styles/Queue.axaml" />
         <StyleInclude Source="avares://MusicSpin/Styles/PlayerBar.axaml" />

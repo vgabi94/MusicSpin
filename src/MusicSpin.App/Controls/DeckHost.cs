@@ -10,7 +10,7 @@ namespace MusicSpin.App.Controls;
 /// <summary>
 /// Holds the turntable design chosen in Settings (<see cref="Design"/>): it builds the design's <see cref="DeckView"/>
 /// from the data templates in scope (a design is a <c>DeckDesign</c> record; its template is its deck), passes it the
-/// record, the arm, the spin, the empty platter and the accent, and scales it to the window. Changing the design
+/// record, the arm, the spin, the empty platter, the accent, the speed and what is behind it, and scales it to the window. Changing the design
 /// swaps the deck at once.
 /// </summary>
 /// <remarks>
@@ -33,6 +33,12 @@ public sealed class DeckHost : Control
     public static readonly StyledProperty<bool> IsEmptyProperty = DeckView.IsEmptyProperty.AddOwner<DeckHost>();
 
     public static readonly StyledProperty<IBrush?> AccentProperty = DeckView.AccentProperty.AddOwner<DeckHost>();
+
+    public static readonly StyledProperty<double> SpeedProperty = DeckView.SpeedProperty.AddOwner<DeckHost>();
+
+    public static readonly StyledProperty<Image?> BackdropProperty = DeckView.BackdropProperty.AddOwner<DeckHost>();
+
+    public static readonly StyledProperty<Border?> BackdropVeilProperty = DeckView.BackdropVeilProperty.AddOwner<DeckHost>();
 
     public static readonly StyledProperty<double> HeightShareProperty = AvaloniaProperty.Register<DeckHost, double>(nameof(HeightShare), 0.46);
 
@@ -92,6 +98,24 @@ public sealed class DeckHost : Control
     {
         get => GetValue(AccentProperty);
         set => SetValue(AccentProperty, value);
+    }
+
+    public double Speed
+    {
+        get => GetValue(SpeedProperty);
+        set => SetValue(SpeedProperty, value);
+    }
+
+    public Image? Backdrop
+    {
+        get => GetValue(BackdropProperty);
+        set => SetValue(BackdropProperty, value);
+    }
+
+    public Border? BackdropVeil
+    {
+        get => GetValue(BackdropVeilProperty);
+        set => SetValue(BackdropVeilProperty, value);
     }
 
     /// <summary>The platter's diameter as a share of the window's height (mockup: 46vh).</summary>
@@ -167,6 +191,9 @@ public sealed class DeckHost : Control
             deck.Bind(DeckView.IsSpinningProperty, this.GetObservable(IsSpinningProperty));
             deck.Bind(DeckView.IsEmptyProperty, this.GetObservable(IsEmptyProperty));
             deck.Bind(DeckView.AccentProperty, this.GetObservable(AccentProperty));
+            deck.Bind(DeckView.SpeedProperty, this.GetObservable(SpeedProperty));
+            deck.Bind(DeckView.BackdropProperty, this.GetObservable(BackdropProperty));
+            deck.Bind(DeckView.BackdropVeilProperty, this.GetObservable(BackdropVeilProperty));
         }
 
         _scaler.Child = deck;

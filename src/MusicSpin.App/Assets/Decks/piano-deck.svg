@@ -1,0 +1,33 @@
+<!-- Piano Black & Chrome (docs/design/mockup/decks/4-piano-chrome.html): the gloss black lacquer and its long reflections, the chrome arm collar, the anti-skate dial, the cue lever and the rest. Deck units. The silver-filled name is drawn on top. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1080">
+  <defs>
+    <clipPath id="plinth"><rect width="1320" height="1080" rx="20"/></clipPath>
+    <linearGradient id="reflectA" gradientUnits="userSpaceOnUse" x1="-85.93" y1="176.19" x2="1405.93" y2="903.81"><stop offset="0.0000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.3600" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.3640" stop-color="#ffffff" stop-opacity="0.063"/><stop offset="0.4500" stop-color="#ffffff" stop-opacity="0.063"/><stop offset="0.4540" stop-color="#000000" stop-opacity="0.000"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.000"/></linearGradient>
+    <linearGradient id="reflectB" gradientUnits="userSpaceOnUse" x1="-85.93" y1="176.19" x2="1405.93" y2="903.81"><stop offset="0.0000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.4700" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.4730" stop-color="#ffffff" stop-opacity="0.031"/><stop offset="0.5000" stop-color="#ffffff" stop-opacity="0.031"/><stop offset="0.5030" stop-color="#000000" stop-opacity="0.000"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.000"/></linearGradient>
+    <linearGradient id="lacquer" gradientUnits="userSpaceOnUse" x1="438.27" y1="-142.40" x2="881.73" y2="1222.40"><stop offset="0.0000" stop-color="#2a2b30" stop-opacity="1.000"/><stop offset="0.5200" stop-color="#0b0b0d" stop-opacity="1.000"/><stop offset="1.0000" stop-color="#050506" stop-opacity="1.000"/></linearGradient>
+    <radialGradient id="chromeR0" gradientUnits="userSpaceOnUse" cx="1150" cy="160" r="170"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#c3c7cc"/><stop offset=".7" stop-color="#5b6068"/><stop offset="1" stop-color="#2a2d32"/></radialGradient>
+    <radialGradient id="chromeR1" gradientUnits="userSpaceOnUse" cx="1072.8" cy="335.4" r="40.8"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#c3c7cc"/><stop offset=".7" stop-color="#5b6068"/><stop offset="1" stop-color="#2a2d32"/></radialGradient>
+    <radialGradient id="chromeR2" gradientUnits="userSpaceOnUse" cx="1269.4" cy="321.2" r="37.4"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#c3c7cc"/><stop offset=".7" stop-color="#5b6068"/><stop offset="1" stop-color="#2a2d32"/></radialGradient>
+    <linearGradient id="silverInlay3" gradientUnits="userSpaceOnUse" x1="1268" y1="330" x2="1284" y2="330"><stop offset="0" stop-color="#8d9299"/><stop offset=".45" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#c7cbd0"/><stop offset="1" stop-color="#8d9299"/></linearGradient>
+    <radialGradient id="chromeR4" gradientUnits="userSpaceOnUse" cx="1174.6" cy="648.8" r="30.6"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#c3c7cc"/><stop offset=".7" stop-color="#5b6068"/><stop offset="1" stop-color="#2a2d32"/></radialGradient>
+  </defs>
+  <g clip-path="url(#plinth)">
+    <rect width="1320" height="1080" fill="url(#lacquer)"/>
+    <rect width="1320" height="1080" fill="url(#reflectB)"/>
+    <rect width="1320" height="1080" fill="url(#reflectA)"/>
+    <rect width="1320" height="1080" rx="20" fill="none" stroke="#ffffff" stroke-opacity=".06" stroke-width="4"/>
+    <rect width="1320" height="2" fill="#ffffff" fill-opacity=".35"/>
+  </g>
+  <!-- arm board: chrome collar around a black well -->
+  <circle cx="1180" cy="200" r="100" fill="url(#chromeR0)"/>
+  <circle cx="1180" cy="200" r="78" fill="#0b0b0d" stroke="#000" stroke-width="2"/>
+  <!-- anti-skate dial and cue lever -->
+  <circle cx="1080" cy="345" r="24" fill="url(#chromeR1)"/><circle cx="1080" cy="345" r="10" fill="#111"/>
+  <circle cx="1276" cy="330" r="22" fill="url(#chromeR2)"/>
+  <rect x="1268" y="330" width="16" height="96" rx="8" fill="url(#silverInlay3)"/>
+  <!-- arm rest -->
+  <circle cx="1180" cy="656" r="18" fill="url(#chromeR4)"/>
+  <path d="M1163,648 q17,22 34,0" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+  <!-- the rule over the name -->
+  <path d="M42,970 h200" stroke="#c7cbd0" stroke-width="1.5" opacity=".45"/>
+</svg>

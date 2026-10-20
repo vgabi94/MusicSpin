@@ -1,0 +1,12 @@
+<!-- Linear Tracking's twin rails, cantilevered over the record from the housing on the right (the line on the housing that takes the album colour is drawn on top). Deck units. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1080">
+  <defs>
+    <linearGradient id="rail0" gradientUnits="userSpaceOnUse" x1="770" y1="462" x2="770" y2="474"><stop offset="0" stop-color="#f4f1ea"/><stop offset=".5" stop-color="#b9b2a5"/><stop offset="1" stop-color="#7d7669"/></linearGradient>
+    <linearGradient id="rail1" gradientUnits="userSpaceOnUse" x1="770" y1="494" x2="770" y2="506"><stop offset="0" stop-color="#f4f1ea"/><stop offset=".5" stop-color="#b9b2a5"/><stop offset="1" stop-color="#7d7669"/></linearGradient>
+    <linearGradient id="housing2" gradientUnits="userSpaceOnUse" x1="1180" y1="420" x2="1180" y2="590"><stop offset="0" stop-color="#e3ddd2"/><stop offset="1" stop-color="#a9a194"/></linearGradient>
+  </defs>
+  <rect x="770" y="462" width="430" height="12" rx="6" fill="url(#rail0)"/>
+  <rect x="770" y="494" width="430" height="12" rx="6" fill="url(#rail1)"/>
+  <rect x="1180" y="420" width="104" height="170" rx="14" fill="url(#housing2)" stroke="#8a8377" stroke-width="2"/>
+  <rect x="1196" y="436" width="72" height="4" rx="2" fill="#000000" fill-opacity=".12"/>
+</svg>
