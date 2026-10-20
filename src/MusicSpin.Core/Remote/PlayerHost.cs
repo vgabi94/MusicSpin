@@ -101,6 +101,7 @@ public sealed class PlayerHost : IAsyncDisposable
     private (PlayerState State, int? Index, int Length, RepeatMode Repeat, bool Shuffle, int? Seed, double Position)? _savedSignature;
     private string? _lastSaveError;
     private readonly RadioPoolCache _radioPools;
+    private readonly StationStore? _stations;
     private readonly SpectrumMeter _spectrum;
 
     private PlayerHost(PlayerHostOptions options, PlayerEndpoint endpoint, FileStream lockFile, IPlayerListener listener)
@@ -122,6 +123,8 @@ public sealed class PlayerHost : IAsyncDisposable
         {
             _queue.ResolveMissing = ResolveMoved;
             _queue.RadioPool = _radioPools.Get;
+            _stations = new StationStore(options.DataDirectory, options.Time);
+            _queue.RadioStarted += (_, filter) => RecordStation(filter);
         }
 
         _queue.SetRepeat(options.InitialRepeat);
@@ -667,6 +670,19 @@ public sealed class PlayerHost : IAsyncDisposable
     }
 
     /// <summary>Writes <c>queue.json</c> atomically when the queue, index, state or modes changed, or the position moved enough.</summary>
+    /// <summary>A station that started goes first in the recent list (#38). Best effort: a failure is logged, radio plays on.</summary>
+    private void RecordStation(RadioFilter filter)
+    {
+        try
+        {
+            _stations?.AddRecent(filter);
+        }
+        catch (MusicSpinException ex)
+        {
+            Log($"could not record the radio station in {_stations?.FilePath}: {ex.Message}");
+        }
+    }
+
     private void SaveQueue(bool force)
     {
         if (!force && Volatile.Read(ref _shutdownStarted) != 0)
@@ -725,6 +741,9 @@ public sealed class PlayerHost : IAsyncDisposable
 
         SharedFile.Replace(temp, Endpoint.InfoFile);
     }
+
+    /// <summary>Writes a line to the player log (e.g. whether the tray icon started).</summary>
+    public void Note(string message) => Log(message);
 
     private void Log(string message)
     {

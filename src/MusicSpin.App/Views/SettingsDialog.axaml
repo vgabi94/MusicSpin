@@ -116,6 +116,7 @@
                                                Maximum="{x:Static vm:SettingsViewModel.MaxTilt}"
                                                Value="{Binding ShelfTilt, Mode=OneWay}"
                                                CommitCommand="{Binding SetShelfTiltCommand}"
+                                               Scrub="{Binding TiltScrub}"
                                                ValueText="{Binding ShelfTiltText}"
                                                AutomationProperties.Name="Shelf tilt" />
                             <TextBlock Name="TiltText" Text="{Binding ShelfTiltText}" />
@@ -135,6 +136,7 @@
                                                Maximum="{x:Static vm:SettingsViewModel.MaxDepth}"
                                                Value="{Binding ShelfDepth, Mode=OneWay}"
                                                CommitCommand="{Binding SetShelfDepthCommand}"
+                                               Scrub="{Binding DepthScrub}"
                                                ValueText="{Binding ShelfDepthText}"
                                                AutomationProperties.Name="Shelf depth" />
                             <TextBlock Name="DepthText" Text="{Binding ShelfDepthText}" />

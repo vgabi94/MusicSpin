@@ -46,7 +46,9 @@ MusicSpin keeps everything it writes (settings, the library database, the backgr
 ├── player.json        running player info: pid, endpoint, version, output (0600)
 ├── player.lock        held by the running player (one player per data folder)
 ├── player.log         background player log (rotated to player.log.1 above 1 MiB)
-└── queue.json         the player's saved queue, restored paused by the next player (a corrupt one is moved to queue.json.bad)
+├── queue.json         the player's saved queue, restored paused by the next player (a corrupt one is moved to queue.json.bad)
+├── stations.json      recent and saved radio stations (filters only, no paths; a corrupt one is moved to stations.json.bad on the next change)
+└── stations.json.lock cross-process lock for changes to stations.json
 ```
 
 **Override (optional, advanced):** `--data-dir <path>` or the `MUSICSPIN_DATA_DIR` environment variable. Precedence: `--data-dir` > `MUSICSPIN_DATA_DIR` > the default.
@@ -83,6 +85,7 @@ Created with defaults by `doctor` (or by the first command that writes):
 | `shuffle` | `false` | shuffle mode of a newly started background player. Written by `music-spin shuffle <mode>` and the MCP `shuffle` tool |
 | `playerIdleTimeoutSeconds` | `900` | the background player exits after this long when it is stopped (or the queue has ended) and no client is subscribed. `0` means never. A paused player does not time out |
 | `playbackBufferMs` | `2000` | how much audio the background player decodes ahead of the output, in milliseconds. Values outside `100`..`10000` are clamped. Memory is rate × channels × 4 bytes per second (2 s of 192 kHz stereo = 3 MB) |
+| `trayIcon` | `true` | show a tray icon (Play/Pause, Next, Previous, Quit) while the background player runs in a desktop session (see [Playback](playback.md#tray-icon)) |
 | `gapless` | `true` | play consecutive queue entries with the same sample rate, channels and bit depth without a gap (see [Playback](playback.md#gapless)) |
 | `outputDevice` | `null` | **reserved for the App**. The CLI uses `--device` |
 | `exclusiveMode` | `false` | **reserved for the App**. The CLI uses `--exclusive` |

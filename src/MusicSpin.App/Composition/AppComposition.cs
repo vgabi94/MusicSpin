@@ -1,5 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using MusicSpin.App.Services;
+using MusicSpin.App.Services.MediaControls;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
 using MusicSpin.App.Views;
@@ -17,15 +20,39 @@ public static class AppComposition
         var time = TimeProvider.System;
         var ui = new AvaloniaUiDispatcher();
         var library = new LibraryService(directory, time);
+        var resizer = new SkiaCoverResizer();
         return new AppServices(
             new SettingsService(directory),
             library,
-            new CoverService(directory, new SkiaCoverResizer(), time, library: library, ui: ui),
+            new CoverService(directory, resizer, time, library: library, ui: ui),
             new BackgroundPlayerConnector(directory),
             new Appearance(application),
             time,
             ui,
-            startupWarning);
+            startupWarning,
+            MediaControlsFactory.Create(directory, library, resizer));
+    }
+
+    /// <summary>
+    /// Tray-only mode (<c>MusicSpin --tray</c>, #83): the tray icon of the running background player, with no window. The
+    /// app exits when the player is gone (or was never there).
+    /// </summary>
+    public static async Task StartTrayAsync(Application application, IControlledApplicationLifetime lifetime, DataDirectory directory)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        ArgumentNullException.ThrowIfNull(lifetime);
+        var viewModel = new TrayViewModel(new BackgroundPlayerConnector(directory), new AvaloniaUiDispatcher());
+        application.DataContext = viewModel; // a TrayIcon binds to the application's DataContext
+        var icon = new TrayIconView();
+        TrayIcon.SetIcons(application, [icon]);
+        viewModel.ExitRequested += async (_, _) =>
+        {
+            icon.IsVisible = false;
+            icon.Dispose();
+            await viewModel.DisposeAsync();
+            lifetime.Shutdown();
+        };
+        await viewModel.StartAsync();
     }
 
     /// <summary>The main window and its view model over <paramref name="services"/>.</summary>

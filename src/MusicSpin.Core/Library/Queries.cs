@@ -69,7 +69,7 @@ public sealed record TrackQuery
     /// <summary>Album title (case-insensitive exact; diacritics ignored when nothing matches exactly) or album id. Unknown: NotFound.</summary>
     public string? Album { get; init; }
 
-    /// <summary>Search syntax (see <see cref="LibrarySearch.Parse"/>): words, "phrases", artist:/album:/title:/genre:/year:.</summary>
+    /// <summary>Search syntax (see <see cref="LibrarySearch.Parse"/>): words, "phrases", artist:/album:/title:/genre:/year:, is:favorite.</summary>
     public string? Text { get; init; }
 
     /// <summary>Every word must appear in the track title (folded, see <see cref="LibrarySearch.Fold"/>).</summary>

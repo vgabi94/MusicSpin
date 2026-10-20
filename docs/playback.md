@@ -85,6 +85,22 @@ $ music-spin quit
 - **Logs:** `player.log` in the data folder (rotated to `player.log.1` above 1 MiB).
 - `--foreground` (or `--duration`) plays in the calling process instead and blocks until done.
 
+### Tray icon
+
+In a desktop session the background player shows a **tray icon** (the notification area on Windows, the menu bar on
+macOS, a StatusNotifier icon on Linux) with **Play/Pause**, **Next**, **Previous** and **Quit**. Quit shuts the player
+down like `music-spin quit`; the icon goes away whenever the player exits.
+
+- The icon is the desktop app in a tray-only mode (`MusicSpin --tray --data-dir <folder>`), started by the player,
+  because the player itself has no UI. It needs the app next to `music-spin` (as the release builds ship them; on macOS
+  `MusicSpin.app` next to it), or `MUSICSPIN_APP` pointing at it in a development build.
+- **Turn it off:** `"trayIcon": false` in settings.json, or for one player `music-spin play --no-tray` (or
+  `MUSICSPIN_NO_TRAY=1` in the environment, which every way of starting the player honours).
+- No icon without a desktop session: on Linux without `DISPLAY`/`WAYLAND_DISPLAY`, over SSH on macOS and Windows, or
+  in a Windows service. The player runs the same; `player.log` says why there is no icon.
+- One icon per data folder: a restarted player finds the icon already there. The icon never starts a player.
+- Linux: the desktop needs a StatusNotifier host (KDE, most others; GNOME only with the AppIndicator extension).
+
 How it works internally: [Architecture → Background player and IPC](architecture.md#background-player-and-ipc).
 
 ## Queue behaviour
@@ -167,6 +183,7 @@ Details:
 - The player keeps the current track plus a **lookahead of 20** picked tracks in the queue and tops up to 20 whenever fewer than 10 are left. The pool itself is never put in the queue, so a 50,000-track library starts as fast as a small one apart from reading the pool (below).
 - **No repeats:** a track is not picked again within the last **100** picks. Small pools clamp this to *pool size - 1*: a pool of 2 alternates, a pool of N plays each track once per N picks.
 - **Spacing:** the next track is by a different artist and from a different album than the one before it, **when the pool has such a track** that also keeps the no-repeat rule. If not (a single-artist station), the album rule is still applied when possible, then neither. The no-repeat rule is never relaxed.
+- **Favorites first** (`--prefer-favorites`, MCP `preferFavorites`): among the tracks the two rules above allow, a [favorite](cli-reference.md#favorite--favorites) is **3× as likely** as any other track, without limiting the station to favorites. The rules still come first, so a small or one-artist pool may leave nothing to weight. It is **part of the station** (saved in `queue.json` with the filters, shown as `· favorites first` in the description) rather than a player setting, because it describes what a station is (like `--favorites`), it survives restarts with the station, and two stations can differ in it. With `--favorites` it changes nothing: every track is a favorite. Favorites marked or unmarked while the station plays count from the next top-up.
 - **A pool of one track** replays that track (radio does not stop; use `stop`, `play` or `queue clear`). An **empty pool** is exit 12 before anything starts.
 - Picks use a random generator per station; there is no seed yet (see the roadmap in the README).
 
@@ -187,7 +204,8 @@ Details:
 | `repeat one` | Replays the current track when it ends (`next`/`prev` still move) |
 | `repeat all` | Accepted (it is a global mode) but has no effect: radio never ends, and `next`/`prev` do not wrap |
 | `shuffle on/off/toggle` | Exit 8 `invalid_state`: radio is already random. The shuffle setting is kept and applies again to the next normal queue |
-| `play`, `queue clear` (without `--up-next`), `load` (serve) | End radio mode |
+| `radio end` | Ends radio and keeps playing, in one step: the current track plays on at its position (no gap), the up-next entries follow as a normal queue, and the lookahead and the played radio tracks are dropped. A no-op when no station is on air |
+| `play`, `queue clear` (without `--up-next`), `load` (serve) | End radio mode and replace (or empty) the queue |
 | `status` | `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text shows `[radio]` instead of the queue position and a `Radio: <filters> (<N> tracks) · Repeat: ...` line |
 
 - **Gapless:** the lookahead is the queue, so same-format radio tracks play back to back exactly like a normal queue ([Gapless](#gapless)).
@@ -205,6 +223,20 @@ Details:
 Excludes are applied while the pool is read and do not change these numbers: on the 50,000-track library, excluding an artist and a genre (39,968 left) reads in 0.55-0.7 s, an artist + album + year range 0.51-0.57 s, `--genre` with an excluded artist 0.36-0.39 s, and an excluded search + format (which needs whole records) 0.6 s; the CLI pre-check still stops at the first match (1-4 ms).
 
 Most of a CLI call is process start and JIT (about 0.2-0.4 s for any command). The CLI checks the filters against the library before starting a player and stops at the first match, so unknown names and empty pools fail fast.
+
+## Media keys and system controls
+
+While the desktop app is open it shows the current track in the system's media controls and takes their commands
+(play/pause, next, previous, seek, volume). On Linux that is MPRIS on the session bus, so the GNOME and KDE media
+widgets, `playerctl` and the keyboard media keys work, as long as the desktop routes them to MPRIS:
+
+```sh
+playerctl -p musicspin metadata
+playerctl -p musicspin play-pause
+```
+
+The controls follow the background player, so changes made with the CLI show there too. A media key never starts a
+player: with none running they do nothing. Windows (#34) and macOS (#35) are not wired yet.
 
 ## Testing without a sound card
 

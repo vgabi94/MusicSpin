@@ -375,7 +375,7 @@ public sealed partial class TracksPageViewModel : TrackListPageViewModel
         // One after the other: each read holds the library's lock while it runs.
         var albums = await _library.AlbumsAsync().ConfigureAwait(true);
         var tracks = await _library.TracksAsync().ConfigureAwait(true);
-        _albums = [.. albums.Select(a => _albums.FirstOrDefault(x => x.Album == a) ?? new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Small, Covers)))];
+        _albums = AlbumItems.Reuse(albums, _albums, a => new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Small, Covers)));
         var byId = _albums.ToDictionary(a => a.Album.Id, StringComparer.Ordinal);
         _albumTracks = tracks.GroupBy(t => t.AlbumId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
         return [.. tracks.Select(t => byId.GetValueOrDefault(t.AlbumId) is { } album

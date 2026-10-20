@@ -14,6 +14,7 @@ MusicSpin itself is MIT licensed (see `LICENSE`). Release builds contain or load
 | [ModelContextProtocol.Core](https://github.com/modelcontextprotocol/csharp-sdk) 2.2.0 (official MCP C# SDK) | Apache-2.0 | Inside the CLI executable (`music-spin mcp`) |
 | Microsoft.Extensions.AI.Abstractions, Microsoft.Extensions.Logging.Abstractions (MCP SDK dependencies) | MIT | Inside the CLI executable |
 | [Avalonia](https://avaloniaui.net) 12, SkiaSharp, HarfBuzzSharp | MIT | Inside the desktop app executable |
+| [Tmds.DBus.Protocol](https://github.com/tmds/Tmds.DBus) 0.94 (also used by Avalonia.FreeDesktop) | MIT | Inside the desktop app executable (the Linux MPRIS media controls) |
 | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) 8.4 | MIT | Inside the desktop app executable |
 | [Inter](https://rsms.me/inter/) font (via Avalonia.Fonts.Inter) | SIL Open Font License 1.1 | Inside the desktop app executable |
 | .NET runtime | MIT | Inside the executables (self-contained) |

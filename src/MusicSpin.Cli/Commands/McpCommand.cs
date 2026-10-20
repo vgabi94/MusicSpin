@@ -92,7 +92,7 @@ internal static class McpCommand
             yield return Tool("radio", "Endless random playback of the library (or the tracks the filters select) in the background player; returns its status " +
                 "(queueMode 'radio', radio.description, radio.poolSize). Each list is ORed, different filters are ANDed; exclude* lists leave matching tracks out (exclude wins). No track repeats within the last 100 " +
                 "(or pool size - 1); the same artist/album is not played twice in a row when there is a choice. next/previous/pause/stop work as usual; " +
-                "play or queue_clear end radio; shuffle is refused (radio is random); repeat one replays the current track. Nothing matches: not_found.",
+                "radio_end ends it and keeps the queue (play or queue_clear replace it); shuffle is refused (radio is random); repeat one replays the current track. Nothing matches: not_found.",
                 ([Description("Exact artist names (track or album artist); unknown: not_found.")] string[]? artists = null,
                  [Description("Exact album titles or album ids; unknown: not_found.")] string[]? albums = null,
                  [Description("Exact genre names (case/diacritic-insensitive; multi-genre tags are split on ; / , |).")] string[]? genres = null,
@@ -101,24 +101,43 @@ internal static class McpCommand
                  [Description("Search texts (syntax as the search tool); a track matching any of them qualifies.")] string[]? searches = null,
                  [Description("Only hi-res tracks.")] bool hires = false,
                  [Description("Only favorite tracks; narrows the other filters.")] bool favorites = false,
+                 [Description("Play favorites 3x as often as other tracks, without limiting the station to them.")] bool preferFavorites = false,
              [Description("Leave out these artists (track or album artist). Excludes win over includes; unknown names are ignored.")] string[]? excludeArtists = null,
              [Description("Leave out these albums (titles or ids; unknown ignored).")] string[]? excludeAlbums = null,
              [Description("Leave out these genres.")] string[]? excludeGenres = null,
              [Description("Leave out these years or inclusive ranges (\"1959\", \"1990-1999\").")] string[]? excludeYears = null,
              [Description("Leave out these format ids.")] string[]? excludeFormats = null,
              [Description("Leave out tracks matching any of these search texts.")] string[]? excludeSearches = null,
+                 [Description("Start recent station N again (1 = the newest, see radio_stations) instead of giving filters.")] int? recent = null,
+                 [Description("Start a saved station by name (see radio_stations) instead of giving filters.")] string? station = null,
                  CancellationToken ct = default) => Guard(async () =>
                 {
                     var filter = new RadioFilter
                     {
                         Artists = RadioCommand.List(artists), Albums = RadioCommand.List(albums), Genres = RadioCommand.List(genres),
-                        Years = RadioCommand.Years(null, years), Formats = RadioCommand.List(formats), Searches = RadioCommand.List(searches), HiRes = hires, Favorites = favorites,
+                        Years = RadioCommand.Years(null, years), Formats = RadioCommand.List(formats), Searches = RadioCommand.List(searches), HiRes = hires, Favorites = favorites, PreferFavorites = preferFavorites,
                     ExcludeArtists = RadioCommand.List(excludeArtists), ExcludeAlbums = RadioCommand.List(excludeAlbums), ExcludeGenres = RadioCommand.List(excludeGenres),
                     ExcludeYears = RadioCommand.Years(null, excludeYears), ExcludeFormats = RadioCommand.List(excludeFormats), ExcludeSearches = RadioCommand.List(excludeSearches),
                     };
+                    filter = RadioCommand.Stored(runner, parseResult, filter, recent, station, cli: false);
                     var (status, started) = await RadioCommand.StartAsync(runner, parseResult, filter, backend, device, exclusive, ct).ConfigureAwait(false);
                     return With(status, started, null, null);
                 }));
+            yield return Simple("radio_end", "End the radio station and keep playing: the current track plays on without a gap and the up-next tracks follow " +
+                "as a normal queue; the station's remaining picks are dropped. Does nothing when no station is on air.", "radio.end");
+            yield return Tool("radio_stations", $"The recent radio stations (the last {StationStore.RecentLimit} started from anywhere, newest first; start one again with " +
+                "radio and recent: N, 1-based) and the saved ones (radio with station: name). Each has its filter and description.",
+                (CancellationToken ct = default) => Guard(() => Task.FromResult(ToElement(RadioCommand.List(runner, parseResult)))), readOnly: true);
+            yield return Tool("radio_save", "Save the radio station on air, or recent station N, under a name (case-insensitive). A taken name is invalid_state unless replace; " +
+                "nothing on air: invalid_state.",
+                ([Description("Station name.")] string name,
+                 [Description("Save recent station N (1 = the newest) instead of the one on air.")] int? recent = null,
+                 [Description("Overwrite a saved station with this name.")] bool replace = false,
+                 CancellationToken ct = default) => Guard(async () =>
+                    ToElement(await RadioCommand.SaveAsync(runner, parseResult, name, recent, replace, ct).ConfigureAwait(false))));
+            yield return Tool("radio_delete", "Delete a saved radio station. Unknown name: not_found.",
+                ([Description("Saved station name (case-insensitive).")] string name, CancellationToken ct = default)
+                    => Guard(() => Task.FromResult(ToElement(RadioCommand.Stations(runner, parseResult).Delete(name)))));
             yield return Simple("pause", "Pause playback.");
             yield return Tool("resume", "Resume (or start) playback of the current queue entry. When no player runs but a saved queue exists, " +
                 "starts the player, which restores that queue and continues where it stopped.",
@@ -232,7 +251,7 @@ internal static class McpCommand
             }));
             yield return Tool("search", "Search the music library: artists, albums and tracks, best matches first. Case- and diacritic-insensitive " +
                 "(beyonce finds Beyoncé); every word must match somewhere; \"quoted phrases\" must appear as a whole; artist:, album:, title:, genre: restrict " +
-                "a word or \"phrase\" to one field; year:1959 or year:1950-1959.",
+                "a word or \"phrase\" to one field; year:1959 or year:1950-1959; is:favorite (is:fav) keeps favorite tracks only (no artists or albums then).",
                 ([Description("Search text, e.g. miles blue, artist:\"miles davis\" year:1959, title:\"so what\".")] string text, int limit = 20) => Guard(() =>
                 {
                     using var library = runner.OpenLibraryForRead(parseResult);

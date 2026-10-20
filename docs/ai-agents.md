@@ -18,7 +18,7 @@
 | Goal | Command |
 |---|---|
 | What's in the library | `library stats --json`, `artists --json`, `albums --json` |
-| Free-text lookup (artist, album or track) | `search "<text>" --json`. Best match first; case/diacritic-insensitive; every word must match; `"phrases"`, `artist:`, `album:`, `title:`, `genre:`, `year:1959` |
+| Free-text lookup (artist, album or track) | `search "<text>" --json`. Best match first; case/diacritic-insensitive; every word must match; `"phrases"`, `artist:`, `album:`, `title:`, `genre:`, `year:1959`, `is:favorite` |
 | One field contains some words | `tracks --title "<words>"`, `tracks --album-contains ...`, `--artist-contains ...`, `albums --title ...`, `artists --name ...` |
 | Albums by one artist | `albums --artist "<exact name>" --json` (case-insensitive exact match; unknown: exit 12) |
 | Tracks of an album | `tracks --album "<exact title or id>" --json` |
@@ -90,7 +90,7 @@ Notes:
 - Queue editing: `queue add --next` / `--up-next` (play next), `queue remove <pos>`, `queue move <from> <to>` (1-based), `queue clear --up-next`. See [Playback → Up next](playback.md#up-next).
 - Favorites: `favorite add|remove <files> | --album ... | --search ... | --track-id <id> | --current` (idempotent; JSON `requested`/`changed`/`unchanged`/`favorites`), `favorites [--missing]` (newest first; `missing` counts favorites no longer in the library), and `--favorites` on `tracks`, `filter`, `play`, `queue add` and `radio`. MCP: `favorite_add`, `favorite_remove`, `favorites`, and `favorites: true` on `play`, `queue_add`, `tracks`, `radio`. See [Music library → Favorites](library.md#favorites).
 - Playlists: `playlist create/add/show/...` (positions are 1-based), `play --playlist <name>`, `queue add --playlist <name>`, `queue save <name>`, `playlist import/export` for M3U/M3U8/PLS. Missing entries come back as `warnings` when played. See [Music library → Playlists](library.md#playlists).
-- **Radio:** `music-spin radio [--artist ...] [--genre ...] [--years 1990-1999] [--hires] [--exclude-artist ...] [--exclude-genre ...] ... --json` (MCP `radio`) plays the library endlessly at random. It starts the player like `play`. Check `queueMode` (`"radio"` or `"queue"`) and `radio.description`/`radio.poolSize` in any status. `next` never fails in radio mode; `shuffle` is exit 8 there; `play` or `queue clear` (without `--up-next`) end it. Nothing matching is exit 12. Rules: [Playback → Radio](playback.md#radio).
+- **Radio:** `music-spin radio [--artist ...] [--genre ...] [--years 1990-1999] [--hires] [--exclude-artist ...] [--exclude-genre ...] ... --json` (MCP `radio`) plays the library endlessly at random. It starts the player like `play`. Check `queueMode` (`"radio"` or `"queue"`) and `radio.description`/`radio.poolSize` in any status. `next` never fails in radio mode; `shuffle` is exit 8 there; `radio end` (MCP `radio_end`) ends it and keeps the current track and the up-next tracks playing; `play` or `queue clear` (without `--up-next`) replace it. Nothing matching is exit 12. Rules: [Playback → Radio](playback.md#radio).
 - The queue survives the player: a new player restores it **paused**, and `resume` starts the player again when no player runs but a saved queue exists ([Persistent queue](playback.md#persistent-queue)).
 
 ## `serve`: JSON-lines protocol (v1)
@@ -128,7 +128,7 @@ One request per line on stdin; one response per line on stdout with the same `id
 {"id":21,"cmd":"repeat","mode":"all"}          // off|one|all; without "mode": just the status
 {"id":22,"cmd":"shuffle","mode":"on","seed":7} // on|off|toggle (or "enabled":true/false); without "mode": just the status
 {"id":23,"cmd":"queue.set","items":["/music/a.flac","/music/b.flac"],"shuffle":true,"seed":7}  // turn shuffle on for the new queue
-{"id":24,"cmd":"radio","filter":{"artists":["Miles Davis"],"genres":["Jazz"],"years":[{"from":1955,"to":1965}],"formats":["flac"],"searches":["blue"],"hiRes":false,"favorites":false,"excludeArtists":["Kenny G"],"excludeYears":[{"from":1960,"to":1960}]},"play":true}
+{"id":24,"cmd":"radio","filter":{"artists":["Miles Davis"],"genres":["Jazz"],"years":[{"from":1955,"to":1965}],"formats":["flac"],"searches":["blue"],"hiRes":false,"favorites":false,"excludeArtists":["Kenny G"],"excludeYears":[{"from":1960,"to":1960}]},"play":true}  {"id":25,"cmd":"radio.end"}
                                                // endless random playback; every filter is optional ("filter" omitted = whole library); exclude* lists also: excludeAlbums, excludeGenres, excludeFormats, excludeSearches
 
 // events

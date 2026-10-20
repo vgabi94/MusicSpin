@@ -137,11 +137,32 @@ internal sealed class StubLibrary : ILibraryService
         }
     }
 
+    /// <summary>
+    /// Reads that fail, by method name (<c>nameof(TracksAsync)</c>, <c>nameof(AlbumTracksAsync)</c>,
+    /// <c>nameof(PlaylistEntriesAsync)</c>): each read fails with the exception until it is removed. <see cref="Busy"/> is a
+    /// busy library, <see cref="Corrupt"/> one that can't be read at all.
+    /// </summary>
+    public Dictionary<string, Exception> Failures { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>How many times each read was asked for, failed or not, by method name.</summary>
+    public Dictionary<string, int> Reads { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>A library that can't be read (not busy: trying again soon won't help).</summary>
+    public static MusicSpinException Corrupt() => new(MusicSpinErrorCode.LibraryCorrupt, "The library database is corrupt.");
+
+    public int ReadsOf(string method) => Reads.GetValueOrDefault(method);
+
+    private Task<T> Read<T>(string method, Func<T> read)
+    {
+        Reads[method] = ReadsOf(method) + 1;
+        return Failures.TryGetValue(method, out var failure) ? Task.FromException<T>(failure) : Task.FromResult(read());
+    }
+
     public Task<IReadOnlyList<TrackSummary>> TracksAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<TrackSummary>>([.. Tracks]);
+        => Read<IReadOnlyList<TrackSummary>>(nameof(TracksAsync), () => [.. Tracks]);
 
     public Task<IReadOnlyList<TrackSummary>> AlbumTracksAsync(string albumId, CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<TrackSummary>>([.. Tracks.Where(t => t.AlbumId == albumId)]);
+        => Read<IReadOnlyList<TrackSummary>>(nameof(AlbumTracksAsync), () => [.. Tracks.Where(t => t.AlbumId == albumId)]);
 
     /// <summary>How many times several albums' tracks were read (group Play reads them once).</summary>
     public int AlbumsTracksReads { get; private set; }
@@ -195,7 +216,7 @@ internal sealed class StubLibrary : ILibraryService
     public HashSet<string> MissingPaths { get; } = new(StringComparer.Ordinal);
 
     public Task<IReadOnlyList<PlaylistEntryItem>> PlaylistEntriesAsync(string playlistId, CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<PlaylistEntryItem>>([.. (PlaylistEntries.GetValueOrDefault(playlistId) ?? [])
+        => Read<IReadOnlyList<PlaylistEntryItem>>(nameof(PlaylistEntriesAsync), () => [.. (PlaylistEntries.GetValueOrDefault(playlistId) ?? [])
             .Select((t, i) => new PlaylistEntryItem(i + 1, t, !MissingPaths.Contains(t.Path)))]);
 
     /// <summary>Set: album lookups (a track's album) fail with it, a busy library's refusal say.</summary>

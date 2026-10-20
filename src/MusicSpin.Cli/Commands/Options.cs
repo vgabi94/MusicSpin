@@ -16,6 +16,11 @@ internal static class Options
         Description = "Output device id (from 'music-spin devices') or part of its name. Default: system default device.",
     };
 
+    public static Option<bool> NoTray() => new("--no-tray")
+    {
+        Description = "Don't show the tray icon for a background player this command starts (default: the trayIcon setting).",
+    };
+
     public static Option<bool> Exclusive() => new("--exclusive")
     {
         Description = "Open the device exclusively (WASAPI exclusive / ALSA hw / CoreAudio) for bit-perfect output.",

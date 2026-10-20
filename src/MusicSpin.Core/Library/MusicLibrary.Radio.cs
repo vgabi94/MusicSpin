@@ -159,14 +159,15 @@ public sealed partial class MusicLibrary
         });
     }
 
-    private static bool Excluded(ExcludeSet? x, string artistKey, string? albumArtistKey, string albumId, string? format, int? year, string? genre, Func<TrackRecord>? record)
+    private static bool Excluded(ExcludeSet? x, string artistKey, string? albumArtistKey, string albumId, string? format, int? year, string? genre, Func<TrackRecord>? record,
+        IReadOnlySet<string>? favorites = null)
         => x is not null
            && (x.ArtistKeys.Contains(artistKey) || (albumArtistKey is not null && x.ArtistKeys.Contains(albumArtistKey))
                || x.AlbumIds.Contains(albumId)
                || (format is not null && x.Formats.Contains(format))
                || (x.Years is { } ys && ys.Any(y => y.Contains(year)))
                || (x.Genres is { Count: > 0 } gs && GenreMatches(genre, gs))
-               || (x.Searches is { Count: > 0 } ss && record is not null && record() is { } t && ss.Any(s => LibrarySearch.Score(s, t) is not null)));
+               || (x.Searches is { Count: > 0 } ss && record is not null && record() is { } t && ss.Any(s => LibrarySearch.Score(s, t, favorites) is not null)));
 
     private IEnumerable<RadioCandidate> RadioMatches(RadioFilter filter, List<SearchQuery>? searches, HashSet<string>? genres, ExcludeSet? excludes)
     {
@@ -191,6 +192,14 @@ public sealed partial class MusicLibrary
         {
             yield break;
         }
+
+        // Favorites first (#49): which pool tracks are favorites, read once, so the picker can weight them.
+        var preferred = filter.PreferFavorites && !filter.Favorites ? ResolveFavorites().Ticks.Keys.ToHashSet(StringComparer.Ordinal) : null;
+
+        // is:favorite in --search or --exclude-search: the favorites, read once for the whole pool.
+        var searchFavorites = searches?.Any(s => s.Favorite) == true || excludes?.Searches?.Any(s => s.Favorite) == true
+            ? ResolveFavorites().Ticks.Keys.ToHashSet(StringComparer.Ordinal)
+            : null;
         bool Keep(int? year, string? genre)
             => (filter.Years is not { Count: > 0 } years || years.Any(y => y.Contains(year)))
                && (genres is null || (genres.Count > 0 && GenreMatches(genre, genres)));
@@ -224,12 +233,12 @@ public sealed partial class MusicLibrary
                 // Search rules need the folded keys: read whole records.
                 foreach (var t in q.ToEnumerable())
                 {
-                    if (Keep(t.Year, t.Genre) && (searches is not { Count: > 0 } || searches.Any(s => LibrarySearch.Score(s, t) is not null))
-                        && !Excluded(excludes, t.ArtistKey, t.AlbumArtistKey, t.AlbumId, t.Format, t.Year, t.Genre, () => t)
+                    if (Keep(t.Year, t.Genre) && (searches is not { Count: > 0 } || searches.Any(s => LibrarySearch.Score(s, t, searchFavorites) is not null))
+                        && !Excluded(excludes, t.ArtistKey, t.AlbumArtistKey, t.AlbumId, t.Format, t.Year, t.Genre, () => t, searchFavorites)
                         && (seen?.Add(t.Id) ?? true))
                     {
                         yield return new RadioCandidate(t.Id, t.Path, t.ArtistKey, t.AlbumId, t.Title, t.Artist, t.Album, t.EffectiveAlbumArtist,
-                            t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null);
+                            t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null, preferred?.Contains(t.Id) == true);
                     }
                 }
 
@@ -247,7 +256,7 @@ public sealed partial class MusicLibrary
                     && (seen?.Add(t.Id) ?? true))
                 {
                     yield return new RadioCandidate(t.Id, t.Path, t.ArtistKey, t.AlbumId, t.Title, t.Artist, t.Album, t.EffectiveAlbumArtist,
-                        t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null);
+                        t.TrackNumber, t.DurationSeconds > 0 ? t.DurationSeconds : null, preferred?.Contains(t.Id) == true);
                 }
             }
         }
@@ -265,7 +274,7 @@ public sealed partial class MusicLibrary
     }
 
     /// <summary>The projection read for radio pools.</summary>
-    private sealed class RadioRow
+    internal sealed class RadioRow
     {
         public string Id { get; set; } = string.Empty;
         public string Path { get; set; } = string.Empty;

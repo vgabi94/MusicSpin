@@ -76,7 +76,7 @@ Decoder: FFmpeg n9.0.2-23-g27b46f0fbc-20261008 (LGPL version 3 or later)
 music-spin play [<files>...] [--album <title|id>] [--artist <name>] [--genre <name>]... [--search <query>]
                 [--title <words>] [--album-contains <words>] [--artist-contains <words>] [--playlist <name>] [--favorites]
                 [--shuffle] [--seed <n>] [--start <seconds>] [--volume <0..1>]
-                [--backend auto|null] [--device <id|name>] [--exclusive]
+                [--backend auto|null] [--device <id|name>] [--exclusive] [--no-tray]
                 [--foreground|--wait] [--duration <seconds>]
 ```
 
@@ -99,6 +99,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--backend auto\|null` | `auto` = SoundFlow/miniaudio (WASAPI, CoreAudio, PulseAudio/ALSA). `null` = no sound card (decodes in real time and discards). Default `auto` |
 | `--device <id\|name>` | Output device id from `devices`, or part of its name. Default: system default |
 | `--exclusive` | Open the device exclusively (WASAPI exclusive / ALSA hw / CoreAudio) |
+| `--no-tray` | A player this command starts shows no tray icon (default: `trayIcon` in settings.json; see [Tray icon](playback.md#tray-icon)) |
 | `--foreground`, `--wait` | Play in this process and block until done (Ctrl+C: exit 130) |
 | `--duration <s>` | Stop after this many seconds. Implies `--foreground`. For a library queue it applies per track |
 
@@ -106,7 +107,8 @@ Use **exactly one source kind**: files, `--album` (optionally with `--artist`), 
 
 ## radio
 
-`music-spin radio [filters] [--backend] [--device] [--exclusive]`
+`music-spin radio [filters | --recent N | --station <name>] [--backend] [--device] [--exclusive]`  
+`music-spin radio list` · `music-spin radio save <name> [--recent N] [--replace]` · `music-spin radio delete <name>`
 
 Endless random playback of the library in the background player (started if needed). Returns at once with the player status, like `play`.
 
@@ -121,14 +123,15 @@ Endless random playback of the library in the background player (started if need
 | `--search <text>` | [Search syntax](library.md#search-syntax), as `music-spin search` |
 | `--hires` | Only hi-res tracks |
 | `--favorites` | Only [favorite](#favorite--favorites) tracks; narrows the other filters (`--favorites --genre jazz` plays favorite jazz tracks). No favorites yet, or none of them in the library: exit 12 with a message saying which |
+| `--prefer-favorites` | Play favorites **3× as often** as other tracks without limiting the station to them (a weight, not a filter: see [Playback → Radio](playback.md#radio)). Saved with the station; the description ends with `· favorites first` |
 | `--exclude-artist <name>` | Leave out tracks whose track **or** album artist is this (same matching as `--artist`) |
 | `--exclude-album <title\|id>` | Leave out this album |
 | `--exclude-genre <name>` | Leave out this genre (same matching as `--genre`; a `Rock; Pop` track is left out by either) |
 | `--exclude-year <N>` / `--exclude-years <A-B>` | Leave out these years / inclusive ranges (validated like `--years`) |
 | `--exclude-format <id>` | Leave out these formats; repeat or comma-separate |
-| `--exclude-search <text>` | Leave out tracks matching this search |
+| `--exclude-search <text>` | Leave out tracks matching this search (`--exclude-search is:favorite`: radio without your favorites) |
 
-Every filter except `--hires` and `--favorites` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
+Every filter except `--hires`, `--favorites` and `--prefer-favorites` can be repeated. **Values of one filter are ORed, different filters are ANDed**: `--artist A --artist B --years 1960-1969` plays tracks by A or B from the sixties. `--year` and `--years` are the same filter (ranges, ORed). No filter: the whole library.
 
 **Excludes:** every `--exclude-*` option is repeatable, and a track matching **any** exclude value is left out, **even when an include filter matches it** (exclude wins). Excludes alone narrow the whole library: `music-spin radio --exclude-genre Christmas --exclude-artist "Kenny G"`. Unknown names in `--exclude-artist`/`--exclude-album` are **ignored silently** (excluding something the library does not have is harmless, and they are not errors as they are in includes). There is no `--exclude-hires`: use `--exclude-format` or `--hires` instead (a "lossy only" station is `--format mp3 --format aac ...`). The description shows excludes last: `genre jazz · year 1955-1965 · excluding artist Kenny G`.
 
@@ -136,7 +139,23 @@ Every filter except `--hires` and `--favorites` can be repeated. **Values of one
 - Bad values (`--years 1999-1990`, `--years nineties`, `--year 10000`, an empty `--artist ""`, the same for the `--exclude-*` options): exit 2.
 - The status has `queueMode: "radio"` and `radio: {filter, description, poolSize}`; text output shows `[radio]` and a `Radio:` line. JSON adds `playerStarted`.
 
-How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` (without `--up-next`) or `load` end radio.
+How tracks are chosen, and how the other commands behave in radio mode, is in [Playback → Radio](playback.md#radio). In short: `next` never runs out, `prev` goes back through the last 100 tracks, `stop`/`pause`/`seek`/`volume` work as usual, `repeat one` replays the current track, `repeat all` has no effect, `shuffle` is exit 8 (radio is already random), `queue add` plays the added tracks next and then the station continues, and `play`, `queue clear` (without `--up-next`) or `load` replace the station.
+
+**`music-spin radio end`** ends the station and keeps playing: the current track plays on where it is (no reload, no gap), the [up-next](playback.md#up-next) tracks follow as a normal queue, and the station's remaining picks and its history are dropped. It takes no filters (exit 2). With no station on air it does nothing and prints the status. No running player: exit 13. MCP: `radio_end`; protocol: `{"cmd":"radio.end"}`.
+
+### Recent and saved stations
+
+The background player remembers the **last 6 stations started** (from the CLI, MCP or the app), newest first and without duplicates: starting a station that is already in the list (the same filters, in any order or case) moves it to the top. Stations can also be **saved under a name**. Both live in `stations.json` in the data folder; a station is stored as its filters (names, genres, years, album ids), never as file paths, so the file moves with a portable data folder.
+
+| Command | |
+|---|---|
+| `radio list` | The recent stations, numbered (1 = newest), and the saved ones by name, each with its description. JSON: `{recent: [{filter, description, startedAt}], saved: [{name, filter, description, savedAt}]}` |
+| `radio --recent N` | Start recent station N again. No such station: exit 12 |
+| `radio --station <name>` | Start a saved station (names are case-insensitive). Unknown: exit 12 |
+| `radio save <name>` | Save the station on air (asks the running player: none, exit 13; not on radio, exit 8). `--recent N` saves a recent station instead (no player needed). A taken name is exit 8 unless `--replace`; an empty name or more than 100 characters, exit 2 |
+| `radio delete <name>` | Delete a saved station. Unknown: exit 12 |
+
+`--recent` and `--station` start the station as it was stored: combining them with filters, or with each other, is exit 2. The filters are checked against the library as usual, so a station whose artist is gone is exit 12. An unreadable `stations.json` reads as empty (with a warning) and is moved to `stations.json.bad` at the next change. Recording a station never stops radio: if the file can't be written, the player logs it and plays on. MCP: `radio_stations`, `radio_save`, `radio_delete`, and `radio` with `recent` or `station`.
 
 ## pause, resume, toggle, stop
 
@@ -255,8 +274,9 @@ Details: [Music library](library.md).
 - Case- and diacritic-insensitive (`bjork` finds `Björk`, `beyonce` finds `Beyoncé`); punctuation is ignored.
 - **Every word** must match somewhere (`frahm says` finds "Says" by Nils Frahm). `"quoted phrases"` must appear as a whole in one field.
 - Field prefixes: `artist:`, `album:`, `title:`, `genre:` (a word or a `"phrase"`), `year:1959` / `year:1950-1959`.
+- `is:favorite` (alias `is:fav`): only favorite tracks, ANDed with the rest (`search "miles is:fav"`). The artists and albums sections are empty then.
 - Ranking: exact field > prefix > word start > anywhere.
-- Exit 2: empty text, no letters/digits (`!!!`), a prefix without a value (`artist:`), a bad year, more than 1,000 characters or 32 terms.
+- Exit 2: empty text, no letters/digits (`!!!`), a prefix without a value (`artist:`), a bad year, an unknown `is:` value (`is:liked`; the message lists the valid ones), more than 1,000 characters or 32 terms.
 
 ```console
 $ music-spin search 'artist:"nils frahm" year:2013 hammers'

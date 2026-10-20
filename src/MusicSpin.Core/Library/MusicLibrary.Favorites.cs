@@ -127,22 +127,14 @@ public sealed partial class MusicLibrary
     /// <param name="Records">Every favorite with the id of its track now, or null when its track is not in the library.</param>
     private sealed record ResolvedFavorites(Dictionary<string, long> Ticks, List<(FavoriteRecord Record, string? TrackId)> Records);
 
-    /// <summary>Each favorite's track: by its id, else (the file added back under a new id) by its path.</summary>
+    /// <summary>Each favorite's track: by its id, else (the file added back under a new id) by its path. Two queries at most.</summary>
     private ResolvedFavorites ResolveFavorites()
     {
-        var ticks = new Dictionary<string, long>(StringComparer.Ordinal);
-        var records = new List<(FavoriteRecord, string?)>();
-        foreach (var favorite in _db.Favorites.FindAll())
-        {
-            var id = _db.Tracks.Exists(Query.EQ("_id", favorite.Id)) ? favorite.Id
-                : _db.Tracks.FindOne(Query.EQ(nameof(TrackRecord.PathKey), favorite.PathKey))?.Id;
-            records.Add((favorite, id));
-            if (id is not null)
-            {
-                ticks[id] = Math.Max(ticks.GetValueOrDefault(id), favorite.FavoritedUtcTicks);
-            }
-        }
-
+        var (ticks, records) = FavoriteResolver.Resolve(
+            [.. _db.Favorites.FindAll()],
+            ids => _db.Tracks.Query().Where(IdIn(ids)).Select(t => t.Id).ToEnumerable().ToHashSet(StringComparer.Ordinal),
+            keys => _db.Tracks.Query().Where(BsonExpression.Create($"$.{nameof(TrackRecord.PathKey)} IN @0", new BsonArray(keys.Select(k => new BsonValue(k)))))
+                .Select(t => new { t.Id, t.PathKey }).ToEnumerable().ToDictionary(t => t.PathKey, t => t.Id, StringComparer.Ordinal));
         return new ResolvedFavorites(ticks, records);
     }
 
@@ -237,5 +229,45 @@ internal static class FavoriteMaintenance
                 db.Favorites.Update(favorite);
             }
         }
+    }
+}
+
+/// <summary>
+/// Resolves favorites to library tracks in two batched lookups, however many favorites there are: which favorite ids are
+/// tracks now, then the tracks at the paths of the rest (a file added back under a new id). The lookups are passed in so
+/// the batching itself can be tested.
+/// </summary>
+internal static class FavoriteResolver
+{
+    /// <param name="favorites">Every favorite record.</param>
+    /// <param name="existingIds">The ones of these track ids that are in the library.</param>
+    /// <param name="idsByPathKey">Path key → track id, for the library tracks at these path keys.</param>
+    public static (Dictionary<string, long> Ticks, List<(FavoriteRecord Record, string? TrackId)> Records) Resolve(
+        IReadOnlyList<FavoriteRecord> favorites,
+        Func<IReadOnlyCollection<string>, IReadOnlySet<string>> existingIds,
+        Func<IReadOnlyCollection<string>, IReadOnlyDictionary<string, string>> idsByPathKey)
+    {
+        var ticks = new Dictionary<string, long>(StringComparer.Ordinal);
+        var records = new List<(FavoriteRecord, string?)>(favorites.Count);
+        if (favorites.Count == 0)
+        {
+            return (ticks, records);
+        }
+
+        var present = existingIds([.. favorites.Select(f => f.Id).Distinct(StringComparer.Ordinal)]);
+        var missingKeys = favorites.Where(f => !present.Contains(f.Id) && !string.IsNullOrEmpty(f.PathKey))
+            .Select(f => f.PathKey).Distinct(StringComparer.Ordinal).ToList();
+        var byPath = missingKeys.Count == 0 ? new Dictionary<string, string>(StringComparer.Ordinal) : idsByPathKey(missingKeys);
+        foreach (var favorite in favorites)
+        {
+            var id = present.Contains(favorite.Id) ? favorite.Id : byPath.GetValueOrDefault(favorite.PathKey);
+            records.Add((favorite, id));
+            if (id is not null)
+            {
+                ticks[id] = Math.Max(ticks.GetValueOrDefault(id), favorite.FavoritedUtcTicks);
+            }
+        }
+
+        return (ticks, records);
     }
 }

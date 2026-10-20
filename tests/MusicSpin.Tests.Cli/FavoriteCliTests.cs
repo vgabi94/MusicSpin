@@ -248,6 +248,61 @@ public sealed class FavoriteCliTests : IAsyncDisposable
         await Ok("quit");
     }
 
+    // ---- is:favorite in search text (#50) ---------------------------------------------------------------------
+
+    [Fact]
+    public async Task Search_takes_is_favorite_with_empty_artist_and_album_sections()
+    {
+        await ScanAsync();
+        await Ok("favorite", "add", SoWhat);
+        await Ok("favorite", "add", Lossy);
+
+        var search = await Ok("search", "is:favorite");
+        Assert.Equal(["Lossy Song", "So What"], Titles(search.GetProperty("tracks")).Order(StringComparer.Ordinal));
+        Assert.Equal(0, search.GetProperty("artists").GetArrayLength());
+        Assert.Equal(0, search.GetProperty("albums").GetArrayLength());
+        Assert.Equal(["So What"], Titles((await Ok("search", "miles is:fav")).GetProperty("tracks")));
+        Assert.Equal(["Lossy Song", "So What"], Titles(await Ok("tracks", "--search", "is:fav")).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Play_and_playlist_add_take_is_favorite_in_their_search()
+    {
+        await ScanAsync();
+        await Ok("favorite", "add", SoWhat);
+        await Ok("favorite", "add", Freddie);
+
+        await Ok("play", "--search", "is:favorite kind", "--backend", "null");
+        Assert.Equal(["Freddie Freeloader", "So What"], (await QueueTitles()).Order(StringComparer.Ordinal));
+        await Ok("playlist", "create", "Loved");
+        Assert.Equal(2, (await Ok("playlist", "add", "Loved", "--search", "is:fav")).GetProperty("added").GetInt32());
+        await Ok("quit");
+    }
+
+    [Fact]
+    public async Task Radio_takes_is_favorite_in_search_and_exclude_search()
+    {
+        await ScanAsync();
+        await Ok("favorite", "add", SoWhat);
+        await Ok("favorite", "add", Lossy);
+
+        var loved = await Ok("radio", "--search", "is:favorite", "--backend", "null");
+        Assert.Equal(2, loved.GetProperty("radio").GetProperty("poolSize").GetInt32());
+        var rest = await Ok("radio", "--genre", "jazz", "--exclude-search", "is:favorite");
+        Assert.Equal(4, rest.GetProperty("radio").GetProperty("poolSize").GetInt32()); // 5 jazz tracks, So What left out
+        await Ok("quit");
+    }
+
+    [Fact]
+    public async Task An_unknown_is_value_is_a_usage_error_naming_the_valid_ones()
+    {
+        await ScanAsync();
+
+        Assert.Equal("Unknown 'is:loved': use is:favorite (or is:fav).", await Error(ExitCodes.Usage, "search", "is:loved"));
+        Assert.Contains("is:favorite", await Error(ExitCodes.Usage, "play", "--search", "is:", "--backend", "null"), StringComparison.Ordinal);
+        Assert.Contains("is:favorite", await Error(ExitCodes.Usage, "radio", "--exclude-search", "is:hires", "--backend", "null"), StringComparison.Ordinal);
+    }
+
     /// <summary>A clock that moves one second on every reading, so each favorite gets its own time.</summary>
     private sealed class SteppingClock : TimeProvider
     {

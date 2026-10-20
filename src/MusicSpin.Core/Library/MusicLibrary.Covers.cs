@@ -55,7 +55,7 @@ public sealed partial class MusicLibrary
         => CoverCache.Prune(Directory.CoversDirectory, _db.Albums.Query().Select(a => a.Id).ToList().ToHashSet(StringComparer.Ordinal));
 
     /// <summary>The track fields a cover lookup needs.</summary>
-    private sealed class CoverRow
+    internal sealed class CoverRow
     {
         public string AlbumId { get; set; } = string.Empty;
         public string Path { get; set; } = string.Empty;

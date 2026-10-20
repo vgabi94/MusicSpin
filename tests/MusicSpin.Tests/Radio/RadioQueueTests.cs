@@ -82,6 +82,24 @@ public sealed class RadioQueueTests : IDisposable
     }
 
     [Fact]
+    public void RadioStarted_fires_once_per_started_station_but_not_for_failures_or_restores()
+    {
+        var queue = Create(Pool(10, artists: 10));
+        var started = new List<RadioFilter>();
+        queue.RadioStarted += (_, f) => started.Add(f);
+        var jazz = new RadioFilter { Genres = ["Jazz"] };
+
+        queue.StartRadio(jazz);
+        Assert.Throws<MusicSpinException>(() => queue.StartRadio(new RadioFilter { Years = [new YearRange(1999, 1990)] }));
+        var snapshot = queue.Snapshot(DateTimeOffset.UnixEpoch);
+        queue.RadioPool = _ => [];
+        Assert.Throws<MusicSpinException>(() => queue.StartRadio(new RadioFilter()));
+        queue.Restore(snapshot);
+
+        Assert.Same(jazz, Assert.Single(started));
+    }
+
+    [Fact]
     public void Radio_can_start_without_playing()
     {
         var queue = Create(Pool(5, artists: 5));
@@ -355,6 +373,132 @@ public sealed class RadioQueueTests : IDisposable
         queue.StartRadio(new RadioFilter());
         queue.Load(_pool[1].Path);
         Assert.Equal("queue", queue.Status().QueueMode);
+    }
+
+    [Fact]
+    public void End_radio_keeps_the_current_track_where_it_is_and_the_up_next_entries_and_drops_the_picks()
+    {
+        var queue = Create(Pool(30, artists: 30));
+        var extra = PlayerTestKit.Tracks(2, 30, "/music/extra");
+        foreach (var p in extra.Paths)
+        {
+            _decoders.Files[p] = extra.Decoders.Files[p];
+        }
+
+        queue.StartRadio(new RadioFilter());
+        queue.Next();
+        queue.Next(); // two radio tracks of history before the current one
+        queue.Add([new QueueItem(extra.Paths[0]), new QueueItem(extra.Paths[1])]);
+        queue.Seek(TimeSpan.FromSeconds(12));
+        queue.Pause();
+        var before = queue.Status();
+        var loads = 0;
+        queue.TrackLoaded += (_, _) => Interlocked.Increment(ref loads);
+        var changes = 0;
+        queue.QueueChanged += (_, _) => Interlocked.Increment(ref changes);
+
+        var ended = queue.EndRadio();
+
+        Assert.Equal("queue", ended.QueueMode);
+        Assert.Null(ended.Radio);
+        Assert.False(queue.IsRadio);
+        Assert.Equal(PlayerState.Paused, ended.State);
+        Assert.Equal(before.Item!.Path, ended.Item!.Path);
+        Assert.Equal(before.PositionSeconds, ended.PositionSeconds, 3); // not reloaded, not rewound: no gap
+        Assert.Equal(0, Volatile.Read(ref loads));
+        Assert.Equal(1, Volatile.Read(ref changes));
+        Assert.Equal((0, 3, 2), (ended.QueueIndex, ended.QueueLength, ended.UpNext));
+        Assert.Equal([before.Item.Path, extra.Paths[0], extra.Paths[1]], queue.List().Items.Select(e => e.Item.Path));
+
+        // A normal queue now: the up-next entries play, then it ends instead of picking more.
+        Assert.Equal(extra.Paths[0], queue.Next().Item!.Path);
+        Assert.Equal(extra.Paths[1], queue.Next().Item!.Path);
+        Fails(MusicSpinErrorCode.InvalidState, () => queue.Next());
+        Assert.Equal(3, queue.Status().QueueLength);
+        Assert.Null(queue.Snapshot(DateTimeOffset.UnixEpoch).Radio);
+    }
+
+    [Fact]
+    public void End_radio_while_playing_plays_on_and_with_nothing_up_next_leaves_just_the_current_track()
+    {
+        var queue = Create(Pool(30, artists: 30));
+        var started = queue.StartRadio(new RadioFilter());
+        var loads = 0;
+        queue.TrackLoaded += (_, _) => Interlocked.Increment(ref loads);
+
+        var ended = queue.EndRadio();
+
+        Assert.Equal(PlayerState.Playing, ended.State);
+        Assert.Equal(started.Item!.Path, ended.Item!.Path);
+        Assert.Equal((0, 1, 0), (ended.QueueIndex, ended.QueueLength, ended.UpNext));
+        Assert.Equal(0, Volatile.Read(ref loads));
+        // Shuffle is allowed again (it was refused on air).
+        Assert.True(queue.SetShuffle(true).Shuffle);
+    }
+
+    [Fact]
+    public void Repeat_all_after_end_radio_wraps_only_the_kept_tracks()
+    {
+        var queue = Create(Pool(30, artists: 30));
+        var extra = PlayerTestKit.Tracks(1, 30, "/music/extra");
+        _decoders.Files[extra.Paths[0]] = extra.Decoders.Files[extra.Paths[0]];
+        queue.StartRadio(new RadioFilter());
+        var current = queue.Next().Item!.Path;
+        queue.Add([new QueueItem(extra.Paths[0])]);
+        queue.EndRadio();
+        queue.SetRepeat(RepeatMode.All);
+
+        Assert.Equal(extra.Paths[0], queue.Next().Item!.Path);
+        Assert.Equal(current, queue.Next().Item!.Path); // wraps to the kept track, not to the radio history
+        Assert.Equal(2, queue.Status().QueueLength);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void End_radio_off_air_changes_nothing_and_after_dispose_throws()
+    {
+        var queue = Create(Pool(5, artists: 5));
+        var other = PlayerTestKit.Tracks(2, 30, "/music/other");
+        foreach (var p in other.Paths)
+        {
+            _decoders.Files[p] = other.Decoders.Files[p];
+        }
+
+        queue.SetQueue([new QueueItem(other.Paths[0]), new QueueItem(other.Paths[1])]);
+        var changes = 0;
+        queue.QueueChanged += (_, _) => Interlocked.Increment(ref changes);
+
+        var status = queue.EndRadio();
+
+        Assert.Equal(("queue", 2, 0), (status.QueueMode, status.QueueLength, status.QueueIndex));
+        Assert.Equal(other.Paths, queue.List().Items.Select(e => e.Item.Path));
+        Assert.Equal(PlayerState.Playing, status.State);
+        Assert.Equal(0, Volatile.Read(ref changes));
+
+        queue.Clear();
+        Assert.Equal(0, queue.EndRadio().QueueLength); // an empty player too
+
+        queue.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => queue.EndRadio());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void End_radio_after_the_station_ran_dry_keeps_what_is_left()
+    {
+        var queue = Create(Pool(30, artists: 30));
+        queue.StartRadio(new RadioFilter());
+        queue.RadioPool = _ => throw new MusicSpinException(MusicSpinErrorCode.LibraryLocked, "busy");
+        for (var i = 0; i < 12; i++)
+        {
+            queue.Next(); // top-ups fail: the station keeps playing what it queued
+        }
+
+        var current = queue.Status().Item!.Path;
+        var ended = queue.EndRadio();
+
+        Assert.Equal((current, 0, 1), (ended.Item!.Path, ended.QueueIndex, ended.QueueLength));
+        Assert.Equal("queue", ended.QueueMode);
     }
 
     [Fact]

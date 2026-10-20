@@ -23,6 +23,7 @@ internal static class PlayCommand
         Options.Validated(volume, v => v is < 0f or > 1f ? "--volume must be between 0.0 and 1.0." : null);
         var start = new Option<double>("--start") { Description = "Start position in seconds (first track only)." };
         Options.Validated(start, v => v < 0 || !double.IsFinite(v) ? "--start must be 0 or greater." : null);
+        var noTray = Options.NoTray();
         var foreground = new Option<bool>("--foreground", "--wait")
         {
             Description = "Play in this process and block until done (the pre-background behaviour). Ctrl+C stops (exit 130).",
@@ -44,6 +45,7 @@ internal static class PlayCommand
         command.Add(start);
         command.Add(foreground);
         command.Add(duration);
+        command.Add(noTray);
         command.Validators.Add(r =>
         {
             source.Validate(r);
@@ -79,7 +81,7 @@ internal static class PlayCommand
             var seed = QueueSource.PickSeed(parseResult.GetValue(source.Shuffle), parseResult.GetValue(source.Seed));
             var requestedBackend = parseResult.GetValue(backend)!;
             var (client, started) = await PlayerSupport.ConnectOrStartAsync(runner, parseResult, requestedBackend,
-                parseResult.GetValue(device), parseResult.GetValue(exclusive), cancellationToken).ConfigureAwait(false);
+                parseResult.GetValue(device), parseResult.GetValue(exclusive), cancellationToken, parseResult.GetValue(noTray)).ConfigureAwait(false);
             await using (client.ConfigureAwait(false))
             {
                 var warnings = resolved.Warnings;
