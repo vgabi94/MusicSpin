@@ -137,10 +137,11 @@ public sealed class AudioSettingsTests
     }
 
     [AvaloniaFact]
-    public async Task A_restart_starts_the_new_player_only_once_the_old_one_has_stopped()
+    public async Task A_restart_starts_the_new_player_only_once_the_old_one_has_stopped_and_nothing_else_reaches_the_old_one()
     {
         await using var app = await OpenAsync();
         await OpenSettingsAsync(app);
+        await PlayingAsync(app); // the poll runs while playing
         var disconnected = false;
         app.ViewModel.Player.PropertyChanged += (_, e) =>
             disconnected |= e.PropertyName == nameof(PlayerViewModel.IsConnected) && !app.ViewModel.Player.IsConnected;
@@ -152,16 +153,31 @@ public sealed class AudioSettingsTests
         await Gui.UntilAsync(() => app.Scripted.Count("quit") == 1 && app.Scripted.Subscribers == 0, "the old player stopping");
         Gui.Settle();
 
+        // Meanwhile: polls come due, and a media key sends next.
+        for (var i = 0; i < 4; i++)
+        {
+            app.Time.Advance(PlayerViewModel.PollInterval);
+            Gui.Settle();
+        }
+
+        await app.ViewModel.Player.SendAsync("next");
+        Gui.Settle();
+
         Assert.False(choosing.IsCompleted);
         Assert.True(Audio(app).IsRestarting);
         Assert.Equal(1, app.Scripted.AppStarts);
-        Assert.Equal(1, app.Scripted.Count("subscribe")); // nothing reconnected to the player on its way out
+        string[] sinceQuit = [.. app.Scripted.Requests.Select(r => r.Cmd).SkipWhile(c => c != "quit").Skip(1)];
+        Assert.Empty(sinceQuit); // no status, no next, no subscribe: the old player gets nothing after its quit
         Assert.False(disconnected);
 
         teardown.SetResult();
         await choosing;
         await RestartedAsync(app, 2);
+        await Gui.UntilAsync(() => app.Scripted.Count("next") == 1, "the held next sent");
+
         Assert.Equal(new PlayerOutput("USB DAC", false), app.Scripted.StartOutputs.Last());
+        string[] after = [.. app.Scripted.Requests.Select(r => r.Cmd).SkipWhile(c => c != "quit").Where(c => c is "subscribe" or "resume" or "next")];
+        Assert.Equal(["subscribe", "resume", "next"], after); // to the new player, after the resume
         Assert.False(disconnected);
         Assert.True(app.ViewModel.Player.StartedPlayer);
     }
@@ -180,8 +196,14 @@ public sealed class AudioSettingsTests
             await Gui.UntilAsync(() => app.ViewModel.Banner == PlayerViewModel.NotStoppedMessage, "the notice");
             Assert.Equal(1, app.Scripted.AppStarts);
             Assert.False(Audio(app).IsRestarting);
-            Assert.Equal("USB DAC", new SettingsStore(app.Data).Load().OutputDevice); // the next start uses it
+            await Gui.UntilAsync(() => !app.ViewModel.Player.IsConnected, "disconnected");
         }
+
+        // As the notice says: the next start, here by pressing play, uses the new output.
+        await app.ViewModel.Player.ResumeAsync();
+
+        Assert.Equal(2, app.Scripted.AppStarts);
+        Assert.Equal(new PlayerOutput("USB DAC", false), app.Scripted.StartOutputs.Last());
     }
 
     [AvaloniaFact]

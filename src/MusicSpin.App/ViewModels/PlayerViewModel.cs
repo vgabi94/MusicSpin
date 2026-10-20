@@ -52,6 +52,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     private bool _disposed;
     private readonly Func<PlayerOutput> _output;
 
+    /// <summary>Set while <see cref="RestartAsync"/> runs: commands, losses and reconnects wait for it or leave it be.</summary>
+    private volatile TaskCompletionSource? _restarting;
+
     /// <summary>Commands held while the turntable scene plays (see <see cref="HoldInput"/>), in order.</summary>
     private List<(string Cmd, object? Args)>? _held;
 
@@ -322,25 +325,67 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     public Task StartRadioAsync(RadioFilter? filter = null) => SendAsync("radio", new { filter = filter ?? new RadioFilter(), play = true });
 
     /// <summary>A restart's quit wasn't done within its wait: the old player still holds the data folder.</summary>
-    public const string NotStoppedMessage = "The player didn't stop in time, so it keeps its output for now. Try the change again.";
+    public const string NotStoppedMessage = "The player took too long to stop. The new output is saved, and the player uses it the next time it starts.";
 
     /// <summary>
     /// Settings › Audio: output options apply only when the player starts, so it is restarted with the output saved now:
     /// quit (it saves its queue and position), started again (it restores them), and resumed if it was playing.
-    /// False when that failed (a notice says why).
+    /// Meanwhile nothing else reaches the old player: the poll stops, playback input is held (sent to the new player
+    /// after the resume, in order), and any other command waits. False when the restart failed (a notice says why).
     /// </summary>
     public async Task<bool> RestartAsync()
     {
         var (playing, owned) = (IsPlaying, StartedPlayer);
+        var restart = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _restarting = restart;
+        var hold = !IsInputHeld; // the turntable scene may hold it already: then the scene releases it
+        if (hold)
+        {
+            HoldInput();
+        }
 
-        // The event stream first: a quitting player ends its subscriptions before it has stopped, and that end must not
-        // count as a loss here (it would drop the connection the quit is waiting on, and start a player too early).
+        StopTimers(); // no poll on the quitting connection; the new connection's status starts them again
+        bool done;
+        try
+        {
+            done = await RestartPlayerAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _restarting = null;
+            restart.SetResult();
+        }
+
+        if (!done)
+        {
+            await LostAsync().ConfigureAwait(false); // disconnected, and looking for a player (one the CLI starts)
+        }
+        else
+        {
+            StartedPlayer = owned; // who owns the player doesn't change: one the CLI started keeps playing when the window closes
+            done = !playing || await SendAsync("resume", null, holdable: false).ConfigureAwait(false);
+        }
+
+        if (hold)
+        {
+            _ui.Post(() => _ = ReleaseInputAsync());
+        }
+
+        return done;
+    }
+
+    /// <summary>Quits the player and starts it again; false (with a notice) when that failed.</summary>
+    private async Task<bool> RestartPlayerAsync()
+    {
+        // Both connections are taken out first. The event stream: a quitting player ends its subscriptions before it has
+        // stopped, and that end must not count as a loss. The command connection: the quit reads it until the player
+        // has stopped, and nothing else may use it meanwhile.
         if (Interlocked.Exchange(ref _events, null) is { } events)
         {
             await events.DisposeAsync().ConfigureAwait(false);
         }
 
-        if (_client is { } client)
+        if (Interlocked.Exchange(ref _client, null) is { } client)
         {
             try
             {
@@ -354,13 +399,15 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             {
                 return false; // closing
             }
+            finally
+            {
+                await client.DisposeAsync().ConfigureAwait(false);
+            }
 
-            await DropConnectionAsync().ConfigureAwait(false);
             if (PlayerHost.IsLockHeld(_connector.Endpoint))
             {
                 // Not stopped within the wait (the quit closes its connection only once the player is gone): a player
                 // started now would find the old one's lock and give up.
-                await LostAsync().ConfigureAwait(false);
                 Raise(NotStoppedMessage);
                 return false;
             }
@@ -369,6 +416,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         try
         {
             await EnsureConnectedAsync(start: true).ConfigureAwait(false);
+            return true;
         }
         catch (OperationCanceledException) when (_life.IsCancellationRequested)
         {
@@ -376,14 +424,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         }
         catch (MusicSpinException ex)
         {
-            await LostAsync().ConfigureAwait(false); // disconnected, and looking for a player (one the CLI starts)
             Raise(ex.Message);
             return false;
         }
-
-        // Who owns the player doesn't change: one the CLI started keeps playing when the window closes, as before.
-        StartedPlayer = owned;
-        return !playing || await SendAsync("resume", null, holdable: false).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -449,6 +492,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         {
             held.Add((cmd, args));
             return true;
+        }
+
+        if (_restarting is { } restarting)
+        {
+            await restarting.Task.ConfigureAwait(false); // the new player gets it (the old one is quitting)
         }
 
         try
@@ -744,9 +792,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     private async Task LostAsync(PlayerClient? events = null)
     {
-        if (_life.IsCancellationRequested)
+        if (_life.IsCancellationRequested || _restarting is not null)
         {
-            return;
+            return; // closing, or restarting: the restart says how it went
         }
 
         if (events is not null)
@@ -804,6 +852,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     private async Task ReconnectAsync(ITimer timer)
     {
+        if (_restarting is not null)
+        {
+            return; // the restart connects; the next tick looks again if it failed
+        }
+
         try
         {
             await EnsureConnectedAsync(start: false).ConfigureAwait(false);
