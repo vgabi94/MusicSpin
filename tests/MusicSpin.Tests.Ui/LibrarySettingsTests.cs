@@ -51,6 +51,24 @@ public sealed class LibrarySettingsTests
         Gui.Settle();
     }
 
+    /// <summary>
+    /// The quiet time passes until no change waits: the watch reports, and the scan it asks for (posted to the UI thread)
+    /// runs. A late event of the same write re-arms the wait, so the time passes again then.
+    /// </summary>
+    private static async Task LetTheWatchReportAsync(AppHarness app)
+    {
+        await Gui.UntilAsync(() =>
+        {
+            if (Library(app).WatchHasPending)
+            {
+                app.Time.Advance(LibrarySettingsViewModel.WatchDebounce);
+            }
+
+            return !Library(app).WatchHasPending;
+        }, "the watch reporting");
+        Gui.Settle();
+    }
+
     // ---- the empty library -------------------------------------------------------------------------------------
 
     [AvaloniaFact]
@@ -296,6 +314,54 @@ public sealed class LibrarySettingsTests
         Click(app, watch);
         Assert.False(new SettingsStore(app.Data).Load().WatchLibrary);
         Assert.Equal(0, Library(app).WatchedFolders);
+    }
+
+    [AvaloniaFact]
+    public async Task With_the_watch_on_an_album_added_to_a_folder_is_scanned_in_once_the_folder_goes_quiet()
+    {
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Music = TwoAlbums, Settings = new AppSettings { WatchLibrary = true } });
+        await Gui.UntilAsync(() => Library(app).WatchedFolders == 1, "the watch");
+        Assert.Equal(2, app.ViewModel.AlbumsPage.Albums.Count);
+
+        TestImages.Album(app.Music, "Giant Steps", "John Coltrane", tracks: 2, year: 1960);
+        await Gui.UntilAsync(() => Library(app).WatchHasPending, "the watch seeing the new files");
+        Assert.False(app.ViewModel.LibraryScan.IsScanning); // nothing until the folder is quiet
+
+        await LetTheWatchReportAsync(app);
+        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 3, "the new album after the scan");
+
+        Assert.Contains("Giant Steps", app.ViewModel.AlbumsPage.Albums.Select(a => a.Title));
+    }
+
+    [AvaloniaFact]
+    public async Task Changes_seen_while_a_scan_runs_make_one_more_scan_after_it_not_one_each()
+    {
+        var watched = Directory.CreateDirectory(Path.Combine(TempDir.Create("watch"), "Music")).FullName;
+        var library = SampleLibrary.Create();
+        library.Folders.Add(new FolderInfo(watched, true, 0, DateTimeOffset.UnixEpoch, null));
+        await using var app = await AppHarness.OpenAsync(new AppOptions
+        {
+            Scripted = true, Library = library, Covers = SampleLibrary.Covers(), Settings = new AppSettings { WatchLibrary = true },
+        });
+        await Gui.UntilAsync(() => Library(app).WatchedFolders == 1, "the watch");
+        var hold = library.ScanHold = new TaskCompletionSource();
+        var first = app.ViewModel.LibraryScan.ScanAsync();
+        Assert.Equal(1, library.Scans);
+
+        foreach (var name in new[] { "a.flac", "b.flac" })
+        {
+            await File.WriteAllBytesAsync(Path.Combine(watched, name), [1, 2, 3]);
+            await Gui.UntilAsync(() => Library(app).WatchHasPending, $"the watch seeing {name}");
+            await LetTheWatchReportAsync(app);
+        }
+
+        Assert.Equal(1, library.Scans); // both wait for the running scan
+        library.ScanHold = null;
+        hold.SetResult();
+        await first;
+        await Gui.UntilAsync(() => !app.ViewModel.LibraryScan.IsScanning, "the scans done");
+
+        Assert.Equal(2, library.Scans);
     }
 
     [AvaloniaFact]

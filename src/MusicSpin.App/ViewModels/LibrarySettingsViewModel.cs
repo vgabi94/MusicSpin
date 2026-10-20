@@ -125,6 +125,9 @@ public sealed partial class LibrarySettingsViewModel : ObservableObject, IDispos
     /// <summary>The folders are being watched now (tests read it).</summary>
     public int WatchedFolders => _watcher?.WatchedFolders ?? 0;
 
+    /// <summary>The watch saw a change and waits for the folders to go quiet (tests read it).</summary>
+    internal bool WatchHasPending => _watcher?.HasPending ?? false;
+
     /// <summary>Reads the folders, the last scan and the issues; starts the watch when it is on.</summary>
     public Task LoadAsync() => _notices.GuardAsync(async () =>
     {
