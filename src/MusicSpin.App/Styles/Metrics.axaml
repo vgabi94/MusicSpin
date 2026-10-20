@@ -518,6 +518,7 @@
       s = 66.7; the platter s at .04 s, the record .98 s at .05 s; the arm .14 s wide and .8 s long, .07 s from the
       top right, parked at -4°.
     -->
+    <sys:Double x:Key="DesignRowSpacing">10</sys:Double>
     <sys:Double x:Key="DeckPreviewWidth">88</sys:Double>
     <sys:Double x:Key="DeckPreviewHeight">72</sys:Double>
     <CornerRadius x:Key="DeckPreviewRadius">6</CornerRadius>
@@ -578,6 +579,11 @@
       turned 18°.
     -->
     <sys:Double x:Key="DeckWidth">528</sys:Double>
+    <!-- The designs on the studies' bench (Styles/Decks.axaml) draw in deck units, 1320 × 1080, scaled to DeckWidth:
+         0.4 px each, so their record's grooves are 2.4 / 0.4 units apart. -->
+    <sys:Double x:Key="KitDeckUnits">1320</sys:Double>
+    <sys:Double x:Key="KitDeckUnitsHigh">1080</sys:Double>
+    <sys:Double x:Key="KitGroovePitch">6</sys:Double>
     <sys:Double x:Key="DeckHeight">432</sys:Double>
     <CornerRadius x:Key="DeckRadius">18</CornerRadius>
     <sys:Double x:Key="DeckPlatterSize">400</sys:Double>

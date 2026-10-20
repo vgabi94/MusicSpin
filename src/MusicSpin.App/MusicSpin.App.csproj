@@ -20,11 +20,12 @@
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Svg.Controls.Avalonia" />
     <PackageReference Include="Tmds.DBus.Protocol" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The tray icon's image (#83). -->
+    <!-- The tray icon's image (#83); the turntable designs' drawings and fonts (#25–#30). -->
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 

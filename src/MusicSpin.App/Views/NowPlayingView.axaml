@@ -16,11 +16,30 @@
         <DataTemplate DataType="services:ClassicDeck">
             <controls:ClassicDeckView />
         </DataTemplate>
+        <!-- The designs from the deck studies (#25–#30): Styles/Decks.axaml. -->
+        <DataTemplate DataType="services:WalnutDeck">
+            <controls:KitDeckView Theme="{StaticResource WalnutDeck}" />
+        </DataTemplate>
+        <DataTemplate DataType="services:AluminiumDeck">
+            <controls:KitDeckView Theme="{StaticResource AluminiumDeck}" />
+        </DataTemplate>
+        <DataTemplate DataType="services:CarbonDeck">
+            <controls:KitDeckView Theme="{StaticResource CarbonDeck}" />
+        </DataTemplate>
+        <DataTemplate DataType="services:PianoDeck">
+            <controls:KitDeckView Theme="{StaticResource PianoDeck}" />
+        </DataTemplate>
+        <DataTemplate DataType="services:LinearDeck">
+            <controls:KitDeckView Theme="{StaticResource LinearDeck}" />
+        </DataTemplate>
+        <DataTemplate DataType="services:AcrylicDeck">
+            <controls:KitDeckView Theme="{StaticResource AcrylicDeck}" />
+        </DataTemplate>
     </UserControl.DataTemplates>
 
     <Panel>
         <Image Name="Backdrop" Classes="npBackground" Source="{Binding NowPlaying.Cover}" />
-        <Border Classes="npVeil" />
+        <Border Name="Veil" Classes="npVeil" />
 
         <Button Name="CloseNowPlaying"
                 Classes="npClose"
@@ -37,7 +56,10 @@
                                Angle="{Binding SpinClock.Angle}"
                                Arm="{Binding NowPlaying.Arm}"
                                IsSpinning="{Binding NowPlaying.IsSpinning}"
-                               IsEmpty="{Binding NowPlaying.IsEmpty}" />
+                               IsEmpty="{Binding NowPlaying.IsEmpty}"
+                               Speed="{Binding Settings.RecordSpeed}"
+                               Backdrop="{Binding #Backdrop}"
+                               BackdropVeil="{Binding #Veil}" />
 
             <!-- The album takes the column, up to its widest (mockup: .np-info, max-width). -->
             <Grid Grid.Column="1">

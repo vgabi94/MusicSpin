@@ -22,6 +22,14 @@
             <!-- A radio tag's edge under the pointer: the text colour at 28% (mockup: .tag:hover). -->
             <SolidColorBrush x:Key="TagHoverEdgeBrush" Color="#47EEF0F4" />
             <Color x:Key="CardShadowColor">#CC000000</Color>
+            <!-- Smoked Acrylic's plinth (#30, 6-smoked-acrylic.html): the smoke tint and its light (linear-gradient(155deg, …)). -->
+            <SolidColorBrush x:Key="AcrylicTintBrush" Color="#A81A1C22" />
+            <LinearGradientBrush x:Key="AcrylicSheenBrush" StartPoint="25.4%,-14.5%" EndPoint="74.6%,114.5%">
+                <GradientStop Color="#1FFFFFFF" Offset="0" />
+                <GradientStop Color="#08FFFFFF" Offset="0.35" />
+                <GradientStop Color="#00FFFFFF" Offset="0.6" />
+                <GradientStop Color="#2E000000" Offset="1" />
+            </LinearGradientBrush>
             <!-- The Classic deck's plinth (mockup: .deck, linear-gradient(160deg, …)). -->
             <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
                 <GradientStop Color="#2A2C31" Offset="0" />
@@ -58,6 +66,13 @@
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#14000000" />
             <SolidColorBrush x:Key="TagHoverEdgeBrush" Color="#471B1C1F" />
             <Color x:Key="CardShadowColor">#66000000</Color>
+            <SolidColorBrush x:Key="AcrylicTintBrush" Color="#B82A2D35" />
+            <LinearGradientBrush x:Key="AcrylicSheenBrush" StartPoint="25.4%,-14.5%" EndPoint="74.6%,114.5%">
+                <GradientStop Color="#40FFFFFF" Offset="0" />
+                <GradientStop Color="#10FFFFFF" Offset="0.35" />
+                <GradientStop Color="#00FFFFFF" Offset="0.6" />
+                <GradientStop Color="#1A000000" Offset="1" />
+            </LinearGradientBrush>
             <LinearGradientBrush x:Key="DeckPlinthBrush" StartPoint="33%,0%" EndPoint="67%,100%">
                 <GradientStop Color="#F7F5F1" Offset="0" />
                 <GradientStop Color="#DCD8D0" Offset="1" />

@@ -1,0 +1,41 @@
+<!-- Walnut & Brass (docs/design/mockup/decks/1-walnut-brass.html): the oiled walnut plinth and its brass inlay line, the brass arm board, rest, cue lever and the screwed name plate. Deck units. The name, the platter, the record and the arm are drawn on top. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1080">
+  <defs>
+    <clipPath id="plinth"><rect width="1320" height="1080" rx="22"/></clipPath>
+    <linearGradient id="light" gradientUnits="userSpaceOnUse" x1="409.24" y1="-148.95" x2="910.76" y2="1228.95"><stop offset="0.0000" stop-color="#ffffff" stop-opacity="0.090"/><stop offset="0.3800" stop-color="#000000" stop-opacity="0.000"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.322"/></linearGradient>
+    <radialGradient id="knotA" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(369.60 324.00) scale(1188.00 194.40)"><stop offset="0.0000" stop-color="#2a1508" stop-opacity="0.333"/><stop offset="0.7000" stop-color="#2a1508" stop-opacity="0.000"/></radialGradient>
+    <radialGradient id="knotB" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(924.00 799.20) scale(924.00 151.20)"><stop offset="0.0000" stop-color="#2a1508" stop-opacity="0.267"/><stop offset="0.7000" stop-color="#2a1508" stop-opacity="0.000"/></radialGradient>
+    <linearGradient id="grainA" gradientUnits="userSpaceOnUse" spreadMethod="repeat" x1="650.38" y1="-11.35" x2="650.71" y2="7.64"><stop offset="0.0000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.3684" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.4211" stop-color="#1f0f05" stop-opacity="0.149"/><stop offset="0.5263" stop-color="#1f0f05" stop-opacity="0.149"/><stop offset="0.5789" stop-color="#000000" stop-opacity="0.000"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.000"/></linearGradient>
+    <linearGradient id="grainB" gradientUnits="userSpaceOnUse" spreadMethod="repeat" x1="674.58" y1="-16.90" x2="674.24" y2="-3.91"><stop offset="0.0000" stop-color="#ffffff" stop-opacity="0.035"/><stop offset="0.2308" stop-color="#ffffff" stop-opacity="0.035"/><stop offset="0.3077" stop-color="#000000" stop-opacity="0.000"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.000"/></linearGradient>
+    <linearGradient id="wood" gradientUnits="userSpaceOnUse" x1="660.00" y1="-0.00" x2="660.00" y2="1080.00"><stop offset="0.0000" stop-color="#5d3920" stop-opacity="1.000"/><stop offset="0.3500" stop-color="#4b2d19" stop-opacity="1.000"/><stop offset="0.6200" stop-color="#613c23" stop-opacity="1.000"/><stop offset="1.0000" stop-color="#4a2c18" stop-opacity="1.000"/></linearGradient>
+    <radialGradient id="brassR0" gradientUnits="userSpaceOnUse" cx="1156.96" cy="155.44" r="153.6"><stop offset="0" stop-color="#fff1c4"/><stop offset=".35" stop-color="#d9b56b"/><stop offset=".8" stop-color="#8a6527"/><stop offset="1" stop-color="#5c4116"/></radialGradient>
+    <radialGradient id="brassR1" gradientUnits="userSpaceOnUse" cx="1147.92" cy="641.88" r="27.2"><stop offset="0" stop-color="#fff1c4"/><stop offset=".35" stop-color="#d9b56b"/><stop offset=".8" stop-color="#8a6527"/><stop offset="1" stop-color="#5c4116"/></radialGradient>
+    <radialGradient id="brassR2" gradientUnits="userSpaceOnUse" cx="1267.2" cy="332.8" r="32"><stop offset="0" stop-color="#fff1c4"/><stop offset=".35" stop-color="#d9b56b"/><stop offset=".8" stop-color="#8a6527"/><stop offset="1" stop-color="#5c4116"/></radialGradient>
+    <linearGradient id="brassPlate3" gradientUnits="userSpaceOnUse" x1="1264" y1="340" x2="1264" y2="430"><stop offset="0" stop-color="#f0d699"/><stop offset=".5" stop-color="#c9a35a"/><stop offset="1" stop-color="#9c7834"/></linearGradient>
+    <linearGradient id="brassPlate4" gradientUnits="userSpaceOnUse" x1="36" y1="978" x2="36" y2="1048"><stop offset="0" stop-color="#f0d699"/><stop offset=".5" stop-color="#c9a35a"/><stop offset="1" stop-color="#9c7834"/></linearGradient>
+  </defs>
+  <g clip-path="url(#plinth)">
+    <rect width="1320" height="1080" fill="url(#wood)"/>
+    <rect width="1320" height="1080" fill="url(#grainB)"/>
+    <rect width="1320" height="1080" fill="url(#grainA)"/>
+    <rect width="1320" height="1080" fill="url(#knotB)"/>
+    <rect width="1320" height="1080" fill="url(#knotA)"/>
+    <rect width="1320" height="1080" fill="url(#light)"/>
+    <rect width="1320" height="2" fill="#ffffff" fill-opacity=".18"/>
+  </g>
+  <!-- the brass inlay line -->
+  <rect x="17.5" y="17.5" width="1285" height="1045" rx="10" fill="none" stroke="#d2ad66" stroke-opacity=".6" stroke-width="3"/>
+  <!-- arm board -->
+  <circle cx="1180" cy="190" r="96" fill="url(#brassR0)"/>
+  <circle cx="1180" cy="190" r="82" fill="none" stroke="#6e4f1d" stroke-width="2" opacity=".6"/>
+  <!-- arm rest -->
+  <circle cx="1152" cy="648" r="17" fill="url(#brassR1)"/>
+  <path d="M1134,640 q18,22 36,0" fill="none" stroke="#2a1a0c" stroke-width="5" stroke-linecap="round"/>
+  <!-- cue lever -->
+  <circle cx="1272" cy="340" r="20" fill="url(#brassR2)"/>
+  <rect x="1264" y="340" width="16" height="90" rx="8" fill="url(#brassPlate3)"/>
+  <!-- the brass name plate, screwed on -->
+  <rect x="36" y="978" width="250" height="70" rx="6" fill="url(#brassPlate4)" stroke="#6e4f1d" stroke-width="2"/>
+  <circle cx="52" cy="1013" r="6" fill="#8a6527"/><path d="M47,1013 h10" stroke="#4a3310" stroke-width="2"/>
+  <circle cx="270" cy="1013" r="6" fill="#8a6527"/><path d="M265,1013 h10" stroke="#4a3310" stroke-width="2"/>
+</svg>

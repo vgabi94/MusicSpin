@@ -47,6 +47,12 @@ public abstract class DeckView : TemplatedControl
 
     public static readonly StyledProperty<IBrush?> AccentProperty = AvaloniaProperty.Register<DeckView, IBrush?>(nameof(Accent));
 
+    public static readonly StyledProperty<double> SpeedProperty = AvaloniaProperty.Register<DeckView, double>(nameof(Speed), 33.333);
+
+    public static readonly StyledProperty<Image?> BackdropProperty = AvaloniaProperty.Register<DeckView, Image?>(nameof(Backdrop));
+
+    public static readonly StyledProperty<Border?> BackdropVeilProperty = AvaloniaProperty.Register<DeckView, Border?>(nameof(BackdropVeil));
+
     /// <summary>The record's label: the album cover.</summary>
     public IImage? Label
     {
@@ -86,6 +92,27 @@ public abstract class DeckView : TemplatedControl
     {
         get => GetValue(AccentProperty);
         set => SetValue(AccentProperty, value);
+    }
+
+    /// <summary>The speed chosen in Settings, in rpm (a deck with a readout shows it).</summary>
+    public double Speed
+    {
+        get => GetValue(SpeedProperty);
+        set => SetValue(SpeedProperty, value);
+    }
+
+    /// <summary>What is behind the deck (Now Playing's blurred cover): a see-through deck shows it through its plinth.</summary>
+    public Image? Backdrop
+    {
+        get => GetValue(BackdropProperty);
+        set => SetValue(BackdropProperty, value);
+    }
+
+    /// <summary>What lies over <see cref="Backdrop"/> (Now Playing's veil), drawn through a see-through deck too.</summary>
+    public Border? BackdropVeil
+    {
+        get => GetValue(BackdropVeilProperty);
+        set => SetValue(BackdropVeilProperty, value);
     }
 
     /// <summary>The record on the platter (PART_Record): where a record lands.</summary>

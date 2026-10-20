@@ -29,6 +29,7 @@
     <PackageVersion Include="Avalonia.Headless.XUnit" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Skia" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Svg.Controls.Avalonia" Version="12.0.0.17" />
     <!-- MIT: source-generated observable properties and commands for the app's view models. -->
     <!-- The D-Bus library Avalonia.FreeDesktop already brings (same version), used directly by the MPRIS server (#36). -->
     <PackageVersion Include="Tmds.DBus.Protocol" Version="0.94.1" />

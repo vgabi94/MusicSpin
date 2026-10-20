@@ -17,6 +17,11 @@ MusicSpin itself is MIT licensed (see `LICENSE`). Release builds contain or load
 | [Tmds.DBus.Protocol](https://github.com/tmds/Tmds.DBus) 0.94 (also used by Avalonia.FreeDesktop) | MIT | Inside the desktop app executable (the Linux MPRIS media controls) |
 | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) 8.4 | MIT | Inside the desktop app executable |
 | [Inter](https://rsms.me/inter/) font (via Avalonia.Fonts.Inter) | SIL Open Font License 1.1 | Inside the desktop app executable |
+| [Cormorant Garamond](https://github.com/CatharsisFonts/Cormorant) font (Regular, v4.002) | SIL Open Font License 1.1 (`src/MusicSpin.App/Assets/Fonts/OFL-CormorantGaramond.txt`) | Inside the desktop app executable (the Walnut & Brass turntable's name plate) |
+| [Barlow Semi Condensed](https://github.com/jpt/barlow) font (Regular, SemiBold) | SIL Open Font License 1.1 (`src/MusicSpin.App/Assets/Fonts/OFL-BarlowSemiCondensed.txt`) | Inside the desktop app executable (the Carbon Signal turntable's name and speed readout) |
+| [Svg.Controls.Avalonia](https://github.com/wieslawsoltes/Svg.Skia) 12.0, Svg.Model, Svg.SceneGraph, ShimSkiaSharp 5.2 | MIT | Inside the desktop app executable (draws the turntable designs) |
+| Svg.Custom 5.2 (Svg.Skia's build of [SVG.NET](https://github.com/svg-net/SVG)) | Microsoft Public License (MS-PL) | Inside the desktop app executable (parses the turntable designs' SVG) |
+| [ExCSS](https://github.com/TylerBrinks/ExCSS) 4.3 | MIT | Inside the desktop app executable (Svg.Custom's CSS parser) |
 | .NET runtime | MIT | Inside the executables (self-contained) |
 
 ## LGPL notes

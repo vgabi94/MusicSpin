@@ -1,0 +1,10 @@
+<!-- Linear Tracking's pickup carriage. Arm units: the stylus at (0, 0), where the carriage sits on the record. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-300 -300 600 1200">
+  <defs>
+    <linearGradient id="carriage0" gradientUnits="userSpaceOnUse" x1="-38" y1="-92" x2="-38" y2="-20"><stop offset="0" stop-color="#f8f5ef"/><stop offset="1" stop-color="#a39b8e"/></linearGradient>
+  </defs>
+  <rect x="-38" y="-92" width="76" height="72" rx="10" fill="url(#carriage0)" stroke="#8a8377" stroke-width="2"/>
+  <rect x="-38" y="-62" width="76" height="4" fill="#000000" fill-opacity=".1"/>
+  <rect x="-16" y="-26" width="32" height="46" rx="5" fill="#1d1c1a"/>
+  <rect x="-16" y="-14" width="32" height="5" fill="#c9a15b"/>
+</svg>

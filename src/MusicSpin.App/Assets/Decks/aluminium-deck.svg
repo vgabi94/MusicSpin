@@ -1,0 +1,25 @@
+<!-- Brushed Aluminium (docs/design/mockup/decks/2-aluminium.html): the brushed slab, the milled arm pocket and the arm rest. Deck units. The lamp and the name are drawn on top. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1080">
+  <defs>
+    <clipPath id="plinth"><rect width="1320" height="1080" rx="16"/></clipPath>
+    <linearGradient id="light" gradientUnits="userSpaceOnUse" x1="521.65" y1="-110.88" x2="798.35" y2="1190.88"><stop offset="0.0000" stop-color="#ffffff" stop-opacity="0.302"/><stop offset="0.3000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.6500" stop-color="#000000" stop-opacity="0.102"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.200"/></linearGradient>
+    <linearGradient id="brush" gradientUnits="userSpaceOnUse" spreadMethod="repeat" x1="660.00" y1="1080.00" x2="660.00" y2="1074.00"><stop offset="0.0000" stop-color="#ffffff" stop-opacity="0.078"/><stop offset="0.3333" stop-color="#ffffff" stop-opacity="0.078"/><stop offset="0.3333" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.6667" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.6667" stop-color="#000000" stop-opacity="0.059"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.059"/></linearGradient>
+    <linearGradient id="brush2" gradientUnits="userSpaceOnUse" spreadMethod="repeat" x1="660.00" y1="1080.00" x2="660.00" y2="1054.00"><stop offset="0.0000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.5385" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.5385" stop-color="#ffffff" stop-opacity="0.051"/><stop offset="0.6154" stop-color="#ffffff" stop-opacity="0.051"/><stop offset="0.6154" stop-color="#000000" stop-opacity="0.000"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.000"/></linearGradient>
+    <linearGradient id="metal" gradientUnits="userSpaceOnUse" x1="0.00" y1="540.00" x2="1320.00" y2="540.00"><stop offset="0.0000" stop-color="#b3b7bd" stop-opacity="1.000"/><stop offset="0.3800" stop-color="#d8dbdf" stop-opacity="1.000"/><stop offset="0.5800" stop-color="#c6c9ce" stop-opacity="1.000"/><stop offset="1.0000" stop-color="#aaaeb4" stop-opacity="1.000"/></linearGradient>
+    <linearGradient id="aluInset0" gradientUnits="userSpaceOnUse" x1="1095" y1="115" x2="1095" y2="285"><stop offset="0" stop-color="#9da1a7"/><stop offset="1" stop-color="#d7dadd"/></linearGradient>
+  </defs>
+  <g clip-path="url(#plinth)">
+    <rect width="1320" height="1080" fill="url(#metal)"/>
+    <rect width="1320" height="1080" fill="url(#brush2)"/>
+    <rect width="1320" height="1080" fill="url(#brush)"/>
+    <rect width="1320" height="1080" fill="url(#light)"/>
+    <rect width="1320" height="2" fill="#ffffff" fill-opacity=".69"/>
+    <rect y="1076" width="1320" height="4" fill="#000000" fill-opacity=".15"/>
+  </g>
+  <!-- arm board: a recessed square, like a milled pocket -->
+  <rect x="1095" y="115" width="170" height="170" rx="26" fill="url(#aluInset0)" stroke="#8a8e94" stroke-width="2"/>
+  <rect x="1095" y="117" width="170" height="170" rx="26" fill="none" stroke="#ffffff" stroke-opacity=".69" stroke-width="1.5" opacity=".6"/>
+  <!-- arm rest -->
+  <rect x="1184" y="636" width="38" height="26" rx="8" fill="#1d1e21"/>
+  <rect x="1190" y="641" width="26" height="6" rx="3" fill="#3a3c41"/>
+</svg>

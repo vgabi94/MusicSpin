@@ -1,0 +1,15 @@
+<!-- Smoked Acrylic (docs/design/mockup/decks/6-smoked-acrylic.html): the acrylic's edges and inner glow line, the clear arm board and rest. Deck units. The smoke tint and what shows through it, the edge light and the name are drawn around it. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1080">
+  <defs>
+    <clipPath id="plinth"><rect width="1320" height="1080" rx="26"/></clipPath>
+  </defs>
+  <g clip-path="url(#plinth)">
+    <rect x="12" y="12" width="1296" height="1056" rx="14" fill="none" stroke="#ffffff" stroke-opacity=".03" stroke-width="24"/>
+    <rect x="1" y="1" width="1318" height="1078" rx="25" fill="none" stroke="#ffffff" stroke-opacity=".18" stroke-width="2"/>
+    <rect width="1320" height="2" fill="#ffffff" fill-opacity=".3"/>
+  </g>
+  <!-- clear arm board and rest -->
+  <circle cx="1180" cy="200" r="92" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".22" stroke-width="2"/>
+  <circle cx="1180" cy="200" r="80" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="2"/>
+  <rect x="1186" y="636" width="34" height="24" rx="12" fill="#ffffff" fill-opacity=".12" stroke="#ffffff" stroke-opacity=".3" stroke-width="2"/>
+</svg>

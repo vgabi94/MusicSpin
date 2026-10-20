@@ -1,0 +1,27 @@
+<!-- Piano Black & Chrome's needle: a chrome J-arm, the knurled counterweight, the black headshell and its chrome finger lift. Arm units: the pivot at (0, 0), the stylus at (0, 740). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-300 -300 600 1200">
+  <defs>
+    <linearGradient id="knurl" gradientUnits="userSpaceOnUse" spreadMethod="repeat" x1="-0.00" y1="-180.00" x2="-0.00" y2="-171.00"><stop offset="0.0000" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.6667" stop-color="#000000" stop-opacity="0.000"/><stop offset="0.6667" stop-color="#000000" stop-opacity="0.349"/><stop offset="1.0000" stop-color="#000000" stop-opacity="0.349"/></linearGradient>
+    <linearGradient id="chromeCyl0" gradientUnits="userSpaceOnUse" x1="-46" y1="-180" x2="46" y2="-180"><stop offset="0" stop-color="#3e4248"/><stop offset=".28" stop-color="#f6f7f9"/><stop offset=".45" stop-color="#9ba0a7"/><stop offset=".6" stop-color="#ffffff"/><stop offset=".85" stop-color="#565b62"/><stop offset="1" stop-color="#b9bdc2"/></linearGradient>
+    <linearGradient id="chromeCyl1" gradientUnits="userSpaceOnUse" x1="-8" y1="-92" x2="8" y2="-92"><stop offset="0" stop-color="#3e4248"/><stop offset=".28" stop-color="#f6f7f9"/><stop offset=".45" stop-color="#9ba0a7"/><stop offset=".6" stop-color="#ffffff"/><stop offset=".85" stop-color="#565b62"/><stop offset="1" stop-color="#b9bdc2"/></linearGradient>
+    <linearGradient id="chromeCyl2" gradientUnits="userSpaceOnUse" x1="-50" y1="-50" x2="50" y2="-50"><stop offset="0" stop-color="#3e4248"/><stop offset=".28" stop-color="#f6f7f9"/><stop offset=".45" stop-color="#9ba0a7"/><stop offset=".6" stop-color="#ffffff"/><stop offset=".85" stop-color="#565b62"/><stop offset="1" stop-color="#b9bdc2"/></linearGradient>
+    <linearGradient id="chromeCyl3" gradientUnits="userSpaceOnUse" x1="-16" y1="-16" x2="16" y2="-16"><stop offset="0" stop-color="#3e4248"/><stop offset=".28" stop-color="#f6f7f9"/><stop offset=".45" stop-color="#9ba0a7"/><stop offset=".6" stop-color="#ffffff"/><stop offset=".85" stop-color="#565b62"/><stop offset="1" stop-color="#b9bdc2"/></linearGradient>
+    <linearGradient id="chromeCyl4" gradientUnits="userSpaceOnUse" x1="-20" y1="682" x2="20" y2="682"><stop offset="0" stop-color="#3e4248"/><stop offset=".28" stop-color="#f6f7f9"/><stop offset=".45" stop-color="#9ba0a7"/><stop offset=".6" stop-color="#ffffff"/><stop offset=".85" stop-color="#565b62"/><stop offset="1" stop-color="#b9bdc2"/></linearGradient>
+  </defs>
+  <rect x="-46" y="-180" width="92" height="90" rx="8" fill="url(#chromeCyl0)"/>
+  <rect x="-46" y="-180" width="92" height="90" rx="8" fill="url(#knurl)"/>
+  <rect x="-8" y="-92" width="16" height="96" fill="url(#chromeCyl1)"/>
+  <path d="M0,30 L0,470 C0,580 20,620 34,657" fill="none" stroke="#3e4248" stroke-width="17" stroke-linecap="round"/>
+  <path d="M0,30 L0,470 C0,580 20,620 34,657" fill="none" stroke="#c9cdd2" stroke-width="12" stroke-linecap="round"/>
+  <path d="M-2.5,30 L-2.5,470 C-2.5,580 17.5,620 31.5,657" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M3.5,40 L3.5,470 C3.5,580 23.5,620 37.5,650" fill="none" stroke="#6b7078" stroke-width="2"/>
+  <circle r="50" fill="url(#chromeCyl2)"/>
+  <circle r="32" fill="#0b0b0d"/>
+  <circle r="16" fill="url(#chromeCyl3)"/>
+  <g transform="rotate(22 0 740)">
+    <path d="M24,666 C60,662 82,646 96,614" fill="none" stroke="#c9cdd2" stroke-width="7" stroke-linecap="round"/>
+    <rect x="-28" y="645" width="56" height="120" rx="6" fill="#0c0c0e" stroke="#3a3d43" stroke-width="2"/>
+    <rect x="-20" y="682" width="40" height="72" rx="4" fill="url(#chromeCyl4)"/>
+    <rect x="-20" y="694" width="40" height="5" fill="#0c0c0e"/>
+  </g>
+</svg>

@@ -1,0 +1,127 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+
+namespace MusicSpin.App.Controls;
+
+/// <summary>
+/// What shows through a see-through deck (Smoked Acrylic): the image behind it (<see cref="Source"/>, Now Playing's blurred
+/// cover) drawn again where it is on screen, so the two line up across the deck's edge. Avalonia can't blur what is behind
+/// an element (CSS <c>backdrop-filter</c>); this draws the same image, the same size and place, with the same blur and
+/// opacity over the same <see cref="Background"/>, under the same <see cref="Veil"/>. The parent clips it to the plinth.
+/// </summary>
+public sealed class BackdropView : Control
+{
+    public static readonly StyledProperty<Image?> SourceProperty = AvaloniaProperty.Register<BackdropView, Image?>(nameof(Source));
+
+    public static readonly StyledProperty<IBrush?> BackgroundProperty = AvaloniaProperty.Register<BackdropView, IBrush?>(nameof(Background));
+
+    public static readonly StyledProperty<Border?> VeilProperty = AvaloniaProperty.Register<BackdropView, Border?>(nameof(Veil));
+
+    private Matrix _placed = Matrix.Identity;
+    private Matrix _veiled = Matrix.Identity;
+
+    static BackdropView()
+    {
+        AffectsRender<BackdropView>(SourceProperty, BackgroundProperty, VeilProperty);
+    }
+
+    public BackdropView()
+    {
+        LayoutUpdated += (_, _) => Follow();
+    }
+
+    /// <summary>The image behind the deck.</summary>
+    public Image? Source
+    {
+        get => GetValue(SourceProperty);
+        set => SetValue(SourceProperty, value);
+    }
+
+    /// <summary>What is under the image (the page's background).</summary>
+    public IBrush? Background
+    {
+        get => GetValue(BackgroundProperty);
+        set => SetValue(BackgroundProperty, value);
+    }
+
+    /// <summary>What lies over the image (a veil that darkens it), drawn over it here too.</summary>
+    public Border? Veil
+    {
+        get => GetValue(VeilProperty);
+        set => SetValue(VeilProperty, value);
+    }
+
+    /// <summary>The source's coordinates in this control's (the image lines up through it).</summary>
+    public Matrix Placement => _placed;
+
+    public override void Render(DrawingContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var bounds = new Rect(Bounds.Size);
+        if (Background is { } background)
+        {
+            context.FillRectangle(background, bounds);
+        }
+
+        if (Source is { Source: { } image } source && source.Bounds.Width > 0 && source.Bounds.Height > 0)
+        {
+            var size = source.Bounds.Size;
+            var crop = Crop(image.Size, size, source.Stretch);
+            using (context.PushOpacity(source.Opacity))
+            using (context.PushTransform(_placed))
+            {
+                context.DrawImage(image, crop, new Rect(size));
+            }
+        }
+
+        if (Veil is { Background: { } veil } over)
+        {
+            using (context.PushTransform(_veiled))
+            {
+                context.FillRectangle(veil, new Rect(over.Bounds.Size));
+            }
+        }
+    }
+
+    /// <summary>The part of the image an <see cref="Image"/> of <paramref name="size"/> shows (UniformToFill crops it).</summary>
+    private static Rect Crop(Size image, Size size, Stretch stretch)
+    {
+        if (stretch != Stretch.UniformToFill)
+        {
+            return new Rect(image);
+        }
+
+        var scale = Math.Max(size.Width / image.Width, size.Height / image.Height);
+        var shown = new Size(size.Width / scale, size.Height / scale);
+        return new Rect((image.Width - shown.Width) / 2, (image.Height - shown.Height) / 2, shown.Width, shown.Height);
+    }
+
+    /// <summary>Follows the source's place and blur after every layout pass (the window or the deck moved).</summary>
+    private void Follow()
+    {
+        if (Veil?.TransformToVisual(this) is { } veiled && veiled != _veiled)
+        {
+            _veiled = veiled;
+            InvalidateVisual();
+        }
+
+        if (Source is not { } source || source.TransformToVisual(this) is not { } placed)
+        {
+            return;
+        }
+
+        // The source's blur is in its own units: here it is as many of ours as one of its units is.
+        var radius = source.Effect is BlurEffect blur ? blur.Radius * Math.Sqrt(Math.Abs((placed.M11 * placed.M22) - (placed.M12 * placed.M21))) : 0;
+        if (placed != _placed)
+        {
+            _placed = placed;
+            InvalidateVisual();
+        }
+
+        if (Effect is not BlurEffect mine ? radius > 0 : Math.Abs(mine.Radius - radius) > 0.01)
+        {
+            Effect = radius > 0 ? new BlurEffect { Radius = radius } : null;
+        }
+    }
+}
