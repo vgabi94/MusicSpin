@@ -13,7 +13,7 @@ internal static class Options
 
     public static Option<string?> Device() => new("--device")
     {
-        Description = "Output device id (from 'music-spin devices') or part of its name. Default: system default device.",
+        Description = "Output device: its name, its id (from 'music-spin devices') or part of its name, tried in that order. Default: system default device.",
     };
 
     public static Option<bool> NoTray() => new("--no-tray")

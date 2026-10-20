@@ -304,9 +304,12 @@ src/MusicSpin.App/
 - **Settings › Audio.** `AudioSettingsViewModel` offers System default, then the devices the player's backend lists
   (`IAudioDevices`; tests use a stub; a saved device that isn't plugged in says so), and Exclusive mode. Both are saved
   (`outputDevice`, `exclusiveMode`) and are the `PlayerOutput` a player the app starts gets (`player run --device
-  --exclusive`). They apply only when the player starts, so a change restarts it (`PlayerViewModel.RestartAsync`): quit
-  (it saves its queue and position), start again (it restores them), and resume if it was playing. "In use now" is
-  `status.output`.
+  --exclusive`; the player finds a device by its whole name before its index or part of its name). They apply only
+  when the player starts, so a change restarts it (`PlayerViewModel.RestartAsync`): the event stream is closed first (a quitting player ends its subscriptions before it has stopped, which mustn't count as losing it),
+  then quit (it saves its queue and position, and closes that connection only once it has stopped and let go of its
+  lock), start again (it restores them), and resume if it was playing. A player still holding its lock after the quit's
+  wait isn't started over: a notice says so. Who owns the player doesn't change: one the CLI started is still left
+  playing when the window closes. "In use now" is `status.output`.
 - **Now Playing.** `NowPlayingViewModel` is a layer: the player bar's cover opens and closes it, ✕ and Esc close it.
   It shows the playing track's album (title, "artist · year", the tracks; a click plays the album from that track) and
   holds the deck's state, which follows play/pause from anywhere: playing lowers the arm and turns the platter, a pause

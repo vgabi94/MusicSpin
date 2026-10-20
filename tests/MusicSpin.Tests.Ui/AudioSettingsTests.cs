@@ -137,6 +137,77 @@ public sealed class AudioSettingsTests
     }
 
     [AvaloniaFact]
+    public async Task A_restart_starts_the_new_player_only_once_the_old_one_has_stopped()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        var disconnected = false;
+        app.ViewModel.Player.PropertyChanged += (_, e) =>
+            disconnected |= e.PropertyName == nameof(PlayerViewModel.IsConnected) && !app.ViewModel.Player.IsConnected;
+        var teardown = app.Scripted!.QuitGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Click(app, Gui.Find<Button>(app.Window, "OutputDevice"));
+        var choosing = app.ViewModel.Menu.ChooseCommand.ExecuteAsync(app.ViewModel.Menu.Entries.Single(e => e.Label == "USB DAC"));
+        // The old player ended the app's subscription as it began stopping, and is still tearing down.
+        await Gui.UntilAsync(() => app.Scripted.Count("quit") == 1 && app.Scripted.Subscribers == 0, "the old player stopping");
+        Gui.Settle();
+
+        Assert.False(choosing.IsCompleted);
+        Assert.True(Audio(app).IsRestarting);
+        Assert.Equal(1, app.Scripted.AppStarts);
+        Assert.Equal(1, app.Scripted.Count("subscribe")); // nothing reconnected to the player on its way out
+        Assert.False(disconnected);
+
+        teardown.SetResult();
+        await choosing;
+        await RestartedAsync(app, 2);
+        Assert.Equal(new PlayerOutput("USB DAC", false), app.Scripted.StartOutputs.Last());
+        Assert.False(disconnected);
+        Assert.True(app.ViewModel.Player.StartedPlayer);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_player_that_has_not_stopped_after_the_quit_is_not_started_over()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        // The old player's lock, still held after its quit connection closed (a teardown past the wait).
+        using (new FileStream(app.Scripted!.Endpoint.LockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            await ChooseDeviceAsync(app, "USB DAC");
+
+            await Gui.UntilAsync(() => app.ViewModel.Banner == PlayerViewModel.NotStoppedMessage, "the notice");
+            Assert.Equal(1, app.Scripted.AppStarts);
+            Assert.False(Audio(app).IsRestarting);
+            Assert.Equal("USB DAC", new SettingsStore(app.Data).Load().OutputDevice); // the next start uses it
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task A_player_the_CLI_started_stays_the_CLIs_after_a_restart()
+    {
+        var app = await AppHarness.OpenAsync(new AppOptions
+        {
+            Scripted = true,
+            Initialize = false,
+            AudioDevices = new StubAudioDevices { Names = TwoDevices },
+        });
+        await using var _ = app;
+        app.Scripted!.Start(); // as music-spin play would
+        await app.ViewModel.InitializeAsync();
+        await Gui.UntilAsync(() => app.ViewModel.Player.IsConnected, "connected");
+        Assert.False(app.ViewModel.Player.StartedPlayer);
+        await OpenSettingsAsync(app);
+
+        await ChooseDeviceAsync(app, "USB DAC");
+        await RestartedAsync(app, 1); // the app's first start
+
+        Assert.Equal(new PlayerOutput("USB DAC", false), app.Scripted.StartOutputs.Single());
+        Assert.False(app.ViewModel.Player.StartedPlayer); // closing the window leaves it playing, as before
+    }
+
+    [AvaloniaFact]
     public async Task A_paused_player_restarts_paused()
     {
         await using var app = await OpenAsync();

@@ -190,6 +190,9 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         return (await ConnectAsync(cancellationToken), started);
     }
 
+    /// <summary>Set: a quit holds here after ending the subscriptions, before the player stops (a slow teardown).</summary>
+    public TaskCompletionSource? QuitGate { get; set; }
+
     /// <summary>Set: connecting waits for it (or for the caller's cancellation), as a slow connect would.</summary>
     public TaskCompletionSource? ConnectGate { get; set; }
 
@@ -264,9 +267,21 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                         await connection.WriteAsync(ProtocolMessages.Ok(id, QueuePage(request)));
                         break;
                     case "quit":
-                        // As the real player: the quitting connection closes once the player has stopped (so a
-                        // client waiting for that can start the next one).
+                        // As the real player: the subscriptions end first, the player stops (held at QuitGate, as a
+                        // slow teardown would be: it is still running and its lock still held), and only then does the
+                        // quitting connection close, so a client waiting for that can start the next one.
                         await connection.WriteAsync(ProtocolMessages.Ok(id, new { }));
+                        foreach (var subscriber in _connections.Keys.Where(c => c.Subscribed))
+                        {
+                            _connections.TryRemove(subscriber, out _);
+                            await subscriber.DisposeAsync();
+                        }
+
+                        if (QuitGate is { } quitGate)
+                        {
+                            await quitGate.Task;
+                        }
+
                         await StopAsync();
                         return;
                     default:

@@ -97,7 +97,7 @@ Builds a queue, hands it to the **background player** for this data folder (star
 | `--start <s>` | Start position in seconds (first track only) |
 | `--volume <v>` | 0.0-1.0. 1.0 (the default, or `volume` from settings.json) leaves the samples untouched |
 | `--backend auto\|null` | `auto` = SoundFlow/miniaudio (WASAPI, CoreAudio, PulseAudio/ALSA). `null` = no sound card (decodes in real time and discards). Default `auto` |
-| `--device <id\|name>` | Output device id from `devices`, or part of its name. Default: system default |
+| `--device <id\|name>` | Output device: its whole name, its id from `devices`, or part of its name (tried in that order, names case-insensitive). Default: system default |
 | `--exclusive` | Open the device exclusively (WASAPI exclusive / ALSA hw / CoreAudio) |
 | `--no-tray` | A player this command starts shows no tray icon (default: `trayIcon` in settings.json; see [Tray icon](playback.md#tray-icon)) |
 | `--foreground`, `--wait` | Play in this process and block until done (Ctrl+C: exit 130) |

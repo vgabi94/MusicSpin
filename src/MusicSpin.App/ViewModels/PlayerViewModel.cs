@@ -321,6 +321,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Starts a radio station (<paramref name="filter"/> null: the whole library).</summary>
     public Task StartRadioAsync(RadioFilter? filter = null) => SendAsync("radio", new { filter = filter ?? new RadioFilter(), play = true });
 
+    /// <summary>A restart's quit wasn't done within its wait: the old player still holds the data folder.</summary>
+    public const string NotStoppedMessage = "The player didn't stop in time, so it keeps its output for now. Try the change again.";
+
     /// <summary>
     /// Settings › Audio: output options apply only when the player starts, so it is restarted with the output saved now:
     /// quit (it saves its queue and position), started again (it restores them), and resumed if it was playing.
@@ -328,7 +331,15 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public async Task<bool> RestartAsync()
     {
-        var playing = IsPlaying;
+        var (playing, owned) = (IsPlaying, StartedPlayer);
+
+        // The event stream first: a quitting player ends its subscriptions before it has stopped, and that end must not
+        // count as a loss here (it would drop the connection the quit is waiting on, and start a player too early).
+        if (Interlocked.Exchange(ref _events, null) is { } events)
+        {
+            await events.DisposeAsync().ConfigureAwait(false);
+        }
+
         if (_client is { } client)
         {
             try
@@ -345,6 +356,14 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             }
 
             await DropConnectionAsync().ConfigureAwait(false);
+            if (PlayerHost.IsLockHeld(_connector.Endpoint))
+            {
+                // Not stopped within the wait (the quit closes its connection only once the player is gone): a player
+                // started now would find the old one's lock and give up.
+                await LostAsync().ConfigureAwait(false);
+                Raise(NotStoppedMessage);
+                return false;
+            }
         }
 
         try
@@ -362,6 +381,8 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             return false;
         }
 
+        // Who owns the player doesn't change: one the CLI started keeps playing when the window closes, as before.
+        StartedPlayer = owned;
         return !playing || await SendAsync("resume", null, holdable: false).ConfigureAwait(false);
     }
 
