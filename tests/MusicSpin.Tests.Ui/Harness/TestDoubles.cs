@@ -5,6 +5,7 @@ using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
 using MusicSpin.Core;
+using MusicSpin.Core.Audio;
 using MusicSpin.Core.Library;
 
 namespace MusicSpin.Tests.Ui.Harness;
@@ -491,5 +492,23 @@ internal sealed class StubFolderPicker : IFolderPicker
     {
         Opened++;
         return Task.FromResult(Answer);
+    }
+}
+
+/// <summary>The audio devices, as the test says; <see cref="Error"/> set: listing them fails with it.</summary>
+internal sealed class StubAudioDevices : IAudioDevices
+{
+    public IReadOnlyList<string> Names { get; set; } = [];
+
+    public MusicSpinException? Error { get; set; }
+
+    public int Lists { get; private set; }
+
+    public Task<IReadOnlyList<AudioDeviceInfo>> ListAsync()
+    {
+        Lists++;
+        return Error is { } error ? Task.FromException<IReadOnlyList<AudioDeviceInfo>>(error)
+            : Task.FromResult<IReadOnlyList<AudioDeviceInfo>>(
+                [.. Names.Select((name, i) => new AudioDeviceInfo(i.ToString(CultureInfo.InvariantCulture), name, i == 0, "stub", [], [], []))]);
     }
 }

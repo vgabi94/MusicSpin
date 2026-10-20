@@ -51,6 +51,9 @@ internal sealed record AppOptions
     /// <summary>The folder picker the app gets (Settings › Library, the empty library).</summary>
     public StubFolderPicker FolderPicker { get; init; } = new();
 
+    /// <summary>The audio devices the app sees (Settings › Audio).</summary>
+    public StubAudioDevices AudioDevices { get; init; } = new();
+
     /// <summary>The in-process player reads the library (radio works).</summary>
     public bool PlayerReadsLibrary { get; init; }
 
@@ -148,6 +151,7 @@ internal sealed class AppHarness : IAsyncDisposable
             Options.StartupWarning)
         {
             FolderPicker = Options.FolderPicker,
+            AudioDevices = Options.AudioDevices,
         };
         Window = AppComposition.CreateMainWindow(Services);
         Window.Width = Options.Width;

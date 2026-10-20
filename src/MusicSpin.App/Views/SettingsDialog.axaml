@@ -229,6 +229,50 @@
                         </ItemsControl>
                     </StackPanel>
                 </StackPanel>
+
+                <!--
+                  Audio (#32): the output device (System default, then the devices; one saved but not plugged in says so)
+                  and exclusive mode. A change restarts the player, so both wait while it does. The note under Output says
+                  what the player plays through now.
+                -->
+                <StackPanel Name="AudioSection" IsVisible="{Binding Audio, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock Classes="settingsSection" Text="AUDIO" />
+                    <Border Classes="settingRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Output" />
+                                <TextBlock Name="InUse"
+                                           Classes="settingNote"
+                                           Text="{Binding Audio.InUse, FallbackValue={x:Null}}"
+                                           IsVisible="{Binding Audio.InUse, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
+                            </StackPanel>
+                            <Button Name="OutputDevice"
+                                    Grid.Column="1"
+                                    Classes="dropdown settingDropdown"
+                                    Command="{Binding Audio.OpenDeviceMenuCommand, FallbackValue={x:Null}}"
+                                    AutomationProperties.Name="Output device">
+                                <StackPanel>
+                                    <TextBlock Classes="chosen" Text="{Binding Audio.DeviceLabel, FallbackValue={x:Null}}" />
+                                    <controls:Icon Data="{StaticResource ChevronDown}" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Exclusive mode" />
+                                <TextBlock Classes="settingNote" Text="{x:Static vm:AudioSettingsViewModel.ExclusiveNote}" />
+                            </StackPanel>
+                            <ToggleButton Name="ExclusiveMode"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Audio.Exclusive, FallbackValue=False}"
+                                          IsEnabled="{Binding !Audio.IsRestarting, FallbackValue=False}"
+                                          AutomationProperties.Name="Exclusive mode" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </Border>

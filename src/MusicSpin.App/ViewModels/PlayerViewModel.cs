@@ -50,16 +50,19 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     internal Func<string, Task>? Step { get; set; }
     private bool _disposed;
+    private readonly Func<PlayerOutput> _output;
 
     /// <summary>Commands held while the turntable scene plays (see <see cref="HoldInput"/>), in order.</summary>
     private List<(string Cmd, object? Args)>? _held;
 
-    public PlayerViewModel(IPlayerConnector connector, TimeProvider time, IUiDispatcher ui)
+    /// <param name="output">The output a player the app starts gets (Settings › Audio); null: the system default, shared.</param>
+    public PlayerViewModel(IPlayerConnector connector, TimeProvider time, IUiDispatcher ui, Func<PlayerOutput>? output = null)
     {
         ArgumentNullException.ThrowIfNull(connector);
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(ui);
         _connector = connector;
+        _output = output ?? (() => PlayerOutput.Default);
         _time = time;
         _ui = ui;
     }
@@ -156,6 +159,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     [ObservableProperty]
     public partial bool HiRes { get; private set; }
+
+    /// <summary>What the player plays through now: the backend, the device, exclusive or not (<c>status.output</c>).</summary>
+    [ObservableProperty]
+    public partial OutputInfo? Output { get; private set; }
 
     /// <summary>The last <c>status</c> (null before the first).</summary>
     public PlayerStatus? Status { get; private set; }
@@ -313,6 +320,50 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>Starts a radio station (<paramref name="filter"/> null: the whole library).</summary>
     public Task StartRadioAsync(RadioFilter? filter = null) => SendAsync("radio", new { filter = filter ?? new RadioFilter(), play = true });
+
+    /// <summary>
+    /// Settings › Audio: output options apply only when the player starts, so it is restarted with the output saved now:
+    /// quit (it saves its queue and position), started again (it restores them), and resumed if it was playing.
+    /// False when that failed (a notice says why).
+    /// </summary>
+    public async Task<bool> RestartAsync()
+    {
+        var playing = IsPlaying;
+        if (_client is { } client)
+        {
+            try
+            {
+                await client.QuitAsync(TimeSpan.FromSeconds(5), _life.Token).ConfigureAwait(false);
+            }
+            catch (MusicSpinException)
+            {
+                // gone already: the start below is all that's needed
+            }
+            catch (OperationCanceledException) when (_life.IsCancellationRequested)
+            {
+                return false; // closing
+            }
+
+            await DropConnectionAsync().ConfigureAwait(false);
+        }
+
+        try
+        {
+            await EnsureConnectedAsync(start: true).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_life.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (MusicSpinException ex)
+        {
+            await LostAsync().ConfigureAwait(false); // disconnected, and looking for a player (one the CLI starts)
+            Raise(ex.Message);
+            return false;
+        }
+
+        return !playing || await SendAsync("resume", null, holdable: false).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Closing the window: the music stops (paused, so <c>resume</c> continues). A player the app started is shut down.
@@ -486,6 +537,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         QueueIndex = status.QueueIndex;
         UpNext = status.UpNext;
         HiRes = status.Track?.HiRes ?? false;
+        Output = status.Output;
         _statusPosition = status.PositionSeconds;
         _statusTimestamp = _time.GetTimestamp();
         Position = Math.Min(status.PositionSeconds, Duration > 0 ? Duration : double.MaxValue);
@@ -547,7 +599,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             PlayerClient client;
             if (start)
             {
-                var (made, started) = await _connector.ConnectOrStartAsync(_life.Token).ConfigureAwait(false);
+                var (made, started) = await _connector.ConnectOrStartAsync(_output(), _life.Token).ConfigureAwait(false);
                 client = made;
                 StartedPlayer |= started;
             }
@@ -661,16 +713,29 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
 
         if (ReferenceEquals(events, _events))
         {
-            await LostAsync().ConfigureAwait(false);
+            await LostAsync(events).ConfigureAwait(false);
         }
     }
 
-    /// <summary>The player went away (quit, crash, restart): drop the connection and look for it again.</summary>
-    private async Task LostAsync()
+    /// <summary>
+    /// The player went away (quit, crash, restart): drop the connection and look for it again. With
+    /// <paramref name="events"/>, only if that is still the connection (a restart may already have made a new one).
+    /// </summary>
+    private async Task LostAsync(PlayerClient? events = null)
     {
         if (_life.IsCancellationRequested)
         {
             return;
+        }
+
+        if (events is not null)
+        {
+            if (Interlocked.CompareExchange(ref _events, null, events) != events)
+            {
+                return; // another connection is the app's now
+            }
+
+            await events.DisposeAsync().ConfigureAwait(false);
         }
 
         await DropConnectionAsync().ConfigureAwait(false);

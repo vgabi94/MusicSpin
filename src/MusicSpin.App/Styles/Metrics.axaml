@@ -485,6 +485,7 @@
     <Thickness x:Key="AddMusicMargin">0,16,0,0</Thickness>
     <sys:Double x:Key="AddMusicGap">12</sys:Double>
     <Thickness x:Key="FolderRowPadding">0,8</Thickness>
+    <sys:Double x:Key="SettingDropdownMaxWidth">240</sys:Double>
     <Thickness x:Key="ScanIssuesMargin">0,10,0,0</Thickness>
     <sys:Double x:Key="ScanIssuesGap">6</sys:Double>
     <sys:Double x:Key="SwitchWidth">36</sys:Double>

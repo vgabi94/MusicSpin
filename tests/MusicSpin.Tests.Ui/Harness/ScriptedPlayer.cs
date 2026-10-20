@@ -130,25 +130,27 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
             return;
         }
 
+        // This stop's own: once the connections close, the app may start the player again (new ones).
         _listener = null;
-        await _stop!.CancelAsync();
+        var (stop, accept) = (_stop!, _accept!);
+        await stop.CancelAsync();
         await listener.DisposeAsync();
-        foreach (var connection in _connections.Keys)
-        {
-            await connection.DisposeAsync();
-        }
-
-        _connections.Clear();
         try
         {
-            await _accept!;
+            await accept;
         }
         catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
         {
             // stopped
         }
 
-        _stop.Dispose();
+        foreach (var connection in _connections.Keys)
+        {
+            _connections.TryRemove(connection, out _);
+            await connection.DisposeAsync();
+        }
+
+        stop.Dispose();
     }
 
     /// <summary>Sends an event to every subscriber.</summary>
@@ -161,7 +163,14 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         }
     }
 
-    public async Task<(PlayerClient Client, bool Started)> ConnectOrStartAsync(CancellationToken cancellationToken)
+    /// <summary>The output each start by the app asked for (Settings › Audio), in order.</summary>
+    public ConcurrentQueue<PlayerOutput> StartOutputs { get; } = new();
+
+    public Task<(PlayerClient Client, bool Started)> ConnectOrStartAsync(CancellationToken cancellationToken)
+        => ConnectOrStartAsync(PlayerOutput.Default, cancellationToken);
+
+    /// <summary>A start plays through <paramref name="output"/>: <c>status.output</c> says so, as the real player's does.</summary>
+    public async Task<(PlayerClient Client, bool Started)> ConnectOrStartAsync(PlayerOutput output, CancellationToken cancellationToken)
     {
         var started = false;
         if (!IsRunning)
@@ -171,8 +180,10 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                 throw new MusicSpinException(MusicSpinErrorCode.PlayerUnavailable, "The scripted player may not be started.");
             }
 
+            Status = Status with { Output = new OutputInfo("scripted", output.Device, output.Exclusive) };
             Start();
             AppStarts++;
+            StartOutputs.Enqueue(output);
             started = true;
         }
 
@@ -253,8 +264,10 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                         await connection.WriteAsync(ProtocolMessages.Ok(id, QueuePage(request)));
                         break;
                     case "quit":
+                        // As the real player: the quitting connection closes once the player has stopped (so a
+                        // client waiting for that can start the next one).
                         await connection.WriteAsync(ProtocolMessages.Ok(id, new { }));
-                        _ = Task.Run(StopAsync, CancellationToken.None);
+                        await StopAsync();
                         return;
                     default:
                         if (FollowsCommands)

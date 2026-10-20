@@ -42,10 +42,12 @@ public sealed partial class SettingsViewModel : LayerViewModel
     private bool _depthPending;
 
     /// <param name="library">Settings › Library (#31); none in tests of the other sections.</param>
+    /// <param name="audio">Settings › Audio (#32); none in tests of the other sections.</param>
     public SettingsViewModel(ISettingsService settings, IAppearance appearance, SpinClock spinClock, Notices notices,
-        LibrarySettingsViewModel? library = null)
+        LibrarySettingsViewModel? library = null, AudioSettingsViewModel? audio = null)
     {
         Library = library;
+        Audio = audio;
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(spinClock);
@@ -72,16 +74,29 @@ public sealed partial class SettingsViewModel : LayerViewModel
     /// <summary>The music folders and scanning (null: the section isn't shown).</summary>
     public LibrarySettingsViewModel? Library { get; }
 
-    /// <summary>Opening reads the library folders afresh (a scan or the CLI may have changed them).</summary>
+    /// <summary>The output device and exclusive mode (null: the section isn't shown).</summary>
+    public AudioSettingsViewModel? Audio { get; }
+
+    /// <summary>
+    /// Opening reads the library folders and the audio devices afresh (a scan or the CLI may have changed the folders; a
+    /// device may have been plugged in). Closing saves a slider a drag left unsaved.
+    /// </summary>
     protected override void OnOpenChanged(bool isOpen)
     {
         if (!isOpen)
         {
             SavePending();
+            return;
         }
-        else if (Library is { } library)
+
+        if (Library is { } library)
         {
             _ = library.LoadAsync();
+        }
+
+        if (Audio is { } audio)
+        {
+            _ = audio.LoadAsync();
         }
     }
 

@@ -213,6 +213,15 @@
         <Setter Property="FontSize" Value="{StaticResource ButtonFontSize}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- The output device: a dropdown on the panel colour; a long device name is cut. -->
+    <Style Selector="Button.settingDropdown">
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="MaxWidth" Value="{StaticResource SettingDropdownMaxWidth}" />
+    </Style>
+    <Style Selector="Button.settingDropdown TextBlock.chosen">
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
     <Style Selector="ItemsControl.libraryFolders Border.settingRow">
         <Setter Property="Padding" Value="{StaticResource FolderRowPadding}" />
     </Style>
