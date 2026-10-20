@@ -36,7 +36,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         ArgumentNullException.ThrowIfNull(services);
         _services = services;
-        Player = new PlayerViewModel(services.Player, services.Time, services.Ui);
+        Player = new PlayerViewModel(services.Player, services.Time, services.Ui, () => PlayerOutput.From(services.Settings.Current));
         Radio = new RadioViewModel(Player, services.Library, Notices, services.Time, services.Ui);
         SpinClock = new SpinClock(services.Time, services.Ui);
         Favorites = new FavoritesViewModel(services.Library, Notices);
@@ -63,7 +63,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Layers.Register(Menu);
         Layers.Register(Sidebar.Rename);
         Playlists = new PlaylistActions(services.Library, Player, Sidebar, Menu, Notices, () => ReloadAsync());
-        Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices);
+        LibraryScan = new LibraryScanViewModel(services.Library, Notices, services.Ui, () => ReloadAsync());
+        Library = new LibrarySettingsViewModel(services.Library, services.FolderPicker, services.Settings, LibraryScan, Menu, Notices, services.Time,
+            services.Ui, () => ReloadAsync());
+        Audio = new AudioSettingsViewModel(services.AudioDevices, services.Settings, Player, Menu, Notices);
+        Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices, Library, Audio);
         Scene = new TurntableSceneViewModel(Player, NowPlaying, services.Library, services.Covers, Settings, services.Time, services.Ui, Notices);
         AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, Radio, SpinClock, NowPlaying, Scene, Menu, Playlists, Notices, Settings,
             services.Time);
@@ -187,8 +191,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     [ObservableProperty]
     public partial bool IsTextInputFocused { get; set; }
 
-    /// <summary>The cog's dialog: the theme, Motion, the record speed and design, the shelf's tilt and depth.</summary>
+    /// <summary>The cog's dialog: the theme, Motion, the record speed and design, the shelf's tilt and depth, the library.</summary>
     public SettingsViewModel Settings { get; }
+
+    /// <summary>The library's scan: Settings › Library's Rescan, the empty library's Add a music folder, the folder watch.</summary>
+    public LibraryScanViewModel LibraryScan { get; }
+
+    /// <summary>The music folders (Settings › Library, and the empty library's Add a music folder).</summary>
+    public LibrarySettingsViewModel Library { get; }
+
+    /// <summary>The output device and exclusive mode (Settings › Audio).</summary>
+    public AudioSettingsViewModel Audio { get; }
 
     /// <summary>Connects to the player and loads the library.</summary>
     public async Task InitializeAsync()
@@ -198,6 +211,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         // lets one reader in at a time, even within this process: side by side, one could find it busy and be refused.)
         Sidebar.Navigate(Sidebar.Albums);
         await Task.WhenAll(Player.StartAsync(), ReloadAsync(page: false)).ConfigureAwait(true);
+        if (Library.WatchFolders)
+        {
+            await Library.LoadAsync().ConfigureAwait(true); // the watch starts with the folders read
+        }
     }
 
     /// <summary>Esc: closes the topmost open layer (a menu, Settings, the queue drawer, Now Playing).</summary>
@@ -293,6 +310,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         Scene.Dispose();
         QueueDrawer.Dispose();
         RadioPage.Dispose();
+        Library.Dispose();
+        LibraryScan.Dispose();
         Radio.Dispose();
         SpinClock.Dispose();
         PlayerBar.Dispose();

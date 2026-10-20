@@ -203,4 +203,47 @@
         <Setter Property="Background" Value="{StaticResource DeckHeadshellBrush}" />
         <Setter Property="RenderTransform" Value="rotate(18deg)" />
     </Style>
+
+    <!-- Settings › Library and Audio (#31, #32): a small button on the panel colour, the folders' paths cut in the middle. -->
+    <Style Selector="Button.settingButton">
+        <Setter Property="Padding" Value="{StaticResource SettingButtonPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ButtonRadius}" />
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="FontSize" Value="{StaticResource ButtonFontSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- The output device: a dropdown on the panel colour; a long device name is cut. -->
+    <Style Selector="Button.settingDropdown">
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="MaxWidth" Value="{StaticResource SettingDropdownMaxWidth}" />
+    </Style>
+    <Style Selector="Button.settingDropdown TextBlock.chosen">
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="ItemsControl.libraryFolders Border.settingRow">
+        <Setter Property="Padding" Value="{StaticResource FolderRowPadding}" />
+    </Style>
+    <Style Selector="TextBlock.folderPath">
+        <Setter Property="TextTrimming" Value="PathSegmentEllipsis" />
+    </Style>
+    <!-- A folder that isn't there now: its note in the danger colour. -->
+    <Style Selector="Border.settingRow TextBlock.settingNote.missing">
+        <Setter Property="Foreground" Value="{StaticResource InvalidBrush}" />
+    </Style>
+    <Style Selector="StackPanel.scanIssues">
+        <Setter Property="Margin" Value="{StaticResource ScanIssuesMargin}" />
+        <Setter Property="Spacing" Value="{StaticResource ScanIssuesGap}" />
+    </Style>
+    <Style Selector="StackPanel.scanIssues > Button.link">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="StackPanel.scanIssue TextBlock.settingNote">
+        <Setter Property="Margin" Value="{StaticResource SettingNoteMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
 </Styles>

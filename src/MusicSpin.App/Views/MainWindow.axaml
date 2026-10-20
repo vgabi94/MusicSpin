@@ -195,6 +195,19 @@
                         <controls:Icon Classes="stroke emptyHeart" Data="{StaticResource Heart}" />
                         <TextBlock Classes="empty" Text="on a track to add it." />
                     </StackPanel>
+                    <!-- An empty library (#31): Add a music folder, then the scan's progress until its albums appear. -->
+                    <StackPanel Name="AddMusic" Classes="addMusic" IsVisible="{Binding CurrentPage.IsLibraryEmpty}">
+                        <Button Name="AddMusicButton" Classes="accent pill" Command="{Binding Library.AddFolderCommand}">
+                            <StackPanel>
+                                <controls:Icon Data="{StaticResource Plus}" />
+                                <TextBlock Text="Add a music folder" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Name="AddMusicProgress"
+                                   Classes="empty"
+                                   Text="{Binding LibraryScan.ProgressText}"
+                                   IsVisible="{Binding LibraryScan.ProgressText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </StackPanel>
                 </StackPanel>
             </Panel>
         </DockPanel>

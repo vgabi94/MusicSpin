@@ -84,7 +84,7 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
     /// <summary>The size line while the draft's size isn't known yet (it just changed, or the library is busy).</summary>
     public const string Counting = "Counting…";
 
-    public const string EmptyLibrary = "No music to play yet. Add a music folder with 'music-spin library add <folder>' and scan it.";
+    public const string EmptyLibrary = NoMusic;
 
     /// <summary>The Artists row shows this many (the most tracks first) until a search finds the others.</summary>
     public const int TopArtists = 10;
@@ -188,7 +188,8 @@ public sealed partial class RadioPageViewModel : PageViewModel, IDisposable
         _counts = counts;
         _albumArtists = counts.Albums.ToDictionary(a => a.Value, a => a.Detail, StringComparer.Ordinal);
         _radio.KnowAlbums(counts.Albums.Select(a => (a.Value, a.Name)));
-        EmptyText = counts.Artists.Count == 0 ? EmptyLibrary : null;
+        IsLibraryEmpty = counts.Formats.Count == 0; // every track has a format
+        EmptyText = IsLibraryEmpty ? EmptyLibrary : null;
         OnPropertyChanged(nameof(Description)); // albums by their titles now
         Filter();
         CountSoon();

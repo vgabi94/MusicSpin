@@ -202,6 +202,9 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
 
     protected abstract string EmptyLibraryText { get; }
 
+    /// <summary>The whole library's tracks (not a playlist's): an empty list means an empty library.</summary>
+    protected virtual bool IsLibraryPage => false;
+
     /// <summary>The rows for the tracks shown (<see cref="Tracks"/>, already sorted).</summary>
     protected abstract IReadOnlyList<object> LayOut(IReadOnlyList<TrackItemViewModel> shown);
 
@@ -268,6 +271,7 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
     protected override void Filter()
     {
         Tracks = [.. Shown()];
+        IsLibraryEmpty = IsLibraryPage && _all.Count == 0;
         CountText = Count(Tracks.Count);
         EmptyText = _all.Count == 0 ? EmptyLibraryText : Tracks.Count == 0 ? $"Nothing matches “{SearchText.Trim()}”." : null;
         Rows = LayOut(Tracks);
@@ -350,7 +354,9 @@ public sealed partial class TracksPageViewModel : TrackListPageViewModel
     /// <summary>The groups shown: genres, or album titles (empty when ungrouped).</summary>
     public IReadOnlyList<string> GroupNames { get; private set; } = [];
 
-    protected override string EmptyLibraryText => "No tracks yet. Add a music folder with 'music-spin library add <folder>' and scan it.";
+    protected override string EmptyLibraryText => NoMusic;
+
+    protected override bool IsLibraryPage => true;
 
     [RelayCommand]
     private void OpenSortMenu() => Menu.Show(Enum.GetValues<LibrarySort>().Select(s => MenuEntryViewModel.Of(s.ToString(), () => Sort = s, s == Sort)));

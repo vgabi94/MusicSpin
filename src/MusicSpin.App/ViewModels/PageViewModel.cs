@@ -12,6 +12,15 @@ public abstract partial class PageViewModel : ObservableObject
     [ObservableProperty]
     public partial string? CountText { get; protected set; }
 
+    /// <summary>What a library page says while the library has no tracks (no folders, or none scanned yet).</summary>
+    public const string NoMusic = "No music yet. Add a folder of music, and Music Spin finds the albums in it.";
+
+    /// <summary>
+    /// The library has no tracks (the Albums, Tracks and Radio pages): the empty view offers Add a music folder (#31).
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsLibraryEmpty { get; protected set; }
+
     /// <summary>A message instead of the content (empty library, nothing found), or null.</summary>
     [ObservableProperty]
     public partial string? EmptyText { get; protected set; }

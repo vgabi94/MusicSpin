@@ -87,9 +87,9 @@ Created with defaults by `doctor` (or by the first command that writes):
 | `playbackBufferMs` | `2000` | how much audio the background player decodes ahead of the output, in milliseconds. Values outside `100`..`10000` are clamped. Memory is rate × channels × 4 bytes per second (2 s of 192 kHz stereo = 3 MB) |
 | `trayIcon` | `true` | show a tray icon (Play/Pause, Next, Previous, Quit) while the background player runs in a desktop session (see [Playback](playback.md#tray-icon)) |
 | `gapless` | `true` | play consecutive queue entries with the same sample rate, channels and bit depth without a gap (see [Playback](playback.md#gapless)) |
-| `outputDevice` | `null` | **reserved for the App**. The CLI uses `--device` |
-| `exclusiveMode` | `false` | **reserved for the App**. The CLI uses `--exclusive` |
-| `watchLibrary` | `false` | **reserved for the App**. The CLI uses `library watch` |
+| `outputDevice` | `null` | the device a player the App starts plays through (Settings › Audio; `null` is the system default). The CLI uses `--device` |
+| `exclusiveMode` | `false` | a player the App starts opens its device exclusively (Settings › Audio). The CLI uses `--exclusive` |
+| `watchLibrary` | `false` | the App scans after changes in the library folders while it runs (Settings › Library). The CLI uses `library watch` |
 
 ## FFmpeg
 

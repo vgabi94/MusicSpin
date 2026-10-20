@@ -16,4 +16,11 @@ public sealed record AppServices(
     TimeProvider Time,
     IUiDispatcher Ui,
     string? StartupWarning = null,
-    Services.MediaControls.MediaControlsSetup? MediaControls = null);
+    Services.MediaControls.MediaControlsSetup? MediaControls = null)
+{
+    /// <summary>The OS's folder picker (Settings › Library, the empty library's Add a music folder).</summary>
+    public IFolderPicker FolderPicker { get; init; } = new AvaloniaFolderPicker();
+
+    /// <summary>The audio output devices (Settings › Audio).</summary>
+    public IAudioDevices AudioDevices { get; init; } = new SoundFlowAudioDevices();
+}

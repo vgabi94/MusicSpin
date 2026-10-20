@@ -44,6 +44,18 @@ public sealed class LibraryWatcher : IDisposable
 
     public int WatchedFolders => _watchers.Count;
 
+    /// <summary>A change was seen and waits for the folders to go quiet (tests wait on it instead of sleeping).</summary>
+    public bool HasPending
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _pending.Count > 0;
+            }
+        }
+    }
+
     /// <summary>Raised (on a thread-pool thread) with the changed paths after a quiet period.</summary>
     public event EventHandler<IReadOnlyCollection<string>>? Changed;
 

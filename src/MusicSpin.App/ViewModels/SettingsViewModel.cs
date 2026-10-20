@@ -41,8 +41,13 @@ public sealed partial class SettingsViewModel : LayerViewModel
     private bool _tiltPending;
     private bool _depthPending;
 
-    public SettingsViewModel(ISettingsService settings, IAppearance appearance, SpinClock spinClock, Notices notices)
+    /// <param name="library">Settings › Library (#31); none in tests of the other sections.</param>
+    /// <param name="audio">Settings › Audio (#32); none in tests of the other sections.</param>
+    public SettingsViewModel(ISettingsService settings, IAppearance appearance, SpinClock spinClock, Notices notices,
+        LibrarySettingsViewModel? library = null, AudioSettingsViewModel? audio = null)
     {
+        Library = library;
+        Audio = audio;
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(spinClock);
@@ -65,6 +70,35 @@ public sealed partial class SettingsViewModel : LayerViewModel
     }
 
     public override int Order => LayerOrder.Settings;
+
+    /// <summary>The music folders and scanning (null: the section isn't shown).</summary>
+    public LibrarySettingsViewModel? Library { get; }
+
+    /// <summary>The output device and exclusive mode (null: the section isn't shown).</summary>
+    public AudioSettingsViewModel? Audio { get; }
+
+    /// <summary>
+    /// Opening reads the library folders and the audio devices afresh (a scan or the CLI may have changed the folders; a
+    /// device may have been plugged in). Closing saves a slider a drag left unsaved.
+    /// </summary>
+    protected override void OnOpenChanged(bool isOpen)
+    {
+        if (!isOpen)
+        {
+            SavePending();
+            return;
+        }
+
+        if (Library is { } library)
+        {
+            _ = library.LoadAsync();
+        }
+
+        if (Audio is { } audio)
+        {
+            _ = audio.LoadAsync();
+        }
+    }
 
     public IReadOnlyList<Choice<AppTheme>> Themes { get; } = [new("Dark", AppTheme.Dark), new("Light", AppTheme.Light)];
 
@@ -196,14 +230,6 @@ public sealed partial class SettingsViewModel : LayerViewModel
             var (tilt, depth, saveTilt, saveDepth) = (ShelfTilt, ShelfDepth, _tiltPending, _depthPending);
             _tiltPending = _depthPending = false;
             Save(s => s with { ShelfTilt = saveTilt ? tilt : s.ShelfTilt, ShelfDepth = saveDepth ? depth : s.ShelfDepth });
-        }
-    }
-
-    protected override void OnOpenChanged(bool isOpen)
-    {
-        if (!isOpen)
-        {
-            SavePending();
         }
     }
 

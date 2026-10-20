@@ -102,7 +102,11 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
         return new SoundFlowAudioOutput(this, options);
     }
 
-    /// <summary>Resolves a device by index id ("0", "1", ...) or case-insensitive name substring.</summary>
+    /// <summary>
+    /// Resolves a device by its whole name (case-insensitive; the App saves names), then by index id ("0", "1", ...),
+    /// then by part of its name. The whole name first, so a name inside an earlier device's name ("Speakers" and
+    /// "Speakers (USB DAC)") or a name of digits still finds its own device.
+    /// </summary>
     internal DeviceInfo? ResolveDevice(string? deviceId)
     {
         if (string.IsNullOrWhiteSpace(deviceId))
@@ -111,6 +115,14 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
         }
 
         var devices = Engine.RefreshPlaybackDevices();
+        foreach (var device in devices)
+        {
+            if (string.Equals(device.Name, deviceId, StringComparison.OrdinalIgnoreCase))
+            {
+                return device;
+            }
+        }
+
         if (int.TryParse(deviceId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
             && index >= 0 && index < devices.Count)
         {

@@ -506,7 +506,8 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         Albums = [.. _all.Where(a => Matches(a.Title, a.Artist, a.Album.Genre, a.Album.Year?.ToString(CultureInfo.InvariantCulture)))
             .OrderBy(a => a.Album, LibraryOrder.Albums(Sort))];
         CountText = Count(Albums.Count);
-        EmptyText = _all.Count == 0 ? "No albums yet. Add a music folder with 'music-spin library add <folder>' and scan it."
+        IsLibraryEmpty = _all.Count == 0;
+        EmptyText = _all.Count == 0 ? NoMusic
             : Albums.Count == 0 ? $"Nothing matches “{SearchText.Trim()}”." : null;
         LayOut();
     }

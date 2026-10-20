@@ -160,6 +160,23 @@ public class SoundFlowOutputTests
         Assert.Equal(expected, backend.Opened.Single().Device!.Value.Name);
     }
 
+    [Theory]
+    [InlineData("Speakers", "Speakers")] // not "Speakers (USB DAC)", listed first, which contains it
+    [InlineData("speakers", "Speakers")]
+    [InlineData("1", "1")] // a device named by digits: the name wins over the index
+    [InlineData("0", "Speakers (USB DAC)")] // no device has that name: the index
+    [InlineData("USB", "Speakers (USB DAC)")] // part of a name: the first that contains it
+    public void A_whole_device_name_finds_that_device_before_an_index_or_a_part_of_a_name(string id, string expected)
+    {
+        var backend = new FakeBackend(Device("Speakers (USB DAC)", false), Device("Speakers", true), Device("1", false));
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(DeviceId: id));
+
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+
+        Assert.Equal(expected, backend.Opened.Single().Device!.Value.Name);
+    }
+
     [Fact]
     public void A_device_that_fails_to_open_is_wrapped_and_leaves_the_output_closed()
     {

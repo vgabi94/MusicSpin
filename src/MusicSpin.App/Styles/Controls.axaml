@@ -207,6 +207,45 @@
         </Style>
     </ControlTheme>
 
+    <!--
+      A switch (Settings' Watch folders and Exclusive mode; the mockup has none): a round-ended track, the panel colour when
+      off and the accent when on, with its knob at the start or the end. Space toggles it when it has the focus.
+    -->
+    <ControlTheme x:Key="Switch" TargetType="ToggleButton">
+        <Setter Property="Width" Value="{StaticResource SwitchWidth}" />
+        <Setter Property="Height" Value="{StaticResource SwitchHeight}" />
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource SwitchRadius}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="theming:Animate.Transitions" Value="Background HoverDuration" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                    <Ellipse Name="PART_Knob"
+                             Width="{StaticResource SwitchKnobSize}"
+                             Height="{StaticResource SwitchKnobSize}"
+                             Margin="{StaticResource SwitchKnobMargin}"
+                             Fill="{TemplateBinding Foreground}"
+                             HorizontalAlignment="Left"
+                             VerticalAlignment="Center" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:checked">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+        </Style>
+        <Style Selector="^:checked /template/ Ellipse#PART_Knob">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
+    </ControlTheme>
+
     <!-- A segmented control (mockup: .seg): a ListBox of Choice records, one always chosen; arrows move the choice. -->
     <ControlTheme x:Key="Segmented" TargetType="ListBox">
         <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />

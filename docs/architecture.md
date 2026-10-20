@@ -295,6 +295,23 @@ src/MusicSpin.App/
   Motion through `IAppearance`, the speed and Motion to the spin clock; the turntable design, the shelf's tilt and depth
   are properties Now Playing and the shelf read. Each design is a `DeckDesign` type (`DeckDesigns.All`), so its preview
   in Settings and its deck in Now Playing are picked by data template.
+- **Settings › Library.** `LibrarySettingsViewModel` lists the music folders (a missing one says so), adds one through
+  the OS's folder picker (`IFolderPicker`; tests use a stub) and says what `library add` did in plain words (added,
+  already covered, taking in folders inside it), removes one after asking, and shows when the last scan ran and what it
+  couldn't read. `LibraryScanViewModel` runs one scan at a time through the library's write lock, with its progress and
+  Cancel; a scan asked for while one runs makes one more after it. Watch folders (`watchLibrary`) runs a
+  `LibraryWatcher` while the app runs. An empty library shows Add a music folder on the Albums, Tracks and Radio pages.
+- **Settings › Audio.** `AudioSettingsViewModel` offers System default, then the devices the player's backend lists
+  (`IAudioDevices`; tests use a stub; a saved device that isn't plugged in says so), and Exclusive mode. Both are saved
+  (`outputDevice`, `exclusiveMode`) and are the `PlayerOutput` a player the app starts gets (`player run --device
+  --exclusive`; the player finds a device by its whole name before its index or part of its name). They apply only
+  when the player starts, so a change restarts it (`PlayerViewModel.RestartAsync`): the event stream is closed first (a quitting player ends its subscriptions before it has stopped, which mustn't count as losing it),
+  then quit (it saves its queue and position, and closes that connection only once it has stopped and let go of its
+  lock), start again (it restores them), and resume if it was playing. Nothing else reaches the old player meanwhile:
+  the poll stops, playback input is held and sent to the new player after the resume, and other commands wait. A
+  player still holding its lock after the quit's wait isn't started over: a notice says the new output is used at the
+  next start. Who owns the player doesn't change: one the CLI started is still left
+  playing when the window closes. "In use now" is `status.output`.
 - **Now Playing.** `NowPlayingViewModel` is a layer: the player bar's cover opens and closes it, ✕ and Esc close it.
   It shows the playing track's album (title, "artist · year", the tracks; a click plays the album from that track) and
   holds the deck's state, which follows play/pause from anywhere: playing lowers the arm and turns the platter, a pause

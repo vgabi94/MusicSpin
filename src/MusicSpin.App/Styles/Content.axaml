@@ -177,6 +177,16 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- An empty library: Add a music folder under the message, the scan's progress under it (#31). -->
+    <Style Selector="StackPanel.addMusic">
+        <Setter Property="Spacing" Value="{StaticResource AddMusicGap}" />
+        <Setter Property="Margin" Value="{StaticResource AddMusicMargin}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.addMusic > Button">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
     <!-- Favorites, empty: "Click ♡ on a track to add it.", the heart an icon in the line. -->
     <Style Selector="StackPanel.emptyHint">
         <Setter Property="Orientation" Value="Horizontal" />
