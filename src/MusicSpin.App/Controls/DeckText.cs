@@ -126,14 +126,16 @@ public sealed class DeckText : Control
     {
         ArgumentNullException.ThrowIfNull(change);
         base.OnPropertyChanged(change);
-        if (change.Property == TextProperty || change.Property == FontFamilyProperty || change.Property == FontSizeProperty
-            || change.Property == FontWeightProperty || change.Property == LetterSpacingProperty)
+        var shaped = change.Property == TextProperty || change.Property == FontFamilyProperty || change.Property == FontSizeProperty
+                     || change.Property == FontWeightProperty || change.Property == LetterSpacingProperty;
+        if (shaped || change.Property == ForegroundProperty)
         {
             _layout?.Dispose();
             _layout = null;
         }
 
-        if (change.Property != ForegroundProperty)
+        // Only what moves the text places it again (its size, its anchor point, which end is anchored).
+        if (shaped || change.Property == XProperty || change.Property == YProperty || change.Property == AnchorProperty)
         {
             var origin = Origin;
             Canvas.SetLeft(this, origin.X);
@@ -150,19 +152,9 @@ public sealed class DeckText : Control
     public override void Render(DrawingContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        Layout(Foreground).Draw(context, default);
+        Layout().Draw(context, default);
     }
 
-    private TextLayout Layout(IBrush? foreground = null)
-    {
-        if (foreground is not null)
-        {
-            return Make(foreground);
-        }
-
-        return _layout ??= Make(null);
-    }
-
-    private TextLayout Make(IBrush? foreground)
-        => new(Text ?? string.Empty, Typeface, FontSize, foreground, letterSpacing: LetterSpacing);
+    /// <summary>The text shaped once, with its brush, until the text, the font or the brush changes.</summary>
+    private TextLayout Layout() => _layout ??= new(Text ?? string.Empty, Typeface, FontSize, Foreground, letterSpacing: LetterSpacing);
 }

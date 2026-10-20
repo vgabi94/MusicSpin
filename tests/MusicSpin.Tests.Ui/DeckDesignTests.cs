@@ -351,6 +351,28 @@ public sealed class DeckDesignTests
 
     private static KitDeckView Deck(AppHarness app) => Assert.IsType<KitDeckView>(Gui.Find<DeckHost>(app.Window, "Deck").Deck);
 
+    private static async Task LoadAlbumAsync(AppHarness app, int album)
+    {
+        var a = SampleLibrary.Albums[album - 1];
+        app.Scripted!.Status = ScriptedPlayer.Playing(a.Tracks[0], trackId: SampleLibrary.TrackId(album, 1));
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.PlayingAlbumId == SampleLibrary.AlbumId(album) && app.ViewModel.NowPlaying.Tracks.Count == a.Tracks.Length,
+            "the album loaded");
+    }
+
+    /// <summary>
+    /// A pixel 30 units inside Smoked Acrylic's plinth and one 30 units outside, either side of its right edge at y 400,
+    /// where nothing else is drawn (below the arm board, above the rest).
+    /// </summary>
+    private static (SKColor Inside, SKColor Outside) Sides(AppHarness app)
+    {
+        var plinth = Part(Deck(app), "Glass");
+        var edge = plinth.TranslatePoint(new Point(plinth.Bounds.Width, 400), app.Window)!.Value;
+        var reach = 30 * plinth.TransformToVisual(app.Window)!.Value.M11;
+        using var frame = Capture(app);
+        return (Pixel(frame, app, edge.X - reach, edge.Y), Pixel(frame, app, edge.X + reach, edge.Y));
+    }
+
     [AvaloniaTheory]
     [MemberData(nameof(Designs))]
     public async Task Choosing_the_design_in_Settings_shows_it_in_Now_Playing_at_once_and_saves_it(string design)
@@ -455,6 +477,27 @@ public sealed class DeckDesignTests
     private static bool Near((byte, byte, byte) expected, (byte, byte, byte) actual, int tolerance)
         => Math.Abs(expected.Item1 - actual.Item1) <= tolerance && Math.Abs(expected.Item2 - actual.Item2) <= tolerance
            && Math.Abs(expected.Item3 - actual.Item3) <= tolerance;
+
+    [AvaloniaFact]
+    public async Task Smoked_Acrylic_shows_the_new_cover_through_its_plinth_when_the_album_changes()
+    {
+        await using var app = await OpenAsync("acrylic");
+        await LoadAlbumAsync(app, 6); // Night Transit: blue behind the plinth
+        app.ViewModel.NowPlaying.Open();
+        Gui.FinishAnimations(Settled);
+        var (before, _) = Sides(app);
+
+        await LoadAlbumAsync(app, 9); // a red one
+        Gui.FinishAnimations(Settled);
+        var (inside, outside) = Sides(app);
+
+        var tint = Assert.IsAssignableFrom<ISolidColorBrush>(Resource(app, "AcrylicTintBrush")).Color;
+        var a = tint.A / 255.0;
+        byte Mix(byte under, byte over) => (byte)Math.Round((under * (1 - a)) + (over * a));
+        var expected = (Mix(outside.Red, tint.R), Mix(outside.Green, tint.G), Mix(outside.Blue, tint.B));
+        Assert.True(Near(expected, (inside.Red, inside.Green, inside.Blue), 3), $"inside {inside}, expected about {expected} (outside {outside})");
+        Assert.False(Near((before.Red, before.Green, before.Blue), (inside.Red, inside.Green, inside.Blue), 3), $"inside {inside} is still the first cover's {before}");
+    }
 
     [AvaloniaFact]
     [Trait("Category", "Unhappy")]

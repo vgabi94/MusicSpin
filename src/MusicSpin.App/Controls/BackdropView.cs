@@ -20,6 +20,7 @@ public sealed class BackdropView : Control
 
     private Matrix _placed = Matrix.Identity;
     private Matrix _veiled = Matrix.Identity;
+    private bool _attached;
 
     static BackdropView()
     {
@@ -30,6 +31,10 @@ public sealed class BackdropView : Control
     {
         LayoutUpdated += (_, _) => Follow();
     }
+
+    /// <summary>What a redraw depends on: the source's bitmap, opacity, stretch and blur; the veil's brush.</summary>
+    private static readonly AvaloniaProperty[] Watched =
+        [Image.SourceProperty, OpacityProperty, Image.StretchProperty, EffectProperty, Border.BackgroundProperty];
 
     /// <summary>The image behind the deck.</summary>
     public Image? Source
@@ -81,6 +86,44 @@ public sealed class BackdropView : Control
             {
                 context.FillRectangle(veil, new Rect(over.Bounds.Size));
             }
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        base.OnPropertyChanged(change);
+        if ((change.Property == SourceProperty || change.Property == VeilProperty) && _attached)
+        {
+            // The image and the veil stay the same controls while what they show changes (a new album's cover): watch them.
+            (change.OldValue as AvaloniaObject)?.PropertyChanged -= OnWatchedChanged;
+            (change.NewValue as AvaloniaObject)?.PropertyChanged += OnWatchedChanged;
+        }
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _attached = true;
+        Source?.PropertyChanged += OnWatchedChanged;
+        Veil?.PropertyChanged += OnWatchedChanged;
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _attached = false;
+        Source?.PropertyChanged -= OnWatchedChanged;
+        Veil?.PropertyChanged -= OnWatchedChanged;
+    }
+
+
+    private void OnWatchedChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (Array.IndexOf(Watched, e.Property) >= 0)
+        {
+            Follow();
+            InvalidateVisual();
         }
     }
 
