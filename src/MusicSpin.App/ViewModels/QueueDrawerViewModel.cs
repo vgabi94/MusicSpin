@@ -193,6 +193,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         _player.QueueChanged -= OnQueueChanged;
         _player.StatusApplied -= OnStatusApplied;
         _player.PropertyChanged -= OnPlayerChanged;
@@ -387,6 +388,8 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     /// <summary>Reads started (tests wait on these, not on time).</summary>
     internal int ReadsStarted => _reads;
 
+    private bool _disposed;
+
     /// <summary>Reads finished: applied, superseded by a later one, or failed.</summary>
     internal int ReadsFinished { get; private set; }
 
@@ -417,9 +420,9 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
             }
         }
 
-        if (read != _reads)
+        if (read != _reads || _disposed)
         {
-            return;
+            return; // a later read wins; and a read still under way when the drawer went shows nothing
         }
 
         _readFor = key;
