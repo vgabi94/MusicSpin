@@ -190,6 +190,9 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         return (await ConnectAsync(cancellationToken), started);
     }
 
+    /// <summary>Set: the player dies on this command, without answering it (it crashed, or couldn't open its output).</summary>
+    public string? StopsOn { get; set; }
+
     /// <summary>Set: a quit holds here after ending the subscriptions, before the player stops (a slow teardown).</summary>
     public TaskCompletionSource? QuitGate { get; set; }
 
@@ -244,6 +247,11 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
                 var id = request.GetProperty("id").Clone();
                 var cmd = request.GetProperty("cmd").GetString()!;
                 Requests.Enqueue((cmd, request));
+                if (cmd == StopsOn)
+                {
+                    await StopAsync();
+                    return;
+                }
                 if (_failures.TryGetValue(cmd, out var failure))
                 {
                     if (_holds.TryGetValue(cmd, out var held))

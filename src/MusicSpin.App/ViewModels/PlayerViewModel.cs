@@ -55,6 +55,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Set while <see cref="RestartAsync"/> runs: commands, losses and reconnects wait for it or leave it be.</summary>
     private volatile TaskCompletionSource<bool>? _restarting;
 
+    /// <summary>The window is closing: no command reaches the player any more (one would start a player as it goes).</summary>
+    private volatile bool _closing;
+
     /// <summary>Commands held while the turntable scene plays (see <see cref="HoldInput"/>), in order.</summary>
     private List<(string Cmd, object? Args)>? _held;
 
@@ -370,20 +373,19 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             restart.SetResult(started);
         }
 
-        if (hold)
+        _ui.Post(() =>
         {
-            _ui.Post(() =>
+            if (!started)
             {
-                if (started)
-                {
-                    _ = ReleaseInputAsync();
-                }
-                else
-                {
-                    _held = null;
-                }
-            });
-        }
+                // Whoever held it (this restart, or the turntable scene): sent now, it would start a player while the old
+                // one may still hold the data folder. The scene's own release then finds nothing to send.
+                _held = null;
+            }
+            else if (hold)
+            {
+                _ = ReleaseInputAsync();
+            }
+        });
 
         return done;
     }
@@ -448,6 +450,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public async Task ShutdownAsync()
     {
+        // From here nothing else reaches the player: input held or waiting would start a player as the window goes.
+        _closing = true;
+        _held = null;
         if (_restarting is { } restarting)
         {
             await restarting.Task.ConfigureAwait(false); // the player the restart starts is the one to shut down
@@ -508,6 +513,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// <param name="gated">Waits for a restart under way (the restart's own resume doesn't).</param>
     private async Task<bool> SendAsync(string cmd, object? args, bool holdable, bool gated = true)
     {
+        if (_closing)
+        {
+            return false;
+        }
+
         if (holdable && _held is { } held)
         {
             held.Add((cmd, args));
@@ -551,7 +561,8 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             Raise(ex.Message);
             if (ex.Code is MusicSpinErrorCode.PlayerNotRunning or MusicSpinErrorCode.PlayerUnavailable)
             {
-                await LostAsync().ConfigureAwait(false);
+                // The restart's own resume (ungated) is part of the restart: its loss is the restart's to report.
+                await LostAsync(restarting: !gated).ConfigureAwait(false);
             }
 
             return false;

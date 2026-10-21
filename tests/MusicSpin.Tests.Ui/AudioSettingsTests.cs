@@ -248,6 +248,86 @@ public sealed class AudioSettingsTests
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_new_player_that_dies_as_it_is_told_to_resume_is_noticed_and_looked_for_again()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        app.Scripted!.StopsOn = "resume"; // the new player can't open its output, say, and exits
+
+        await ChooseDeviceAsync(app, "USB DAC");
+
+        await Gui.UntilAsync(() => !app.ViewModel.Player.IsConnected, "disconnected");
+        Assert.False(app.Scripted.IsRunning);
+        Assert.Equal(2, app.Scripted.AppStarts);
+
+        // It is looked for again: started from elsewhere (the CLI), it is found at the next look.
+        app.Scripted.StopsOn = null;
+        app.Scripted.Start();
+        app.Time.Advance(PlayerViewModel.ReconnectInterval);
+        await Gui.UntilAsync(() => app.ViewModel.Player.IsConnected, "found again");
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Input_the_turntable_scene_held_through_a_failed_restart_is_dropped_too()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        var player = app.ViewModel.Player;
+        player.HoldInput(); // as the turntable scene does while it runs
+        await player.SendAsync("next");
+        var teardown = app.Scripted!.QuitGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Click(app, Gui.Find<Button>(app.Window, "OutputDevice"));
+        var choosing = app.ViewModel.Menu.ChooseCommand.ExecuteAsync(app.ViewModel.Menu.Entries.Single(e => e.Label == "USB DAC"));
+        await Gui.UntilAsync(() => app.Scripted.Count("quit") == 1 && app.Scripted.Subscribers == 0, "the old player stopping");
+
+        using (new FileStream(app.Scripted.Endpoint.LockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            teardown.SetResult();
+            await choosing;
+            await Gui.UntilAsync(() => app.ViewModel.Banner == PlayerViewModel.NotStoppedMessage, "the notice");
+            Gui.Settle();
+
+            await player.ReleaseInputAsync(); // the scene ends and lets its input go: there is none left
+            Gui.Settle();
+        }
+
+        Assert.Equal(1, app.Scripted.AppStarts);
+        Assert.Equal(0, app.Scripted.Count("next"));
+        Assert.Equal(PlayerViewModel.NotStoppedMessage, app.ViewModel.Banner);
+    }
+
+    [AvaloniaFact]
+    public async Task Input_sent_during_a_restart_doesnt_reach_the_player_once_the_window_is_closing()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        var teardown = app.Scripted!.QuitGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Click(app, Gui.Find<Button>(app.Window, "OutputDevice"));
+        var choosing = app.ViewModel.Menu.ChooseCommand.ExecuteAsync(app.ViewModel.Menu.Entries.Single(e => e.Label == "USB DAC"));
+        await Gui.UntilAsync(() => app.Scripted.Count("quit") == 1 && app.Scripted.Subscribers == 0, "the old player stopping");
+        await app.ViewModel.Player.SendAsync("next"); // held
+        var volume = app.ViewModel.Player.SendAsync("volume", new { value = 0.4 }); // waiting
+
+        var closing = app.ViewModel.Player.ShutdownAsync();
+        app.Scripted.QuitGate = null;
+        teardown.SetResult();
+        await choosing;
+        await closing;
+        await volume;
+        Gui.Settle();
+
+        Assert.Equal(2, app.Scripted.AppStarts); // the restart's, and no other
+        Assert.Equal(0, app.Scripted.Count("next"));
+        Assert.Equal(0, app.Scripted.Count("volume"));
+        await Gui.UntilAsync(() => !app.Scripted.IsRunning, "the new player quit");
+    }
+
+    [AvaloniaFact]
     public async Task Closing_the_window_during_a_restart_quits_the_player_the_restart_started()
     {
         await using var app = await OpenAsync();
