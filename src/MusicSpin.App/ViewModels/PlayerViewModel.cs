@@ -529,6 +529,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             return false; // the restart failed: dropped with it (the old player is quitting, the notice says why)
         }
 
+        if (_closing)
+        {
+            return false; // the window started closing while this waited for the restart
+        }
+
         try
         {
             // The connection this call made or found: _client may be dropped meanwhile (the player went away), and then
