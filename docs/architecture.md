@@ -319,7 +319,14 @@ src/MusicSpin.App/
   It shows the playing track's album (title, "artist · year", the tracks; a click plays the album from that track) and
   holds the deck's state, which follows play/pause from anywhere: playing lowers the arm and turns the platter, a pause
   lifts the arm where it is, nothing loaded parks it. `SlidePanel` sets its `Shown` (0 down, 1 in place) as a local
-  value and its transition animates it, so a closing panel slides back from wherever it is.
+  value and its transition animates it, so a closing panel slides back from wherever it is. Once it is all the way in
+  (`Covers`), the sidebar and the page under it are hidden, so they aren't drawn; they show again as it starts to go,
+  and while the turntable scene fades it in. Its background is the small cover blurred once per album
+  (`Theming/BlurredCover`, a 64-pixel image) and stretched: no blur runs per frame.
+- **Records.** A `VinylView` draws its two parts once each into an image as large as it shows on screen: what stays
+  still (the disc, its edge and grooves) and what turns (the label and the hole). The label turns on its composition
+  visual (a rotation about its centre), so a spinning record draws nothing new: the compositor turns an image. The
+  images are drawn again only when what they show changes, or the record shows much larger or smaller.
 - **Turntable designs.** A design is a `DeckDesign` record and its deck a `DeckView`, chosen by data template.
   `DeckHost` builds the deck for Settings › Design and gives it the same things whatever the design: the record (the
   cover as label, turned by the spin clock), the arm state, whether the platter spins, the accent, and the theme as any

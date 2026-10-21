@@ -129,6 +129,11 @@ public sealed class SceneFlight : TemplatedControl
         base.OnApplyTemplate(e);
         _pack = e.NameScope.Find<Control>("PART_Pack");
         _record = e.NameScope.Find<Control>("PART_Record");
+        if (_record is VinylView vinyl)
+        {
+            // It grows by render transforms (no layout pass): drawn from the start for the largest size it reaches.
+            vinyl.ImageScale = Math.Max(Math.Max(LiftScale, 1), Cross.Max(k => k.Scale));
+        }
         _sleeve = e.NameScope.Find<Control>("PART_Sleeve");
         Place();
     }

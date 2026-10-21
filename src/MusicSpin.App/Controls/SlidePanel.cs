@@ -26,6 +26,9 @@ public sealed class SlidePanel : Panel
 
     public static readonly StyledProperty<Dock> EdgeProperty = AvaloniaProperty.Register<SlidePanel, Dock>(nameof(Edge), Dock.Bottom);
 
+    public static readonly DirectProperty<SlidePanel, bool> CoversProperty =
+        AvaloniaProperty.RegisterDirect<SlidePanel, bool>(nameof(Covers), p => p.Covers);
+
     public SlidePanel()
     {
         Show();
@@ -49,6 +52,16 @@ public sealed class SlidePanel : Panel
     {
         get => GetValue(IsFadingProperty);
         set => SetValue(IsFadingProperty, value);
+    }
+
+    /// <summary>
+    /// Open, all the way in and not fading: an opaque panel hides what is under it, which then needn't be drawn (Now Playing
+    /// over the page and the sidebar: their spinning records would be drawn every frame for nothing).
+    /// </summary>
+    public bool Covers
+    {
+        get;
+        private set => SetAndRaise(CoversProperty, ref field, value);
     }
 
     /// <summary>Where it slides in from: <see cref="Dock.Bottom"/> (the default) or <see cref="Dock.Right"/>.</summary>
@@ -80,6 +93,7 @@ public sealed class SlidePanel : Panel
         // Fading, it stays in place even closed (invisible), so what is on it can be measured.
         IsHitTestVisible = IsOpen;
         IsVisible = IsOpen || Shown > 0 || IsFading;
+        Covers = IsOpen && !IsFading && Shown >= 1;
         Opacity = IsFading ? Shown : 1;
         var away = 1 - Shown;
         RenderTransform = IsFading ? null

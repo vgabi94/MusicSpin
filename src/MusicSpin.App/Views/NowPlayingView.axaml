@@ -38,7 +38,7 @@
     </UserControl.DataTemplates>
 
     <Panel>
-        <Image Name="Backdrop" Classes="npBackground" Source="{Binding NowPlaying.Cover}" />
+        <Image Name="Backdrop" Classes="npBackground" Source="{Binding NowPlaying.BackdropCover, Converter={StaticResource BlurredBackdrop}}" />
         <Border Name="Veil" Classes="npVeil" />
 
         <Button Name="CloseNowPlaying"

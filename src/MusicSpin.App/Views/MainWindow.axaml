@@ -50,9 +50,13 @@
 
         <views:TitleBar Name="TitleBarView" Grid.ColumnSpan="2" />
 
-        <views:SidebarView Name="SidebarView" Grid.Row="1" DataContext="{Binding Sidebar}" />
+        <!-- Under Now Playing, once it covers them, the sidebar and the page aren't drawn (their records would turn unseen). -->
+        <views:SidebarView Name="SidebarView"
+                           Grid.Row="1"
+                           DataContext="{Binding Sidebar}"
+                           IsVisible="{Binding #NowPlayingLayer.Covers, Converter={x:Static BoolConverters.Not}}" />
 
-        <DockPanel Name="ContentArea" Grid.Row="1" Grid.Column="1">
+        <DockPanel Name="ContentArea" Grid.Row="1" Grid.Column="1" IsVisible="{Binding #NowPlayingLayer.Covers, Converter={x:Static BoolConverters.Not}}">
             <Border Name="Banner"
                     Classes="banner"
                     DockPanel.Dock="Top"

@@ -105,9 +105,13 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
     [ObservableProperty]
     public partial string? ArtistLine { get; private set; }
 
-    /// <summary>The cover, large: the record's label and the blurred background.</summary>
+    /// <summary>The cover, large: the record's label (and the turntable scene's sleeve).</summary>
     [ObservableProperty]
     public partial Bitmap? Cover { get; private set; }
+
+    /// <summary>The cover, small: the blurred background is made from it once per album (a blurred image needs few pixels).</summary>
+    [ObservableProperty]
+    public partial Bitmap? BackdropCover { get; private set; }
 
     [ObservableProperty]
     public partial IReadOnlyList<NowPlayingTrackViewModel> Tracks { get; private set; } = [];
@@ -154,12 +158,13 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
         _shown = albumId is not null;
         if (albumId is null)
         {
-            (Title, ArtistLine, Cover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, []);
+            (Title, ArtistLine, Cover, BackdropCover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, null, []);
             return;
         }
 
         // The cover is asked for now but awaited apart: it waits out a busy library on its own (see CoverService).
         var cover = _covers.CoverAsync(albumId, CoverSize.Large);
+        _ = ShowBackdropAsync(albumId, _covers.CoverAsync(albumId, CoverSize.Small));
         await _notices.GuardAsync(async () =>
         {
             IReadOnlyList<AlbumSummary> albums;
@@ -217,6 +222,34 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
     }
 
     /// <summary>
+    /// The small cover the background is made from, on its own: a slow or failing one doesn't hold up the large cover (the
+    /// record's label), nor the other way round. The last album asked for wins; a cover that can't be read leaves the
+    /// background plain (the large one, read from the same file, says why if it fails too).
+    /// </summary>
+    private async Task ShowBackdropAsync(string albumId, Task<Bitmap?> backdrop)
+    {
+        if (!backdrop.IsCompleted)
+        {
+            BackdropCover = null; // not the last album's background under this one meanwhile
+        }
+
+        Bitmap? small;
+        try
+        {
+            small = await backdrop.ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MusicSpinException or IOException or InvalidOperationException or ArgumentException)
+        {
+            small = null;
+        }
+
+        if (_albumId == albumId)
+        {
+            BackdropCover = small;
+        }
+    }
+
+    /// <summary>
     /// The album couldn't be read: until it is, show what the player says is playing, as for a file outside the library,
     /// rather than the album shown before (unless another album is wanted by now).
     /// </summary>
@@ -224,7 +257,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
     {
         if (_albumId == albumId)
         {
-            (Title, ArtistLine, Cover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, []);
+            (Title, ArtistLine, Cover, BackdropCover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, null, []);
         }
     }
 

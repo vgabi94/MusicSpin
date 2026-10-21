@@ -546,7 +546,10 @@
     <Thickness x:Key="NowPlayingPadding">56,40</Thickness>
     <sys:Double x:Key="NowPlayingColumnGap">40</sys:Double>
     <Thickness x:Key="NowPlayingBackgroundInset">-60</Thickness>
-    <sys:Double x:Key="NowPlayingBackgroundBlur">60</sys:Double>
+    <!-- The blurred background: the small cover made into a 64-pixel image blurred once (Theming/BlurredCover), then
+         stretched; it looks like the mockup's live blur(60px) at the cost of one plain image a frame. -->
+    <sys:Int32 x:Key="NowPlayingBackgroundPixels">64</sys:Int32>
+    <sys:Double x:Key="NowPlayingBackgroundBlur">1.5</sys:Double>
     <sys:Double x:Key="NowPlayingBackgroundOpacity">0.55</sys:Double>
     <sys:Double x:Key="NowPlayingBackgroundScale">1.2</sys:Double>
     <sys:Double x:Key="NowPlayingCloseSize">36</sys:Double>
