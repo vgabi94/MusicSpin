@@ -105,9 +105,13 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
     [ObservableProperty]
     public partial string? ArtistLine { get; private set; }
 
-    /// <summary>The cover, large: the record's label and the blurred background.</summary>
+    /// <summary>The cover, large: the record's label (and the turntable scene's sleeve).</summary>
     [ObservableProperty]
     public partial Bitmap? Cover { get; private set; }
+
+    /// <summary>The cover, small: the blurred background is made from it once per album (a blurred image needs few pixels).</summary>
+    [ObservableProperty]
+    public partial Bitmap? BackdropCover { get; private set; }
 
     [ObservableProperty]
     public partial IReadOnlyList<NowPlayingTrackViewModel> Tracks { get; private set; } = [];
@@ -154,12 +158,13 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
         _shown = albumId is not null;
         if (albumId is null)
         {
-            (Title, ArtistLine, Cover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, []);
+            (Title, ArtistLine, Cover, BackdropCover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, null, []);
             return;
         }
 
         // The cover is asked for now but awaited apart: it waits out a busy library on its own (see CoverService).
         var cover = _covers.CoverAsync(albumId, CoverSize.Large);
+        var backdrop = _covers.CoverAsync(albumId, CoverSize.Small);
         await _notices.GuardAsync(async () =>
         {
             IReadOnlyList<AlbumSummary> albums;
@@ -208,6 +213,17 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
                 Cover = null; // not the last album's cover under this one's title meanwhile
             }
 
+            if (!backdrop.IsCompleted)
+            {
+                BackdropCover = null;
+            }
+
+            var small = await backdrop.ConfigureAwait(true);
+            if (_albumId == albumId)
+            {
+                BackdropCover = small; // the last album asked for wins: an earlier one's late cover is dropped
+            }
+
             var bitmap = await cover.ConfigureAwait(true);
             if (_albumId == albumId)
             {
@@ -224,7 +240,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
     {
         if (_albumId == albumId)
         {
-            (Title, ArtistLine, Cover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, []);
+            (Title, ArtistLine, Cover, BackdropCover, Tracks) = (_player.Album ?? _player.Title, _player.Artist, null, null, []);
         }
     }
 

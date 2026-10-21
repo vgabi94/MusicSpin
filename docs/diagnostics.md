@@ -98,6 +98,21 @@ MusicSpin player stopped (quit).
 
 There is no separate log for CLI commands. Errors are in the JSON `error` object (with `--json`) or on stderr.
 
+## Frame rate (desktop app)
+
+Start the app with `MUSICSPIN_FPS=1` to show Avalonia's overlay in the window: frames per second, and graphs of the
+time each frame spent on layout and on rendering. Use it to compare views (Cards, Shelf, Crate, Now Playing) and
+turntable designs on your machine, or to check that rendering runs on the GPU (a software renderer is much slower at
+high display scaling).
+
+```powershell
+$env:MUSICSPIN_FPS = "1"; ./MusicSpin.exe
+```
+
+```bash
+MUSICSPIN_FPS=1 ./MusicSpin
+```
+
 ## Common problems
 
 | Symptom | Cause and fix |

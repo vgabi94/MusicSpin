@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Rendering;
 using MusicSpin.App.Services;
 using MusicSpin.App.Services.MediaControls;
 using MusicSpin.App.Theming;
@@ -56,9 +57,19 @@ public static class AppComposition
     }
 
     /// <summary>The main window and its view model over <paramref name="services"/>.</summary>
+    /// <summary>Set to 1: the window shows Avalonia's frame rate and its layout and render times (docs/diagnostics.md).</summary>
+    public const string FpsVariable = "MUSICSPIN_FPS";
+
     public static MainWindow CreateMainWindow(AppServices services)
     {
         var viewModel = new MainWindowViewModel(services);
-        return new MainWindow { DataContext = viewModel };
+        var window = new MainWindow { DataContext = viewModel };
+        if (Environment.GetEnvironmentVariable(FpsVariable) == "1")
+        {
+            window.RendererDiagnostics.DebugOverlays =
+                RendererDebugOverlays.Fps | RendererDebugOverlays.LayoutTimeGraph | RendererDebugOverlays.RenderTimeGraph;
+        }
+
+        return window;
     }
 }

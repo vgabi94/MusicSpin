@@ -8,6 +8,7 @@
         xmlns:controls="using:MusicSpin.App.Controls"
         xmlns:theming="using:MusicSpin.App.Theming">
     <Styles.Resources>
+        <theming:BlurredCover x:Key="BlurredBackdrop" Pixels="{StaticResource NowPlayingBackgroundPixels}" Blur="{StaticResource NowPlayingBackgroundBlur}" />
         <!-- The Classic deck (mockup: .deck), drawn at s = 400; the host scales it. -->
         <ControlTheme x:Key="{x:Type controls:ClassicDeckView}" TargetType="controls:ClassicDeckView">
             <Setter Property="Width" Value="{StaticResource DeckWidth}" />
@@ -190,9 +191,7 @@
         <Setter Property="Opacity" Value="{StaticResource NowPlayingBackgroundOpacity}" />
         <Setter Property="RenderTransform" Value="scale(1.2)" />
         <Setter Property="IsHitTestVisible" Value="False" />
-        <Setter Property="Effect">
-            <BlurEffect Radius="{StaticResource NowPlayingBackgroundBlur}" />
-        </Setter>
+        <!-- Already blurred (BlurredBackdrop): stretched, it needs no blur of its own. -->
     </Style>
     <Style Selector="Border.npVeil">
         <Setter Property="Background" Value="{DynamicResource NowPlayingVeilBrush}" />

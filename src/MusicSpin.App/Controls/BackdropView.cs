@@ -75,8 +75,9 @@ public sealed class BackdropView : Control
             var crop = Crop(image.Size, size, source.Stretch);
             using (context.PushOpacity(source.Opacity))
             using (context.PushTransform(_placed))
+            using (context.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = RenderOptions.GetBitmapInterpolationMode(source) }))
             {
-                context.DrawImage(image, crop, new Rect(size));
+                context.DrawImage(image, crop, new Rect(size)); // the same image, stretched the same way
             }
         }
 
