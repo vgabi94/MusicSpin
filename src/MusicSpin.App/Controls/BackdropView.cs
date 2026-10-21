@@ -117,7 +117,6 @@ public sealed class BackdropView : Control
         Veil?.PropertyChanged -= OnWatchedChanged;
     }
 
-
     private void OnWatchedChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (Array.IndexOf(Watched, e.Property) >= 0)

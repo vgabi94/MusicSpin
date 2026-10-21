@@ -52,7 +52,8 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _player.FollowsCommands = true; // queue.add and queue.move edit its queue, as a real player's
         _player.Start();
         await _vm.StartAsync();
-        await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1 && _drawer.Rows.Count == upNext && _player.Count("queue") > 0, "the first read");
+        await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1 && _drawer.Rows.Count == upNext && _player.Count("queue") > 0
+                                   && ReadsSettled(), "the first read");
     }
 
     /// <summary>The queue changed (from the app or the CLI): the player says so and the drawer reads it again.</summary>

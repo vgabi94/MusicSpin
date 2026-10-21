@@ -53,7 +53,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     private readonly Func<PlayerOutput> _output;
 
     /// <summary>Set while <see cref="RestartAsync"/> runs: commands, losses and reconnects wait for it or leave it be.</summary>
-    private volatile TaskCompletionSource? _restarting;
+    private volatile TaskCompletionSource<bool>? _restarting;
+
+    /// <summary>The window is closing: no command reaches the player any more (one would start a player as it goes).</summary>
+    private volatile bool _closing;
 
     /// <summary>Commands held while the turntable scene plays (see <see cref="HoldInput"/>), in order.</summary>
     private List<(string Cmd, object? Args)>? _held;
@@ -336,7 +339,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     public async Task<bool> RestartAsync()
     {
         var (playing, owned) = (IsPlaying, StartedPlayer);
-        var restart = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var restart = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _restarting = restart;
         var hold = !IsInputHeld; // the turntable scene may hold it already: then the scene releases it
         if (hold)
@@ -345,31 +348,51 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         }
 
         StopTimers(); // no poll on the quitting connection; the new connection's status starts them again
-        bool done;
+        var started = false;
+        var done = false;
         try
         {
-            done = await RestartPlayerAsync().ConfigureAwait(false);
+            started = await RestartPlayerAsync().ConfigureAwait(false);
+            if (!started)
+            {
+                await LostAsync(restarting: true).ConfigureAwait(false); // disconnected, and looking for a player (one the CLI starts)
+            }
+            else
+            {
+                StartedPlayer = owned; // who owns the player doesn't change: one the CLI started keeps playing when the window closes
+                done = !playing || await SendAsync("resume", null, holdable: false, gated: false).ConfigureAwait(false);
+            }
         }
         finally
         {
+            // Only now may anything else reach the player: the new one is playing (or paused) as the old one was, or the
+            // restart failed and the app is looking for a player. Commands that waited go to the new player, or are
+            // dropped with the restart (the notice says why): sent now, they would start a player while the old one may
+            // still hold the data folder.
             _restarting = null;
-            restart.SetResult();
+            restart.SetResult(started);
         }
 
-        if (!done)
+        _ui.Post(() =>
         {
-            await LostAsync().ConfigureAwait(false); // disconnected, and looking for a player (one the CLI starts)
-        }
-        else
-        {
-            StartedPlayer = owned; // who owns the player doesn't change: one the CLI started keeps playing when the window closes
-            done = !playing || await SendAsync("resume", null, holdable: false).ConfigureAwait(false);
-        }
-
-        if (hold)
-        {
-            _ui.Post(() => _ = ReleaseInputAsync());
-        }
+            if (!started)
+            {
+                // Whoever held it (this restart, or the turntable scene): sent now, it would start a player while the old
+                // one may still hold the data folder. A scene's hold stays (it is still playing); its release finds nothing.
+                if (hold)
+                {
+                    _held = null;
+                }
+                else
+                {
+                    _held?.Clear();
+                }
+            }
+            else if (hold)
+            {
+                _ = ReleaseInputAsync();
+            }
+        });
 
         return done;
     }
@@ -434,6 +457,14 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public async Task ShutdownAsync()
     {
+        // From here nothing else reaches the player: input held or waiting would start a player as the window goes.
+        _closing = true;
+        _held = null;
+        if (_restarting is { } restarting)
+        {
+            await restarting.Task.ConfigureAwait(false); // the player the restart starts is the one to shut down
+        }
+
         if (_client is not { } client)
         {
             return;
@@ -486,17 +517,28 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public Task SendAsync(string cmd, object? args = null) => SendAsync(cmd, args, holdable: cmd is not ("volume" or "mute"));
 
-    private async Task<bool> SendAsync(string cmd, object? args, bool holdable)
+    /// <param name="gated">Waits for a restart under way (the restart's own resume doesn't).</param>
+    private async Task<bool> SendAsync(string cmd, object? args, bool holdable, bool gated = true)
     {
+        if (_closing)
+        {
+            return false;
+        }
+
         if (holdable && _held is { } held)
         {
             held.Add((cmd, args));
             return true;
         }
 
-        if (_restarting is { } restarting)
+        if (gated && _restarting is { } restarting && !await restarting.Task.ConfigureAwait(false))
         {
-            await restarting.Task.ConfigureAwait(false); // the new player gets it (the old one is quitting)
+            return false; // the restart failed: dropped with it (the old player is quitting, the notice says why)
+        }
+
+        if (_closing)
+        {
+            return false; // the window started closing while this waited for the restart
         }
 
         try
@@ -531,7 +573,8 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             Raise(ex.Message);
             if (ex.Code is MusicSpinErrorCode.PlayerNotRunning or MusicSpinErrorCode.PlayerUnavailable)
             {
-                await LostAsync().ConfigureAwait(false);
+                // The restart's own resume (ungated) is part of the restart: its loss is the restart's to report.
+                await LostAsync(restarting: !gated).ConfigureAwait(false);
             }
 
             return false;
@@ -789,12 +832,13 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// <summary>
     /// The player went away (quit, crash, restart): drop the connection and look for it again. With
     /// <paramref name="events"/>, only if that is still the connection (a restart may already have made a new one).
+    /// During a restart only the restart itself says so (<paramref name="restarting"/>).
     /// </summary>
-    private async Task LostAsync(PlayerClient? events = null)
+    private async Task LostAsync(PlayerClient? events = null, bool restarting = false)
     {
-        if (_life.IsCancellationRequested || _restarting is not null)
+        if (_life.IsCancellationRequested || _closing || (_restarting is not null && !restarting))
         {
-            return; // closing, or restarting: the restart says how it went
+            return; // closing (nothing more to look for), or restarting: the restart says how it went
         }
 
         if (events is not null)
