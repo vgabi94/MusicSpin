@@ -446,9 +446,25 @@ internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<strin
     /// <summary>An album's covers wait for its gate (a cover service waiting out a busy library).</summary>
     public ConcurrentDictionary<string, TaskCompletionSource<Bitmap?>> Gates { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>One size of an album's cover fails with this (a file that can't be read).</summary>
+    public ConcurrentDictionary<(string AlbumId, CoverSize Size), Exception> Failures { get; } = new();
+
+    /// <summary>One size of an album's cover waits for its gate (the other sizes don't).</summary>
+    public ConcurrentDictionary<(string AlbumId, CoverSize Size), TaskCompletionSource<Bitmap?>> SizeGates { get; } = new();
+
     public Task<Bitmap?> CoverAsync(string albumId, CoverSize size)
     {
         Requests.AddOrUpdate(albumId, 1, (_, n) => n + 1);
+        if (Failures.TryGetValue((albumId, size), out var failure))
+        {
+            return Task.FromException<Bitmap?>(failure);
+        }
+
+        if (SizeGates.TryGetValue((albumId, size), out var sizeGate))
+        {
+            return sizeGate.Task;
+        }
+
         return Gates.TryGetValue(albumId, out var gate) ? gate.Task : Task.FromResult(cover?.Invoke(albumId));
     }
 

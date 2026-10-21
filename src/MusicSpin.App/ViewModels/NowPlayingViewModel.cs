@@ -164,7 +164,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
 
         // The cover is asked for now but awaited apart: it waits out a busy library on its own (see CoverService).
         var cover = _covers.CoverAsync(albumId, CoverSize.Large);
-        var backdrop = _covers.CoverAsync(albumId, CoverSize.Small);
+        _ = ShowBackdropAsync(albumId, _covers.CoverAsync(albumId, CoverSize.Small));
         await _notices.GuardAsync(async () =>
         {
             IReadOnlyList<AlbumSummary> albums;
@@ -213,23 +213,40 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
                 Cover = null; // not the last album's cover under this one's title meanwhile
             }
 
-            if (!backdrop.IsCompleted)
-            {
-                BackdropCover = null;
-            }
-
-            var small = await backdrop.ConfigureAwait(true);
-            if (_albumId == albumId)
-            {
-                BackdropCover = small; // the last album asked for wins: an earlier one's late cover is dropped
-            }
-
             var bitmap = await cover.ConfigureAwait(true);
             if (_albumId == albumId)
             {
                 Cover = bitmap;
             }
         }).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The small cover the background is made from, on its own: a slow or failing one doesn't hold up the large cover (the
+    /// record's label), nor the other way round. The last album asked for wins; a cover that can't be read leaves the
+    /// background plain (the large one, read from the same file, says why if it fails too).
+    /// </summary>
+    private async Task ShowBackdropAsync(string albumId, Task<Bitmap?> backdrop)
+    {
+        if (!backdrop.IsCompleted)
+        {
+            BackdropCover = null; // not the last album's background under this one meanwhile
+        }
+
+        Bitmap? small;
+        try
+        {
+            small = await backdrop.ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MusicSpinException or IOException or InvalidOperationException or ArgumentException)
+        {
+            small = null;
+        }
+
+        if (_albumId == albumId)
+        {
+            BackdropCover = small;
+        }
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -275,6 +276,31 @@ public sealed class SceneTests
         Near(spot, app.ViewModel.Scene.Landing);
         new SceneClock(app).To(SceneTimeline.FlightMs + 60);
         Near(spot, InWindow(app, Flight(app).Record!));
+    }
+
+    [AvaloniaFact]
+    public async Task The_flying_record_is_drawn_from_the_start_for_the_size_it_lands_at()
+    {
+        await using var app = await OpenAsync();
+        await StartAsync(app);
+        var clock = new SceneClock(app);
+        clock.To(20); // the first frames: the record is still the sleeve's size
+        using (app.Window.CaptureRenderedFrame())
+        {
+        }
+
+        var record = Assert.IsType<VinylView>(Flight(app).Record);
+        var first = record.GrooveImagePixels;
+        Assert.True(first > 0, "drawn at the start");
+
+        clock.To(SceneTimeline.FlightMs + 60); // landed on the deck, full size
+        using (app.Window.CaptureRenderedFrame())
+        {
+        }
+
+        Assert.True(record.GrooveImagePixels >= record.Bounds.Width * app.Window.RenderScaling,
+            $"{record.GrooveImagePixels} px for a record {record.Bounds.Width} wide: it would be stretched");
+        Assert.Equal(first, record.GrooveImagePixels); // that size from the start: not drawn small and stretched
     }
 
     [AvaloniaFact]

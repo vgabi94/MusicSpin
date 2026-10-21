@@ -42,6 +42,9 @@ public sealed class VinylView : Control
     /// <summary>Distance between grooves in pixels.</summary>
     public static readonly StyledProperty<double> GroovePitchProperty = AvaloniaProperty.Register<VinylView, double>(nameof(GroovePitch));
 
+    /// <summary>Set: the record's images are drawn at this scale of its size (times the window's), not as it shows now.</summary>
+    public static readonly StyledProperty<double> ImageScaleProperty = AvaloniaProperty.Register<VinylView, double>(nameof(ImageScale));
+
     private readonly Grooves _grooves;
     private readonly Disc _disc;
     private readonly Sheen _sheen;
@@ -51,6 +54,11 @@ public sealed class VinylView : Control
         AffectsRender<VinylView>(SheenColorProperty);
         AngleProperty.Changed.AddClassHandler<VinylView>((v, _) => v._disc.Turn(v.Angle));
         // Each part's image is drawn again only when something it draws changes.
+        ImageScaleProperty.Changed.AddClassHandler<VinylView>((v, _) =>
+        {
+            v._grooves.Redraw();
+            v._disc.Redraw();
+        });
         foreach (var property in new AvaloniaProperty[] { DiscBrushProperty, GrooveBrushProperty, EdgeBrushProperty, LabelScaleProperty, GroovePitchProperty })
         {
             property.Changed.AddClassHandler<VinylView>((v, _) => v._grooves.Redraw());
@@ -156,6 +164,20 @@ public sealed class VinylView : Control
         set => SetValue(GroovePitchProperty, value);
     }
 
+    /// <summary>
+    /// The scale of its laid-out size the record's images are drawn for (0, the default: as it shows now). For a record
+    /// that render transforms grow without a layout pass (the turntable scene's flying record): drawn for the largest size
+    /// it reaches, it isn't stretched as it lands.
+    /// </summary>
+    public double ImageScale
+    {
+        get => GetValue(ImageScaleProperty);
+        set => SetValue(ImageScaleProperty, value);
+    }
+
+    /// <summary>The still part's image, in pixels across (tests check it's sharp where it shows).</summary>
+    internal int GrooveImagePixels => _grooves.Pixels;
+
     /// <summary>The disc's rotation as rendered (tests check that discs of the playing album agree).</summary>
     public double RenderedAngle => _disc.RenderedAngle;
 
@@ -227,6 +249,9 @@ public sealed class VinylView : Control
         /// <summary>How often its image was drawn.</summary>
         public int Images { get; private set; }
 
+        /// <summary>Its image's size, in pixels across (without the border).</summary>
+        public int Pixels { get; private set; }
+
         /// <summary>The record changed: the image is drawn again at the next frame.</summary>
         public void Redraw()
         {
@@ -265,6 +290,7 @@ public sealed class VinylView : Control
             {
                 Images++;
                 var pixels = (int)Math.Clamp(Math.Ceiling(side * Scale()), 1, MaxPixels);
+                Pixels = pixels;
                 _imageScale = pixels / side;
                 _image = new RenderTargetBitmap(new PixelSize(pixels + (2 * Border), pixels + (2 * Border)));
                 using var drawing = _image.CreateDrawingContext();
@@ -281,10 +307,19 @@ public sealed class VinylView : Control
         /// <summary>Draws the part on a record of radius <paramref name="r"/>, its centre at (r, r).</summary>
         protected abstract void Draw(DrawingContext context, double r);
 
-        /// <summary>Screen pixels per unit here: the window's scaling and every transform above (rotation aside).</summary>
+        /// <summary>
+        /// Screen pixels per unit here: the window's scaling and every transform above (rotation aside), or the record's
+        /// <see cref="ImageScale"/> of the window's scaling.
+        /// </summary>
         private double Scale()
         {
-            if (TopLevel.GetTopLevel(this) is not { } top || this.TransformToVisual(top) is not { } m)
+            var top = TopLevel.GetTopLevel(this);
+            if (Owner.ImageScale > 0)
+            {
+                return Owner.ImageScale * (top?.RenderScaling ?? 1);
+            }
+
+            if (top is null || this.TransformToVisual(top) is not { } m)
             {
                 return 1;
             }

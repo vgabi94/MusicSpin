@@ -56,10 +56,10 @@ public static class AppComposition
         await viewModel.StartAsync();
     }
 
-    /// <summary>The main window and its view model over <paramref name="services"/>.</summary>
     /// <summary>Set to 1: the window shows Avalonia's frame rate and its layout and render times (docs/diagnostics.md).</summary>
     public const string FpsVariable = "MUSICSPIN_FPS";
 
+    /// <summary>The main window and its view model over <paramref name="services"/>.</summary>
     public static MainWindow CreateMainWindow(AppServices services)
     {
         var viewModel = new MainWindowViewModel(services);

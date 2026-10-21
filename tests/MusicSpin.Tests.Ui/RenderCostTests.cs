@@ -8,9 +8,11 @@ using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using MusicSpin.App.Controls;
 using MusicSpin.App.Theming;
+using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Settings;
 using MusicSpin.Tests.Ui.Harness;
+using SkiaSharp;
 
 namespace MusicSpin.Tests.Ui;
 
@@ -220,6 +222,78 @@ public sealed class RenderCostTests
 
         Assert.Same(second, app.ViewModel.NowPlaying.BackdropCover);
         Assert.Equal(SampleLibrary.AlbumId(7), app.ViewModel.PlayingAlbumId);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_small_cover_that_fails_leaves_the_background_plain_and_the_label_still_shows()
+    {
+        var covers = SampleLibrary.Covers(accents: true);
+        covers.Failures[(SampleLibrary.AlbumId(Album), CoverSize.Small)] = new IOException("The cover file can't be read.");
+        await using var app = await OpenAsync(covers: covers);
+
+        await PlayAsync(app);
+        app.ViewModel.NowPlaying.Open();
+        Gui.FinishAnimations(900);
+        await Gui.UntilAsync(() => app.ViewModel.NowPlaying.Cover is not null, "the label");
+
+        Assert.Null(app.ViewModel.NowPlaying.BackdropCover);
+        Assert.Null(Gui.Find<Image>(app.Window, "Backdrop").Source);
+    }
+
+    [AvaloniaFact]
+    public async Task A_slow_small_cover_doesnt_hold_up_the_label_nor_the_other_way_round()
+    {
+        var covers = SampleLibrary.Covers(accents: true);
+        var small = covers.SizeGates[(SampleLibrary.AlbumId(Album), CoverSize.Small)] = new TaskCompletionSource<Bitmap?>();
+        await using var app = await OpenAsync(covers: covers);
+
+        await PlayAsync(app);
+        await Gui.UntilAsync(() => app.ViewModel.NowPlaying.Cover is not null, "the label, while the small cover waits");
+        Assert.Null(app.ViewModel.NowPlaying.BackdropCover);
+
+        small.SetResult(TestImages.Bitmap(TestImages.Cover(64)));
+        await Gui.UntilAsync(() => app.ViewModel.NowPlaying.BackdropCover is not null, "the background");
+
+        var covers2 = SampleLibrary.Covers(accents: true);
+        var large = covers2.SizeGates[(SampleLibrary.AlbumId(Album), CoverSize.Large)] = new TaskCompletionSource<Bitmap?>();
+        await using var app2 = await OpenAsync(covers: covers2);
+        await PlayAsync(app2);
+        await Gui.UntilAsync(() => app2.ViewModel.NowPlaying.BackdropCover is not null, "the background, while the large cover waits");
+        Assert.Null(app2.ViewModel.NowPlaying.Cover);
+        large.SetResult(TestImages.Bitmap(TestImages.Cover(64)));
+        await Gui.UntilAsync(() => app2.ViewModel.NowPlaying.Cover is not null, "the label");
+    }
+
+    [AvaloniaFact]
+    public void The_blurred_cover_is_the_middle_square_of_a_cover_that_isnt_square()
+    {
+        // 200 × 100: red, then green across the middle 100, then blue. The middle square is all green.
+        var cover = TestImages.Bitmap(TestImages.Png(200, 100, (x, _) => x < 50 ? SKColors.Red : x < 150 ? SKColors.Lime : SKColors.Blue));
+
+        var made = Assert.IsAssignableFrom<Bitmap>(BlurredCover.Make(cover, 16, 1.5));
+
+        Assert.Equal(new PixelSize(16, 16), made.PixelSize);
+        using var png = new MemoryStream();
+        made.Save(png, new PngBitmapEncoderOptions());
+        using var pixels = SKBitmap.Decode(png.ToArray());
+        foreach (var (x, y) in new[] { (0, 0), (15, 0), (8, 8), (0, 15), (15, 15) })
+        {
+            var c = pixels.GetPixel(x, y);
+            Assert.True(c.Green > 200 && c.Red < 40 && c.Blue < 40, $"({x}, {y}) is {c}: the sides were cut off");
+        }
+    }
+
+    [AvaloniaTheory]
+    [Trait("Category", "Unhappy")]
+    [InlineData(null)]
+    [InlineData("not an image")]
+    public void Without_a_cover_there_is_no_blurred_background(object? value)
+    {
+        var blurrer = new BlurredCover();
+
+        Assert.Null(blurrer.Convert(value, typeof(IImage), null, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(0, blurrer.Made);
     }
 
     [AvaloniaFact]
