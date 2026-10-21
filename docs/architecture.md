@@ -309,9 +309,11 @@ src/MusicSpin.App/
   when the player starts, so a change restarts it (`PlayerViewModel.RestartAsync`): the event stream is closed first (a quitting player ends its subscriptions before it has stopped, which mustn't count as losing it),
   then quit (it saves its queue and position, and closes that connection only once it has stopped and let go of its
   lock), start again (it restores them), and resume if it was playing. Nothing else reaches the old player meanwhile:
-  the poll stops, playback input is held and sent to the new player after the resume, and other commands wait. A
-  player still holding its lock after the quit's wait isn't started over: a notice says the new output is used at the
-  next start. Who owns the player doesn't change: one the CLI started is still left
+  the poll stops, playback input is held and sent to the new player after the resume, and other commands wait until
+  the restart is over. A player still holding its lock after the quit's wait isn't started over: a notice says the new
+  output is used at the next start, and the input held or waiting meanwhile is dropped (sent then, it would start a
+  player while the old one still holds the data folder). Closing the window during a restart waits for it, then shuts
+  down the player it started. Who owns the player doesn't change: one the CLI started is still left
   playing when the window closes. "In use now" is `status.output`.
 - **Now Playing.** `NowPlayingViewModel` is a layer: the player bar's cover opens and closes it, ✕ and Esc close it.
   It shows the playing track's album (title, "artist · year", the tracks; a click plays the album from that track) and

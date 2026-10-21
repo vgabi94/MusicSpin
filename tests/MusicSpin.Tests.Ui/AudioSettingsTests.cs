@@ -153,7 +153,7 @@ public sealed class AudioSettingsTests
         await Gui.UntilAsync(() => app.Scripted.Count("quit") == 1 && app.Scripted.Subscribers == 0, "the old player stopping");
         Gui.Settle();
 
-        // Meanwhile: polls come due, and a media key sends next.
+        // Meanwhile: polls come due, a media key sends next, and the volume moves (it isn't held: it waits).
         for (var i = 0; i < 4; i++)
         {
             app.Time.Advance(PlayerViewModel.PollInterval);
@@ -161,7 +161,9 @@ public sealed class AudioSettingsTests
         }
 
         await app.ViewModel.Player.SendAsync("next");
+        var volume = app.ViewModel.Player.SendAsync("volume", new { value = 0.4 });
         Gui.Settle();
+        Assert.False(volume.IsCompleted);
 
         Assert.False(choosing.IsCompleted);
         Assert.True(Audio(app).IsRestarting);
@@ -172,12 +174,16 @@ public sealed class AudioSettingsTests
 
         teardown.SetResult();
         await choosing;
+        await volume;
         await RestartedAsync(app, 2);
         await Gui.UntilAsync(() => app.Scripted.Count("next") == 1, "the held next sent");
 
         Assert.Equal(new PlayerOutput("USB DAC", false), app.Scripted.StartOutputs.Last());
         string[] after = [.. app.Scripted.Requests.Select(r => r.Cmd).SkipWhile(c => c != "quit").Where(c => c is "subscribe" or "resume" or "next")];
         Assert.Equal(["subscribe", "resume", "next"], after); // to the new player, after the resume
+        string[] volumeAfter = [.. app.Scripted.Requests.Select(r => r.Cmd).SkipWhile(c => c != "resume").Where(c => c == "volume")];
+        Assert.Equal(["volume"], volumeAfter); // the waiting volume too, once the restart was done
+        Assert.Equal(1, app.Scripted.Count("volume"));
         Assert.False(disconnected);
         Assert.True(app.ViewModel.Player.StartedPlayer);
     }
@@ -204,6 +210,65 @@ public sealed class AudioSettingsTests
 
         Assert.Equal(2, app.Scripted.AppStarts);
         Assert.Equal(new PlayerOutput("USB DAC", false), app.Scripted.StartOutputs.Last());
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Input_sent_during_a_restart_that_fails_is_dropped_and_starts_no_player()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        var teardown = app.Scripted!.QuitGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Click(app, Gui.Find<Button>(app.Window, "OutputDevice"));
+        var choosing = app.ViewModel.Menu.ChooseCommand.ExecuteAsync(app.ViewModel.Menu.Entries.Single(e => e.Label == "USB DAC"));
+        await Gui.UntilAsync(() => app.Scripted.Count("quit") == 1 && app.Scripted.Subscribers == 0, "the old player stopping");
+
+        // While it stops: next (held) and the volume (waiting).
+        await app.ViewModel.Player.SendAsync("next");
+        var volume = app.ViewModel.Player.SendAsync("volume", new { value = 0.4 });
+        Gui.Settle();
+
+        // It stops, but its lock outlives the wait: the restart gives up.
+        using (new FileStream(app.Scripted.Endpoint.LockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            teardown.SetResult();
+            await choosing;
+            await volume;
+            await Gui.UntilAsync(() => app.ViewModel.Banner == PlayerViewModel.NotStoppedMessage, "the notice");
+            await Gui.UntilAsync(() => !app.ViewModel.Player.IsConnected, "disconnected");
+            Gui.Settle();
+        }
+
+        Assert.Equal(1, app.Scripted.AppStarts); // nothing started a player while the old one held the data folder
+        Assert.Equal(0, app.Scripted.Count("next"));
+        Assert.Equal(0, app.Scripted.Count("volume"));
+        Assert.Equal(PlayerViewModel.NotStoppedMessage, app.ViewModel.Banner); // not replaced by a start or connection error
+        Assert.False(app.ViewModel.Player.IsInputHeld);
+    }
+
+    [AvaloniaFact]
+    public async Task Closing_the_window_during_a_restart_quits_the_player_the_restart_started()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        var teardown = app.Scripted!.QuitGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Click(app, Gui.Find<Button>(app.Window, "OutputDevice"));
+        var choosing = app.ViewModel.Menu.ChooseCommand.ExecuteAsync(app.ViewModel.Menu.Entries.Single(e => e.Label == "USB DAC"));
+        await Gui.UntilAsync(() => app.Scripted.Count("quit") == 1 && app.Scripted.Subscribers == 0, "the old player stopping");
+
+        var closing = app.ViewModel.Player.ShutdownAsync(); // the window closes now
+        Gui.Settle();
+        Assert.False(closing.IsCompleted); // it waits for the restart
+
+        app.Scripted.QuitGate = null; // the new player stops at once when told
+        teardown.SetResult();
+        await choosing;
+        await closing;
+
+        Assert.Equal(2, app.Scripted.AppStarts);
+        Assert.Equal(2, app.Scripted.Count("quit")); // the old player's, then the new one's
+        await Gui.UntilAsync(() => !app.Scripted.IsRunning, "the new player quit");
     }
 
     [AvaloniaFact]

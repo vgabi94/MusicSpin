@@ -485,9 +485,13 @@ public sealed class DeckDesignTests
         await LoadAlbumAsync(app, 6); // Night Transit: blue behind the plinth
         app.ViewModel.NowPlaying.Open();
         Gui.FinishAnimations(Settled);
+        var first = app.ViewModel.NowPlaying.Cover;
+        Assert.NotNull(first);
         var (before, _) = Sides(app);
 
         await LoadAlbumAsync(app, 9); // a red one
+        // Its cover loads after its tracks: sample only once it shows, or the test would compare the page with itself.
+        await Gui.UntilAsync(() => app.ViewModel.NowPlaying.Cover is { } cover && !ReferenceEquals(cover, first), "the new cover");
         Gui.FinishAnimations(Settled);
         var (inside, outside) = Sides(app);
 
