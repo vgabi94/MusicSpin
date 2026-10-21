@@ -291,6 +291,7 @@ public sealed class AudioSettingsTests
             await Gui.UntilAsync(() => app.ViewModel.Banner == PlayerViewModel.NotStoppedMessage, "the notice");
             Gui.Settle();
 
+            Assert.True(player.IsInputHeld); // the scene is still playing: its hold stays, empty
             await player.ReleaseInputAsync(); // the scene ends and lets its input go: there is none left
             Gui.Settle();
         }
@@ -312,6 +313,7 @@ public sealed class AudioSettingsTests
         await Gui.UntilAsync(() => app.Scripted.Count("quit") == 1 && app.Scripted.Subscribers == 0, "the old player stopping");
         await app.ViewModel.Player.SendAsync("next"); // held
         var volume = app.ViewModel.Player.SendAsync("volume", new { value = 0.4 }); // waiting
+        var mute = app.ViewModel.Player.SendAsync("mute", new { mode = "on" }); // waiting too
 
         var closing = app.ViewModel.Player.ShutdownAsync();
         app.Scripted.QuitGate = null;
@@ -319,11 +321,13 @@ public sealed class AudioSettingsTests
         await choosing;
         await closing;
         await volume;
+        await mute;
         Gui.Settle();
 
         Assert.Equal(2, app.Scripted.AppStarts); // the restart's, and no other
         Assert.Equal(0, app.Scripted.Count("next"));
         Assert.Equal(0, app.Scripted.Count("volume"));
+        Assert.Equal(0, app.Scripted.Count("mute"));
         await Gui.UntilAsync(() => !app.Scripted.IsRunning, "the new player quit");
     }
 

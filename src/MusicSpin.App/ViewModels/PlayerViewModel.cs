@@ -378,8 +378,15 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             if (!started)
             {
                 // Whoever held it (this restart, or the turntable scene): sent now, it would start a player while the old
-                // one may still hold the data folder. The scene's own release then finds nothing to send.
-                _held = null;
+                // one may still hold the data folder. A scene's hold stays (it is still playing); its release finds nothing.
+                if (hold)
+                {
+                    _held = null;
+                }
+                else
+                {
+                    _held?.Clear();
+                }
             }
             else if (hold)
             {
@@ -829,9 +836,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     private async Task LostAsync(PlayerClient? events = null, bool restarting = false)
     {
-        if (_life.IsCancellationRequested || (_restarting is not null && !restarting))
+        if (_life.IsCancellationRequested || _closing || (_restarting is not null && !restarting))
         {
-            return; // closing, or restarting: the restart says how it went
+            return; // closing (nothing more to look for), or restarting: the restart says how it went
         }
 
         if (events is not null)
