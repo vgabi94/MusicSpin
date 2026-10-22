@@ -245,6 +245,11 @@
     <sys:Double x:Key="ShelfShadowHeight">14</sys:Double>
     <!-- The spine is in shadow (mockup: .edge filter: brightness(.55)). -->
     <sys:Double x:Key="ShelfSpineShade">0.55</sys:Double>
+    <!--
+      An invisible frame around a sleeve, past anything it draws (facing you at the deepest setting it reaches 9 above
+      its slot): its image at rest then starts on a whole pixel, as the sleeve does, so it looks the same as drawn live.
+    -->
+    <Thickness x:Key="ShelfCacheFrame">-16</Thickness>
 
     <!--
       The crate (mockup: .crate-wrap, .crate, .crate-stage, .crate-box, .crate-side). One crate is laid out at full
