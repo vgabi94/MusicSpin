@@ -13,6 +13,7 @@
         <Setter Property="Width" Value="{StaticResource QueueWidth}" />
         <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="theming:Animate.Transitions" Value="Shown QueueSlideDuration EaseOut" />
+        <Setter Property="MotionCache" Value="{StaticResource MotionCache}" />
     </Style>
     <Style Selector="Border.queueDrawer">
         <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />

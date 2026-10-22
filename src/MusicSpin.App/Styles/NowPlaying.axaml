@@ -20,36 +20,48 @@
             <Setter Property="theming:Animate.Transitions" Value="Swing ArmSwingDuration EaseSwing; Drop ArmDropDuration EaseLower" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <Border Classes="plinth">
-                        <Panel>
-                            <controls:PlatterView Classes="platter" />
-                            <controls:VinylView Name="PART_Record"
-                                                Classes="deckRecord"
-                                                Label="{TemplateBinding Label}"
-                                                Angle="{TemplateBinding Angle}"
-                                                IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
-                            <Ellipse Name="PART_Led" Classes="led" />
-                            <!-- Cut into the plinth: its lower wall catches the light, its upper wall is in shade. -->
-                            <TextBlock Classes="brand highlight" Text="MUSIC SPIN" />
-                            <TextBlock Classes="brand shade" Text="MUSIC SPIN" />
-                            <TextBlock Classes="brand" Text="MUSIC SPIN" />
-                            <Panel Name="PART_Tonearm" Classes="tonearm">
-                                <Panel Name="PART_ArmShadow" Classes="armShadow">
+                    <Panel>
+                        <Border Classes="plinthShadow soft" />
+                        <Border Classes="plinth">
+                            <Panel>
+                                <controls:PlatterView Classes="platter" />
+                                <controls:VinylView Name="PART_Record"
+                                                    Classes="deckRecord"
+                                                    Label="{TemplateBinding Label}"
+                                                    Angle="{TemplateBinding Angle}"
+                                                    IsVisible="{TemplateBinding IsEmpty, Converter={x:Static BoolConverters.Not}}" />
+                                <Ellipse Name="PART_Led" Classes="led" />
+                                <!-- Cut into the plinth: its lower wall catches the light, its upper wall is in shade. -->
+                                <TextBlock Classes="brand highlight" Text="MUSIC SPIN" />
+                                <TextBlock Classes="brand shade" Text="MUSIC SPIN" />
+                                <TextBlock Classes="brand" Text="MUSIC SPIN" />
+                                <Panel Name="PART_Tonearm" Classes="tonearm">
+                                    <!-- Its opacity (lifted or lowered) out here; its blur, drawn from an image, inside. -->
+                                    <Panel Name="PART_ArmShadow" Classes="armShadow">
+                                        <Panel Classes="armShadowBlur soft">
+                                            <Border Classes="tube" />
+                                            <Border Classes="headshell" />
+                                        </Panel>
+                                    </Panel>
+                                    <Border Classes="armBase" />
                                     <Border Classes="tube" />
                                     <Border Classes="headshell" />
                                 </Panel>
-                                <Border Classes="armBase" />
-                                <Border Classes="tube" />
-                                <Border Classes="headshell" />
                             </Panel>
-                        </Panel>
-                    </Border>
+                        </Border>
+                    </Panel>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^ /template/ Border.plinth">
+            <Style Selector="^ /template/ Border.plinth, ^ /template/ Border.plinthShadow">
                 <Setter Property="CornerRadius" Value="{StaticResource DeckRadius}" />
+            </Style>
+            <Style Selector="^ /template/ Border.plinth">
                 <Setter Property="Background" Value="{DynamicResource DeckPlinthBrush}" />
-                <Setter Property="BoxShadow" Value="inset 0 1 0 0 #1AFFFFFF, 0 30 60 -20 #FF000000" />
+                <Setter Property="BoxShadow" Value="inset 0 1 0 0 #1AFFFFFF" />
+            </Style>
+            <!-- Its soft shadow, on its own (.soft, below). -->
+            <Style Selector="^ /template/ Border.plinthShadow">
+                <Setter Property="BoxShadow" Value="0 30 60 -20 #FF000000" />
             </Style>
             <Style Selector="^ /template/ controls|PlatterView.platter">
                 <Setter Property="HorizontalAlignment" Value="Left" />
@@ -103,7 +115,7 @@
                 <Setter Property="Margin" Value="{StaticResource DeckArmMargin}" />
                 <Setter Property="RenderTransformOrigin" Value="50%,8.75%" />
             </Style>
-            <Style Selector="^ /template/ Panel.armShadow">
+            <Style Selector="^ /template/ Panel.armShadowBlur">
                 <Setter Property="Effect">
                     <BlurEffect Radius="{StaticResource DeckArmShadowBlur}" />
                 </Setter>
@@ -136,7 +148,7 @@
                 <Setter Property="Background" Value="{StaticResource DeckHeadshellBrush}" />
                 <Setter Property="RenderTransform" Value="rotate(18deg)" />
             </Style>
-            <Style Selector="^ /template/ Panel.armShadow > Border">
+            <Style Selector="^ /template/ Panel.armShadowBlur > Border">
                 <Setter Property="Background" Value="{StaticResource DeckArmShadowBrush}" />
             </Style>
         </ControlTheme>
@@ -152,6 +164,7 @@
                 <ControlTemplate>
                     <Canvas>
                         <Panel Name="PART_Pack" RenderTransformOrigin="0%,0%">
+                            <controls:DiscShadow Name="PART_Shadow" HorizontalAlignment="Left" VerticalAlignment="Top" />
                             <controls:VinylView Name="PART_Record"
                                                 Label="{TemplateBinding Cover}"
                                                 Angle="{TemplateBinding Angle}"
@@ -165,11 +178,28 @@
         </ControlTheme>
     </Styles.Resources>
 
+    <!--
+      Now Playing's deck: its soft shadows and blurs (.soft, each on its own) are drawn once into an image, so the record
+      spinning over them redraws its square without blurring them again each frame (#122). They are soft, so a small
+      image does: Classic draws at its own size, the kit decks in their units, 0.4 px each, scaled.
+    -->
+    <Style Selector="controls|DeckHost controls|ClassicDeckView /template/ :is(Control).soft">
+        <Setter Property="CacheMode" Value="{StaticResource DeckSoftCache}" />
+    </Style>
+    <Style Selector="controls|DeckHost controls|KitDeckView /template/ :is(Control).soft">
+        <Setter Property="CacheMode" Value="{StaticResource KitDeckSoftCache}" />
+    </Style>
+
     <!-- The overlay: on the page background, sliding up into place (mockup: .nowplaying). -->
     <Style Selector="controls|SlidePanel.nowPlaying">
         <Setter Property="Background" Value="{DynamicResource BgBrush}" />
         <Setter Property="ClipToBounds" Value="True" />
         <Setter Property="theming:Animate.Transitions" Value="Shown NowPlayingSlideDuration EaseOut" />
+        <Setter Property="MotionCache" Value="{StaticResource MotionCache}" />
+    </Style>
+    <!-- The sidebar and the page while Now Playing or the queue drawer moves over them: drawn from an image (SlidePanel). -->
+    <Style Selector=":is(Control).underMotion">
+        <Setter Property="CacheMode" Value="{StaticResource MotionCache}" />
     </Style>
     <!-- Behind the turntable scene it fades in, in place (mockup: .nowplaying.scene). -->
     <Style Selector="controls|SlidePanel.nowPlaying[IsFading=True]">

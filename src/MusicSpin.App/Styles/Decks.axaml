@@ -54,6 +54,14 @@
             <Style Selector="^ /template/ Panel.platter > Border">
                 <Setter Property="CornerRadius" Value="500" />
             </Style>
+            <!--
+              Each soft shadow is on its own, drawn after the plinth's hard edge or the rim's ring, as Avalonia drew the
+              pair on one border: the plinth's drawn once into an image (.soft, Styles/NowPlaying.axaml), the rim's with no blur
+              (controls:DiscShadow), round the rim, not through it (a box shadow's; the clear platter shows through).
+            -->
+            <Style Selector="^ /template/ controls|DiscShadow.rimShadow">
+                <Setter Property="OutsideOnly" Value="True" />
+            </Style>
             <!-- The middle of the platter, under the record (the rim is what shows round it). -->
             <Style Selector="^ /template/ Panel.platter > Ellipse.top">
                 <Setter Property="Width" Value="956" />
@@ -84,12 +92,14 @@
                     <Viewbox Classes="units">
                         <Canvas Classes="units">
                             <Border Classes="plinth" />
+                            <Border Classes="plinthShadow soft" />
                             <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/walnut-deck.svg" />
                             <!-- Engraved in the brass plate: its lit lower edge, then the cut. -->
                             <controls:DeckText Classes="name lit" Text="Music Spin" />
                             <controls:DeckText Classes="name" Text="Music Spin" />
                             <Panel Classes="platter">
                                 <Border Classes="rim" />
+                                <controls:DiscShadow Classes="rimShadow" />
                                 <Ellipse Classes="top" />
                             </Panel>
                             <controls:VinylView Name="PART_Record"
@@ -106,14 +116,20 @@
                     </Viewbox>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^ /template/ Border.plinth">
+            <Style Selector="^ /template/ Border.plinth, ^ /template/ Border.plinthShadow">
                 <Setter Property="Width" Value="1320" />
                 <Setter Property="Height" Value="1080" />
                 <Setter Property="CornerRadius" Value="22" />
-                <Setter Property="BoxShadow" Value="0 4 0 0 #FF1A0D05, 0 60 120 -40 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="BoxShadow" Value="0 4 0 0 #FF1A0D05" />
+            </Style>
+            <!-- Its soft shadow, on its own (.soft: Styles/NowPlaying.axaml). -->
+            <Style Selector="^ /template/ Border.plinthShadow">
+                <Setter Property="BoxShadow" Value="0 60 120 -40 #FF000000" />
             </Style>
             <Style Selector="^ /template/ Border.rim">
-                <Setter Property="BoxShadow" Value="0 0 0 3 #FF2A170B, 0 10 24 0 #AA000000" />
+                <Setter Property="BoxShadow" Value="0 0 0 3 #FF2A170B" />
                 <Setter Property="Background">
                     <ConicGradientBrush Angle="30">
                         <GradientStop Color="#8C6A2F" Offset="0" />
@@ -126,6 +142,12 @@
                         <GradientStop Color="#8C6A2F" Offset="1" />
                     </ConicGradientBrush>
                 </Setter>
+            </Style>
+            <!-- The rim's soft shadow (0 10 24 0 #AA000000), drawn without a blur. -->
+            <Style Selector="^ /template/ controls|DiscShadow.rimShadow">
+                <Setter Property="PixelOffsetY" Value="10" />
+                <Setter Property="Blur" Value="24" />
+                <Setter Property="Color" Value="#AA000000" />
             </Style>
             <Style Selector="^ /template/ Ellipse.top">
                 <Setter Property="Fill" Value="#1B1714" />
@@ -159,6 +181,7 @@
                     <Viewbox Classes="units">
                         <Canvas Classes="units">
                             <Border Classes="plinth" />
+                            <Border Classes="plinthShadow soft" />
                             <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/aluminium-deck.svg" />
                             <!-- The single lamp: grey, lit in the album colour while the platter turns. -->
                             <Ellipse Classes="lamp off" />
@@ -167,6 +190,7 @@
                             <controls:DeckText Classes="name" Text="MUSIC SPIN" />
                             <Panel Classes="platter">
                                 <Border Classes="rim" />
+                                <controls:DiscShadow Classes="rimShadow" />
                                 <Ellipse Classes="top" />
                             </Panel>
                             <controls:VinylView Name="PART_Record"
@@ -185,14 +209,20 @@
                     </Viewbox>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^ /template/ Border.plinth">
+            <Style Selector="^ /template/ Border.plinth, ^ /template/ Border.plinthShadow">
                 <Setter Property="Width" Value="1320" />
                 <Setter Property="Height" Value="1080" />
                 <Setter Property="CornerRadius" Value="16" />
-                <Setter Property="BoxShadow" Value="0 4 0 0 #FF6B6E73, 0 60 120 -40 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="BoxShadow" Value="0 4 0 0 #FF6B6E73" />
+            </Style>
+            <!-- Its soft shadow, on its own (.soft: Styles/NowPlaying.axaml). -->
+            <Style Selector="^ /template/ Border.plinthShadow">
+                <Setter Property="BoxShadow" Value="0 60 120 -40 #FF000000" />
             </Style>
             <Style Selector="^ /template/ Border.rim">
-                <Setter Property="BoxShadow" Value="0 0 0 2 #FF7D8187, 0 8 20 0 #66000000" />
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF7D8187" />
                 <Setter Property="Background">
                     <ConicGradientBrush Angle="10">
                         <GradientStop Color="#8E939A" Offset="0" />
@@ -205,6 +235,12 @@
                         <GradientStop Color="#8E939A" Offset="1" />
                     </ConicGradientBrush>
                 </Setter>
+            </Style>
+            <!-- The rim's soft shadow (0 8 20 0 #66000000), drawn without a blur. -->
+            <Style Selector="^ /template/ controls|DiscShadow.rimShadow">
+                <Setter Property="PixelOffsetY" Value="8" />
+                <Setter Property="Blur" Value="20" />
+                <Setter Property="Color" Value="#66000000" />
             </Style>
             <Style Selector="^ /template/ Ellipse.top">
                 <Setter Property="Fill" Value="#232427" />
@@ -260,6 +296,7 @@
                     <Viewbox Classes="units">
                         <Canvas Classes="units">
                             <!-- The carbon-fibre weave (the study's SVG pattern, which the SVG renderer doesn't draw). -->
+                            <Polygon Classes="weaveShadow soft" />
                             <Polygon Classes="weave" />
                             <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/carbon-deck.svg" />
                             <!-- The hairline edge light, faint until the platter turns. -->
@@ -272,6 +309,7 @@
                             <!-- The platter: strobe ticks round its rim, turning with the record. -->
                             <Panel Classes="platter">
                                 <Border Classes="rim" />
+                                <controls:DiscShadow Classes="rimShadow" />
                                 <controls:TickRing Classes="ticks off" Angle="{TemplateBinding Angle}" />
                                 <controls:TickRing Name="Ticks" Classes="ticks lit" Angle="{TemplateBinding Angle}" Fill="{TemplateBinding Accent}" />
                                 <Ellipse Classes="top" />
@@ -297,11 +335,19 @@
                 </ControlTemplate>
             </Setter>
             <!-- 16-unit tiles of four 8-unit squares (two shaded across, two down), turned 45°; the slab's shadow under it. -->
-            <Style Selector="^ /template/ Polygon.weave">
+            <Style Selector="^ /template/ Polygon.weave, ^ /template/ Polygon.weaveShadow">
                 <Setter Property="Points" Value="60,0 1260,0 1320,60 1320,1020 1260,1080 60,1080 0,1020 0,60" />
+            </Style>
+            <!-- The slab's shadow (a drop shadow 30 down, blurred 40, at .75), on its own (.soft: Styles/NowPlaying.axaml). -->
+            <Style Selector="^ /template/ Polygon.weaveShadow">
+                <Setter Property="Fill" Value="Black" />
+                <Setter Property="Opacity" Value="0.75" />
+                <Setter Property="RenderTransform" Value="translate(0px, 30px)" />
                 <Setter Property="Effect">
-                    <DropShadowEffect OffsetX="0" OffsetY="30" BlurRadius="40" Color="Black" Opacity="0.75" />
+                    <BlurEffect Radius="40" />
                 </Setter>
+            </Style>
+            <Style Selector="^ /template/ Polygon.weave">
                 <Setter Property="Fill">
                     <DrawingBrush TileMode="Tile" Stretch="None" DestinationRect="0,0,16,16" Transform="rotate(45deg)" TransformOrigin="0,0">
                         <DrawingBrush.Drawing>
@@ -358,7 +404,13 @@
             </Style>
             <Style Selector="^ /template/ Border.rim">
                 <Setter Property="Background" Value="#0B0B0C" />
-                <Setter Property="BoxShadow" Value="0 0 0 2 #FF2A2C31, 0 10 24 0 #CC000000" />
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF2A2C31" />
+            </Style>
+            <!-- The rim's soft shadow (0 10 24 0 #CC000000), drawn without a blur. -->
+            <Style Selector="^ /template/ controls|DiscShadow.rimShadow">
+                <Setter Property="PixelOffsetY" Value="10" />
+                <Setter Property="Blur" Value="24" />
+                <Setter Property="Color" Value="#CC000000" />
             </Style>
             <!-- repeating-conic-gradient(… 0 1.2deg, #0b0b0c 1.2deg 5deg): 72 ticks; the accent mixed 35% into #2a2c31 at rest. -->
             <Style Selector="^ /template/ controls|TickRing.ticks">
@@ -440,12 +492,14 @@
                     <Viewbox Classes="units">
                         <Canvas Classes="units">
                             <Border Classes="plinth" />
+                            <Border Classes="plinthShadow soft" />
                             <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/piano-deck.svg" />
                             <!-- Engraved through the lacquer and filled with silver. -->
                             <controls:DeckText Classes="name cut" Text="MUSIC SPIN" />
                             <controls:DeckText Classes="name" Text="MUSIC SPIN" />
                             <Panel Classes="platter">
                                 <Border Classes="rim" />
+                                <controls:DiscShadow Classes="rimShadow" />
                                 <Ellipse Classes="top" />
                             </Panel>
                             <controls:VinylView Name="PART_Record"
@@ -462,14 +516,20 @@
                     </Viewbox>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^ /template/ Border.plinth">
+            <Style Selector="^ /template/ Border.plinth, ^ /template/ Border.plinthShadow">
                 <Setter Property="Width" Value="1320" />
                 <Setter Property="Height" Value="1080" />
                 <Setter Property="CornerRadius" Value="20" />
-                <Setter Property="BoxShadow" Value="0 0 0 2 #FF000000, 0 60 120 -40 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF000000" />
+            </Style>
+            <!-- Its soft shadow, on its own (.soft: Styles/NowPlaying.axaml). -->
+            <Style Selector="^ /template/ Border.plinthShadow">
+                <Setter Property="BoxShadow" Value="0 60 120 -40 #FF000000" />
             </Style>
             <Style Selector="^ /template/ Border.rim">
-                <Setter Property="BoxShadow" Value="0 0 0 2 #FF000000, 0 10 24 0 #FF000000" />
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF000000" />
                 <Setter Property="Background">
                     <ConicGradientBrush Angle="25">
                         <GradientStop Color="#5B6068" Offset="0" />
@@ -482,6 +542,12 @@
                         <GradientStop Color="#5B6068" Offset="1" />
                     </ConicGradientBrush>
                 </Setter>
+            </Style>
+            <!-- The rim's soft shadow (0 10 24 0 #FF000000), drawn without a blur. -->
+            <Style Selector="^ /template/ controls|DiscShadow.rimShadow">
+                <Setter Property="PixelOffsetY" Value="10" />
+                <Setter Property="Blur" Value="24" />
+                <Setter Property="Color" Value="#FF000000" />
             </Style>
             <Style Selector="^ /template/ Ellipse.top">
                 <Setter Property="Fill" Value="#0A0A0B" />
@@ -525,11 +591,13 @@
                     <Viewbox Classes="units">
                         <Canvas Classes="units">
                             <Border Classes="plinth" />
+                            <Border Classes="plinthShadow soft" />
                             <Svg Classes="plate" Path="avares://MusicSpin/Assets/Decks/linear-deck.svg" />
                             <controls:DeckText Classes="name lit" Text="MUSIC SPIN" />
                             <controls:DeckText Classes="name" Text="MUSIC SPIN" />
                             <Panel Classes="platter">
                                 <Border Classes="rim" />
+                                <controls:DiscShadow Classes="rimShadow" />
                                 <controls:TickRing Classes="stripes" Angle="{TemplateBinding Angle}" />
                                 <Ellipse Classes="top" />
                             </Panel>
@@ -550,11 +618,17 @@
                     </Viewbox>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^ /template/ Border.plinth">
+            <Style Selector="^ /template/ Border.plinth, ^ /template/ Border.plinthShadow">
                 <Setter Property="Width" Value="1320" />
                 <Setter Property="Height" Value="1080" />
                 <Setter Property="CornerRadius" Value="10" />
-                <Setter Property="BoxShadow" Value="0 4 0 0 #FF5B5348, 0 60 120 -40 #FF000000" />
+            </Style>
+            <Style Selector="^ /template/ Border.plinth">
+                <Setter Property="BoxShadow" Value="0 4 0 0 #FF5B5348" />
+            </Style>
+            <!-- Its soft shadow, on its own (.soft: Styles/NowPlaying.axaml). -->
+            <Style Selector="^ /template/ Border.plinthShadow">
+                <Setter Property="BoxShadow" Value="0 60 120 -40 #FF000000" />
             </Style>
             <Style Selector="^ /template/ Panel.platter">
                 <Setter Property="Canvas.Left" Value="60" />
@@ -565,7 +639,13 @@
             <!-- repeating-conic-gradient(#d6d0c4 0 2deg, #a39c8f 2deg 4deg): 90 stripes round the rim. -->
             <Style Selector="^ /template/ Border.rim">
                 <Setter Property="Background" Value="#A39C8F" />
-                <Setter Property="BoxShadow" Value="0 0 0 2 #FF8A8377, 0 8 20 0 #66000000" />
+                <Setter Property="BoxShadow" Value="0 0 0 2 #FF8A8377" />
+            </Style>
+            <!-- The rim's soft shadow (0 8 20 0 #66000000), drawn without a blur. -->
+            <Style Selector="^ /template/ controls|DiscShadow.rimShadow">
+                <Setter Property="PixelOffsetY" Value="8" />
+                <Setter Property="Blur" Value="20" />
+                <Setter Property="Color" Value="#66000000" />
             </Style>
             <Style Selector="^ /template/ controls|TickRing.stripes">
                 <Setter Property="Count" Value="90" />
@@ -628,6 +708,7 @@
                     <Viewbox Classes="units">
                         <Canvas Classes="units">
                             <Border Classes="plinth" />
+                            <Border Classes="plinthShadow soft" />
                             <Border Name="Glass" Classes="glass">
                                 <Panel>
                                     <controls:BackdropView Name="Backdrop" Source="{TemplateBinding Backdrop}" Veil="{TemplateBinding BackdropVeil}" />
@@ -644,6 +725,7 @@
                             <controls:DeckText Classes="name" Text="MUSIC SPIN" />
                             <Panel Classes="platter">
                                 <Border Classes="rim" />
+                                <controls:DiscShadow Classes="rimShadow" />
                             </Panel>
                             <controls:VinylView Name="PART_Record"
                                                 Label="{TemplateBinding Label}"
@@ -659,10 +741,13 @@
                     </Viewbox>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^ /template/ Border.plinth">
+            <Style Selector="^ /template/ Border.plinth, ^ /template/ Border.plinthShadow">
                 <Setter Property="Width" Value="1320" />
                 <Setter Property="Height" Value="1080" />
                 <Setter Property="CornerRadius" Value="26" />
+            </Style>
+            <!-- Its soft shadow, on its own (.soft: Styles/NowPlaying.axaml). -->
+            <Style Selector="^ /template/ Border.plinthShadow">
                 <Setter Property="BoxShadow" Value="0 60 120 -40 #CC000000" />
             </Style>
             <!-- The glass: the plinth's shape, clipping what shows through it (drawn wider, so its blur reaches the edges). -->
@@ -705,7 +790,7 @@
             </Style>
             <!-- A clear platter: rings of light near its edge. -->
             <Style Selector="^ /template/ Border.rim">
-                <Setter Property="BoxShadow" Value="0 0 0 2 #3DFFFFFF, 0 10 24 0 #66000000" />
+                <Setter Property="BoxShadow" Value="0 0 0 2 #3DFFFFFF" />
                 <Setter Property="Background">
                     <RadialGradientBrush>
                         <GradientStop Color="#0DFFFFFF" Offset="0" />
@@ -716,6 +801,12 @@
                         <GradientStop Color="#33FFFFFF" Offset="1" />
                     </RadialGradientBrush>
                 </Setter>
+            </Style>
+            <!-- The rim's soft shadow (0 10 24 0 #66000000), drawn without a blur. -->
+            <Style Selector="^ /template/ controls|DiscShadow.rimShadow">
+                <Setter Property="PixelOffsetY" Value="10" />
+                <Setter Property="Blur" Value="24" />
+                <Setter Property="Color" Value="#66000000" />
             </Style>
             <Style Selector="^ /template/ Panel#PART_Arm">
                 <Setter Property="Canvas.Left" Value="880" />

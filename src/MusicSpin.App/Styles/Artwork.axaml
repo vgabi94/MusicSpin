@@ -16,8 +16,12 @@
             <Setter Property="Foreground" Value="{DynamicResource PlaceholderInkBrush}" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <!-- The shadow sits outside the clip, so it has its own border. -->
-                    <Border Name="PART_Shadow" CornerRadius="{TemplateBinding CornerRadius}">
+                    <!--
+                      The shadow sits outside the clip, so it has its own border, under the sleeve (beside a spinning record it is
+                      drawn once: Styles/Cards.axaml).
+                    -->
+                    <Panel>
+                        <Border Name="PART_Shadow" CornerRadius="{TemplateBinding CornerRadius}" />
                         <Border Name="PART_Sleeve"
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
@@ -41,7 +45,7 @@
                                 <Border Name="PART_Sheen" Background="{StaticResource CoverSheenBrush}" IsHitTestVisible="False" />
                             </Panel>
                         </Border>
-                    </Border>
+                    </Panel>
                 </ControlTemplate>
             </Setter>
             <!-- mockup: box-shadow: 0 1px 0 #ffffff14 inset, 0 10px 24px -8px #000c -->
