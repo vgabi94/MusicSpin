@@ -17,6 +17,13 @@ namespace MusicSpin.App.Controls;
 /// </summary>
 /// <remarks>
 /// <para>
+/// A hovered slot widens, so the sleeves after it move along the row while it turns. Drawn through its 3D projection, a
+/// sleeve costs a lot (its cover resampled through a perspective matrix); one at rest is drawn through
+/// <see cref="RestCache"/>, an image of it made once, so moving it along the row only copies that image (#131). A
+/// sleeve that turns or whose record comes out draws itself live until it is at rest again. The record isn't drawn at
+/// all while it is in its sleeve, out of sight.
+/// </para>
+/// <para>
 /// Template parts: PART_Vinyl (the record, behind the sleeve), PART_Sleeve (the cover), PART_Edge (the spine, a thin
 /// face at the left edge) and PART_Shadow (the contact shadow on the board). The parts take no input.
 /// </para>
@@ -87,6 +94,9 @@ public sealed class ShelfSleeve : Button
     /// <summary>The spine is in shadow: its colour times this (mockup: .edge filter: brightness(.55)).</summary>
     public static readonly StyledProperty<double> SpineShadeProperty = AvaloniaProperty.Register<ShelfSleeve, double>(nameof(SpineShade), 1);
 
+    /// <summary>The cache a sleeve at rest draws through (Styles/Shelf.axaml); null: always drawn live.</summary>
+    public static readonly StyledProperty<CacheMode?> RestCacheProperty = AvaloniaProperty.Register<ShelfSleeve, CacheMode?>(nameof(RestCache));
+
     public static readonly DirectProperty<ShelfSleeve, IBrush?> SpineProperty =
         AvaloniaProperty.RegisterDirect<ShelfSleeve, IBrush?>(nameof(Spine), s => s.Spine);
 
@@ -99,6 +109,13 @@ public sealed class ShelfSleeve : Button
     {
         AffectsMeasure<ShelfSleeve>(SizeProperty, TiltProperty, TurnProperty, PullProperty);
         AffectsArrange<ShelfSleeve>(DepthProperty, RecordOutProperty, EdgeWidthProperty);
+    }
+
+    public ShelfSleeve()
+    {
+        // An image holds its text in grey antialiasing (subpixel text needs an opaque background): the text on a sleeve
+        // (a cover without art) is drawn that way live too, so it doesn't change as the sleeve starts or stops turning.
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
     }
 
     public double Size
@@ -198,6 +215,15 @@ public sealed class ShelfSleeve : Button
         set => SetValue(SpineShadeProperty, value);
     }
 
+    public CacheMode? RestCache
+    {
+        get => GetValue(RestCacheProperty);
+        set => SetValue(RestCacheProperty, value);
+    }
+
+    /// <summary>Still (closed or facing you, its record in): drawn through <see cref="RestCache"/>.</summary>
+    public bool IsAtRest => Turn is 0 or 1 && RecordOut == 0;
+
     /// <summary>The spine's brush: the album's colour in shade, or the fallback.</summary>
     public IBrush? Spine
     {
@@ -224,6 +250,8 @@ public sealed class ShelfSleeve : Button
             part?.RenderTransformOrigin = RelativePoint.TopLeft;
             part?.IsHitTestVisible = false;
         }
+
+        UpdateRest();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -234,6 +262,10 @@ public sealed class ShelfSleeve : Button
         {
             Turn = IsPointerOver || IsPlaying ? 1 : 0;
             Pull = RecordOut = IsPlaying ? 1 : 0;
+        }
+        else if (change.Property == TurnProperty || change.Property == RecordOutProperty || change.Property == RestCacheProperty)
+        {
+            UpdateRest();
         }
         else if (change.Property == SpineColorProperty || change.Property == SpineFallbackProperty || change.Property == SpineShadeProperty)
         {
@@ -255,6 +287,13 @@ public sealed class ShelfSleeve : Button
         var arranged = base.ArrangeOverride(finalSize);
         UpdateProjection(finalSize.Height - Size);
         return arranged;
+    }
+
+    /// <summary>At rest, the sleeve draws through its cache; its record shows only when it is out of the sleeve.</summary>
+    private void UpdateRest()
+    {
+        CacheMode = IsAtRest ? RestCache : null;
+        _vinyl?.IsVisible = RecordOut > 0;
     }
 
     private byte Shade(byte channel) => (byte)Math.Clamp(Math.Round(channel * SpineShade), 0, 255);

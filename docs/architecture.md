@@ -181,7 +181,11 @@ src/MusicSpin.App/
   build the mockup's CSS transforms as 4×4 matrices (`Projection`) and draw with their 2D projective part. A sleeve's
   slot is flat and takes the pointer; only what is drawn in it turns, so hovering never flickers. The view reports how
   many sleeves fit a board (`ShelfGeometry.PerBoard`, leaving room for a hovered and a playing one) at the current tilt;
-  the boards are re-cut when that changes, and tilt and depth otherwise only change the transforms. A crate record's
+  the boards are re-cut when that changes, and tilt and depth otherwise only change the transforms. A hovered slot
+  widens, so the sleeves after it move along the row while it turns: a sleeve at rest draws through a `BitmapCache` (an
+  image made once, inside a transparent frame so it starts on a whole pixel and looks the same as drawn live), so moving
+  it copies that image instead of resampling its cover through the projection. A turning sleeve, or one whose record is
+  out, draws live; a record in its sleeve isn't drawn. A crate record's
   place from the front is a number its transition animates, and its pose (lean, distance, darkening) follows from it;
   only the records near the front are made. Grouped crates are the full-size crate scaled down whole (a `Viewbox`). The
   wheel flips a crate once its turns add up to half a notch, at most every 180 ms on the app's clock, and past either

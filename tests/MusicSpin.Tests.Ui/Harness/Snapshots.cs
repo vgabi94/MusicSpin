@@ -178,7 +178,7 @@ internal static class Snapshots
         }
     }
 
-    private static void Save(SKBitmap bitmap, string path)
+    public static void Save(SKBitmap bitmap, string path)
     {
         using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
         using var file = File.Create(path);
