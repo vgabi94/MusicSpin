@@ -221,8 +221,17 @@ public sealed class ShelfSleeve : Button
         set => SetValue(RestCacheProperty, value);
     }
 
+    /// <summary>
+    /// How near its end a turn or the record's slide counts as there: an animator that settles a hair short of its target
+    /// (0.9999999999) doesn't leave the sleeve drawn live for good.
+    /// </summary>
+    public const double RestTolerance = 1e-6;
+
     /// <summary>Still (closed or facing you, its record in): drawn through <see cref="RestCache"/>.</summary>
-    public bool IsAtRest => Turn is 0 or 1 && RecordOut == 0;
+    public bool IsAtRest => (Turn < RestTolerance || Turn > 1 - RestTolerance) && !IsRecordOut;
+
+    /// <summary>The record is (partly) out of its sleeve: it is drawn.</summary>
+    private bool IsRecordOut => RecordOut >= RestTolerance;
 
     /// <summary>The spine's brush: the album's colour in shade, or the fallback.</summary>
     public IBrush? Spine
@@ -293,7 +302,7 @@ public sealed class ShelfSleeve : Button
     private void UpdateRest()
     {
         CacheMode = IsAtRest ? RestCache : null;
-        _vinyl?.IsVisible = RecordOut > 0;
+        _vinyl?.IsVisible = IsRecordOut;
     }
 
     private byte Shade(byte channel) => (byte)Math.Clamp(Math.Round(channel * SpineShade), 0, 255);
