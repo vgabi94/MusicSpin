@@ -1,51 +1,76 @@
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
-using MusicSpin.Core.Output.SoundFlow;
-using SoundFlow.Backends.MiniAudio.Devices;
-using SoundFlow.Backends.MiniAudio.Enums;
-using SoundFlow.Enums;
-using SoundFlow.Interfaces;
-using SoundFlow.Structs;
+using MusicSpin.Core.Output;
+using MusicSpin.Core.Output.MiniAudio;
 
 namespace MusicSpin.Tests;
 
-public class SoundFlowOutputTests
+public class MiniAudioOutputTests
 {
     [Theory]
-    [InlineData(16, SampleFormat.S16)]
-    [InlineData(24, SampleFormat.S24)]
-    [InlineData(20, SampleFormat.S24)]
-    [InlineData(32, SampleFormat.F32)]
-    [InlineData(1, SampleFormat.F32)] // DSD is decoded to float PCM
-    [InlineData(0, SampleFormat.F32)]
-    public void Device_format_preserves_source_bit_depth(int bits, SampleFormat expected)
-        => Assert.Equal(expected, SoundFlowAudioOutput.DeviceSampleFormat(bits));
+    [InlineData(16, nameof(DeviceSample.S16))]
+    [InlineData(24, nameof(DeviceSample.S24))]
+    [InlineData(20, nameof(DeviceSample.S24))]
+    [InlineData(32, nameof(DeviceSample.F32))]
+    [InlineData(1, nameof(DeviceSample.F32))] // DSD is decoded to float PCM
+    [InlineData(0, nameof(DeviceSample.F32))]
+    public void Exclusive_mode_hands_the_device_the_source_bit_depth(int bits, string expected)
+        => Assert.Equal(Enum.Parse<DeviceSample>(expected), MiniAudioOutput.DeviceSampleFormat(bits, exclusive: true));
+
+    [Theory]
+    [InlineData(16)]
+    [InlineData(24)]
+    [InlineData(32)]
+    public void Shared_mode_always_hands_the_os_mixer_float32(int bits)
+        => Assert.Equal(DeviceSample.F32, MiniAudioOutput.DeviceSampleFormat(bits, exclusive: false));
 
     [Fact]
-    public void Exclusive_mode_asks_every_backend_not_to_convert()
+    public void The_request_carries_the_tracks_rate_channels_and_depth()
     {
-        var config = SoundFlowAudioOutput.BuildConfig(new AudioOutputOptions(Exclusive: true));
-
-        Assert.Equal(ShareMode.Exclusive, config.Playback!.ShareMode);
-        Assert.True(config.NoClip);
-        Assert.True(config.Wasapi!.NoAutoConvertSRC);
-        Assert.True(config.Wasapi.NoDefaultQualitySRC);
-        Assert.True(config.CoreAudio!.AllowNominalSampleRateChange);
-        Assert.True(config.Alsa!.NoAutoFormat);
-        Assert.True(config.Alsa.NoAutoResample);
-        Assert.True(config.Alsa.NoAutoChannels);
+        Assert.Equal(new OpenRequest(DeviceSample.S16, 44_100, 2, true, 16), MiniAudioOutput.BuildRequest(new PcmFormat(44_100, 2, 16), new AudioOutputOptions(Exclusive: true)));
+        Assert.Equal(new OpenRequest(DeviceSample.F32, 96_000, 6, false, 24), MiniAudioOutput.BuildRequest(new PcmFormat(96_000, 6, 24), new AudioOutputOptions()));
     }
 
     [Fact]
-    public void Shared_mode_leaves_conversion_to_the_os_but_never_clips()
+    public async Task A_device_lost_mid_play_closes_the_output_and_raises_failed_once()
     {
-        var config = SoundFlowAudioOutput.BuildConfig(new AudioOutputOptions());
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var failed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var count = 0;
+        output.Failed += (_, e) => { Interlocked.Increment(ref count); failed.TrySetResult(e.Reason); };
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
 
-        Assert.Equal(ShareMode.Shared, config.Playback!.ShareMode);
-        Assert.True(config.NoClip);
-        Assert.False(config.Wasapi!.NoAutoConvertSRC);
-        Assert.False(config.CoreAudio!.AllowNominalSampleRateChange);
-        Assert.Null(config.Alsa);
+        backend.Streams[0].Lose("unplugged");
+
+        Assert.Equal("unplugged", await failed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+        Assert.False(output.IsOpen);
+        Assert.Null(output.Opened);
+        Assert.True(backend.Streams[0].Disposed);
+        Assert.Equal(1, Volatile.Read(ref count));
+    }
+
+    [Fact]
+    public async Task A_loss_reported_by_an_already_replaced_device_is_ignored()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var reasons = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        output.Failed += (_, e) => { reasons.Enqueue(e.Reason); failed.TrySetResult(); };
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Open(new Source(new PcmFormat(48_000, 2, 16)));
+
+        backend.Streams[0].Lose("old device");
+        Assert.True(output.IsOpen); // checked under the output's lock: the stale loss cannot close the new device
+        backend.Streams[1].Lose("current device");
+
+        await failed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.False(output.IsOpen);
+        Assert.Equal(["current device"], reasons);
     }
 
     [Fact]
@@ -53,14 +78,13 @@ public class SoundFlowOutputTests
     {
         var backend = new FakeBackend(
             Device("Speakers", isDefault: true,
-                Fmt(SampleFormat.S16, 48_000, 2), Fmt(SampleFormat.S24, 44_100, 2), Fmt(SampleFormat.S16, 44_100, 6),
-                Fmt(SampleFormat.F32, 0, 0)),
+                ("s16", 2, 48_000), ("s24", 2, 44_100), ("s16", 6, 44_100), ("f32", 0, 0)),
             Device("USB DAC", isDefault: false));
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
 
         var devices = provider.GetDevices();
 
-        Assert.Equal("SoundFlow/miniaudio (Fake)", provider.Name);
+        Assert.Equal("miniaudio (Fake)", provider.Name);
         Assert.Equal(2, devices.Count);
         var speakers = devices[0];
         Assert.Equal(("0", "Speakers", true, "Fake"), (speakers.Id, speakers.Name, speakers.IsDefault, speakers.Backend));
@@ -77,7 +101,7 @@ public class SoundFlowOutputTests
     {
         var created = 0;
         var backend = new FakeBackend();
-        var provider = new SoundFlowOutputProvider(() => { created++; return backend; });
+        var provider = new MiniAudioOutputProvider(() => { created++; return backend; });
 
         _ = provider.GetDevices();
         _ = provider.GetDevices();
@@ -92,9 +116,9 @@ public class SoundFlowOutputTests
     [Fact]
     public void A_backend_that_cannot_start_is_an_audio_device_error_and_the_name_says_unavailable()
     {
-        using var provider = new SoundFlowOutputProvider(() => throw new InvalidOperationException("Result: NoBackend"));
+        using var provider = new MiniAudioOutputProvider(() => throw new InvalidOperationException("Result: NoBackend"));
 
-        Assert.Equal("SoundFlow/miniaudio (unavailable)", provider.Name);
+        Assert.Equal("miniaudio (unavailable)", provider.Name);
         var ex = Assert.Throws<MusicSpinException>(() => provider.GetDevices());
         Assert.Equal(MusicSpinErrorCode.AudioDeviceError, ex.Code);
         Assert.Contains("Could not initialise audio backend: Result: NoBackend", ex.Message);
@@ -105,7 +129,7 @@ public class SoundFlowOutputTests
     public void A_failing_device_enumeration_is_an_audio_device_error()
     {
         var backend = new FakeBackend { RefreshError = new InvalidOperationException("enumeration failed") };
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
 
         var ex = Assert.Throws<MusicSpinException>(() => provider.GetDevices());
 
@@ -117,7 +141,7 @@ public class SoundFlowOutputTests
     public void Open_uses_the_sources_native_format_and_the_default_device_when_none_is_configured()
     {
         var backend = new FakeBackend(Device("Speakers", isDefault: true));
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
 
         Assert.False(output.IsOpen);
@@ -126,12 +150,8 @@ public class SoundFlowOutputTests
         Assert.True(output.IsOpen);
         var open = Assert.Single(backend.Opened);
         Assert.Null(open.Device);
-        Assert.Equal(96_000, open.Format.SampleRate);
-        Assert.Equal(2, open.Format.Channels);
-        Assert.Equal(SampleFormat.S24, open.Format.Format);
-        Assert.Equal(ChannelLayout.Stereo, open.Format.Layout);
-        Assert.Equal(ShareMode.Exclusive, open.Config.Playback!.ShareMode);
-        Assert.Equal(96_000, open.Data.SampleRate);
+        Assert.Equal(new OpenRequest(DeviceSample.S24, 96_000, 2, Exclusive: true, SourceBits: 24), open.Request);
+        Assert.Equal(96_000, open.Data.Format.SampleRate);
     }
 
     [Theory]
@@ -143,7 +163,7 @@ public class SoundFlowOutputTests
     public void Devices_are_chosen_by_index_or_case_insensitive_name(string id, string? expected)
     {
         var backend = new FakeBackend(Device("Speakers", true), Device("USB DAC", false));
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(DeviceId: id));
 
         if (expected is null)
@@ -157,7 +177,7 @@ public class SoundFlowOutputTests
         }
 
         output.Open(new Source(new PcmFormat(44_100, 2, 16)));
-        Assert.Equal(expected, backend.Opened.Single().Device!.Value.Name);
+        Assert.Equal(expected, backend.Opened.Single().Device!.Name);
     }
 
     [Theory]
@@ -169,19 +189,19 @@ public class SoundFlowOutputTests
     public void A_whole_device_name_finds_that_device_before_an_index_or_a_part_of_a_name(string id, string expected)
     {
         var backend = new FakeBackend(Device("Speakers (USB DAC)", false), Device("Speakers", true), Device("1", false));
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(DeviceId: id));
 
         output.Open(new Source(new PcmFormat(44_100, 2, 16)));
 
-        Assert.Equal(expected, backend.Opened.Single().Device!.Value.Name);
+        Assert.Equal(expected, backend.Opened.Single().Device!.Name);
     }
 
     [Fact]
     public void A_device_that_fails_to_open_is_wrapped_and_leaves_the_output_closed()
     {
         var backend = new FakeBackend { OpenError = new InvalidOperationException("format not supported") };
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions());
 
         var ex = Assert.Throws<MusicSpinException>(() => output.Open(new Source(new PcmFormat(44_100, 2, 16))));
@@ -196,7 +216,7 @@ public class SoundFlowOutputTests
     public void Start_pause_and_stop_drive_the_open_stream_and_reopening_releases_the_old_one()
     {
         var backend = new FakeBackend();
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         var output = provider.Create(new AudioOutputOptions());
 
         var start = Assert.Throws<MusicSpinException>(output.Start);
@@ -223,51 +243,30 @@ public class SoundFlowOutputTests
     }
 
     [Fact]
-    public void The_data_provider_pulls_from_the_source_and_reports_end_of_stream()
+    public void Filling_a_buffer_reads_until_full_and_pads_with_silence_at_the_end()
     {
-        var source = new Source(new PcmFormat(48_000, 2, 24)) { Remaining = 5 };
-        var provider = new PcmSourceDataProvider(source);
-        var ends = 0;
-        var positions = new List<int>();
-        provider.EndOfStreamReached += (_, _) => ends++;
-        provider.PositionChanged += (_, e) => positions.Add(e.NewPosition);
+        var source = new Source(new PcmFormat(48_000, 2, 24)) { Remaining = 5, Chunk = 2 };
+        var buffer = new float[8];
+        Array.Fill(buffer, 9f);
 
-        Assert.Equal((-1, false, SampleFormat.F32, 48_000), (provider.Length, provider.CanSeek, provider.SampleFormat, provider.SampleRate));
-        Assert.Null(provider.FormatInfo);
-
-        var buffer = new float[4];
-        Assert.Equal(4, provider.ReadBytes(buffer));
-        Assert.Equal([1f, 2f, 3f, 4f], buffer);
-        provider.Seek(100); // the Player owns seeking: ignored
-        Assert.Equal(1, provider.ReadBytes(buffer));
-        Assert.Equal(5, provider.Position);
-        Assert.Equal([4, 5], positions);
-        Assert.Equal(0, ends);
-
-        Assert.Equal(0, provider.ReadBytes(buffer));
-        Assert.Equal(1, ends);
-        Assert.Equal(5, provider.Position);
-
-        provider.Dispose();
-        Assert.True(provider.IsDisposed);
-        source.Remaining = 10;
-        Assert.Equal(0, provider.ReadBytes(buffer)); // disposed: never touches the source again
-        Assert.Equal(1, ends);
+        Assert.Equal(5, PcmReading.Fill(source, buffer)); // three short reads, then end of stream
+        Assert.Equal([1f, 2f, 3f, 4f, 5f, 0f, 0f, 0f], buffer);
+        Assert.Equal(0, PcmReading.Fill(source, buffer));
+        Assert.All(buffer, v => Assert.Equal(0f, v));
     }
 
     [Fact]
     public void An_exclusive_44k1_24bit_track_asks_for_exclusive_at_44k1_s24_and_reports_what_opened()
     {
         var backend = new FakeBackend(Device("FiiO BTR13", isDefault: true));
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions("FiiO BTR13", Exclusive: true));
 
         Assert.Null(output.Opened);
         output.Open(new Source(new PcmFormat(44_100, 2, 24)));
 
         var open = Assert.Single(backend.Opened);
-        Assert.Equal((44_100, SampleFormat.S24, ShareMode.Exclusive), (open.Format.SampleRate, open.Format.Format, open.Config.Playback!.ShareMode));
-        Assert.True(open.Config.Wasapi!.NoAutoConvertSRC);
+        Assert.Equal((44_100, DeviceSample.S24, true), (open.Request.SampleRate, open.Request.Format, open.Request.Exclusive));
         var opened = output.Opened!;
         Assert.Equal(("FiiO BTR13", true, 44_100, "s24", 24, true), (opened.Device, opened.Exclusive, opened.SampleRate, opened.SampleFormat, opened.BitsPerSample, opened.Verified));
         Assert.Null(opened.Notice);
@@ -283,9 +282,9 @@ public class SoundFlowOutputTests
         // What #148 saw: asked for 44.1 kHz exclusive, the device ran at the Windows mix rate.
         var backend = new FakeBackend(Device("FiiO BTR13", isDefault: true))
         {
-            OpenedAs = (d, f, _) => new OpenedOutput(d?.Name, true, 48_000, f.Channels, "s24in32", 24, Verified: true),
+            OpenedAs = (d, f) => new OpenedOutput(d?.Name, true, 48_000, f.Channels, "s24in32", 24, Verified: true),
         };
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
 
         output.Open(new Source(new PcmFormat(44_100, 2, 24)));
@@ -301,9 +300,9 @@ public class SoundFlowOutputTests
     {
         var backend = new FakeBackend
         {
-            OpenedAs = (_, f, _) => new OpenedOutput(null, false, 48_000, f.Channels, "f32", 32, Verified: false),
+            OpenedAs = (_, f) => new OpenedOutput(null, false, 48_000, f.Channels, "f32", 32, Verified: false),
         };
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions());
 
         output.Open(new Source(new PcmFormat(44_100, 2, 32)));
@@ -317,10 +316,10 @@ public class SoundFlowOutputTests
     {
         var backend = new FakeBackend
         {
-            OpenedAs = (_, f, _) => new OpenedOutput("BTR13", false, f.SampleRate, f.Channels, "s24", 24, Verified: false,
+            OpenedAs = (_, f) => new OpenedOutput("BTR13", false, f.SampleRate, f.Channels, "s24", 24, Verified: false,
                 Notice: "Exclusive mode unavailable: another app is using the device. Playing in shared mode through the Windows mixer."),
         };
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
 
         output.Open(new Source(new PcmFormat(44_100, 2, 24)));
@@ -333,8 +332,8 @@ public class SoundFlowOutputTests
     [Fact]
     public void Exclusive_asked_but_shared_given_without_a_reason_still_gets_a_notice()
     {
-        var backend = new FakeBackend { OpenedAs = (_, f, _) => new OpenedOutput(null, false, f.SampleRate, f.Channels, "s16", 16, Verified: false) };
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        var backend = new FakeBackend { OpenedAs = (_, f) => new OpenedOutput(null, false, f.SampleRate, f.Channels, "s16", 16, Verified: false) };
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
 
         output.Open(new Source(new PcmFormat(44_100, 2, 16)));
@@ -346,7 +345,7 @@ public class SoundFlowOutputTests
     public void Shared_mode_as_asked_has_no_notice()
     {
         var backend = new FakeBackend();
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions());
 
         output.Open(new Source(new PcmFormat(44_100, 2, 16)));
@@ -359,7 +358,7 @@ public class SoundFlowOutputTests
     public void An_exclusive_open_that_fails_is_an_error_naming_exclusive_mode_and_reports_nothing_in_use()
     {
         var backend = new FakeBackend { OpenError = new InvalidOperationException("Result: ShareModeNotSupported") };
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
 
         var ex = Assert.Throws<MusicSpinException>(() => output.Open(new Source(new PcmFormat(44_100, 2, 24))));
@@ -374,12 +373,12 @@ public class SoundFlowOutputTests
     public void A_failed_reopen_drops_the_previous_tracks_format()
     {
         var backend = new FakeBackend();
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
         output.Open(new Source(new PcmFormat(44_100, 2, 16)));
         Assert.NotNull(output.Opened);
 
-        backend.OpenedAs = (_, _, _) => throw new InvalidOperationException("unplugged");
+        backend.OpenedAs = (_, _) => throw new InvalidOperationException("unplugged");
         Assert.Throws<MusicSpinException>(() => output.Open(new Source(new PcmFormat(96_000, 2, 24))));
 
         Assert.Null(output.Opened); // not still claiming 44.1 kHz exclusive
@@ -389,7 +388,7 @@ public class SoundFlowOutputTests
     public void The_device_rate_follows_each_tracks_format()
     {
         var backend = new FakeBackend();
-        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
 
         var seen = new List<string>();
@@ -399,16 +398,13 @@ public class SoundFlowOutputTests
             seen.Add(output.Opened!.Describe());
         }
 
-        Assert.Equal([44_100, 96_000, 48_000], backend.Opened.Select(o => o.Format.SampleRate));
+        Assert.Equal([44_100, 96_000, 48_000], backend.Opened.Select(o => o.Request.SampleRate));
         Assert.Equal(["exclusive, 44.1 kHz 16-bit", "exclusive, 96 kHz 24-bit", "exclusive, 48 kHz 24-bit"], seen);
         Assert.All(backend.Streams.Take(2), s => Assert.True(s.Disposed)); // each reopen released the previous device
     }
 
-    private static DeviceInfo Device(string name, bool isDefault, params NativeDataFormat[] formats)
-        => new() { Name = name, IsDefault = isDefault, SupportedDataFormats = formats };
-
-    private static NativeDataFormat Fmt(SampleFormat format, uint rate, uint channels)
-        => new() { Format = format, SampleRate = rate, Channels = channels };
+    private static BackendDevice Device(string name, bool isDefault, params (string, int, int)[] formats)
+        => new(name, isDefault, new byte[256], formats);
 
     private sealed class Source(PcmFormat format) : IPcmSource
     {
@@ -416,11 +412,14 @@ public class SoundFlowOutputTests
 
         public int Remaining { get; set; } = int.MaxValue;
 
+        /// <summary>Most samples one read returns (short reads, like a ring buffer that is not full).</summary>
+        public int Chunk { get; init; } = int.MaxValue;
+
         public PcmFormat Format => format;
 
         public int Read(Span<float> buffer)
         {
-            var n = Math.Min(buffer.Length, Remaining);
+            var n = Math.Min(Math.Min(buffer.Length, Remaining), Chunk);
             for (var i = 0; i < n; i++)
             {
                 buffer[i] = _next++;
@@ -431,7 +430,7 @@ public class SoundFlowOutputTests
         }
     }
 
-    private sealed record OpenCall(DeviceInfo? Device, AudioFormat Format, MiniAudioDeviceConfig Config, ISoundDataProvider Data);
+    private sealed record OpenCall(BackendDevice? Device, OpenRequest Request, IPcmSource Data);
 
     private sealed class FakeStream(OpenedOutput opened) : IPlaybackStream
     {
@@ -441,21 +440,26 @@ public class SoundFlowOutputTests
 
         public bool Disposed { get; private set; }
 
+        public event EventHandler<string>? Lost;
+
         public void Start() => Calls.Add("start");
 
         public void Pause() => Calls.Add("pause");
 
+        /// <summary>What the audio thread does when the device goes away.</summary>
+        public void Lose(string reason) => Lost?.Invoke(this, reason);
+
         public void Dispose() => Disposed = true;
     }
 
-    private sealed class FakeBackend(params DeviceInfo[] devices) : IAudioBackend
+    private sealed class FakeBackend(params BackendDevice[] devices) : IAudioBackend
     {
         public Exception? RefreshError { get; init; }
 
         public Exception? OpenError { get; init; }
 
         /// <summary>What the "device" reads back; default: exactly what was asked, verified.</summary>
-        public Func<DeviceInfo?, AudioFormat, MiniAudioDeviceConfig, OpenedOutput>? OpenedAs { get; set; }
+        public Func<BackendDevice?, OpenRequest, OpenedOutput>? OpenedAs { get; set; }
 
         public List<OpenCall> Opened { get; } = [];
 
@@ -465,21 +469,20 @@ public class SoundFlowOutputTests
 
         public string ActiveBackend => "Fake";
 
-        public IReadOnlyList<DeviceInfo> RefreshPlaybackDevices()
+        public IReadOnlyList<BackendDevice> RefreshPlaybackDevices()
             => RefreshError is null ? devices : throw RefreshError;
 
-        public IPlaybackStream Open(DeviceInfo? device, AudioFormat format, MiniAudioDeviceConfig config, ISoundDataProvider data)
+        public IPlaybackStream Open(BackendDevice? device, OpenRequest request, IPcmSource source)
         {
             if (OpenError is not null)
             {
                 throw OpenError;
             }
 
-            Opened.Add(new OpenCall(device, format, config, data));
-            var stream = new FakeStream(OpenedAs?.Invoke(device, format, config) ?? new OpenedOutput(
-                device?.Name, config.Playback!.ShareMode == ShareMode.Exclusive, format.SampleRate, format.Channels,
-                format.Format.ToString().ToLowerInvariant(), format.Format == SampleFormat.S16 ? 16 : format.Format == SampleFormat.S24 ? 24 : 32,
-                Verified: true));
+            Opened.Add(new OpenCall(device, request, source));
+            var stream = new FakeStream(OpenedAs?.Invoke(device, request) ?? new OpenedOutput(
+                device?.Name, request.Exclusive, request.SampleRate, request.Channels,
+                DeviceSamples.Name(request.Format), DeviceSamples.ValidBits(request.Format), Verified: true));
             Streams.Add(stream);
             return stream;
         }

@@ -88,15 +88,52 @@ jobs:
           dotnet run --project src/MusicSpin.Cli --configuration Release --no-build -- --help > /dev/null
           dotnet run --project src/MusicSpin.Cli --configuration Release --no-build -- doctor --backend null --json
 
-  # The check the "Protect main" ruleset requires (named CI): green only when the build and tests passed on every OS.
+  # native/msaudio (miniaudio + flat C API) for every RID the release ships. build-test builds its own OS's RID
+  # through MSBuild (eng/Native.targets); this job proves the cross-architecture builds too.
+  native:
+    name: native ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64,     os: windows-latest }
+          - { rid: win-arm64,   os: windows-latest }
+          - { rid: linux-x64,   os: ubuntu-latest }
+          - { rid: linux-arm64, os: ubuntu-latest }
+          - { rid: osx-x64,     os: macos-latest }
+          - { rid: osx-arm64,   os: macos-latest }
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the arm64 cross compiler
+        if: matrix.rid == 'linux-arm64'
+        run: sudo apt-get update -q && sudo apt-get install -y -q gcc-aarch64-linux-gnu
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./eng/build-native.ps1 -Rid ${{ matrix.rid }}
+
+      - name: Build (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ./eng/build-native.sh ${{ matrix.rid }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: msaudio-${{ matrix.rid }}
+          path: native/msaudio/bin/${{ matrix.rid }}/*msaudio.*
+
+  # The check the "Protect main" ruleset requires (named CI): green only when the build and tests passed on every OS
+  # and the native layer built for every RID.
   ci:
     name: CI
-    needs: build-test
+    needs: [build-test, native]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Every OS passed
-        run: '[[ "${{ needs.build-test.result }}" == success ]]'
+        run: '[[ "${{ needs.build-test.result }}" == success && "${{ needs.native.result }}" == success ]]'
 
   # Merges the per-OS Cobertura files into the run's summary page. Informational: never fails the run.
   coverage-summary:

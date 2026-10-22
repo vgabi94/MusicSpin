@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using MusicSpin.Core.Output.Wasapi;
+using MusicSpin.Core.Output;
 
 namespace MusicSpin.Tests;
 

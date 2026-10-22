@@ -5,7 +5,7 @@
 `music-spin doctor [--backend auto|null] [--json]` checks three things and reports each one:
 
 1. **FFmpeg:** are the FFmpeg 9.0 shared libraries loadable? It shows the version, the license (and whether it is LGPL) and the folder they were loaded from.
-2. **Audio backend:** initializes SoundFlow/miniaudio (or the null output) and counts playback devices.
+2. **Audio backend:** initializes miniaudio (or the null output) and counts playback devices.
 3. **Data folder:** resolves it (`portable` = the default `.usrdata` next to the executable, `environment` = `MUSICSPIN_DATA_DIR`, `override` = `--data-dir`; see [Data folder](getting-started.md#data-folder)), creates it and a default `settings.json` if missing, and checks that it is writable. It also reports whether `library.db` exists and its size.
 
 | Exit | When |
@@ -23,11 +23,11 @@ Real output (published linux-x64 build on Debian 13 in a headless VM; `/home/me/
 $ music-spin doctor
 music-spin 0.1.0+73f41b91588edc1f451c4971ce53b14e24dba5e6 on .NET 10.0.12, Debian GNU/Linux 13 (trixie) (linux-x64)
   [ok]   FFmpeg n9.0.2-23-g27b46f0fbc-20261008, license: LGPL version 3 or later (/home/me/MusicSpin/ffmpeg)
-  [ok]   Audio: SoundFlow/miniaudio (PulseAudio), 1 playback device(s)
+  [ok]   Audio: miniaudio (PulseAudio), 1 playback device(s)
   [ok]   Data: /home/me/MusicSpin/.usrdata (portable)
 
 $ music-spin doctor --json
-{"ok":true,"command":"doctor","data":{"version":"0.1.0+73f41b91588edc1f451c4971ce53b14e24dba5e6","runtime":".NET 10.0.12","os":"Debian GNU/Linux 13 (trixie) (linux-x64)","decoder":{"name":"ffmpeg","available":true,"version":"n9.0.2-23-g27b46f0fbc-20261008","license":"LGPL version 3 or later","lgpl":true,"path":"/home/me/MusicSpin/ffmpeg"},"audioBackend":"SoundFlow/miniaudio (PulseAudio)","playbackDevices":1,"dataDir":{"path":"/home/me/MusicSpin/.usrdata","source":"portable","exists":true,"writable":true,"settingsFile":"/home/me/MusicSpin/.usrdata/settings.json","settingsExists":true,"libraryFile":"/home/me/MusicSpin/.usrdata/library.db","libraryExists":true,"librarySizeBytes":180224},"executableDirectory":"/home/me/MusicSpin"}}
+{"ok":true,"command":"doctor","data":{"version":"0.1.0+73f41b91588edc1f451c4971ce53b14e24dba5e6","runtime":".NET 10.0.12","os":"Debian GNU/Linux 13 (trixie) (linux-x64)","decoder":{"name":"ffmpeg","available":true,"version":"n9.0.2-23-g27b46f0fbc-20261008","license":"LGPL version 3 or later","lgpl":true,"path":"/home/me/MusicSpin/ffmpeg"},"audioBackend":"miniaudio (PulseAudio)","playbackDevices":1,"dataDir":{"path":"/home/me/MusicSpin/.usrdata","source":"portable","exists":true,"writable":true,"settingsFile":"/home/me/MusicSpin/.usrdata/settings.json","settingsExists":true,"libraryFile":"/home/me/MusicSpin/.usrdata/library.db","libraryExists":true,"librarySizeBytes":180224},"executableDirectory":"/home/me/MusicSpin"}}
 ```
 
 FFmpeg not found (exit 6):
@@ -59,11 +59,11 @@ Real output on the same headless VM. Its only device is PulseAudio's null sink:
 
 ```console
 $ music-spin devices
-Backend: SoundFlow/miniaudio (PulseAudio)
+Backend: miniaudio (PulseAudio)
     0    Discard all samples (playback) or generate zero samples (capture)
 
 $ music-spin devices --json
-{"ok":true,"command":"devices","data":{"backend":"SoundFlow/miniaudio (PulseAudio)","devices":[{"id":"0","name":"Discard all samples (playback) or generate zero samples (capture)","isDefault":false,"backend":"PulseAudio","sampleFormats":["s16","f32","s32","s24","u8"],"sampleRates":[8000,11025,16000,22050,24000,32000,44100,48000,88200,96000,176400,192000,352800,384000],"channels":[]}]}}
+{"ok":true,"command":"devices","data":{"backend":"miniaudio (PulseAudio)","devices":[{"id":"0","name":"Discard all samples (playback) or generate zero samples (capture)","isDefault":false,"backend":"PulseAudio","sampleFormats":["s16","f32","s32","s24","u8"],"sampleRates":[8000,11025,16000,22050,24000,32000,44100,48000,88200,96000,176400,192000,352800,384000],"channels":[]}]}}
 
 $ music-spin devices --backend null --json
 {"ok":true,"command":"devices","data":{"backend":"null (realtime)","devices":[{"id":"null","name":"Null output (discards audio)","isDefault":true,"backend":"null","sampleFormats":["f32"],"sampleRates":[],"channels":[]}]}}
@@ -84,7 +84,7 @@ On a desktop you would see your real outputs (speakers, HDMI, USB DAC), with one
 Excerpt of `player.log` after a `play` whose audio device could not be opened, followed by `music-spin quit`:
 
 ```
-2026-10-08T18:30:07.359Z [139883] started pid 139883 on unix:/home/me/MusicSpin/.usrdata/player.sock, output SoundFlow/miniaudio (PulseAudio), idle timeout 900s
+2026-10-08T18:30:07.359Z [139883] started pid 139883 on unix:/home/me/MusicSpin/.usrdata/player.sock, output miniaudio (PulseAudio), idle timeout 900s
 MusicSpin player (pid 139883) listening on unix:/home/me/MusicSpin/.usrdata/player.sock
 2026-10-08T18:30:07.535Z [139883] loaded /home/me/Music/Nils Frahm/Spaces/01 An Aborted Beginning.flac
 2026-10-08T18:30:07.548Z [139883] error: Could not open audio device: Unable to init device Default Device. Result: FailedToOpenBackendDevice

@@ -1,27 +1,27 @@
 using System.Globalization;
 using MusicSpin.Core.Audio;
-using SoundFlow.Backends.MiniAudio.Enums;
-using SoundFlow.Structs;
 
-namespace MusicSpin.Core.Output.SoundFlow;
+
+
+namespace MusicSpin.Core.Output.MiniAudio;
 
 /// <summary>
-/// Audio output through SoundFlow (MIT) on top of miniaudio: WASAPI on Windows, CoreAudio on macOS,
+/// Audio output straight through miniaudio (public domain / MIT-0, via native/msaudio), with no mixer: WASAPI on Windows, CoreAudio on macOS,
 /// PulseAudio/ALSA/JACK on Linux. One miniaudio context is shared by all outputs of this provider.
 /// </summary>
-public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
+public sealed class MiniAudioOutputProvider : IAudioOutputProvider, IDisposable
 {
     private readonly Func<IAudioBackend> _createBackend;
     private readonly Lock _lock = new();
     private IAudioBackend? _engine;
 
-    /// <param name="backends">Optional backend priority (e.g. [Alsa] for direct hardware access on Linux).</param>
-    public SoundFlowOutputProvider(IReadOnlyList<MiniAudioBackend>? backends = null)
-        : this(() => new MiniAudioBackendAdapter(backends))
+    /// <param name="nullBackend">true: miniaudio's silent Null backend (tests, CI, machines without audio).</param>
+    public MiniAudioOutputProvider(bool nullBackend = false)
+        : this(() => new MiniAudioBackend(nullBackend))
     {
     }
 
-    internal SoundFlowOutputProvider(Func<IAudioBackend> createBackend)
+    internal MiniAudioOutputProvider(Func<IAudioBackend> createBackend)
     {
         _createBackend = createBackend;
     }
@@ -32,11 +32,11 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
         {
             try
             {
-                return $"SoundFlow/miniaudio ({Engine.ActiveBackend})";
+                return $"miniaudio ({Engine.ActiveBackend})";
             }
             catch (MusicSpinException)
             {
-                return "SoundFlow/miniaudio (unavailable)";
+                return "miniaudio (unavailable)";
             }
         }
     }
@@ -69,7 +69,7 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
     public IReadOnlyList<AudioDeviceInfo> GetDevices()
     {
         var engine = Engine;
-        IReadOnlyList<DeviceInfo> devices;
+        IReadOnlyList<BackendDevice> devices;
         try
         {
             devices = engine.RefreshPlaybackDevices();
@@ -83,15 +83,15 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
         return devices
             .Select((d, i) =>
             {
-                var formats = d.SupportedDataFormats ?? [];
+                var formats = d.Formats;
                 return new AudioDeviceInfo(
                     i.ToString(CultureInfo.InvariantCulture),
                     d.Name,
                     d.IsDefault,
                     backend,
-                    formats.Select(f => f.Format.ToString().ToLowerInvariant()).Distinct().ToArray(),
-                    formats.Select(f => (int)f.SampleRate).Where(r => r > 0).Distinct().Order().ToArray(),
-                    formats.Select(f => (int)f.Channels).Where(c => c > 0).Distinct().Order().ToArray());
+                    formats.Select(f => f.Format).Distinct().ToArray(),
+                    formats.Select(f => f.SampleRate).Where(r => r > 0).Distinct().Order().ToArray(),
+                    formats.Select(f => f.Channels).Where(c => c > 0).Distinct().Order().ToArray());
             })
             .ToArray();
     }
@@ -99,7 +99,7 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
     public IAudioOutput Create(AudioOutputOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return new SoundFlowAudioOutput(this, options);
+        return new MiniAudioOutput(this, options);
     }
 
     /// <summary>
@@ -107,7 +107,7 @@ public sealed class SoundFlowOutputProvider : IAudioOutputProvider, IDisposable
     /// then by part of its name. The whole name first, so a name inside an earlier device's name ("Speakers" and
     /// "Speakers (USB DAC)") or a name of digits still finds its own device.
     /// </summary>
-    internal DeviceInfo? ResolveDevice(string? deviceId)
+    internal BackendDevice? ResolveDevice(string? deviceId)
     {
         if (string.IsNullOrWhiteSpace(deviceId))
         {

@@ -1,18 +1,15 @@
 using System.Globalization;
 using MusicSpin.Core.Audio;
-using SoundFlow.Backends.MiniAudio.Devices;
-using SoundFlow.Backends.MiniAudio.Enums;
-using SoundFlow.Enums;
-using SoundFlow.Structs;
 
-namespace MusicSpin.Core.Output.SoundFlow;
+namespace MusicSpin.Core.Output.MiniAudio;
 
 /// <summary>
-/// Opens a miniaudio playback device at the source's native sample rate/channels and a device sample
-/// format matching the source bit depth (S16/S24/S32), so with exclusive mode and volume 1.0 the
-/// original samples reach the DAC unchanged.
+/// Opens a playback device at the source's own sample rate and channels. Shared mode hands the OS mixer float32;
+/// exclusive mode hands the device the source's own depth (s16/s24, f32 for 32-bit and float sources), so with
+/// volume 1.0 the original samples reach the DAC unchanged. When the device goes away mid-play, <see cref="Failed"/>
+/// fires (on a pool thread) and the output closes.
 /// </summary>
-internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, AudioOutputOptions options) : IAudioOutput
+internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOutputOptions options) : IAudioOutput
 {
     private readonly Lock _lock = new();
     private IPlaybackStream? _stream;
@@ -38,17 +35,10 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
         {
             try
             {
-                var format = new AudioFormat
-                {
-                    SampleRate = source.Format.SampleRate,
-                    Channels = source.Format.Channels,
-                    Format = DeviceSampleFormat(source.Format.SourceBitsPerSample),
-                    Layout = AudioFormat.GetLayoutFromChannels(source.Format.Channels),
-                };
-
-                _stream = provider.Engine.Open(
-                    provider.ResolveDevice(options.DeviceId), format, BuildConfig(options), new PcmSourceDataProvider(source));
-                _opened = Review(_stream.Opened, source.Format, options);
+                var stream = provider.Engine.Open(provider.ResolveDevice(options.DeviceId), BuildRequest(source.Format, options), source);
+                _stream = stream;
+                stream.Lost += (_, reason) => OnLost(stream, reason);
+                _opened = Review(stream.Opened, source.Format, options);
             }
             catch (Exception ex)
             {
@@ -92,26 +82,44 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
 
     public void Dispose() => Stop();
 
-    internal static SampleFormat DeviceSampleFormat(int sourceBits) => sourceBits switch
+    /// <inheritdoc />
+    public event EventHandler<AudioOutputFailedEventArgs>? Failed;
+
+    /// <summary>The open device stream, for tests.</summary>
+    internal IPlaybackStream? Stream
     {
-        > 0 and <= 16 when sourceBits != 1 => SampleFormat.S16,
-        > 16 and <= 24 => SampleFormat.S24,
+        get { lock (_lock) { return _stream; } }
+    }
+
+    /// <summary>The sample format we write: float32 in shared mode (the OS mixer is float), the source's depth in exclusive.</summary>
+    internal static DeviceSample DeviceSampleFormat(int sourceBits, bool exclusive) => !exclusive ? DeviceSample.F32 : sourceBits switch
+    {
+        > 0 and <= 16 when sourceBits != 1 => DeviceSample.S16,
+        > 16 and <= 24 => DeviceSample.S24,
         // 32-bit int sources, float sources and DSD (decoded to float PCM) go out as float.
-        _ => SampleFormat.F32,
+        _ => DeviceSample.F32,
     };
 
-    internal static MiniAudioDeviceConfig BuildConfig(AudioOutputOptions options)
+    internal static OpenRequest BuildRequest(PcmFormat format, AudioOutputOptions options)
+        => new(DeviceSampleFormat(format.SourceBitsPerSample, options.Exclusive), format.SampleRate, format.Channels, options.Exclusive, format.SourceBitsPerSample);
+
+    private void OnLost(IPlaybackStream stream, string reason)
     {
-        var exclusive = options.Exclusive;
-        return new MiniAudioDeviceConfig
+        // Raised on the audio thread, which cannot close its own device (it would wait for itself): hand off.
+        ThreadPool.QueueUserWorkItem(_ =>
         {
-            Playback = new DeviceSubConfig { ShareMode = exclusive ? ShareMode.Exclusive : ShareMode.Shared },
-            // Bit-perfect intent: never let the OS/miniaudio silently resample or clip.
-            NoClip = true,
-            Wasapi = new WasapiSettings { NoAutoConvertSRC = exclusive, NoDefaultQualitySRC = exclusive },
-            CoreAudio = new CoreAudioSettings { AllowNominalSampleRateChange = exclusive },
-            Alsa = exclusive ? new AlsaSettings { NoAutoFormat = true, NoAutoResample = true, NoAutoChannels = true } : null,
-        };
+            lock (_lock)
+            {
+                if (!ReferenceEquals(_stream, stream))
+                {
+                    return; // already closed or re-opened
+                }
+
+                DisposeDevice();
+            }
+
+            Failed?.Invoke(this, new AudioOutputFailedEventArgs(reason));
+        });
     }
 
     /// <summary>

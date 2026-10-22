@@ -24,7 +24,7 @@ public sealed record AudioDeviceInfo(
 /// <summary>Enumerates devices and creates outputs. One implementation per audio backend.</summary>
 public interface IAudioOutputProvider
 {
-    /// <summary>Backend name, e.g. "SoundFlow/miniaudio (PulseAudio)".</summary>
+    /// <summary>Backend name, e.g. "miniaudio (PulseAudio)".</summary>
     string Name { get; }
 
     /// <exception cref="MusicSpinException">AudioDeviceError if the backend cannot be initialised.</exception>
@@ -57,6 +57,21 @@ public interface IAudioOutput : IDisposable
     /// null while closed or when the output cannot tell.
     /// </summary>
     OpenedOutput? Opened => null;
+
+    /// <summary>
+    /// The device failed while open (unplugged, invalidated); the output has closed itself. Raised on a pool thread.
+    /// </summary>
+    event EventHandler<AudioOutputFailedEventArgs>? Failed
+    {
+        add { }
+        remove { }
+    }
+}
+
+/// <summary>Why an open output stopped on its own.</summary>
+public sealed class AudioOutputFailedEventArgs(string reason) : EventArgs
+{
+    public string Reason { get; } = reason;
 }
 
 /// <summary>The format a device really opened at, as read back from the backend after opening it.</summary>
@@ -67,8 +82,8 @@ public interface IAudioOutput : IDisposable
 /// <param name="SampleFormat">"s16", "s24" (packed), "s24in32" (24 valid bits in a 32-bit container), "s32" or "f32".</param>
 /// <param name="BitsPerSample">Valid bits per sample (24 for s24in32).</param>
 /// <param name="Verified">
-/// True when the values were read back from the device (WASAPI exclusive); false when they are what was asked for
-/// and the backend does not report what it opened (miniaudio).
+/// True when the values were read back from the device (miniaudio's internal device format, WASAPI exclusive);
+/// false when they are what was asked for and the output cannot tell what it opened.
 /// </param>
 /// <param name="Notice">Why the output is not what was asked for (e.g. exclusive refused, a resampled rate); null when it is.</param>
 public sealed record OpenedOutput(

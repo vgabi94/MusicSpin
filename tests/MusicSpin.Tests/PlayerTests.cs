@@ -72,6 +72,46 @@ public sealed class PlayerTests : IDisposable
     }
 
     [Fact]
+    public void A_device_lost_mid_play_reports_an_error_pauses_at_the_position_and_play_reopens_it()
+    {
+        var errors = new List<Exception>();
+        _player.Error += (_, e) => errors.Add(e.Exception);
+        _player.Load(Song);
+        _player.Play();
+        _outputs.Output.Pump(500); // 250 ms in
+
+        _outputs.Output.Fail("The audio device stopped unexpectedly (disconnected or taken away).");
+
+        var error = Assert.IsType<MusicSpinException>(Assert.Single(errors));
+        Assert.Equal(MusicSpinErrorCode.AudioDeviceError, error.Code);
+        Assert.Equal("The audio device stopped unexpectedly (disconnected or taken away).", error.Message);
+        Assert.Equal(PlayerState.Paused, _player.State);
+        Assert.Equal(TimeSpan.FromMilliseconds(250), _player.Position);
+        Assert.False(_outputs.Output.IsOpen);
+
+        _player.Play();
+
+        Assert.True(_outputs.Output.IsOpen);
+        Assert.Equal(2, _outputs.Output.OpenCount);
+        Assert.Equal(PlayerState.Playing, _player.State);
+        Assert.All(_outputs.Output.Pump(10), s => Assert.Equal(0.5f, s));
+    }
+
+    [Fact]
+    public void A_device_failure_after_dispose_is_ignored()
+    {
+        var errors = 0;
+        _player.Error += (_, _) => errors++;
+        _player.Load(Song);
+        _player.Play();
+        _player.Dispose();
+
+        _outputs.Output.Fail("late");
+
+        Assert.Equal(0, errors);
+    }
+
+    [Fact]
     public void Output_pulls_decoded_samples_and_position_advances()
     {
         _player.Load(Song);

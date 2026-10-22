@@ -16,7 +16,7 @@ Decoding is done by FFmpeg 9.0 (shared libraries, loaded at runtime). `music-spi
 file → FFmpegAudioDecoder (libavformat + libavcodec)
      → libswresample: interleaved float32 at the source sample rate and channel layout (no resampling)
      → Player / PlaybackSource (volume; skipped at 1.0)
-     → IAudioOutput: SoundFlow/miniaudio (or the null output)
+     → IAudioOutput: miniaudio (native/msaudio; WASAPI exclusive on Windows) (or the null output)
      → device opened at the source sample rate, as S16 (≤16-bit source), S24 (17-24-bit) or F32 (32-bit, float, DSD)
 ```
 

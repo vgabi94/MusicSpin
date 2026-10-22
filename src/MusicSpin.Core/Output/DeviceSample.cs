@@ -1,8 +1,9 @@
 using System.Buffers.Binary;
+using MusicSpin.Core.Audio;
 
-namespace MusicSpin.Core.Output.Wasapi;
+namespace MusicSpin.Core.Output;
 
-/// <summary>A sample format a WASAPI exclusive stream can be opened with.</summary>
+/// <summary>A sample format a device can be opened with (miniaudio formats plus WASAPI exclusive's 24-in-32).</summary>
 internal enum DeviceSample
 {
     S16,
@@ -17,7 +18,7 @@ internal enum DeviceSample
     F32,
 }
 
-/// <summary>Format choice and float-to-device conversion for the exclusive path. Pure, so it is tested on every OS.</summary>
+/// <summary>Format choice and float-to-device conversion for the device outputs. Pure, so it is tested on every OS.</summary>
 internal static class DeviceSamples
 {
     /// <summary>
@@ -106,5 +107,29 @@ internal static class DeviceSamples
 
         var v = (long)Math.Round((double)x * full, MidpointRounding.ToEven);
         return Math.Clamp(v, -full, full - 1);
+    }
+}
+
+/// <summary>Pulls whole buffers from an <see cref="IPcmSource"/>, which may return fewer samples than asked.</summary>
+internal static class PcmReading
+{
+    /// <summary>Fills <paramref name="buffer"/>; whatever the source cannot give (end of stream, underrun) is silence.</summary>
+    /// <returns>The samples the source gave.</returns>
+    public static int Fill(IPcmSource source, Span<float> buffer)
+    {
+        var total = 0;
+        while (total < buffer.Length)
+        {
+            var read = source.Read(buffer[total..]);
+            if (read <= 0)
+            {
+                break;
+            }
+
+            total += read;
+        }
+
+        buffer[total..].Clear();
+        return total;
     }
 }

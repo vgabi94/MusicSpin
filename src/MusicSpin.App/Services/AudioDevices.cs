@@ -1,6 +1,6 @@
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
-using MusicSpin.Core.Output.SoundFlow;
+using MusicSpin.Core.Output.MiniAudio;
 
 namespace MusicSpin.App.Services;
 
@@ -11,14 +11,14 @@ public interface IAudioDevices
     Task<IReadOnlyList<AudioDeviceInfo>> ListAsync();
 }
 
-/// <summary>The devices the player's output backend sees (SoundFlow/miniaudio: WASAPI, CoreAudio, PulseAudio/ALSA).</summary>
-public sealed class SoundFlowAudioDevices : IAudioDevices
+/// <summary>The devices the player's output backend sees (miniaudio: WASAPI, CoreAudio, PulseAudio/ALSA).</summary>
+public sealed class MiniAudioDevices : IAudioDevices
 {
     public Task<IReadOnlyList<AudioDeviceInfo>> ListAsync() => Task.Run(() =>
     {
         try
         {
-            using var provider = new SoundFlowOutputProvider();
+            using var provider = new MiniAudioOutputProvider();
             return provider.GetDevices();
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException)

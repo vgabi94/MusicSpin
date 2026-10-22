@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Playback engine, decoding (FFmpeg) and output (SoundFlow/miniaudio). No UI dependencies. -->
+  <!-- Playback engine, decoding (FFmpeg) and output (miniaudio through native/msaudio). No UI dependencies. -->
   <PropertyGroup>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>MusicSpin.Core</RootNamespace>
@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <PackageReference Include="FFmpeg.AutoGen" />
-    <PackageReference Include="SoundFlow" />
     <PackageReference Include="LiteDB" />
     <PackageReference Include="TagLibSharp" />
   </ItemGroup>
@@ -19,4 +18,5 @@
     <InternalsVisibleTo Include="MusicSpin.Tests.Cli" />
     <InternalsVisibleTo Include="MusicSpin.Tests.Ui" />
   </ItemGroup>
+  <Import Project="..\..\eng\Native.targets" />
 </Project>

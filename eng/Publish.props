@@ -4,7 +4,7 @@
     (dotnet publish -r <rid>, see eng/publish.sh / eng/publish.ps1):
 
     - one self-contained, compressed single-file executable per app (no .NET install needed);
-    - native libraries (SoundFlow's miniaudio, Avalonia's Skia/HarfBuzz) are bundled and self-extracted on first run
+    - native libraries (msaudio = miniaudio, Avalonia's Skia/HarfBuzz) are bundled and self-extracted on first run
       to DOTNET_BUNDLE_EXTRACT_BASE_DIR (default: ~/.net on Linux/macOS, %TEMP%\.net on Windows);
     - LGPL components stay outside the bundle so users can replace them (LGPL-2.1 section 6):
         TagLibSharp.dll next to the executable, FFmpeg shared libraries in ffmpeg/ (copied by the publish script).

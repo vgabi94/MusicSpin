@@ -179,7 +179,12 @@ public sealed class Player : IPlayer
             {
                 if (_output is null || !_output.IsOpen || !ReferenceEquals(_outputSource, buffer))
                 {
-                    _output ??= _outputs.Create(_options.Output);
+                    if (_output is null)
+                    {
+                        _output = _outputs.Create(_options.Output);
+                        _output.Failed += OnOutputFailed;
+                    }
+
                     _output.Open(buffer);
                     _outputSource = buffer;
                     if (_output.Opened is { } opened)
@@ -348,8 +353,12 @@ public sealed class Player : IPlayer
         lock (_sync)
         {
             ReleaseOutput();
-            _output?.Dispose();
-            _output = null;
+            if (_output is not null)
+            {
+                _output.Failed -= OnOutputFailed;
+                _output.Dispose();
+                _output = null;
+            }
             lock (_decodeLock)
             {
                 foreach (var segment in _segments)
@@ -828,6 +837,21 @@ public sealed class Player : IPlayer
 
         RaisePosition();
         PlaybackEnded?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// The device went away mid-play (unplugged, invalidated); the output has closed itself. Report it and pause, so the
+    /// position is kept and Play reopens the device (the same one if it is back, else the error says why).
+    /// </summary>
+    private void OnOutputFailed(object? sender, AudioOutputFailedEventArgs e)
+    {
+        if (_disposed || !ReferenceEquals(sender, _output))
+        {
+            return;
+        }
+
+        Error?.Invoke(this, new PlayerErrorEventArgs(new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, e.Reason)));
+        Pause();
     }
 
     private void ReleaseOutput()

@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Core unit tests. FFmpeg-backed tests skip themselves when FFmpeg 7.1 shared libraries are not installed. -->
+  <PropertyGroup>
+    <!-- MsAudioNativeTests passes pointers to the native layer. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />

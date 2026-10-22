@@ -3,8 +3,8 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using MusicSpin.Core.Audio;
-using MusicSpin.Core.Output.SoundFlow;
-using SoundFlow.Interfaces;
+using MusicSpin.Core.Output.MiniAudio;
+using MusicSpin.Core.Output;
 
 namespace MusicSpin.Core.Output.Wasapi;
 
@@ -13,7 +13,7 @@ internal sealed class ExclusiveUnavailableException(string message, Exception? i
 
 /// <summary>
 /// A WASAPI exclusive-mode, event-driven render stream opened at exactly the track's rate, channels and bit depth.
-/// miniaudio (0.11.x, inside SoundFlow) opens exclusive WASAPI streams at the device's "Default Format" from the
+/// miniaudio (0.11.x) opens exclusive WASAPI streams at the device's "Default Format" from the
 /// Windows sound settings and resamples to it, ignoring the requested rate (#148); this path asks WASAPI for the
 /// source format itself, so a 44.1 kHz track runs the DAC at 44.1 kHz or fails loudly.
 /// All COM objects live on the stream's own MTA render thread.
@@ -30,7 +30,7 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
 
     private readonly string? _endpointId;
     private readonly PcmFormat _source;
-    private readonly ISoundDataProvider _data;
+    private readonly IPcmSource _data;
     private readonly string? _deviceName;
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _ready = new();
@@ -41,7 +41,7 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     private volatile bool _paused;
     private Exception? _initError;
 
-    private WasapiExclusiveStream(string? endpointId, string? deviceName, PcmFormat source, ISoundDataProvider data)
+    private WasapiExclusiveStream(string? endpointId, string? deviceName, PcmFormat source, IPcmSource data)
     {
         _endpointId = endpointId;
         _deviceName = deviceName;
@@ -53,9 +53,12 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
 
     public OpenedOutput Opened { get; private set; } = null!;
 
+    /// <inheritdoc />
+    public event EventHandler<string>? Lost;
+
     /// <summary>Opens the endpoint (null: the default render device) exclusively at the source's format.</summary>
     /// <exception cref="ExclusiveUnavailableException">WASAPI refused every exact format, or exclusive access.</exception>
-    public static WasapiExclusiveStream Open(string? endpointId, string? deviceName, PcmFormat source, ISoundDataProvider data)
+    public static WasapiExclusiveStream Open(string? endpointId, string? deviceName, PcmFormat source, IPcmSource data)
     {
         var stream = new WasapiExclusiveStream(endpointId, deviceName, source, data);
         stream._thread.Start();
@@ -182,9 +185,11 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
                     started = true;
                 }
 
-                if (which == 0 && Fill(render, format, bufferFrames, floats) != 0)
+                if (which == 0 && Fill(render, format, bufferFrames, floats) is var hr and not 0)
                 {
-                    break; // device unplugged or invalidated: stop rendering
+                    // Device unplugged or invalidated: stop rendering and say so.
+                    Lost?.Invoke(this, $"The audio device stopped: {Describe(hr)}.");
+                    break;
                 }
             }
 
@@ -237,8 +242,7 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
             return render.ReleaseBuffer(frames, BufferFlagsSilent);
         }
 
-        var read = Math.Max(0, _data.ReadBytes(floats));
-        floats.AsSpan(read).Clear(); // end of stream or underrun: silence
+        PcmReading.Fill(_data, floats); // end of stream or underrun: the rest is silence
         unsafe
         {
             var bytes = new Span<byte>((void*)buffer, floats.Length * DeviceSamples.ContainerBytes(format));

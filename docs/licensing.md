@@ -14,8 +14,8 @@ The full table with versions is in [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOT
 |---|---|---|
 | FFmpeg (libavcodec, libavformat, libavutil, libswresample) | LGPL-2.1+ / LGPL-3.0+ (LGPL builds only) | separate shared libraries in `ffmpeg/` |
 | TagLib# (TagLibSharp) | LGPL-2.1 | separate `TagLibSharp.dll` |
-| FFmpeg.AutoGen, SoundFlow, LiteDB, System.CommandLine, Avalonia, SkiaSharp, HarfBuzzSharp, .NET runtime | MIT | inside the single-file executables |
-| miniaudio (via SoundFlow) | public domain / MIT-0 | native library inside the executable |
+| FFmpeg.AutoGen, LiteDB, System.CommandLine, Avalonia, SkiaSharp, HarfBuzzSharp, .NET runtime | MIT | inside the single-file executables |
+| miniaudio (compiled into native msaudio) | public domain / MIT-0 | native library inside the executable |
 | ModelContextProtocol.Core (MCP C# SDK) | Apache-2.0 | inside `music-spin` |
 | Microsoft.Extensions.AI.Abstractions, Microsoft.Extensions.Logging.Abstractions | MIT | inside `music-spin` |
 | xUnit v3, Avalonia.Headless | Apache-2.0 / MIT | tests only, not shipped |

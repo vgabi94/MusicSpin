@@ -220,6 +220,15 @@ internal sealed class ManualAudioOutput : IAudioOutput
 
     public void Dispose() => Stop();
 
+    public event EventHandler<AudioOutputFailedEventArgs>? Failed;
+
+    /// <summary>The device goes away mid-play: closes like a real output, then raises <see cref="Failed"/>.</summary>
+    public void Fail(string reason)
+    {
+        Stop();
+        Failed?.Invoke(this, new AudioOutputFailedEventArgs(reason));
+    }
+
     /// <summary>
     /// Pulls <paramref name="samples"/> interleaved samples like a device callback would. By default first waits for the
     /// decode thread to have them ready (deterministic content); <paramref name="wait"/> = false pulls whatever is there,
