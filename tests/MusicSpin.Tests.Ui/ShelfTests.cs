@@ -354,16 +354,22 @@ public sealed class ShelfTests
 
         sleeve.Turn = 1 - 1e-10; // an animator that stops just short of facing you
         Gui.FinishAnimations(Settled);
-        Assert.True(sleeve.IsAtRest && Cached(sleeve));
+        Assert.True(sleeve.IsAtRest, "a hair short of facing you: at rest");
+        Assert.True(Cached(sleeve), "a hair short of facing you: from its image");
         sleeve.Turn = 1e-17; // or just past closed
         sleeve.RecordOut = 1e-17;
         Gui.FinishAnimations(Settled);
-        Assert.True(sleeve.IsAtRest && Cached(sleeve));
+        Assert.True(sleeve.IsAtRest, "a hair past closed: at rest");
+        Assert.True(Cached(sleeve), "a hair past closed: from its image");
         Assert.False(Record(sleeve).IsVisible);
 
-        sleeve.Turn = 0.5; // really turned: drawn live
-        Gui.FinishAnimations(Settled);
-        Assert.False(sleeve.IsAtRest || Cached(sleeve));
+        foreach (var turned in new[] { 0.5, 1.2, -0.3 }) // really turned, or past either end (an easing that overshoots)
+        {
+            sleeve.Turn = turned;
+            Gui.FinishAnimations(Settled);
+            Assert.False(sleeve.IsAtRest, $"turned {turned}: not at rest");
+            Assert.False(Cached(sleeve), $"turned {turned}: drawn live");
+        }
     }
 
     [AvaloniaFact]

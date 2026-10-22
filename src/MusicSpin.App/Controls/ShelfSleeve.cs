@@ -228,7 +228,7 @@ public sealed class ShelfSleeve : Button
     public const double RestTolerance = 1e-6;
 
     /// <summary>Still (closed or facing you, its record in): drawn through <see cref="RestCache"/>.</summary>
-    public bool IsAtRest => (Turn < RestTolerance || Turn > 1 - RestTolerance) && !IsRecordOut;
+    public bool IsAtRest => (Math.Abs(Turn) < RestTolerance || Math.Abs(1 - Turn) < RestTolerance) && !IsRecordOut;
 
     /// <summary>The record is (partly) out of its sleeve: it is drawn.</summary>
     private bool IsRecordOut => RecordOut >= RestTolerance;
