@@ -66,6 +66,25 @@ public interface IAudioOutput : IDisposable
         add { }
         remove { }
     }
+
+    /// <summary>
+    /// The output moved to another device without stopping (the system default changed, or the device was lost and it
+    /// reopened on the default): the source keeps its position. Raised on a pool thread.
+    /// </summary>
+    event EventHandler<AudioOutputReroutedEventArgs>? Rerouted
+    {
+        add { }
+        remove { }
+    }
+}
+
+/// <summary>Where an output moved to, and what to tell the user about it (null when the move needs no word).</summary>
+public sealed class AudioOutputReroutedEventArgs(OpenedOutput opened, string? message) : EventArgs
+{
+    public OpenedOutput Opened { get; } = opened;
+
+    /// <summary>E.g. the chosen device was disconnected, or exclusive mode was refused on the new device.</summary>
+    public string? Message { get; } = message;
 }
 
 /// <summary>Why an open output stopped on its own.</summary>

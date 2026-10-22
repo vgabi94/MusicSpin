@@ -10,7 +10,7 @@ namespace MusicSpin.Core.Output.MiniAudio;
 internal static unsafe partial class MsAudioNative
 {
     public const string Library = "msaudio";
-    public const int AbiVersion = 1;
+    public const int AbiVersion = 2;
     public const int IdBytes = 256;
     public const int NameBytes = 256;
     public const int MaxNativeFormats = 64;
@@ -118,6 +118,9 @@ internal static unsafe partial class MsAudioNative
 
     [LibraryImport(Library, EntryPoint = "msa_device_close")]
     public static partial void DeviceClose(nint device);
+
+    [LibraryImport(Library, EntryPoint = "msa_device_opened")]
+    public static partial int DeviceOpened(nint device, Opened* opened);
 
     [LibraryImport(Library, EntryPoint = "msa_device_render")]
     public static partial int DeviceRender(nint device, void* output, uint frames);

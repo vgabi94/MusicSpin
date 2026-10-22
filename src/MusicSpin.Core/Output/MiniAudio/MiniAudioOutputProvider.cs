@@ -41,6 +41,11 @@ public sealed class MiniAudioOutputProvider : IAudioOutputProvider, IDisposable
         }
     }
 
+    /// <summary>
+    /// Runs device-change work off the backend's thread; the thread pool, or a queue tests drain to order events.
+    /// </summary>
+    internal Action<Action> Post { get; init; } = static work => ThreadPool.QueueUserWorkItem(static w => ((Action)w!)(), work);
+
     internal IAudioBackend Engine
     {
         get

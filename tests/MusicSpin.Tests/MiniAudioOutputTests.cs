@@ -32,45 +32,276 @@ public class MiniAudioOutputTests
     }
 
     [Fact]
-    public async Task A_device_lost_mid_play_closes_the_output_and_raises_failed_once()
+    public void A_lost_default_device_reopens_on_the_new_default_from_the_same_source_without_stopping()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var failed = 0;
+        var moves = new List<AudioOutputReroutedEventArgs>();
+        output.Failed += (_, _) => failed++;
+        output.Rerouted += (_, e) => moves.Add(e);
+        var source = new Source(new PcmFormat(44_100, 2, 16));
+        output.Open(source);
+        output.Start();
+        backend.OpenedAs = (_, r) => new OpenedOutput("Headphones", false, 48_000, r.Channels, "f32", 32, Verified: true);
+
+        backend.Streams[0].Lose("unplugged");
+        Assert.Same(backend.Streams[0], ((MiniAudioOutput)output).Stream); // nothing happens on the audio thread
+        posted.RunAll();
+
+        Assert.True(backend.Streams[0].Disposed);
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Null(backend.Opened[1].Device); // the system default, whatever it is now
+        Assert.Same(source, backend.Opened[1].Data); // the same reader: it goes on from where it was
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+        Assert.Equal(0, failed);
+        var move = Assert.Single(moves);
+        Assert.Equal("Headphones", move.Opened.Device);
+        Assert.Null(move.Message); // the default moved, as asked; the resampling is in the notice
+        Assert.Contains("resampled", move.Opened.Notice, StringComparison.Ordinal);
+        Assert.Same(move.Opened, output.Opened);
+    }
+
+    [Fact]
+    public void A_device_lost_while_paused_reopens_but_stays_paused()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        output.Pause();
+
+        backend.Streams[0].Lose("unplugged");
+        posted.RunAll();
+
+        Assert.True(output.IsOpen);
+        Assert.Empty(backend.Streams[1].Calls);
+    }
+
+    [Fact]
+    public void When_no_device_can_be_opened_after_a_loss_the_output_closes_and_fails_once()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var reasons = new List<string>();
+        output.Failed += (_, e) => reasons.Add(e.Reason);
+        output.Rerouted += (_, _) => Assert.Fail("not rerouted");
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        backend.OpenError = new InvalidOperationException("No output device");
+
+        backend.Streams[0].Lose("unplugged.");
+        backend.Streams[0].Lose("unplugged again.");
+        posted.RunAll();
+
+        var reason = Assert.Single(reasons);
+        Assert.StartsWith("unplugged. Could not open audio device: No output device", reason, StringComparison.Ordinal);
+        Assert.False(output.IsOpen);
+        Assert.Null(output.Opened);
+        Assert.True(backend.Streams[0].Disposed);
+    }
+
+    [Fact]
+    public void When_the_new_device_will_not_start_the_output_closes_and_fails()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var reasons = new List<string>();
+        output.Failed += (_, e) => reasons.Add(e.Reason);
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        backend.StartError = new InvalidOperationException("device busy");
+
+        backend.Streams[0].Lose("unplugged.");
+        posted.RunAll();
+
+        Assert.Contains("device busy", Assert.Single(reasons), StringComparison.Ordinal);
+        Assert.False(output.IsOpen);
+        Assert.True(backend.Streams[1].Disposed);
+    }
+
+    [Fact]
+    public void A_lost_chosen_device_falls_back_to_the_default_says_so_and_returns_when_it_is_back()
+    {
+        var dac = Device("FiiO BTR13", isDefault: false);
+        var speakers = Device("Speakers", isDefault: true);
+        var backend = new FakeBackend(speakers, dac);
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions("FiiO BTR13"));
+        var moves = new List<AudioOutputReroutedEventArgs>();
+        output.Rerouted += (_, e) => moves.Add(e);
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        Assert.Same(dac, backend.Opened[0].Device);
+
+        backend.Devices.Remove(dac);
+        backend.Streams[0].Lose("unplugged");
+        posted.RunAll();
+
+        Assert.Null(backend.Opened[1].Device);
+        var move = Assert.Single(moves);
+        Assert.StartsWith("'FiiO BTR13' is not available: playing on the system default device.", move.Message, StringComparison.Ordinal);
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+
+        // The next track: still on the default while the DAC is gone (not "device not found")...
+        output.Open(new Source(new PcmFormat(48_000, 2, 16)));
+        Assert.Null(backend.Opened[2].Device);
+        Assert.Contains("'FiiO BTR13' is not available", output.Opened!.Notice, StringComparison.Ordinal);
+
+        // ...and back on it once it is plugged in again.
+        backend.Devices.Add(dac);
+        output.Open(new Source(new PcmFormat(48_000, 2, 16)));
+        Assert.Same(dac, backend.Opened[3].Device);
+        Assert.Null(output.Opened!.Notice);
+    }
+
+    [Fact]
+    public void Exclusive_refused_on_the_new_device_plays_shared_and_says_so()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        var moves = new List<AudioOutputReroutedEventArgs>();
+        output.Rerouted += (_, e) => moves.Add(e);
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        // Bluetooth: the backend falls back to shared and says why.
+        backend.OpenedAs = (_, r) => new OpenedOutput("Bluetooth", false, 44_100, r.Channels, "f32", 32, Verified: true,
+            Notice: "Exclusive mode unavailable: refused. Playing in shared mode.");
+
+        backend.Streams[0].ChangeDefault();
+        posted.RunAll();
+
+        var move = Assert.Single(moves);
+        Assert.Equal("Exclusive mode unavailable: refused. Playing in shared mode.", move.Message);
+        Assert.False(output.Opened!.Exclusive);
+        Assert.True(backend.Opened[1].Request.Exclusive); // it still asks: the setting is kept
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+    }
+
+    [Fact]
+    public void Rapid_repeated_notifications_reopen_once_and_a_replaced_devices_late_ones_are_dropped()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var moves = 0;
+        output.Rerouted += (_, _) => moves++;
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+
+        backend.Streams[0].ChangeDefault();
+        backend.Streams[0].ChangeDefault();
+        backend.Streams[0].Lose("unplugged");
+        backend.Streams[0].Reroute();
+        Assert.Equal(1, posted.Count); // one hand-off for the burst
+        posted.RunAll();
+
+        backend.Streams[0].ChangeDefault(); // the replaced device, late
+        backend.Streams[0].Lose("late");
+        posted.RunAll();
+
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Equal(1, moves);
+        Assert.Same(backend.Streams[1], ((MiniAudioOutput)output).Stream);
+    }
+
+    [Fact]
+    public void A_device_lost_during_a_track_switch_does_not_disturb_the_new_track()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var events = 0;
+        output.Rerouted += (_, _) => events++;
+        output.Failed += (_, _) => events++;
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+
+        backend.Streams[0].Lose("unplugged"); // the hand-off is queued...
+        var next = new Source(new PcmFormat(96_000, 2, 24));
+        output.Open(next); // ...and the player opens the next track (on the new default) before it runs
+        output.Start();
+        posted.RunAll();
+
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Same(next, backend.Opened[1].Data);
+        Assert.False(backend.Streams[1].Disposed);
+        Assert.Equal(0, events);
+
+        backend.Streams[1].Lose("unplugged too"); // the new device can still be followed
+        posted.RunAll();
+        Assert.Same(next, backend.Opened[2].Data);
+        Assert.Equal(1, events);
+    }
+
+    [Fact]
+    public void A_stop_before_the_hand_off_runs_leaves_the_output_closed()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+
+        backend.Streams[0].Lose("unplugged");
+        output.Stop();
+        posted.RunAll();
+
+        Assert.Single(backend.Opened);
+        Assert.False(output.IsOpen);
+    }
+
+    [Fact]
+    public void A_backend_reroute_updates_what_is_reported_without_reopening()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var moves = new List<AudioOutputReroutedEventArgs>();
+        output.Rerouted += (_, e) => moves.Add(e);
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+
+        backend.Streams[0].Opened = new OpenedOutput("Headphones", false, 48_000, 2, "f32", 32, Verified: true);
+        backend.Streams[0].Reroute();
+        posted.RunAll();
+
+        Assert.Single(backend.Opened);
+        var move = Assert.Single(moves);
+        Assert.Equal("Headphones", output.Opened!.Device);
+        Assert.Null(move.Message);
+        Assert.False(backend.Streams[0].Disposed);
+    }
+
+    [Fact]
+    public async Task By_default_the_hand_off_runs_on_the_thread_pool_not_the_audio_thread()
     {
         var backend = new FakeBackend();
         using var provider = new MiniAudioOutputProvider(() => backend);
         using var output = provider.Create(new AudioOutputOptions());
-        var failed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var count = 0;
-        output.Failed += (_, e) => { Interlocked.Increment(ref count); failed.TrySetResult(e.Reason); };
+        var moved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        output.Rerouted += (_, _) => moved.TrySetResult(Thread.CurrentThread.IsThreadPoolThread);
         output.Open(new Source(new PcmFormat(44_100, 2, 16)));
         output.Start();
 
         backend.Streams[0].Lose("unplugged");
 
-        Assert.Equal("unplugged", await failed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
-        Assert.False(output.IsOpen);
-        Assert.Null(output.Opened);
-        Assert.True(backend.Streams[0].Disposed);
-        Assert.Equal(1, Volatile.Read(ref count));
-    }
-
-    [Fact]
-    public async Task A_loss_reported_by_an_already_replaced_device_is_ignored()
-    {
-        var backend = new FakeBackend();
-        using var provider = new MiniAudioOutputProvider(() => backend);
-        using var output = provider.Create(new AudioOutputOptions());
-        var reasons = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        output.Failed += (_, e) => { reasons.Enqueue(e.Reason); failed.TrySetResult(); };
-        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
-        output.Open(new Source(new PcmFormat(48_000, 2, 16)));
-
-        backend.Streams[0].Lose("old device");
-        Assert.True(output.IsOpen); // checked under the output's lock: the stale loss cannot close the new device
-        backend.Streams[1].Lose("current device");
-
-        await failed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
-        Assert.False(output.IsOpen);
-        Assert.Equal(["current device"], reasons);
+        Assert.True(await moved.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -432,9 +663,9 @@ public class MiniAudioOutputTests
 
     private sealed record OpenCall(BackendDevice? Device, OpenRequest Request, IPcmSource Data);
 
-    private sealed class FakeStream(OpenedOutput opened) : IPlaybackStream
+    private sealed class FakeStream(OpenedOutput opened, Exception? startError) : IPlaybackStream
     {
-        public OpenedOutput Opened => opened;
+        public OpenedOutput Opened { get; set; } = opened;
 
         public List<string> Calls { get; } = [];
 
@@ -442,21 +673,59 @@ public class MiniAudioOutputTests
 
         public event EventHandler<string>? Lost;
 
-        public void Start() => Calls.Add("start");
+        public event EventHandler? Rerouted;
+
+        public event EventHandler? DefaultDeviceChanged;
+
+        public void Start()
+        {
+            if (startError is not null)
+            {
+                throw startError;
+            }
+
+            Calls.Add("start");
+        }
 
         public void Pause() => Calls.Add("pause");
 
         /// <summary>What the audio thread does when the device goes away.</summary>
         public void Lose(string reason) => Lost?.Invoke(this, reason);
 
+        public void Reroute() => Rerouted?.Invoke(this, EventArgs.Empty);
+
+        public void ChangeDefault() => DefaultDeviceChanged?.Invoke(this, EventArgs.Empty);
+
         public void Dispose() => Disposed = true;
+    }
+
+    /// <summary>The hand-off queue, drained by the test: device changes run exactly when the test says.</summary>
+    private sealed class Posted
+    {
+        private readonly Queue<Action> _work = new();
+
+        public int Count => _work.Count;
+
+        public void Post(Action work) => _work.Enqueue(work);
+
+        public void RunAll()
+        {
+            while (_work.TryDequeue(out var work))
+            {
+                work();
+            }
+        }
     }
 
     private sealed class FakeBackend(params BackendDevice[] devices) : IAudioBackend
     {
+        public List<BackendDevice> Devices { get; } = [.. devices];
+
         public Exception? RefreshError { get; init; }
 
-        public Exception? OpenError { get; init; }
+        public Exception? OpenError { get; set; }
+
+        public Exception? StartError { get; set; }
 
         /// <summary>What the "device" reads back; default: exactly what was asked, verified.</summary>
         public Func<BackendDevice?, OpenRequest, OpenedOutput>? OpenedAs { get; set; }
@@ -470,7 +739,7 @@ public class MiniAudioOutputTests
         public string ActiveBackend => "Fake";
 
         public IReadOnlyList<BackendDevice> RefreshPlaybackDevices()
-            => RefreshError is null ? devices : throw RefreshError;
+            => RefreshError is null ? [.. Devices] : throw RefreshError;
 
         public IPlaybackStream Open(BackendDevice? device, OpenRequest request, IPcmSource source)
         {
@@ -482,7 +751,7 @@ public class MiniAudioOutputTests
             Opened.Add(new OpenCall(device, request, source));
             var stream = new FakeStream(OpenedAs?.Invoke(device, request) ?? new OpenedOutput(
                 device?.Name, request.Exclusive, request.SampleRate, request.Channels,
-                DeviceSamples.Name(request.Format), DeviceSamples.ValidBits(request.Format), Verified: true));
+                DeviceSamples.Name(request.Format), DeviceSamples.ValidBits(request.Format), Verified: true), StartError);
             Streams.Add(stream);
             return stream;
         }

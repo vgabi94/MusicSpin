@@ -14,7 +14,7 @@
 #define MSA_API __attribute__((visibility("default")))
 #endif
 
-#define MSA_ABI_VERSION 1
+#define MSA_ABI_VERSION 2
 #define MSA_ID_BYTES 256
 #define MSA_NAME_BYTES 256
 #define MSA_MAX_NATIVE_FORMATS 64
@@ -88,6 +88,8 @@ MSA_API int32_t msa_device_open(msa_context* context, const msa_open_params* par
 MSA_API int32_t msa_device_start(msa_device* device);
 MSA_API int32_t msa_device_stop(msa_device* device);
 MSA_API void msa_device_close(msa_device* device);
+/* Reads what the device runs at now (after miniaudio rerouted a default device, the new endpoint's format and name). */
+MSA_API int32_t msa_device_opened(msa_device* device, msa_opened* opened);
 /* Tests: runs miniaudio's full playback path (our callback plus its client-to-device conversion) into output. */
 MSA_API int32_t msa_device_render(msa_device* device, void* output, uint32_t frames);
 

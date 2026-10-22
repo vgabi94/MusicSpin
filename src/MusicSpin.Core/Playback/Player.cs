@@ -183,6 +183,7 @@ public sealed class Player : IPlayer
                     {
                         _output = _outputs.Create(_options.Output);
                         _output.Failed += OnOutputFailed;
+                        _output.Rerouted += OnOutputRerouted;
                     }
 
                     _output.Open(buffer);
@@ -356,6 +357,7 @@ public sealed class Player : IPlayer
             if (_output is not null)
             {
                 _output.Failed -= OnOutputFailed;
+                _output.Rerouted -= OnOutputRerouted;
                 _output.Dispose();
                 _output = null;
             }
@@ -852,6 +854,24 @@ public sealed class Player : IPlayer
 
         Error?.Invoke(this, new PlayerErrorEventArgs(new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, e.Reason)));
         Pause();
+    }
+
+    /// <summary>
+    /// The output moved to another device by itself (a new system default, or the default after the chosen device went
+    /// away) and plays on from the same position: report where it is now, and say so when it is not what was asked.
+    /// </summary>
+    private void OnOutputRerouted(object? sender, AudioOutputReroutedEventArgs e)
+    {
+        if (_disposed || !ReferenceEquals(sender, _output))
+        {
+            return;
+        }
+
+        OutputOpened?.Invoke(this, new OutputOpenedEventArgs(e.Opened));
+        if (e.Message is { } message)
+        {
+            Error?.Invoke(this, new PlayerErrorEventArgs(new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, message)));
+        }
     }
 
     private void ReleaseOutput()

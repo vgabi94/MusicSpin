@@ -154,6 +154,17 @@ MSA_API int32_t msa_device_info_at(msa_context* context, int32_t index, msa_devi
     return MA_SUCCESS;
 }
 
+static void msa_read_opened(msa_device* d, msa_opened* opened)
+{
+    memset(opened, 0, sizeof(*opened));
+    opened->format = (int32_t)d->ma.playback.internalFormat;
+    opened->channels = (int32_t)d->ma.playback.internalChannels;
+    opened->sample_rate = (int32_t)d->ma.playback.internalSampleRate;
+    opened->exclusive = d->ma.playback.shareMode == ma_share_mode_exclusive ? 1 : 0;
+    opened->period_frames = (int32_t)d->ma.playback.internalPeriodSizeInFrames;
+    snprintf(opened->name, MSA_NAME_BYTES, "%s", d->ma.playback.name);
+}
+
 static void msa_on_data(ma_device* device, void* output, const void* input, ma_uint32 frames)
 {
     msa_device* d = (msa_device*)device->pUserData;
@@ -220,14 +231,7 @@ MSA_API int32_t msa_device_open(msa_context* context, const msa_open_params* par
         return result;
     }
 
-    memset(opened, 0, sizeof(*opened));
-    opened->format = (int32_t)d->ma.playback.internalFormat;
-    opened->channels = (int32_t)d->ma.playback.internalChannels;
-    opened->sample_rate = (int32_t)d->ma.playback.internalSampleRate;
-    opened->exclusive = d->ma.playback.shareMode == ma_share_mode_exclusive ? 1 : 0;
-    opened->period_frames = (int32_t)d->ma.playback.internalPeriodSizeInFrames;
-    snprintf(opened->name, MSA_NAME_BYTES, "%s", d->ma.playback.name);
-
+    msa_read_opened(d, opened);
     *device = d;
     return MA_SUCCESS;
 }
@@ -241,6 +245,13 @@ MSA_API void msa_device_close(msa_device* device)
     if (device == NULL) return;
     ma_device_uninit(&device->ma);
     free(device);
+}
+
+MSA_API int32_t msa_device_opened(msa_device* device, msa_opened* opened)
+{
+    if (device == NULL || opened == NULL) return MA_INVALID_ARGS;
+    msa_read_opened(device, opened);
+    return MA_SUCCESS;
 }
 
 MSA_API int32_t msa_device_render(msa_device* device, void* output, uint32_t frames)

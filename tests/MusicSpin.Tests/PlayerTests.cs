@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Time.Testing;
 using MusicSpin.Core;
+using MusicSpin.Core.Audio;
 using MusicSpin.Core.Playback;
 using MusicSpin.Tests.Shared;
 
@@ -95,6 +96,50 @@ public sealed class PlayerTests : IDisposable
         Assert.Equal(2, _outputs.Output.OpenCount);
         Assert.Equal(PlayerState.Playing, _player.State);
         Assert.All(_outputs.Output.Pump(10), s => Assert.Equal(0.5f, s));
+    }
+
+    [Fact]
+    public void An_output_that_moved_device_keeps_playing_from_the_same_position_and_reports_where_it_went()
+    {
+        var errors = new List<Exception>();
+        var opened = new List<OpenedOutput>();
+        _player.Error += (_, e) => errors.Add(e.Exception);
+        _player.OutputOpened += (_, e) => opened.Add(e.Opened);
+        _player.Load(Song);
+        _player.Play();
+        _outputs.Output.Pump(500); // 250 ms in
+        var states = new List<PlayerState>();
+        _player.StateChanged += (_, e) => states.Add(e.NewState);
+
+        var speakers = new OpenedOutput("Speakers", false, 48_000, 2, "f32", 32, true);
+        _outputs.Output.Reroute(speakers, null); // the default changed: no word needed
+        var shared = speakers with { Notice = "'BTR13' is not available: playing on the system default device." };
+        _outputs.Output.Reroute(shared, shared.Notice);
+
+        Assert.Equal([speakers, shared], opened.Skip(opened.Count - 2));
+        var error = Assert.IsType<MusicSpinException>(Assert.Single(errors));
+        Assert.Equal(shared.Notice, error.Message);
+        Assert.Empty(states); // never paused
+        Assert.Equal(PlayerState.Playing, _player.State);
+        Assert.Equal(1, _outputs.Output.OpenCount);
+        Assert.Equal(TimeSpan.FromMilliseconds(250), _player.Position);
+        _outputs.Output.Pump(500);
+        Assert.Equal(TimeSpan.FromMilliseconds(500), _player.Position);
+    }
+
+    [Fact]
+    public void A_reroute_after_dispose_is_ignored()
+    {
+        var events = 0;
+        _player.Error += (_, _) => events++;
+        _player.OutputOpened += (_, _) => events++;
+        _player.Load(Song);
+        _player.Play();
+        _player.Dispose();
+
+        _outputs.Output.Reroute(new OpenedOutput("Speakers", false, 48_000, 2, "f32", 32, true), "moved");
+
+        Assert.Equal(0, events);
     }
 
     [Fact]

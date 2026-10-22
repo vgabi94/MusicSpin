@@ -56,6 +56,16 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     /// <inheritdoc />
     public event EventHandler<string>? Lost;
 
+    /// <summary>Never raised: an exclusive stream stays on its endpoint; a new default is <see cref="DefaultDeviceChanged"/>.</summary>
+    public event EventHandler? Rerouted
+    {
+        add { }
+        remove { }
+    }
+
+    /// <inheritdoc />
+    public event EventHandler? DefaultDeviceChanged;
+
     /// <summary>Opens the endpoint (null: the default render device) exclusively at the source's format.</summary>
     /// <exception cref="ExclusiveUnavailableException">WASAPI refused every exact format, or exclusive access.</exception>
     public static WasapiExclusiveStream Open(string? endpointId, string? deviceName, PcmFormat source, IPcmSource data)
@@ -98,6 +108,7 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     private void Run()
     {
         object? enumeratorObj = null, deviceObj = null, clientObj = null, renderObj = null;
+        DefaultWatcher? watcher = null;
         var formatPtr = IntPtr.Zero;
         var mmcss = IntPtr.Zero;
         try
@@ -166,6 +177,18 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
 
             var floats = new float[bufferFrames * _source.Channels];
             Fill(render, format, bufferFrames, floats); // pre-roll, as WASAPI requires before Start
+            if (_endpointId is null && device.GetId(out var idPtr) == 0)
+            {
+                // Opened on the system default: hear when Windows picks another one, so playback can follow it.
+                var openedId = Marshal.PtrToStringUni(idPtr);
+                Marshal.FreeCoTaskMem(idPtr);
+                watcher = new DefaultWatcher(openedId, this);
+                if (enumerator.RegisterEndpointNotificationCallback(watcher) != 0)
+                {
+                    watcher = null; // no notifications: a lost device still reopens on the default through Lost
+                }
+            }
+
             _ready.Set();
 
             mmcss = AvSetMmThreadCharacteristicsW("Pro Audio", out _);
@@ -188,7 +211,7 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
                 if (which == 0 && Fill(render, format, bufferFrames, floats) is var hr and not 0)
                 {
                     // Device unplugged or invalidated: stop rendering and say so.
-                    Lost?.Invoke(this, $"The audio device stopped: {Describe(hr)}.");
+                    RaiseLost($"The audio device stopped: {Describe(hr)}.");
                     break;
                 }
             }
@@ -200,10 +223,21 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
         }
         catch (Exception ex)
         {
+            if (_ready.IsSet && !_quit)
+            {
+                // Failed while playing (e.g. Start refused after the device went away): never silently.
+                RaiseLost($"The audio device stopped: {ex.Message}");
+            }
+
             _initError ??= ex;
         }
         finally
         {
+            if (watcher is not null && enumeratorObj is IMMDeviceEnumerator registered)
+            {
+                registered.UnregisterEndpointNotificationCallback(watcher);
+            }
+
             if (mmcss != IntPtr.Zero)
             {
                 AvRevertMmThreadCharacteristics(mmcss);
@@ -227,6 +261,78 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
                 _ready.Set();
             }
         }
+    }
+
+    private void RaiseLost(string reason)
+    {
+        try
+        {
+            Lost?.Invoke(this, reason);
+        }
+        catch (Exception)
+        {
+            // The handler hands off to the pool; nothing it does may end the render thread's cleanup.
+        }
+    }
+
+    private void OnDefaultChanged()
+    {
+        try
+        {
+            DefaultDeviceChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception)
+        {
+            // Called by Windows on its notification thread: never throw back into it.
+        }
+    }
+
+    /// <summary>
+    /// IMMNotificationClient: tells the stream when the default render device for multimedia becomes another endpoint.
+    /// Windows calls it on its own thread and requires it not to block, so it only raises the event (the output hands off).
+    /// </summary>
+    [ComVisible(true)]
+    private sealed class DefaultWatcher(string? openedId, WasapiExclusiveStream owner) : IMMNotificationClient
+    {
+        public int OnDeviceStateChanged(string? deviceId, int newState) => 0;
+
+        public int OnDeviceAdded(string? deviceId) => 0;
+
+        public int OnDeviceRemoved(string? deviceId) => 0;
+
+        public int OnDefaultDeviceChanged(int flow, int role, string? defaultDeviceId)
+        {
+            // eRender, eMultimedia (the role the stream opened with); Windows also reports eConsole and
+            // eCommunications for the same change, which are skipped. No default at all: the stream's loss says it.
+            if (flow == 0 && role == 1 && defaultDeviceId is not null
+                && !string.Equals(defaultDeviceId, openedId, StringComparison.OrdinalIgnoreCase))
+            {
+                owner.OnDefaultChanged();
+            }
+
+            return 0;
+        }
+
+        public int OnPropertyValueChanged(string? deviceId, PropertyKey key) => 0;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PropertyKey
+    {
+        public Guid FormatId;
+        public int PropertyId;
+    }
+
+    [ComImport]
+    [Guid("7991EEC9-7E89-4D85-8390-6C703CEC60C0")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IMMNotificationClient
+    {
+        [PreserveSig] int OnDeviceStateChanged([MarshalAs(UnmanagedType.LPWStr)] string? deviceId, int newState);
+        [PreserveSig] int OnDeviceAdded([MarshalAs(UnmanagedType.LPWStr)] string? deviceId);
+        [PreserveSig] int OnDeviceRemoved([MarshalAs(UnmanagedType.LPWStr)] string? deviceId);
+        [PreserveSig] int OnDefaultDeviceChanged(int flow, int role, [MarshalAs(UnmanagedType.LPWStr)] string? defaultDeviceId);
+        [PreserveSig] int OnPropertyValueChanged([MarshalAs(UnmanagedType.LPWStr)] string? deviceId, PropertyKey key);
     }
 
     private int Fill(IAudioRenderClient render, DeviceSample format, uint frames, float[] floats)
@@ -331,6 +437,8 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
         [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
         [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
         [PreserveSig] int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
+        [PreserveSig] int RegisterEndpointNotificationCallback(IMMNotificationClient client);
+        [PreserveSig] int UnregisterEndpointNotificationCallback(IMMNotificationClient client);
     }
 
     [ComImport]
@@ -339,6 +447,8 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     private interface IMMDevice
     {
         [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object instance);
+        [PreserveSig] int OpenPropertyStore(int access, out IntPtr properties);
+        [PreserveSig] int GetId(out IntPtr id);
     }
 
     [ComImport]

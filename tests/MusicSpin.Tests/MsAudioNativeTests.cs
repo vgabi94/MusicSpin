@@ -69,6 +69,22 @@ public sealed unsafe class MsAudioNativeTests : IDisposable
         Assert.Null(opened.Notice);
     }
 
+    [Fact]
+    public void A_reroute_reads_back_the_device_as_it_runs_now_and_is_reported_once()
+    {
+        var device = _backend.RefreshPlaybackDevices()[0];
+        using var stream = (MiniAudioStream)_backend.Open(device, new OpenRequest(DeviceSample.S16, 44_100, 2, false, 16), Silence(44_100));
+        stream.Notice = "stale";
+        var rerouted = 0;
+        stream.Rerouted += (_, _) => rerouted++;
+
+        stream.OnRerouted(); // what miniaudio's reroute notification runs
+
+        Assert.Equal(1, rerouted);
+        Assert.Equal((device.Name, 44_100, 2, "s16", 16), (stream.Opened.Device, stream.Opened.SampleRate, stream.Opened.Channels, stream.Opened.SampleFormat, stream.Opened.BitsPerSample));
+        Assert.Null(stream.Opened.Notice); // the old device's notice no longer applies
+    }
+
     [Theory]
     [InlineData(44_100, 0)] // no channels
     [InlineData(44_100, 300)] // more than miniaudio's maximum
@@ -91,6 +107,7 @@ public sealed unsafe class MsAudioNativeTests : IDisposable
         Assert.Equal(MsAudioNative.InvalidArgs, MsAudioNative.ContextRefresh(0, out _));
         Assert.Equal(MsAudioNative.InvalidArgs, MsAudioNative.DeviceStart(0));
         Assert.Equal(MsAudioNative.InvalidArgs, MsAudioNative.DeviceRender(0, null, 1));
+        Assert.Equal(MsAudioNative.InvalidArgs, MsAudioNative.DeviceOpened(0, null));
         MsAudioNative.DeviceClose(0); // no-op
         Assert.False(string.IsNullOrEmpty(MsAudioNative.Describe(MsAudioNative.InvalidArgs)));
     }

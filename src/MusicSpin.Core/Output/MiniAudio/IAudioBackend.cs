@@ -41,4 +41,16 @@ internal interface IPlaybackStream : IDisposable
 
     /// <summary>The device stopped on its own (unplugged, invalidated); the argument says why. Raised on the audio thread.</summary>
     event EventHandler<string>? Lost;
+
+    /// <summary>
+    /// The backend moved this stream to the new system default device by itself (miniaudio reroutes default devices);
+    /// <see cref="Opened"/> now describes the new device. Raised on a backend thread.
+    /// </summary>
+    event EventHandler? Rerouted;
+
+    /// <summary>
+    /// The system default device changed while this stream, opened on the default, stays on the old one (the WASAPI
+    /// exclusive path cannot follow by itself): the owner reopens on the new default. Raised on a backend thread.
+    /// </summary>
+    event EventHandler? DefaultDeviceChanged;
 }

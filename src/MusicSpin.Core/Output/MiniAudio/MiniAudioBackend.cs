@@ -215,6 +215,15 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
 
     public event EventHandler<string>? Lost;
 
+    public event EventHandler? Rerouted;
+
+    /// <summary>Never raised: miniaudio follows the default device itself and reports it as <see cref="Rerouted"/>.</summary>
+    public event EventHandler? DefaultDeviceChanged
+    {
+        add { }
+        remove { }
+    }
+
     /// <summary>The device handle, for <see cref="RenderForTest"/>.</summary>
     internal nint Handle => _device;
 
@@ -279,10 +288,49 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnNotify(nint user, int type)
     {
-        if (GCHandle.FromIntPtr(user).Target is MiniAudioStream stream && type == MsAudioNative.NotifyStopped && !stream._stopping)
+        if (GCHandle.FromIntPtr(user).Target is not MiniAudioStream stream || stream._stopping)
+        {
+            return;
+        }
+
+        if (type == MsAudioNative.NotifyStopped)
         {
             // Stopped without us asking: the device went away (unplugged, invalidated, the server died).
             stream.RaiseLost("The audio device stopped unexpectedly (disconnected or taken away).");
+        }
+        else if (type == MsAudioNative.NotifyRerouted)
+        {
+            stream.OnRerouted();
+        }
+    }
+
+    /// <summary>miniaudio moved a default-device stream to the new default: read back what it runs at now.</summary>
+    internal void OnRerouted()
+    {
+        try
+        {
+            var opened = new MsAudioNative.Opened();
+            if (_device != 0 && MsAudioNative.DeviceOpened(_device, &opened) == MsAudioNative.Success)
+            {
+                var name = MsAudioNative.Utf8(opened.Name, MsAudioNative.NameBytes);
+                var sample = MsAudioNative.ToSample(opened.Format);
+                Opened = Opened with
+                {
+                    Device = string.IsNullOrEmpty(name) ? Opened.Device : name,
+                    Exclusive = opened.Exclusive != 0,
+                    SampleRate = opened.SampleRate,
+                    Channels = opened.Channels,
+                    SampleFormat = MsAudioNative.FormatName(opened.Format),
+                    BitsPerSample = sample is { } s ? DeviceSamples.ValidBits(s) : 8,
+                    Notice = null,
+                };
+            }
+
+            Rerouted?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception)
+        {
+            // Never unwind into native code.
         }
     }
 

@@ -222,6 +222,11 @@ internal sealed class ManualAudioOutput : IAudioOutput
 
     public event EventHandler<AudioOutputFailedEventArgs>? Failed;
 
+    public event EventHandler<AudioOutputReroutedEventArgs>? Rerouted;
+
+    /// <summary>The output moved to another device by itself and keeps pulling from the same source.</summary>
+    public void Reroute(OpenedOutput opened, string? message) => Rerouted?.Invoke(this, new AudioOutputReroutedEventArgs(opened, message));
+
     /// <summary>The device goes away mid-play: closes like a real output, then raises <see cref="Failed"/>.</summary>
     public void Fail(string reason)
     {
