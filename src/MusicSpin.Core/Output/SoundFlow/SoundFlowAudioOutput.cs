@@ -1,3 +1,4 @@
+using System.Globalization;
 using MusicSpin.Core.Audio;
 using SoundFlow.Backends.MiniAudio.Devices;
 using SoundFlow.Backends.MiniAudio.Enums;
@@ -15,10 +16,17 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
 {
     private readonly Lock _lock = new();
     private IPlaybackStream? _stream;
+    private OpenedOutput? _opened;
 
     public bool IsOpen
     {
         get { lock (_lock) { return _stream is not null; } }
+    }
+
+    /// <inheritdoc />
+    public OpenedOutput? Opened
+    {
+        get { lock (_lock) { return _opened; } }
     }
 
     public void Open(IPcmSource source)
@@ -40,12 +48,15 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
 
                 _stream = provider.Engine.Open(
                     provider.ResolveDevice(options.DeviceId), format, BuildConfig(options), new PcmSourceDataProvider(source));
+                _opened = Review(_stream.Opened, source.Format, options);
             }
             catch (Exception ex)
             {
                 DisposeDevice();
                 throw ex as MusicSpinException
-                      ?? new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, $"Could not open audio device: {ex.Message}", ex);
+                      ?? new MusicSpinException(
+                          MusicSpinErrorCode.AudioDeviceError,
+                          $"Could not open audio device{(options.Exclusive ? " in exclusive mode" : string.Empty)}: {ex.Message}", ex);
             }
         }
     }
@@ -103,9 +114,35 @@ internal sealed class SoundFlowAudioOutput(SoundFlowOutputProvider provider, Aud
         };
     }
 
+    /// <summary>
+    /// Checks what the device opened at against what was asked: exclusive asked but shared given, or a verified rate
+    /// that is not the track's, become a notice, so nothing claims exclusive or bit-perfect when it is not.
+    /// </summary>
+    internal static OpenedOutput Review(OpenedOutput opened, PcmFormat source, AudioOutputOptions options)
+    {
+        var notices = new List<string>();
+        if (opened.Notice is { } notice)
+        {
+            notices.Add(notice);
+        }
+        else if (options.Exclusive && !opened.Exclusive)
+        {
+            notices.Add("Exclusive mode was requested, but the device opened in shared mode.");
+        }
+
+        if (opened.Verified && opened.SampleRate != source.SampleRate)
+        {
+            notices.Add(string.Create(CultureInfo.InvariantCulture,
+                $"The device runs at {opened.SampleRate / 1000.0:0.###} kHz, not the track's {source.SampleRate / 1000.0:0.###} kHz: the audio is resampled."));
+        }
+
+        return opened with { Notice = notices.Count == 0 ? null : string.Join(" ", notices) };
+    }
+
     private void DisposeDevice()
     {
         _stream?.Dispose();
         _stream = null;
+        _opened = null;
     }
 }

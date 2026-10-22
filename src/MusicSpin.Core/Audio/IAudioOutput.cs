@@ -51,4 +51,38 @@ public interface IAudioOutput : IDisposable
     void Stop();
 
     bool IsOpen { get; }
+
+    /// <summary>
+    /// What the device actually opened at (share mode, rate, sample format), read back after <see cref="Open"/>;
+    /// null while closed or when the output cannot tell.
+    /// </summary>
+    OpenedOutput? Opened => null;
+}
+
+/// <summary>The format a device really opened at, as read back from the backend after opening it.</summary>
+/// <param name="Device">The device's name; null when unknown.</param>
+/// <param name="Exclusive">True only when the device is held exclusively (no OS mixer in between).</param>
+/// <param name="SampleRate">The device's rate in Hz.</param>
+/// <param name="Channels">The device's channel count.</param>
+/// <param name="SampleFormat">"s16", "s24" (packed), "s24in32" (24 valid bits in a 32-bit container), "s32" or "f32".</param>
+/// <param name="BitsPerSample">Valid bits per sample (24 for s24in32).</param>
+/// <param name="Verified">
+/// True when the values were read back from the device (WASAPI exclusive); false when they are what was asked for
+/// and the backend does not report what it opened (miniaudio).
+/// </param>
+/// <param name="Notice">Why the output is not what was asked for (e.g. exclusive refused, a resampled rate); null when it is.</param>
+public sealed record OpenedOutput(
+    string? Device,
+    bool Exclusive,
+    int SampleRate,
+    int Channels,
+    string SampleFormat,
+    int BitsPerSample,
+    bool Verified,
+    string? Notice = null)
+{
+    /// <summary>"exclusive, 44.1 kHz 24-bit" / "shared, 48 kHz 32-bit float".</summary>
+    public string Describe()
+        => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{(Exclusive ? "exclusive" : "shared")}, {SampleRate / 1000.0:0.###} kHz {BitsPerSample}-bit{(SampleFormat == "f32" ? " float" : string.Empty)}");
 }

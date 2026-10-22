@@ -255,6 +255,155 @@ public class SoundFlowOutputTests
         Assert.Equal(1, ends);
     }
 
+    [Fact]
+    public void An_exclusive_44k1_24bit_track_asks_for_exclusive_at_44k1_s24_and_reports_what_opened()
+    {
+        var backend = new FakeBackend(Device("FiiO BTR13", isDefault: true));
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions("FiiO BTR13", Exclusive: true));
+
+        Assert.Null(output.Opened);
+        output.Open(new Source(new PcmFormat(44_100, 2, 24)));
+
+        var open = Assert.Single(backend.Opened);
+        Assert.Equal((44_100, SampleFormat.S24, ShareMode.Exclusive), (open.Format.SampleRate, open.Format.Format, open.Config.Playback!.ShareMode));
+        Assert.True(open.Config.Wasapi!.NoAutoConvertSRC);
+        var opened = output.Opened!;
+        Assert.Equal(("FiiO BTR13", true, 44_100, "s24", 24, true), (opened.Device, opened.Exclusive, opened.SampleRate, opened.SampleFormat, opened.BitsPerSample, opened.Verified));
+        Assert.Null(opened.Notice);
+        Assert.Equal("exclusive, 44.1 kHz 24-bit", opened.Describe());
+
+        output.Stop();
+        Assert.Null(output.Opened); // closed: nothing is in use
+    }
+
+    [Fact]
+    public void A_device_that_opens_at_another_rate_is_reported_at_that_rate_with_a_resampling_notice()
+    {
+        // What #148 saw: asked for 44.1 kHz exclusive, the device ran at the Windows mix rate.
+        var backend = new FakeBackend(Device("FiiO BTR13", isDefault: true))
+        {
+            OpenedAs = (d, f, _) => new OpenedOutput(d?.Name, true, 48_000, f.Channels, "s24in32", 24, Verified: true),
+        };
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+
+        output.Open(new Source(new PcmFormat(44_100, 2, 24)));
+
+        var opened = output.Opened!;
+        Assert.Equal(48_000, opened.SampleRate);
+        Assert.Equal("exclusive, 48 kHz 24-bit", opened.Describe());
+        Assert.Equal("The device runs at 48 kHz, not the track's 44.1 kHz: the audio is resampled.", opened.Notice);
+    }
+
+    [Fact]
+    public void An_unverified_rate_is_not_flagged_as_resampled()
+    {
+        var backend = new FakeBackend
+        {
+            OpenedAs = (_, f, _) => new OpenedOutput(null, false, 48_000, f.Channels, "f32", 32, Verified: false),
+        };
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+
+        output.Open(new Source(new PcmFormat(44_100, 2, 32)));
+
+        Assert.Null(output.Opened!.Notice); // shared, unverified: the OS mixer's rate is its business
+        Assert.Equal("shared, 48 kHz 32-bit float", output.Opened.Describe());
+    }
+
+    [Fact]
+    public void Exclusive_refused_and_played_shared_keeps_the_backends_reason_and_is_never_reported_as_exclusive()
+    {
+        var backend = new FakeBackend
+        {
+            OpenedAs = (_, f, _) => new OpenedOutput("BTR13", false, f.SampleRate, f.Channels, "s24", 24, Verified: false,
+                Notice: "Exclusive mode unavailable: another app is using the device. Playing in shared mode through the Windows mixer."),
+        };
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+
+        output.Open(new Source(new PcmFormat(44_100, 2, 24)));
+
+        Assert.False(output.Opened!.Exclusive);
+        Assert.StartsWith("Exclusive mode unavailable: another app is using the device.", output.Opened.Notice);
+        Assert.StartsWith("shared,", output.Opened.Describe());
+    }
+
+    [Fact]
+    public void Exclusive_asked_but_shared_given_without_a_reason_still_gets_a_notice()
+    {
+        var backend = new FakeBackend { OpenedAs = (_, f, _) => new OpenedOutput(null, false, f.SampleRate, f.Channels, "s16", 16, Verified: false) };
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+
+        Assert.Equal("Exclusive mode was requested, but the device opened in shared mode.", output.Opened!.Notice);
+    }
+
+    [Fact]
+    public void Shared_mode_as_asked_has_no_notice()
+    {
+        var backend = new FakeBackend();
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+
+        Assert.False(output.Opened!.Exclusive);
+        Assert.Null(output.Opened.Notice);
+    }
+
+    [Fact]
+    public void An_exclusive_open_that_fails_is_an_error_naming_exclusive_mode_and_reports_nothing_in_use()
+    {
+        var backend = new FakeBackend { OpenError = new InvalidOperationException("Result: ShareModeNotSupported") };
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+
+        var ex = Assert.Throws<MusicSpinException>(() => output.Open(new Source(new PcmFormat(44_100, 2, 24))));
+
+        Assert.Equal(MusicSpinErrorCode.AudioDeviceError, ex.Code);
+        Assert.Equal("Could not open audio device in exclusive mode: Result: ShareModeNotSupported", ex.Message);
+        Assert.False(output.IsOpen);
+        Assert.Null(output.Opened);
+    }
+
+    [Fact]
+    public void A_failed_reopen_drops_the_previous_tracks_format()
+    {
+        var backend = new FakeBackend();
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        Assert.NotNull(output.Opened);
+
+        backend.OpenedAs = (_, _, _) => throw new InvalidOperationException("unplugged");
+        Assert.Throws<MusicSpinException>(() => output.Open(new Source(new PcmFormat(96_000, 2, 24))));
+
+        Assert.Null(output.Opened); // not still claiming 44.1 kHz exclusive
+    }
+
+    [Fact]
+    public void The_device_rate_follows_each_tracks_format()
+    {
+        var backend = new FakeBackend();
+        using var provider = new SoundFlowOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+
+        var seen = new List<string>();
+        foreach (var format in new[] { new PcmFormat(44_100, 2, 16), new PcmFormat(96_000, 2, 24), new PcmFormat(48_000, 2, 24) })
+        {
+            output.Open(new Source(format));
+            seen.Add(output.Opened!.Describe());
+        }
+
+        Assert.Equal([44_100, 96_000, 48_000], backend.Opened.Select(o => o.Format.SampleRate));
+        Assert.Equal(["exclusive, 44.1 kHz 16-bit", "exclusive, 96 kHz 24-bit", "exclusive, 48 kHz 24-bit"], seen);
+        Assert.All(backend.Streams.Take(2), s => Assert.True(s.Disposed)); // each reopen released the previous device
+    }
+
     private static DeviceInfo Device(string name, bool isDefault, params NativeDataFormat[] formats)
         => new() { Name = name, IsDefault = isDefault, SupportedDataFormats = formats };
 
@@ -284,8 +433,10 @@ public class SoundFlowOutputTests
 
     private sealed record OpenCall(DeviceInfo? Device, AudioFormat Format, MiniAudioDeviceConfig Config, ISoundDataProvider Data);
 
-    private sealed class FakeStream : IPlaybackStream
+    private sealed class FakeStream(OpenedOutput opened) : IPlaybackStream
     {
+        public OpenedOutput Opened => opened;
+
         public List<string> Calls { get; } = [];
 
         public bool Disposed { get; private set; }
@@ -302,6 +453,9 @@ public class SoundFlowOutputTests
         public Exception? RefreshError { get; init; }
 
         public Exception? OpenError { get; init; }
+
+        /// <summary>What the "device" reads back; default: exactly what was asked, verified.</summary>
+        public Func<DeviceInfo?, AudioFormat, MiniAudioDeviceConfig, OpenedOutput>? OpenedAs { get; set; }
 
         public List<OpenCall> Opened { get; } = [];
 
@@ -322,7 +476,10 @@ public class SoundFlowOutputTests
             }
 
             Opened.Add(new OpenCall(device, format, config, data));
-            var stream = new FakeStream();
+            var stream = new FakeStream(OpenedAs?.Invoke(device, format, config) ?? new OpenedOutput(
+                device?.Name, config.Playback!.ShareMode == ShareMode.Exclusive, format.SampleRate, format.Channels,
+                format.Format.ToString().ToLowerInvariant(), format.Format == SampleFormat.S16 ? 16 : format.Format == SampleFormat.S24 ? 24 : 32,
+                Verified: true));
             Streams.Add(stream);
             return stream;
         }

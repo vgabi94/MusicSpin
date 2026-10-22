@@ -195,9 +195,15 @@ internal sealed class ManualAudioOutput : IAudioOutput
 
     public bool IsOpen => Source is not null;
 
+    /// <summary>What <see cref="Opened"/> reports for a source (what a real device would read back); null: nothing.</summary>
+    public Func<IPcmSource, OpenedOutput?>? OpenedAs { get; set; }
+
+    public OpenedOutput? Opened { get; private set; }
+
     public void Open(IPcmSource source)
     {
         Source = source;
+        Opened = OpenedAs?.Invoke(source);
         OpenCount++;
     }
 
@@ -209,6 +215,7 @@ internal sealed class ManualAudioOutput : IAudioOutput
     {
         Started = false;
         Source = null;
+        Opened = null;
     }
 
     public void Dispose() => Stop();

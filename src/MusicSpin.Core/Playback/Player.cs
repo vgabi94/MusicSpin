@@ -75,6 +75,9 @@ public sealed class Player : IPlayer
     public event EventHandler<PlayerErrorEventArgs>? Error;
     public event EventHandler<TrackAdvancedEventArgs>? TrackAdvanced;
 
+    /// <summary>The device was (re)opened for a track's format; raised on the caller's thread, under the player lock.</summary>
+    public event EventHandler<OutputOpenedEventArgs>? OutputOpened;
+
     public PlayerState State
     {
         get { lock (_sync) { return _state; } }
@@ -179,6 +182,10 @@ public sealed class Player : IPlayer
                     _output ??= _outputs.Create(_options.Output);
                     _output.Open(buffer);
                     _outputSource = buffer;
+                    if (_output.Opened is { } opened)
+                    {
+                        OutputOpened?.Invoke(this, new OutputOpenedEventArgs(opened));
+                    }
                 }
 
                 _output.Start();

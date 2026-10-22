@@ -93,7 +93,14 @@ public sealed class QueuePlayer : IDisposable
         _player.TrackAdvanced += OnTrackAdvanced;
     }
 
-    public OutputInfo? Output { get; }
+    /// <summary>The output in status: the requested one, then what the device really opened at (set by the host).</summary>
+    public OutputInfo? Output
+    {
+        get => Volatile.Read(ref _output);
+        set => Volatile.Write(ref _output, value);
+    }
+
+    private OutputInfo? _output;
 
     /// <summary>
     /// Called (under the queue lock) when a queued file is not found: returns the entry at its new location (e.g. a library
