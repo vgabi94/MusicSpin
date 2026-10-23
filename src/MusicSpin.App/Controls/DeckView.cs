@@ -53,6 +53,8 @@ public abstract class DeckView : TemplatedControl
 
     public static readonly StyledProperty<Border?> BackdropVeilProperty = AvaloniaProperty.Register<DeckView, Border?>(nameof(BackdropVeil));
 
+    public static readonly StyledProperty<double> UnitScaleProperty = AvaloniaProperty.Register<DeckView, double>(nameof(UnitScale), 1);
+
     /// <summary>The record's label: the album cover.</summary>
     public IImage? Label
     {
@@ -113,6 +115,16 @@ public abstract class DeckView : TemplatedControl
     {
         get => GetValue(BackdropVeilProperty);
         set => SetValue(BackdropVeilProperty, value);
+    }
+
+    /// <summary>
+    /// How big one unit of the design's drawing is on the deck: 1 for a design drawn in the deck's own units (Classic),
+    /// less for one drawn bigger and scaled down (the kit decks).
+    /// </summary>
+    public double UnitScale
+    {
+        get => GetValue(UnitScaleProperty);
+        set => SetValue(UnitScaleProperty, value);
     }
 
     /// <summary>The record on the platter (PART_Record): where a record lands.</summary>

@@ -23,6 +23,7 @@
         <ControlTheme x:Key="KitDeck" TargetType="controls:KitDeckView">
             <Setter Property="Width" Value="{StaticResource DeckWidth}" />
             <Setter Property="Height" Value="{StaticResource DeckHeight}" />
+            <Setter Property="UnitScale" Value="{StaticResource KitDeckUnitScale}" />
             <!-- The plinth's shadow falls outside it. -->
             <Setter Property="ClipToBounds" Value="False" />
             <Setter Property="theming:Animate.Transitions" Value="Swing ArmSwingDuration EaseSwing; Drop ArmDropDuration EaseLower" />

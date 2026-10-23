@@ -338,7 +338,12 @@ src/MusicSpin.App/
   `BitmapCache` (in Now Playing's deck only; Settings' still previews don't), and round things draw `DiscShadow`, a
   radial gradient as a Gaussian blurs a disc, with no blur at all: the platters' rims and the scene's record. A box
   shadow's offset is in the window's pixels whatever the scale (Avalonia applies it after the transform), so
-  `DiscShadow.PixelOffsetY` is too.
+  `DiscShadow.PixelOffsetY` is too. A deck's images are drawn at the pixels the deck shows its drawing at
+  (`DeckHost.SoftCache`, in eighths, from `DeckView.UnitScale` and the host's scale): Avalonia draws a cache at the
+  screen's scaling times its own, not at its ancestors' scale, so a fixed one would come out stretched on a big
+  window. It sizes a cache by its content as if nothing in it were turned, so Classic's arm shadow (its headshell is)
+  holds a transparent frame. Drawn live, Avalonia fades each part under an opacity on its own, so the arm's tube and
+  headshell darkened where they overlap; from its image the shadow is one shape faded, as the mockup's.
 - **Records.** A `VinylView` draws its two parts once each into an image as large as it shows on screen: what stays
   still (the disc, its edge and grooves) and what turns (the label and the hole). The label turns on its composition
   visual (a rotation about its centre), so a spinning record draws nothing new: the compositor turns an image. The

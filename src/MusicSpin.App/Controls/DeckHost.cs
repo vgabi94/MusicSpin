@@ -47,6 +47,15 @@ public sealed class DeckHost : Control
     public static readonly DirectProperty<DeckHost, DeckView?> DeckProperty =
         AvaloniaProperty.RegisterDirect<DeckHost, DeckView?>(nameof(Deck), h => h.Deck);
 
+    public static readonly DirectProperty<DeckHost, BitmapCache> SoftCacheProperty =
+        AvaloniaProperty.RegisterDirect<DeckHost, BitmapCache>(nameof(SoftCache), h => h.SoftCache);
+
+    /// <summary>The steps <see cref="SoftCache"/>'s scale moves in: a new image only when the deck has grown or shrunk by one.</summary>
+    public const double SoftCacheStep = 0.125;
+
+    /// <summary>How far, in steps, the deck may outgrow its soft image before a bigger one is drawn: a tenth, 1.25% at 1:1.</summary>
+    public const double SoftCacheSlack = 0.1;
+
     private readonly LayoutTransformControl _scaler = new() { ClipToBounds = false };
     private TopLevel? _topLevel;
     private IDisposable? _windowSize;
@@ -139,6 +148,18 @@ public sealed class DeckHost : Control
         private set => SetAndRaise(DeckProperty, ref field, value);
     }
 
+    /// <summary>
+    /// The image the deck's soft shadows and blurs are drawn into once (Styles/NowPlaying.axaml): at as many pixels as
+    /// the deck shows its drawing's units at, in <see cref="SoftCacheStep"/>s, however big the window. Avalonia draws an
+    /// image at the screen's scaling times its own, not at the deck's, so a bigger deck needs a bigger one, or its
+    /// shadows are drawn small and stretched.
+    /// </summary>
+    public BitmapCache SoftCache
+    {
+        get;
+        private set => SetAndRaise(SoftCacheProperty, ref field, value);
+    } = new();
+
     protected override void OnAttachedToLogicalTree(LogicalTreeAttachmentEventArgs e)
     {
         base.OnAttachedToLogicalTree(e);
@@ -198,6 +219,7 @@ public sealed class DeckHost : Control
 
         _scaler.Child = deck;
         Deck = deck;
+        Scale(); // its drawing's units, now its theme has said
     }
 
     private void Scale()
@@ -210,5 +232,12 @@ public sealed class DeckHost : Control
         var size = Math.Min(top.ClientSize.Height * HeightShare, top.ClientSize.Width * WidthShare);
         var scale = size / DeckView.BaseSize;
         _scaler.LayoutTransform = new ScaleTransform(scale, scale);
+
+        var pixels = scale * (Deck?.UnitScale ?? 1);
+        var at = Math.Max(1, Math.Ceiling((pixels / SoftCacheStep) - SoftCacheSlack)) * SoftCacheStep;
+        if (at != SoftCache.RenderAtScale)
+        {
+            SoftCache = new BitmapCache { RenderAtScale = at };
+        }
     }
 }

@@ -33,16 +33,21 @@ public sealed class MotionCostTests
     private const int Settled = 1500;
 
     /// <param name="live">Nothing drawn from images: to compare with.</param>
-    private static async Task<AppHarness> OpenAsync(string design = "classic", bool live = false, AppTheme theme = AppTheme.Dark)
+    /// <param name="window">The window's size, when not the harness's.</param>
+    /// <param name="scaling">The screen's scaling (2 on a 200% screen).</param>
+    private static async Task<AppHarness> OpenAsync(string design = "classic", bool live = false, AppTheme theme = AppTheme.Dark, Size? window = null, double scaling = 1)
     {
         var app = await AppHarness.OpenAsync(new AppOptions
         {
+            Width = window?.Width ?? 1440,
+            Height = window?.Height ?? 880,
             Scripted = true,
             Library = SampleLibrary.Create(),
             Covers = SampleLibrary.Covers(accents: true),
             Theme = theme,
             Settings = new AppSettings { TurntableDesign = design },
         });
+        app.Window.SetRenderScaling(scaling);
         if (live)
         {
             // With a class in the selector, as the app's own styles have: those outrank styles without one.
@@ -98,8 +103,9 @@ public sealed class MotionCostTests
 
         using (whole)
         {
-            var origin = region.TranslatePoint(default, top)!.Value;
-            var area = SKRectI.Round(new SKRect((float)origin.X, (float)origin.Y, (float)(origin.X + region.Bounds.Width), (float)(origin.Y + region.Bounds.Height)));
+            var (origin, scaling) = (region.TranslatePoint(default, top)!.Value, (float)top.RenderScaling);
+            var area = SKRectI.Round(new SKRect((float)origin.X * scaling, (float)origin.Y * scaling,
+                (float)(origin.X + region.Bounds.Width) * scaling, (float)(origin.Y + region.Bounds.Height) * scaling));
             using var part = new SKBitmap();
             Assert.True(whole.ExtractSubset(part, area));
             return part.Copy();
@@ -522,18 +528,168 @@ public sealed class MotionCostTests
     [MemberData(nameof(Designs))]
     public async Task A_deck_with_its_soft_shadows_from_images_looks_the_same_as_drawn_live(string design)
     {
-        using var fromImages = await DeckAsync(live: false);
-        using var live = await DeckAsync(live: true);
-        // Soft shadows from a smaller image: their clipped edge, over a plinth's ledge, may be a few levels off along a pixel.
+        using var fromImages = await DeckImageAsync(design, live: false);
+        using var live = await DeckImageAsync(design, live: true);
+        // Soft shadows from an image scaled to the deck: their clipped edge, over a plinth's ledge, may be a few levels off
+        // along a pixel. Classic's arm shadow is one shape faded, from its image, as the mockup's (.arm-shadow, opacity
+        // on the whole); drawn live, Avalonia fades its tube and headshell each, so they darken where they overlap.
         AssertSame(fromImages, live, $"deck-cache-{design}", channelTolerance: 16, pixelTolerance: 0.001);
+    }
 
-        async Task<SKBitmap> DeckAsync(bool live)
+    /// <summary>
+    /// A bigger window shows the deck bigger, and its soft image is drawn bigger with it, not stretched; a 200% screen
+    /// draws every image at twice the pixels already.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("classic", 2560, 1440, 1)]
+    [InlineData("piano", 2560, 1440, 1)]
+    [InlineData("classic", 1440, 880, 2)]
+    [InlineData("piano", 1440, 880, 2)]
+    public async Task On_a_big_window_or_a_200_percent_screen_a_deck_from_images_looks_the_same_as_drawn_live(string design, double width, double height, double scaling)
+    {
+        using var fromImages = await DeckImageAsync(design, live: false, new Size(width, height), scaling);
+        using var live = await DeckImageAsync(design, live: true, new Size(width, height), scaling);
+        AssertSame(fromImages, live, $"deck-cache-{design}-{width}x{height}@{scaling}", channelTolerance: 16, pixelTolerance: 0.001);
+    }
+
+    private static async Task<SKBitmap> DeckImageAsync(string design, bool live, Size? window = null, double scaling = 1)
+    {
+        await using var app = await OpenAsync(design, live, AppTheme.Light, window, scaling);
+        await PlayAsync(app, PlayerState.Paused); // the record still: both apps' records at the same angle
+        app.ViewModel.NowPlaying.Open();
+        Gui.FinishAnimations(Settled);
+        return Capture(app.Window, Gui.Find<DeckHost>(app.Window, "Deck"));
+    }
+
+    private static async Task<(AppHarness App, DeckHost Host)> NowPlayingDeckAsync(string design)
+    {
+        var app = await OpenAsync(design);
+        await PlayAsync(app);
+        app.ViewModel.NowPlaying.Open();
+        Gui.FinishAnimations(Settled);
+        return (app, Gui.Find<DeckHost>(app.Window, "Deck"));
+    }
+
+    private static Control[] Soft(DeckView deck) => [.. deck.GetVisualDescendants().OfType<Control>().Where(c => c.Classes.Contains("soft"))];
+
+    /// <summary>The pixels one unit of a soft layer's drawing takes in the window (before the screen's scaling).</summary>
+    private static double Shown(Control soft, TopLevel top)
+    {
+        var m = soft.TransformToVisual(top)!.Value;
+        return Math.Sqrt((m.M11 * m.M11) + (m.M12 * m.M12)); // the arm's is turned
+    }
+
+    [AvaloniaTheory]
+    [InlineData("classic")]
+    [InlineData("piano")]
+    public async Task A_decks_soft_image_has_the_pixels_the_deck_shows_its_drawing_at_however_big_the_window(string design)
+    {
+        var (app, host) = await NowPlayingDeckAsync(design);
+        await using (app)
         {
-            await using var app = await OpenAsync(design, live, AppTheme.Light);
-            await PlayAsync(app, PlayerState.Paused); // the record still: both apps' records at the same angle
-            app.ViewModel.NowPlaying.Open();
-            Gui.FinishAnimations(Settled);
-            return Capture(app.Window, Gui.Find<DeckHost>(app.Window, "Deck"));
+            foreach (var (width, height) in new[] { (1440.0, 880.0), (2560.0, 1440.0), (3840.0, 2100.0), (1100.0, 720.0) })
+            {
+                (app.Window.Width, app.Window.Height) = (width, height);
+                Gui.Settle();
+                var soft = Soft(host.Deck!);
+                Assert.NotEmpty(soft);
+                Assert.All(soft, c => Assert.Same(host.SoftCache, c.CacheMode));
+                var shown = soft.Max(c => Shown(c, app.Window));
+                Assert.True(shown > 0.3 * width / 1440, $"{width} wide: the deck shows its drawing at {shown}");
+                Assert.InRange(host.SoftCache.RenderAtScale, shown - (DeckHost.SoftCacheSlack * DeckHost.SoftCacheStep) - 1e-9, shown + DeckHost.SoftCacheStep);
+            }
         }
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_decks_soft_image_stays_for_a_small_resize_follows_a_new_design_and_never_shrinks_to_nothing()
+    {
+        var (app, host) = await NowPlayingDeckAsync("classic");
+        await using (app)
+        {
+            var image = host.SoftCache;
+            Assert.Equal(1, image.RenderAtScale);
+
+            app.Window.Height -= 4; // the deck a hair smaller: the same image, not drawn again
+            Gui.Settle();
+            Assert.Same(image, host.SoftCache);
+
+            host.SetCurrentValue(DeckHost.DesignProperty, DeckDesigns.All.Single(d => d.Id == "piano")); // drawn in units 0.4 big
+            Gui.Settle();
+            Assert.Equal(0.5, host.SoftCache.RenderAtScale);
+            Assert.All(Soft(host.Deck!), c => Assert.Same(host.SoftCache, c.CacheMode));
+
+            host.HeightShare = 0.001; // a deck almost too small to see: still an image of a step's pixels
+            Gui.Settle();
+            Assert.Equal(DeckHost.SoftCacheStep, host.SoftCache.RenderAtScale);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task The_classic_arms_shadow_image_has_room_for_its_turned_headshell_and_blur()
+    {
+        var (app, _) = await NowPlayingDeckAsync("classic");
+        await using (app)
+        {
+            var blur = Gui.All<Panel>(app.Window).Single(p => p.Classes.Contains("armShadowBlur"));
+            Assert.True(FromImage(blur));
+            var frame = Assert.Single(blur.Children, c => c.Classes.Contains("cacheFrame"));
+            Assert.Equal(0, Assert.IsAssignableFrom<ISolidColorBrush>(((Border)frame).Background).Color.A); // draws nothing
+            var radius = Assert.IsType<BlurEffect>(blur.Effect).Radius;
+            foreach (var part in blur.Children.Where(c => c != frame))
+            {
+                var drawn = new Rect(part.Bounds.Size).TransformToAABB(part.TransformToVisual(blur)!.Value).Inflate(radius);
+                Assert.True(frame.Bounds.Contains(drawn), $"{string.Join('.', part.Classes)} {drawn} in {frame.Bounds}");
+            }
+        }
+    }
+
+    // ---- review follow-ups ------------------------------------------------------------------------------------
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public void A_panel_at_rest_leaves_what_it_holds_to_its_styles_image()
+    {
+        var (styled, motion) = (new BitmapCache(), new BitmapCache());
+        var held = new Border { Classes = { "held" } };
+        var panel = new SlidePanel { IsOpen = true, MotionCache = motion, Children = { held } };
+        var window = new Window { Width = 400, Height = 300, Content = panel };
+        window.Styles.Add(new Style(x => x.OfType<Border>().Class("held")) { Setters = { new Setter(Visual.CacheModeProperty, styled) } });
+        window.Show();
+        try
+        {
+            Assert.Same(styled, held.CacheMode);
+            panel.Shown = 0.5;
+            Assert.Same(motion, held.CacheMode);
+            panel.Shown = 1;
+            Assert.Same(styled, held.CacheMode); // not a value of its own over the style's
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_landing_gone_mid_scene_stops_the_pack_where_it_is_and_one_back_carries_it_on()
+    {
+        await using var app = await OpenAsync();
+        await StartSceneAsync(app);
+        var flight = Flight(app);
+        app.Advance(TimeSpan.FromMilliseconds(300));
+        var landing = flight.Landing;
+        Assert.True(landing.Width > 0);
+
+        flight.SetCurrentValue(SceneFlight.LandingProperty, default(Rect)); // the deck gone from under it
+        var (pack, record) = (flight.Pack!.RenderTransform!.Value, flight.Record!.RenderTransform!.Value);
+        app.Advance(TimeSpan.FromMilliseconds(200));
+        Assert.Equal(pack, flight.Pack.RenderTransform!.Value);
+        Assert.Equal(record, flight.Record.RenderTransform!.Value);
+
+        flight.SetCurrentValue(SceneFlight.LandingProperty, landing);
+        app.Advance(TimeSpan.FromMilliseconds(100));
+        Assert.NotEqual(pack, flight.Pack.RenderTransform!.Value);
     }
 }

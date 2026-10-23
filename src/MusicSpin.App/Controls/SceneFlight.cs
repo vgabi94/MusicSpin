@@ -183,6 +183,7 @@ public sealed class SceneFlight : TemplatedControl
     {
         if (_pack is null || _record is null || _sleeve is null || Landing.Width <= 0)
         {
+            _size = 0; // nowhere to land: Move stops where it is rather than go on with the old place
             return;
         }
 

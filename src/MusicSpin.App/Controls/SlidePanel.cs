@@ -135,7 +135,14 @@ public sealed class SlidePanel : Panel
         var cache = IsMoving || (IsUnder && IsVisible) ? MotionCache : null;
         foreach (var child in Children)
         {
-            child.CacheMode = cache;
+            if (cache is null)
+            {
+                child.ClearValue(CacheModeProperty); // still: whatever its styles say
+            }
+            else
+            {
+                child.CacheMode = cache;
+            }
         }
 
         Opacity = IsFading ? Shown : 1;

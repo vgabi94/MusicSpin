@@ -47,13 +47,10 @@
     -->
     <BitmapCache x:Key="MotionCache" SnapsToDevicePixels="True" />
     <!--
-      A deck's soft shadows and blurs, drawn once into an image (Styles/NowPlaying.axaml): at the Classic deck's own scale,
-      and at half a kit deck's units (it shows them at 0.4 px each times the host's scale), enough for something blurred.
+      A shadow beside a spinning record (a card's cover and Play button), drawn once into an image. A deck's soft shadows
+      have their own, the size the deck is shown at (controls:DeckHost.SoftCache).
     -->
-    <BitmapCache x:Key="DeckSoftCache" />
-    <!-- A shadow beside a spinning record (a card's cover and Play button), drawn once into an image. -->
     <BitmapCache x:Key="ShadowCache" />
-    <BitmapCache x:Key="KitDeckSoftCache" RenderAtScale="0.5" />
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 

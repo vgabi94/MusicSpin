@@ -39,6 +39,8 @@
                                     <!-- Its opacity (lifted or lowered) out here; its blur, drawn from an image, inside. -->
                                     <Panel Name="PART_ArmShadow" Classes="armShadow">
                                         <Panel Classes="armShadowBlur soft">
+                                            <!-- Room for the turned headshell: Avalonia sizes the image as if it weren't turned. -->
+                                            <Border Classes="cacheFrame" />
                                             <Border Classes="tube" />
                                             <Border Classes="headshell" />
                                         </Panel>
@@ -148,8 +150,13 @@
                 <Setter Property="Background" Value="{StaticResource DeckHeadshellBrush}" />
                 <Setter Property="RenderTransform" Value="rotate(18deg)" />
             </Style>
-            <Style Selector="^ /template/ Panel.armShadowBlur > Border">
+            <Style Selector="^ /template/ Panel.armShadowBlur > Border.tube, ^ /template/ Panel.armShadowBlur > Border.headshell">
                 <Setter Property="Background" Value="{StaticResource DeckArmShadowBrush}" />
+            </Style>
+            <Style Selector="^ /template/ Panel.armShadowBlur > Border.cacheFrame">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Margin" Value="{StaticResource DeckCacheFrame}" />
+                <Setter Property="IsHitTestVisible" Value="False" />
             </Style>
         </ControlTheme>
 
@@ -180,14 +187,11 @@
 
     <!--
       Now Playing's deck: its soft shadows and blurs (.soft, each on its own) are drawn once into an image, so the record
-      spinning over them redraws its square without blurring them again each frame (#122). They are soft, so a small
-      image does: Classic draws at its own size, the kit decks in their units, 0.4 px each, scaled.
+      spinning over them redraws its square without blurring them again each frame (#122). The host's image follows the
+      deck's size on screen.
     -->
-    <Style Selector="controls|DeckHost controls|ClassicDeckView /template/ :is(Control).soft">
-        <Setter Property="CacheMode" Value="{StaticResource DeckSoftCache}" />
-    </Style>
-    <Style Selector="controls|DeckHost controls|KitDeckView /template/ :is(Control).soft">
-        <Setter Property="CacheMode" Value="{StaticResource KitDeckSoftCache}" />
+    <Style Selector="controls|DeckHost :is(controls|DeckView) /template/ :is(Control).soft">
+        <Setter Property="CacheMode" Value="{Binding $parent[controls:DeckHost].SoftCache}" />
     </Style>
 
     <!-- The overlay: on the page background, sliding up into place (mockup: .nowplaying). -->
