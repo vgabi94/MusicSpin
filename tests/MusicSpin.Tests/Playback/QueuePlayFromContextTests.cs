@@ -13,6 +13,7 @@ namespace MusicSpin.Tests.Playback;
 public sealed class QueuePlayFromContextTests : IDisposable
 {
     private readonly List<IDisposable> _owned = [];
+    private FakeDecoderFactory _decoders = new();
 
     public void Dispose()
     {
@@ -26,6 +27,7 @@ public sealed class QueuePlayFromContextTests : IDisposable
     private (QueuePlayer Queue, string[] P, List<QueueItem> Album) Create(bool play = true, int seconds = 30)
     {
         var (decoders, paths) = PlayerTestKit.Tracks(6, seconds);
+        _decoders = decoders;
         var player = new Player(decoders, Outputs.Realtime());
         var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
         _owned.Add(player);
@@ -365,6 +367,129 @@ public sealed class QueuePlayFromContextTests : IDisposable
 
         Assert.Equal([p[0], p[3], p[1], "/music/gone/ghost.flac"], queue.List(0, 10).Items.Select(e => e.Item.Path));
         Assert.Equal([1], queue.Snapshot(DateTimeOffset.UnixEpoch).UpNext);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void When_nothing_from_the_clicked_track_on_can_be_opened_the_track_that_plays_keeps_playing()
+    {
+        var (queue, p, _) = Create(play: false);
+        var list = Items([p[0], p[1], "/music/gone/ghost.flac"]);
+        queue.SetQueue(list);
+
+        Assert.Equal(MusicSpinErrorCode.FileNotFound, Code(() => queue.PlayFromContext(list, 2)));
+
+        var status = queue.Status();
+        Assert.Equal(PlayerState.Playing, status.State); // the click on a dead file must not silence the music
+        Assert.Equal(0, status.QueueIndex);
+        Assert.Equal(p[0], status.Track!.Path);
+        Assert.Single(status.Skipped!);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_paused_queue_stays_paused_on_the_same_track_when_the_clicked_track_cannot_be_opened()
+    {
+        var (queue, p, _) = Create(play: false);
+        var list = Items([p[0], p[1], "/music/gone/ghost.flac"]);
+        queue.SetQueue(list);
+        queue.Pause();
+
+        Assert.Equal(MusicSpinErrorCode.FileNotFound, Code(() => queue.PlayFromContext(list, 2)));
+
+        var status = queue.Status();
+        Assert.Equal(PlayerState.Paused, status.State);
+        Assert.Equal(p[0], status.Track!.Path);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_jump_that_fails_leaves_the_queued_entries_where_they_were_and_the_player_playing()
+    {
+        var (queue, p, _) = Create(play: false);
+        var list = Items([p[0], p[1], "/music/gone/ghost.flac"]);
+        queue.SetQueue(list, startIndex: 1);
+        queue.Add(Items([p[3]]), QueuePosition.UpNext);
+
+        Assert.Equal(MusicSpinErrorCode.FileNotFound, Code(() => queue.PlayFromContext(list, 2)));
+
+        Assert.Equal("A [B] +D ?", Show(queue));
+        Assert.Equal(PlayerState.Playing, queue.Status().State);
+    }
+
+    // ---- which entries are the same track ----------------------------------------------------------------------
+
+    [Fact]
+    public void Entries_without_ids_are_matched_by_path()
+    {
+        var (queue, p, _) = Create(play: false);
+        var plain = p[..3].Select(x => new QueueItem(x)).ToList();
+        queue.SetQueue(plain);
+        queue.Add(Items([p[3]]), QueuePosition.UpNext);
+
+        queue.PlayFromContext(plain, 2);
+
+        Assert.Equal("A B [C] +D", Show(queue));
+    }
+
+    [Fact]
+    public void A_queue_without_ids_matches_the_same_list_that_the_app_sends_with_ids()
+    {
+        var (queue, p, album) = Create(play: false);
+        queue.SetQueue(p[..3].Select(x => new QueueItem(x)).ToList());
+        queue.Add(Items([p[3]]), QueuePosition.UpNext);
+
+        queue.PlayFromContext(album, 2); // paths agree and one side has no id
+
+        Assert.Equal("A B [C] +D", Show(queue));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Entries_whose_ids_differ_are_different_tracks_even_when_the_path_is_the_same()
+    {
+        var (queue, p, album) = Create();
+        queue.Add(Items([p[3]]), QueuePosition.UpNext);
+        var other = album.Select(i => i with { TrackId = "other-" + i.TrackId }).ToList();
+
+        queue.PlayFromContext(other, 2);
+
+        Assert.Equal("A B [C]", Show(queue)); // a new queue: the queued entry is gone
+    }
+
+    [Fact]
+    public void With_shuffle_on_entries_without_ids_and_repeats_still_jump_to_the_clicked_occurrence()
+    {
+        var (queue, p, _) = Create(play: false);
+        var list = new List<QueueItem> { new(p[0]), new(p[1]), new(p[0]), new(p[2]) };
+        queue.SetQueue(list, startIndex: 1, shuffle: true, seed: 3);
+
+        var status = queue.PlayFromContext(list, 2);
+
+        Assert.Equal(p[0], status.Track!.Path);
+        Assert.Equal(4, queue.List(0, 10).Items.Count); // kept, not replaced
+        Assert.True(queue.Shuffle);
+    }
+
+    [Fact]
+    public void A_file_the_library_moved_while_it_played_is_still_part_of_the_list()
+    {
+        var (queue, p, album) = Create(play: false);
+        var moved = Path.GetFullPath("/music/elsewhere/02.flac");
+        _decoders.With(TestAudio.Track(moved, sampleRate: 8000, seconds: 30));
+        _decoders.Files.Remove(p[1]);
+        queue.ResolveMissing = item => item.Path == p[1] ? item with { Path = moved } : null;
+        queue.SetQueue(album);
+        queue.Add(Items([p[3]]), QueuePosition.UpNext);
+
+        queue.PlayFromContext(album, 1); // B is gone: it plays from its new path and the entry is updated
+        Assert.Equal(moved, queue.Status().Track!.Path);
+
+        queue.PlayFromContext(album, 2); // the app's list still has the old path for B
+
+        Assert.Equal("A B [C] +D", Show(queue)); // the queue was kept
+        Assert.Equal(moved, queue.List(0, 10).Items[1].Item.Path);
+        Assert.Equal(p[2], queue.Status().Track!.Path);
     }
 
     [Fact]
