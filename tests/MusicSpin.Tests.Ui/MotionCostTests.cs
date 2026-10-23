@@ -572,10 +572,10 @@ public sealed class MotionCostTests
 
     private static Control[] Soft(DeckView deck) => [.. deck.GetVisualDescendants().OfType<Control>().Where(c => c.Classes.Contains("soft"))];
 
-    /// <summary>The pixels one unit of a soft layer's drawing takes in the window (before the screen's scaling).</summary>
-    private static double Shown(Control soft, TopLevel top)
+    /// <summary>How big one unit of a soft layer's drawing is in <paramref name="other"/> (in the window: its pixels, before the screen's scaling).</summary>
+    private static double Shown(Control soft, Visual other)
     {
-        var m = soft.TransformToVisual(top)!.Value;
+        var m = soft.TransformToVisual(other)!.Value;
         return Math.Sqrt((m.M11 * m.M11) + (m.M12 * m.M12)); // the arm's is turned
     }
 
@@ -598,6 +598,19 @@ public sealed class MotionCostTests
                 Assert.True(shown > 0.3 * width / 1440, $"{width} wide: the deck shows its drawing at {shown}");
                 Assert.InRange(host.SoftCache.RenderAtScale, shown - (DeckHost.SoftCacheSlack * DeckHost.SoftCacheStep) - 1e-9, shown + DeckHost.SoftCacheStep);
             }
+        }
+    }
+
+    /// <summary>A deck's own say of how big its drawing's units are, against how big its soft layers are drawn in it.</summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Designs))]
+    public async Task A_decks_unit_scale_is_the_scale_its_soft_layers_are_drawn_at(string design)
+    {
+        var (app, host) = await NowPlayingDeckAsync(design);
+        await using (app)
+        {
+            var deck = host.Deck!;
+            Assert.All(Soft(deck), c => Assert.Equal(deck.UnitScale, Shown(c, deck), 6));
         }
     }
 
