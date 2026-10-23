@@ -17,8 +17,11 @@ namespace MusicSpin.App.Controls;
 /// The pack is the sleeve's size, S = the record's width / 0.96 (a 2% margin round the record), placed so the record
 /// inside it sits on the deck's record; every movement is a transform of it, with the mockup's keyframes and easings.
 /// The shelf's sleeves start square here (the mockup turns a shelf sleeve's copy 7° in 3D as it lifts).
+/// Sizes and places are set only when where it flies from or lands changes; each step of the scene moves the transforms
+/// alone, and the record's shadow is a <see cref="DiscShadow"/>, so no step lays anything out or blurs anything (#129).
 /// </remarks>
 [TemplatePart("PART_Pack", typeof(Control))]
+[TemplatePart("PART_Shadow", typeof(DiscShadow))]
 [TemplatePart("PART_Record", typeof(Control))]
 [TemplatePart("PART_Sleeve", typeof(Control))]
 public sealed class SceneFlight : TemplatedControl
@@ -69,9 +72,21 @@ public sealed class SceneFlight : TemplatedControl
 
     public static readonly StyledProperty<double> AngleProperty = AvaloniaProperty.Register<SceneFlight, double>(nameof(Angle));
 
+    private readonly MatrixTransform _packMove = new();
+    private readonly MatrixTransform _recordMove = new();
+    private readonly MatrixTransform _shadowMove = new();
+    private readonly MatrixTransform _sleeveMove = new();
     private Control? _pack;
+    private DiscShadow? _shadow;
     private Control? _record;
     private Control? _sleeve;
+
+    /// <summary>Where the pack is laid out, in this control (<see cref="Lay"/>), and the sleeve's size there.</summary>
+    private Point _place;
+    private double _size;
+
+    /// <summary>Where the sleeve sat, in this control.</summary>
+    private Point _from;
 
     /// <summary>Milliseconds into the scene at Motion Smooth (<see cref="SceneTimeline"/>).</summary>
     public double Time
@@ -123,11 +138,18 @@ public sealed class SceneFlight : TemplatedControl
     /// <summary>The sleeve and record together (PART_Pack): the sleeve's size, where the sleeve lands.</summary>
     public Control? Pack => _pack;
 
+    /// <summary>The record's shadow (PART_Shadow).</summary>
+    public DiscShadow? Shadow => _shadow;
+
+    /// <summary>How often the pack was laid out again (tests check a step of the scene doesn't).</summary>
+    internal int Lays { get; private set; }
+
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
         ArgumentNullException.ThrowIfNull(e);
         base.OnApplyTemplate(e);
         _pack = e.NameScope.Find<Control>("PART_Pack");
+        _shadow = e.NameScope.Find<DiscShadow>("PART_Shadow");
         _record = e.NameScope.Find<Control>("PART_Record");
         if (_record is VinylView vinyl)
         {
@@ -135,58 +157,93 @@ public sealed class SceneFlight : TemplatedControl
             vinyl.ImageScale = Math.Max(Math.Max(LiftScale, 1), Cross.Max(k => k.Scale));
         }
         _sleeve = e.NameScope.Find<Control>("PART_Sleeve");
-        Place();
+        _pack?.RenderTransform = _packMove;
+        _record?.RenderTransform = _recordMove;
+        _shadow?.RenderTransform = _shadowMove;
+        _sleeve?.RenderTransform = _sleeveMove;
+        Lay();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         ArgumentNullException.ThrowIfNull(change);
         base.OnPropertyChanged(change);
-        if (change.Property == TimeProperty || change.Property == SourceProperty || change.Property == LandingProperty
-            || change.Property == BoundsProperty)
+        if (change.Property == SourceProperty || change.Property == LandingProperty || change.Property == BoundsProperty)
         {
-            Place();
+            Lay();
+        }
+        else if (change.Property == TimeProperty)
+        {
+            Move();
         }
     }
 
-    private void Place()
+    /// <summary>The pack's place and size, and the record's in it: what lays it out, set when they change.</summary>
+    private void Lay()
     {
         if (_pack is null || _record is null || _sleeve is null || Landing.Width <= 0)
         {
+            _size = 0; // nowhere to land: Move stops where it is rather than go on with the old place
             return;
         }
 
         // In this control's coordinates (the overlay layer sits on the window).
+        Lays++;
         var origin = TopLevel.GetTopLevel(this) is { } top && top.TranslatePoint(default, this) is { } at ? at : default;
         var record = Landing.Width;
-        var size = record / RecordShare;
-        var place = Landing.TopLeft + origin - new Point(RecordMargin * size, RecordMargin * size);
-        Canvas.SetLeft(_pack, place.X);
-        Canvas.SetTop(_pack, place.Y);
-        (_pack.Width, _pack.Height) = (size, size);
-        _record.Margin = new Thickness(RecordMargin * size, RecordMargin * size, 0, 0);
-        (_record.Width, _record.Height) = (record, record);
+        _size = record / RecordShare;
+        _place = Landing.TopLeft + origin - new Point(RecordMargin * _size, RecordMargin * _size);
+        _from = Source.TopLeft + origin;
+        Canvas.SetLeft(_pack, _place.X);
+        Canvas.SetTop(_pack, _place.Y);
+        (_pack.Width, _pack.Height) = (_size, _size);
+        foreach (var disc in new[] { _record, _shadow as Control })
+        {
+            if (disc is not null)
+            {
+                disc.Margin = new Thickness(RecordMargin * _size, RecordMargin * _size, 0, 0);
+                (disc.Width, disc.Height) = (record, record);
+            }
+        }
 
+        Move();
+    }
+
+    /// <summary>The pack, record, shadow and sleeve at <see cref="Time"/>: their transforms only.</summary>
+    private void Move()
+    {
+        if (_pack is null || _record is null || _sleeve is null || _size <= 0)
+        {
+            return;
+        }
+
+        var (size, record) = (_size, Landing.Width);
         var t = Time;
-        _pack.RenderTransform = new MatrixTransform(FlightAt(t, Source.TopLeft + origin - place, Source.Height / size));
+        _packMove.Matrix = FlightAt(t, _from - _place, Source.Height / size);
 
         // The record: out of the sleeve, then lifted back across onto the platter, its shadow growing and shrinking.
         var slide = SlideOut * record;
         var crossing = t >= SceneTimeline.CrossAt;
         _record.ZIndex = crossing ? 3 : 1;
+        _shadow?.ZIndex = _record.ZIndex; // before the record: under it
         _sleeve.ZIndex = 2;
         var (x, y, scale, shadowY, blur, alpha) = crossing
             ? Keyframes(CrossEasing.Ease(Progress(t, SceneTimeline.CrossAt + SceneTimeline.CrossDelayMs, SceneTimeline.CrossMs)))
             : (SlideEasing.Ease(Progress(t, SceneTimeline.SlideOutAt, SceneTimeline.SlideOutMs)), 0, 1, Cross[0].ShadowY, Cross[0].Blur, Cross[0].Alpha);
-        _record.RenderTransform = new MatrixTransform(Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(x * slide, y));
-        _record.Effect = new DropShadowEffect { OffsetX = 0, OffsetY = shadowY, BlurRadius = blur, Color = Colors.Black, Opacity = alpha };
+        _recordMove.Matrix = Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(x * slide, y);
+        if (_shadow is not null)
+        {
+            // As the record's drop shadow would fall: offset in the record's own units, then moved with it.
+            _shadowMove.Matrix = Matrix.CreateTranslation(0, shadowY) * _recordMove.Matrix;
+            (_shadow.Blur, _shadow.Strength) = (blur, alpha);
+        }
 
         // The sleeve drifts away and fades as the record crosses.
         var drift = crossing ? DriftEasing.Ease(Progress(t, SceneTimeline.CrossAt, SceneTimeline.DriftMs)) : 0;
         var turn = Matrix.CreateScale(1 + ((DriftScale - 1) * drift), 1 + ((DriftScale - 1) * drift))
                    * Matrix.CreateRotation(DriftAngle * drift * Math.PI / 180)
                    * Matrix.CreateTranslation(Drift.X * size * drift, Drift.Y * size * drift);
-        _sleeve.RenderTransform = new MatrixTransform(turn);
+        _sleeveMove.Matrix = turn;
         _sleeve.Opacity = 1 - drift;
     }
 

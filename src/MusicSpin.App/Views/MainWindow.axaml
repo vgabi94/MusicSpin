@@ -50,13 +50,29 @@
 
         <views:TitleBar Name="TitleBarView" Grid.ColumnSpan="2" />
 
-        <!-- Under Now Playing, once it covers them, the sidebar and the page aren't drawn (their records would turn unseen). -->
+        <!--
+          Under Now Playing, once it covers them, the sidebar and the page aren't drawn (their records would turn unseen);
+          while it or the queue drawer moves over them, they are drawn from an image (.underMotion).
+        -->
         <views:SidebarView Name="SidebarView"
                            Grid.Row="1"
                            DataContext="{Binding Sidebar}"
-                           IsVisible="{Binding #NowPlayingLayer.Covers, Converter={x:Static BoolConverters.Not}}" />
+                           IsVisible="{Binding #NowPlayingLayer.Covers, Converter={x:Static BoolConverters.Not}}">
+            <Classes.underMotion>
+                <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                    <Binding ElementName="NowPlayingLayer" Path="IsMoving" />
+                    <Binding ElementName="QueueLayer" Path="IsMoving" />
+                </MultiBinding>
+            </Classes.underMotion>
+        </views:SidebarView>
 
         <DockPanel Name="ContentArea" Grid.Row="1" Grid.Column="1" IsVisible="{Binding #NowPlayingLayer.Covers, Converter={x:Static BoolConverters.Not}}">
+            <Classes.underMotion>
+                <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                    <Binding ElementName="NowPlayingLayer" Path="IsMoving" />
+                    <Binding ElementName="QueueLayer" Path="IsMoving" />
+                </MultiBinding>
+            </Classes.underMotion>
             <Border Name="Banner"
                     Classes="banner"
                     DockPanel.Dock="Top"
@@ -217,7 +233,8 @@
         </DockPanel>
 
         <!-- Now Playing, between the title bar and the player bar; it slides up from under the player bar. -->
-        <controls:SlidePanel Name="NowPlayingLayer" Classes="nowPlaying" Grid.Row="1" Grid.ColumnSpan="2" IsOpen="{Binding NowPlaying.IsOpen}" IsFading="{Binding Scene.IsRunning}">
+        <controls:SlidePanel Name="NowPlayingLayer" Classes="nowPlaying" Grid.Row="1" Grid.ColumnSpan="2" IsOpen="{Binding NowPlaying.IsOpen}" IsFading="{Binding Scene.IsRunning}"
+                             IsUnder="{Binding #QueueLayer.IsMoving}">
             <views:NowPlayingView Name="NowPlayingView" />
         </controls:SlidePanel>
 
