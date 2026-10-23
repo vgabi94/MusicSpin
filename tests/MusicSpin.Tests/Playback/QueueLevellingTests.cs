@@ -111,6 +111,20 @@ public sealed class QueueLevellingTests : IDisposable
         Assert.Null(queue.Status().Normalization);
     }
 
+    [Theory]
+    [InlineData(GainSource.Off)]
+    [InlineData(GainSource.Unknown)]
+    [InlineData(GainSource.TrackTag)] // a tagged track already at the target level: unity
+    public void Levelling_off_unknown_or_at_unity_leaves_every_sample_bit_exact(GainSource source)
+    {
+        var a = new RampSpec(1, 300);
+        var (_, queue, resolver) = Create();
+        resolver.Set(Add(a), NormalizationGain.Unity(source));
+        queue.SetQueue([new QueueItem(Add(a))]);
+
+        Assert.Equal(a.Pcm(), Drain());
+    }
+
     [Fact]
     public void A_gain_that_arrives_late_moves_the_playing_track_to_it()
     {
