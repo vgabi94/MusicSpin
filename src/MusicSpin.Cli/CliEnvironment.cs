@@ -2,7 +2,7 @@ using MusicSpin.Core.Audio;
 using MusicSpin.Core.Decoding.FFmpeg;
 using MusicSpin.Core.Library;
 using MusicSpin.Core.Output;
-using MusicSpin.Core.Output.SoundFlow;
+using MusicSpin.Core.Output.MiniAudio;
 
 namespace MusicSpin.Cli;
 
@@ -17,7 +17,7 @@ public sealed class CliEnvironment
 
     public required IAudioDecoderFactory Decoders { get; init; }
 
-    /// <summary>Creates the audio output backend by name: "auto" (SoundFlow/miniaudio) or "null".</summary>
+    /// <summary>Creates the audio output backend by name: "auto" (miniaudio) or "null".</summary>
     public required Func<string, IAudioOutputProvider> OutputProviders { get; init; }
 
     /// <summary>FFmpeg load status, for `doctor`/`formats`.</summary>
@@ -74,7 +74,7 @@ public sealed class CliEnvironment
     public static IAudioOutputProvider CreateOutputProvider(string backend) => backend switch
     {
         "null" => new NullAudioOutputProvider(realtime: true),
-        _ => new SoundFlowOutputProvider(),
+        _ => new MiniAudioOutputProvider(),
     };
 }
 

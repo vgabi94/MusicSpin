@@ -231,7 +231,11 @@ internal static class PlayerSupport
 
         if (s.Output is { } o)
         {
-            yield return $"  Output: {o.Backend} · {o.Device ?? "default device"} · {(o.Exclusive ? "exclusive" : "shared")}";
+            yield return $"  Output: {o.Backend} · {o.Device ?? "default device"} · {o.Describe().Replace(", ", " · ", StringComparison.Ordinal)}";
+            if (o.Notice is { } notice)
+            {
+                yield return $"  Output notice: {notice}";
+            }
         }
 
         if (s.LastError is { } error)

@@ -13,7 +13,6 @@
       Bump together with the FFmpeg runtime you ship/require (see README "FFmpeg runtime").
     -->
     <PackageVersion Include="FFmpeg.AutoGen" Version="9.0.1.1" />
-    <PackageVersion Include="SoundFlow" Version="1.4.1" />
   </ItemGroup>
 
   <ItemGroup Label="Library">

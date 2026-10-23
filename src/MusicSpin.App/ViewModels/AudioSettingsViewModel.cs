@@ -64,10 +64,14 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(OpenDeviceMenuCommand))]
     public partial bool IsRestarting { get; private set; }
 
-    /// <summary>"In use now: Speakers (Realtek), shared" from <c>status.output</c>; null before the player said.</summary>
+    /// <summary>
+    /// "In use now: FiiO BTR13, exclusive, 44.1 kHz 24-bit" from <c>status.output</c>: what the device really opened at
+    /// once a track played, with the reason on a second line when it is not what was asked; null before the player said.
+    /// </summary>
     public string? InUse => _player.Output is not { } output ? null
         : output.Backend == "null" ? "In use now: no audio device (silent output)"
-        : $"In use now: {(string.IsNullOrWhiteSpace(output.Device) ? "the system default" : output.Device)}, {(output.Exclusive ? "exclusive" : "shared")}";
+        : $"In use now: {(string.IsNullOrWhiteSpace(output.Device) ? "the system default" : output.Device)}, {output.Describe()}"
+          + (output.Notice is { } notice ? $"\n{notice}" : string.Empty);
 
     /// <summary>Reads the devices (when Settings opens: one may have been plugged in).</summary>
     public Task LoadAsync() => _notices.GuardAsync(async () =>

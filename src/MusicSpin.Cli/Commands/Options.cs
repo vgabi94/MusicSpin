@@ -7,7 +7,7 @@ internal static class Options
 {
     public static Option<string> Backend() => new Option<string>("--backend")
     {
-        Description = "Audio output backend: 'auto' (SoundFlow/miniaudio: WASAPI, CoreAudio, PulseAudio/ALSA) or 'null' (no sound card, decode only).",
+        Description = "Audio output backend: 'auto' (miniaudio: WASAPI, CoreAudio, PulseAudio/ALSA) or 'null' (no sound card, decode only).",
         DefaultValueFactory = _ => "auto",
     }.AcceptOnlyFromAmong("auto", "null");
 

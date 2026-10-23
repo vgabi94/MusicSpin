@@ -1,3 +1,4 @@
+using MusicSpin.Core.Audio;
 using MusicSpin.Core.Metadata;
 
 namespace MusicSpin.Core.Playback;
@@ -52,6 +53,12 @@ public sealed class TrackAdvancedEventArgs(TrackInfo track, object token, TimeSp
 /// <param name="BufferMilliseconds">Configured decode-ahead buffer.</param>
 /// <param name="BufferedMilliseconds">Audio decoded and waiting to be played right now.</param>
 public sealed record PlaybackDiagnostics(long Underruns, bool Gapless, int BufferMilliseconds, double BufferedMilliseconds);
+
+/// <summary>The output opened a device for a track: what it really opened at (see <see cref="IAudioOutput.Opened"/>).</summary>
+public sealed class OutputOpenedEventArgs(OpenedOutput opened) : EventArgs
+{
+    public OpenedOutput Opened { get; } = opened;
+}
 
 public sealed class PlayerErrorEventArgs(Exception exception) : EventArgs
 {

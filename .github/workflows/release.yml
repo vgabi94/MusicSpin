@@ -59,6 +59,10 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install the arm64 cross compiler (native/msaudio)
+        if: matrix.rid == 'linux-arm64'
+        run: sudo apt-get update -q && sudo apt-get install -y -q gcc-aarch64-linux-gnu
+
       - name: Publish (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

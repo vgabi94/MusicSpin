@@ -118,6 +118,7 @@ public sealed class PlayerHost : IAsyncDisposable
             Volume = Math.Clamp(options.InitialVolume, 0f, 1f),
         };
         _queue = new QueuePlayer(_player, output);
+        _player.OutputOpened += (_, e) => OnOutputOpened(output, e.Opened);
         _spectrum = new SpectrumMeter(_player, options.Time);
         if (options.ResolveFromLibrary)
         {
@@ -740,6 +741,16 @@ public sealed class PlayerHost : IAsyncDisposable
         }
 
         SharedFile.Replace(temp, Endpoint.InfoFile);
+    }
+
+    /// <summary>Status now reports what the device really opened at; the log says it too, to check on the device (#148).</summary>
+    private void OnOutputOpened(OutputInfo requested, OpenedOutput opened)
+    {
+        var actual = requested.With(opened);
+        _queue.Output = actual;
+        Log($"output opened: {actual.Device ?? "default device"}, {actual.Describe()}, {opened.Channels} ch, {opened.SampleFormat}" +
+            $"{(opened.Verified ? string.Empty : " (as requested; backend does not report the opened format)")}" +
+            $"{(opened.Notice is { } n ? $"; notice: {n}" : string.Empty)}");
     }
 
     /// <summary>Writes a line to the player log (e.g. whether the tray icon started).</summary>

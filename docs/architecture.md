@@ -11,7 +11,7 @@ MusicSpin.slnx
 │   │   ├── Playback/    IPlayer + Player (play/pause/stop/seek/volume, events), QueuePlayer (queue, next/prev, skips)
 │   │   ├── Remote/      background player: PlayerHost (server), PlayerClient, PlayerProtocol (JSON lines), transports
 │   │   ├── Decoding/FFmpeg/   FFmpegRuntime (loads the shared libraries), FFmpegAudioDecoder, FFmpegDecoderFactory
-│   │   ├── Output/      SoundFlow/ (miniaudio device output), NullAudioOutput (no sound card)
+│   │   ├── Output/      MiniAudio/ (miniaudio device output via native/msaudio, WASAPI exclusive), NullAudioOutput (no sound card)
 │   │   ├── Hosting/     AppPaths: resolves the data folder (default .usrdata)
 │   │   ├── Settings/    AppSettings + SettingsStore (settings.json)
 │   │   └── Library/     MusicLibrary facade, LiteDB store, scanner, tag reader, queries, watcher
@@ -27,7 +27,7 @@ eng/                         get-ffmpeg.sh/.ps1, publish.sh/.ps1, Publish.props
 
 | Project | Kind | Depends on |
 |---|---|---|
-| `MusicSpin.Core` | class library, **no UI dependencies** | FFmpeg.AutoGen, SoundFlow (miniaudio), LiteDB, TagLib# |
+| `MusicSpin.Core` | class library, **no UI dependencies** | FFmpeg.AutoGen, native msaudio (miniaudio), LiteDB, TagLib# |
 | `MusicSpin.App` | Avalonia 12 desktop app, executable `MusicSpin` | Core, CommunityToolkit.Mvvm, Avalonia.Fonts.Inter |
 | `MusicSpin.Cli` | console app, executable `music-spin` | Core, System.CommandLine, ModelContextProtocol.Core |
 | `MusicSpin.Tests` | xUnit v3: Core unit tests, FFmpeg integration tests, player/IPC tests | Core |
@@ -48,7 +48,7 @@ Shared build settings: `Directory.Build.props` (net10.0, nullable, `TreatWarning
                  │  MusicLibrary, PlayerClient/PlayerHost
           ┌──────▼───────────────────────────▼──────────────────┐
           │ MusicSpin.Core                                       │
-          │ Decoding (FFmpeg) · Output (SoundFlow, Null) ·       │
+          │ Decoding (FFmpeg) · Output (miniaudio, Null) ·       │
           │ Playback (Player, QueuePlayer) · Library (LiteDB,    │
           │ scanner, TagLib#) · Remote (IPC) · Hosting · Settings│
           └──────────────────────────────────────────────────────┘
@@ -56,7 +56,7 @@ Shared build settings: `Directory.Build.props` (net10.0, nullable, `TreatWarning
 
 - Front-ends depend only on Core abstractions. A future mobile or web front-end can reuse Core.
 - **Decoding:** `FFmpegRuntime` finds and loads the FFmpeg 9.0 shared libraries (search order in [Getting started](getting-started.md#ffmpeg)). `FFmpegAudioDecoder` demuxes and decodes, and libswresample converts to interleaved float32 at the native rate and channel layout.
-- **Output:** `SoundFlowAudioOutput` opens a miniaudio device per track at the source rate, as S16/S24/F32, with exclusive-mode settings when requested. `NullAudioOutput` consumes samples in real time with no device.
+- **Output:** `MiniAudioOutput` opens a device per track at the source rate through `native/msaudio` (miniaudio plus a flat C API, P/Invoke in `MsAudioNative`): F32 in shared mode, the source format (S16/S24/F32) in exclusive mode, with no mixer, pan or gain other than our volume. On Windows, exclusive mode uses `WasapiExclusiveStream` (miniaudio always opens WASAPI exclusive at the endpoint's default format and resamples). The opened format is read back and reported; a refused exclusive open falls back to shared with a notice; a lost device raises `IAudioOutput.Failed` and the player pauses. `NullAudioOutput` consumes samples in real time with no device.
 - **Playback:** `Player` (load/play/pause/stop/seek/volume, events) and `QueuePlayer` (queue, next/prev, skipping unplayable files, end-of-queue handling). Each `Player` has a **decode thread** that fills a `PlaybackBuffer`: a single-producer/single-consumer ring of interleaved float samples with in-band markers (track boundary, end of stream). The device callback only copies samples out (applying volume below 1.0), never allocates, locks, logs or calls FFmpeg, and plays silence on underrun (counted). Seek/cut/flush take a tiny guard the callback only *tries* to take (bounded spin, then one silent block). The decode thread reads files without holding the bookkeeping lock, and commits a block only if no seek/load/cut happened meanwhile (generation counter), so `status` never waits for a slow disk. Position is computed from the samples the output consumed; `PlaybackEnded`/`TrackAdvanced` fire when the output reaches a marker (raised from the thread pool, not the audio thread). `QueuePlayer` tells the player the upcoming entries (`SetNextTracks`); the player appends them gaplessly when the PCM format matches, otherwise it ends the stream and `QueuePlayer` loads the next track normally (device reopened). See [Playback](playback.md#gapless). Queue editing (remove, move, the *up next* run after the current entry) lives in `QueuePlayer` too. `SpectrumMeter` gives a visualizer 16 band levels: while it has subscribers, the callback copies a mono mix of the samples (before volume, decimated to 44.1/48 kHz) into a small ring, and a 33 ms timer runs a 2048-point FFT on the latest samples; with no subscriber nothing is copied or computed.
 - **Library:** the `MusicLibrary` facade over `LibraryDatabase` (LiteDB), `LibraryScanner` + `FileWalker` + `TrackReader` (TagLib#, FFmpeg fallback), `LibraryIndexer` (albums, artists, search keys), `LibrarySearch` (folding, query syntax, ranking), `FileFingerprint` + `PlaylistMaintenance` + `FavoriteMaintenance` (rename/move detection, `Relocate`; playlist entries and favorites follow moved tracks), favorites (`MusicLibrary.Favorites`: their own collection, found by track id then path), `LibraryKeys` (normalization, path keys, UUIDv7 track/playlist ids, name-based UUIDv8 album/artist ids, id parsing), `QueueTrackResolver` (maps saved queue entries to the current path of their track id, used by the background player), `LibraryWatcher`. Tracks are identified by a GUID that never depends on the path; the path is a separate unique-indexed key used by scans (see [Ids](library.md#ids)).
 - **Hosting:** `AppPaths` resolves the data folder (`--data-dir` > `MUSICSPIN_DATA_DIR` > `.usrdata` next to the executable). **Settings:** `AppSettings` + `SettingsStore`.
