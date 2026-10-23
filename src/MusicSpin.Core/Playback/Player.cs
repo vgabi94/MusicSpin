@@ -44,6 +44,7 @@ public sealed class Player : IPlayer
     // decoder state (_decodeLock)
     private PlaybackBuffer? _buffer;
     private readonly List<TrackSegment> _segments = [];
+    private IReadOnlyList<TrackGain> _gains = [];
     private TrackSegment? _writing;
     private bool _writingDone;
     private bool _endQueued;
@@ -290,6 +291,40 @@ public sealed class Player : IPlayer
         }
 
         RaisePosition();
+    }
+
+    public void SetGains(float current, IReadOnlyList<TrackGain> next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        if (_disposed)
+        {
+            return;
+        }
+
+        lock (_decodeLock)
+        {
+            _gains = next;
+            // By identity, never by position: the track that was loaded has no token (it takes `current`), every track that
+            // came in gaplessly is found by its token, so a call that races a boundary cannot give the new track the old one's gain.
+            foreach (var segment in _segments)
+            {
+                segment.Gain = segment.Token is null ? current : GainOf(segment.Token);
+            }
+        }
+    }
+
+    /// <summary>The levelling gain the caller gave an entry (1 when it gave none). Caller holds _decodeLock.</summary>
+    private float GainOf(object? token)
+    {
+        foreach (var entry in _gains)
+        {
+            if (ReferenceEquals(entry.Token, token))
+            {
+                return entry.Gain;
+            }
+        }
+
+        return 1f;
     }
 
     public void SetNextTracks(IReadOnlyList<NextTrack> next)
@@ -643,6 +678,11 @@ public sealed class Player : IPlayer
                 {
                     next?.Segment.Decoder.Dispose();
                     return Step.Progress;
+                }
+
+                if (next is not null)
+                {
+                    next.Segment.Gain = GainOf(next.Segment.Token); // before the output can reach the boundary
                 }
 
                 if (next is null || !buffer.TryAddMarker(MarkerKind.Boundary, next.Segment))

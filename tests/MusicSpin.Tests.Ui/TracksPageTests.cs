@@ -119,13 +119,13 @@ public sealed class TracksPageTests
         window.MouseDown(point, MouseButton.Left);
         window.MouseUp(point, MouseButton.Left);
         await app.PlayerRoundTripAsync();
-        Assert.Equal(0, app.Scripted!.Count("queue.set"));
+        Assert.Equal(0, app.Scripted!.Count("queue.play"));
 
         Gui.DoubleClick(window, title);
-        await Gui.UntilAsync(() => app.Scripted.Count("queue.set") >= 1, "the track played");
+        await Gui.UntilAsync(() => app.Scripted.Count("queue.play") >= 1, "the track played");
         await app.PlayerRoundTripAsync();
-        Assert.Equal(1, app.Scripted.Count("queue.set")); // the double-click played it once
-        var sent = app.Scripted.Sent("queue.set")[0];
+        Assert.Equal(1, app.Scripted.Count("queue.play")); // the double-click played it once
+        var sent = app.Scripted.Sent("queue.play")[0];
         Assert.Equal(2, sent.GetProperty("start").GetInt32());
         Assert.Equal(30, sent.GetProperty("items").GetArrayLength());
     }
@@ -140,14 +140,14 @@ public sealed class TracksPageTests
         Gui.Hover(window, row);
         Assert.True(Child<Icon>(row, "play").IsEffectivelyVisible); // ▶ instead of the number
         Gui.Click(window, Child<Button>(row, "number"));
-        await Gui.UntilAsync(() => app.Scripted!.Count("queue.set") == 1, "the track played");
-        Assert.Equal(5, app.Scripted!.Sent("queue.set")[0].GetProperty("start").GetInt32());
+        await Gui.UntilAsync(() => app.Scripted!.Count("queue.play") == 1, "the track played");
+        Assert.Equal(5, app.Scripted!.Sent("queue.play")[0].GetProperty("start").GetInt32());
 
         app.ViewModel.TracksPage.Grouping = TrackGrouping.None;
         Gui.Settle();
         Gui.Click(window, Child<Button>(Row(window, "Glass Window"), "thumb"));
-        await Gui.UntilAsync(() => app.Scripted.Count("queue.set") == 2, "the track played");
-        Assert.Equal(1, app.Scripted.Sent("queue.set")[1].GetProperty("start").GetInt32());
+        await Gui.UntilAsync(() => app.Scripted.Count("queue.play") == 2, "the track played");
+        Assert.Equal(1, app.Scripted.Sent("queue.play")[1].GetProperty("start").GetInt32());
     }
 
     [AvaloniaFact]

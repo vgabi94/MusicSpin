@@ -220,10 +220,11 @@ public sealed class NowPlayingTests
         Assert.Contains("current", rows[1].Classes);
 
         Gui.Click(app.Window, rows[2]);
-        await Gui.UntilAsync(() => app.Scripted!.Count("queue.set") == 1, "queue.set sent");
-        var sent = app.Scripted!.Sent("queue.set")[0];
+        // The album's own list, not a replacement queue: the player keeps what the user queued up next (#140).
+        await Gui.UntilAsync(() => app.Scripted!.Count("queue.play") == 1, "queue.play sent");
+        Assert.Equal(0, app.Scripted!.Count("queue.set"));
+        var sent = app.Scripted!.Sent("queue.play")[0];
         Assert.Equal(2, sent.GetProperty("start").GetInt32());
-        Assert.True(sent.GetProperty("play").GetBoolean());
         Assert.Equal(
             Enumerable.Range(1, tracks.Length).Select(t => SampleLibrary.TrackId(Album, t)),
             sent.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("trackId").GetString()));

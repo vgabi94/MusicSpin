@@ -247,8 +247,8 @@ public sealed class PlaylistTests
 
         // playing the entry after it starts there among the entries that can play
         Gui.DoubleClick(app.Window, Row(app, "Blue Train 1"));
-        var set = await SentAsync(app, "queue.set");
-        Assert.Equal(1, app.Scripted!.Count("queue.set"));
+        var set = await SentAsync(app, "queue.play");
+        Assert.Equal(1, app.Scripted!.Count("queue.play"));
         Assert.Equal(3, Paths(set).Length);
         Assert.Equal(1, set.GetProperty("start").GetInt32());
     }

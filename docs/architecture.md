@@ -13,6 +13,7 @@ MusicSpin.slnx
 │   │   ├── Decoding/FFmpeg/   FFmpegRuntime (loads the shared libraries), FFmpegAudioDecoder, FFmpegDecoderFactory
 │   │   ├── Output/      MiniAudio/ (miniaudio device output via native/msaudio, WASAPI exclusive), NullAudioOutput (no sound card)
 │   │   ├── Hosting/     AppPaths: resolves the data folder (default .usrdata)
+│   │   ├── Normalization/ Volume levelling: ReplayGain/R128 tags, EBU R128 meter and analyzer, gain calculation, background service
 │   │   ├── Settings/    AppSettings + SettingsStore (settings.json)
 │   │   └── Library/     MusicLibrary facade, LiteDB store, scanner, tag reader, queries, watcher
 │   ├── MusicSpin.App    Avalonia 12 desktop app, executable `MusicSpin` (see Desktop app below)
@@ -168,8 +169,19 @@ src/MusicSpin.App/
   until it lands. An edit's own change is told apart by stamping `library.db` after closing it but before releasing
   `library.lock`, so a write by a process waiting for the lock is never taken for the edit's. Favorites, when not shown,
   reads its list when it is next opened.
-- **Covers.** `CoverService` reads covers through Core's cover cache and keeps decoded bitmaps for the session; a row
-  asks for its cover only when it is first shown, and lists are virtualized.
+- **Covers.** `CoverService` reads covers through Core's cover cache, decodes them at the pixels asked for (in steps
+  of 128, never past the size cached) and hands each out in a `CoverLease`: a bitmap held is never disposed. Those let
+  go are kept up to 96 MB with the held ones, for scrolling back; past that the least recently asked for are disposed,
+  since their pixels are native memory the GC doesn't count, so it might never run to free them. An album's
+  `AlbumArt` holds its cover while something watches it (its `PropertyChanged` handlers are the bindings of the items
+  shown) and lets go when the last one goes, so the view models of thousands of albums pin no pixels; a row asks for
+  its cover only when it is first shown, and lists are virtualized. The albums page reports the most pixels it shows a
+  cover at (a card's width, a crate's front record: `CrateCoverMost`, times the screen's scaling), and Now Playing's
+  deck the pixels across its platter (`DeckHost.CoverPixels`), so a 2048-pixel cover isn't decoded for a label 140
+  across; both only grow, so a smaller window decodes nothing again. Now Playing, the turntable scene and the player
+  bar each hold the one cover they show and let go of the one it replaces once the new one shows. A drag's ghost
+  copies the cover its item has loaded (`AlbumArt.Loaded`, which asks for nothing) at 128 pixels, and disposes the
+  copy when the drag ends.
 - **Albums and Tracks.** The pages sort, group and filter in the view model (`LibraryOrder`, as the mockup's
   `cmpAlbums` and `groupBy`: group names A–Z, untagged genres last) and hand the view a flat list of rows: group
   headers and rows of cards, or headers and track rows. A plain `VirtualizingStackPanel` then virtualizes the whole page
@@ -231,7 +243,7 @@ src/MusicSpin.App/
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
-  an index (skipping to a row drops the up-next entries above it), `queue.remove`, `queue.clear` with `upNext`, and
+  an index (skipping to a row drops the up-next entries above it; a row of the list that is playing in the app's Now playing and Tracks pages sends `queue.play`, which keeps them, #140), `queue.remove`, `queue.clear` with `upNext`, and
   `radio.end` to end radio while keeping the current track and the rows (one atomic player command, #37; the Radio page's End radio uses it too). A drop between rows adds the tracks up next and
   then moves them into place with `queue.move`, at indices from the queue read again after the add (it may have moved
   on since the rows were read); a row dragged while the rows were read again is found by its file. Save as playlist writes a library playlist. Rows that were not there at

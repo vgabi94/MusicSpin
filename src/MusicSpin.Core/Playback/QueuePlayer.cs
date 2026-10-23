@@ -1,4 +1,5 @@
 using MusicSpin.Core.Library;
+using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Remote;
 
 namespace MusicSpin.Core.Playback;
@@ -72,6 +73,8 @@ public sealed class QueuePlayer : IDisposable
     private Slot? _loadedSlot;
     private int _rapidLoops;
     private RadioSession? _radio;
+    private IGainResolver? _normalizer;
+    private NormalizationGain? _levelGain; // the current track's gain, for status
 
     /// <summary>Radio keeps this many tracks queued after the current one...</summary>
     public const int RadioLookahead = 20;
@@ -91,6 +94,41 @@ public sealed class QueuePlayer : IDisposable
         _player.TrackLoaded += OnTrackLoaded;
         _player.Error += OnPlayerError;
         _player.TrackAdvanced += OnTrackAdvanced;
+    }
+
+    /// <summary>
+    /// Volume levelling (#139): gives each track a gain from its ReplayGain / R128 tags or an analysis. Null: tracks play as
+    /// they are. Set before playing.
+    /// </summary>
+    public IGainResolver? Normalizer
+    {
+        get { lock (_gate) { return _normalizer; } }
+        set
+        {
+            lock (_gate)
+            {
+                if (ReferenceEquals(_normalizer, value))
+                {
+                    return;
+                }
+
+                if (_normalizer is not null)
+                {
+                    _normalizer.Changed -= OnNormalizationChanged;
+                }
+
+                _normalizer = value;
+                _levelGain = null;
+                if (value is not null)
+                {
+                    value.Changed += OnNormalizationChanged;
+                    if (!_disposed)
+                    {
+                        ApplyGains(BuildNext());
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>The output in status: the requested one, then what the device really opened at (set by the host).</summary>
@@ -316,6 +354,7 @@ public sealed class QueuePlayer : IDisposable
             ThrowIfDisposed();
             _player.Load(path); // throws before touching the queue when the file is bad
             _player.Pause(); // nothing plays next: hand back an exclusive device the switch kept held for it
+            PrepareLoadedGain(path, [], -1);
             _items.Clear();
             _items.Add(_loadedSlot = new Slot(new QueueItem(path), 0));
             _radio = null;
@@ -544,6 +583,137 @@ public sealed class QueuePlayer : IDisposable
 
             return MoveAndPlay(target, +1, wrap: WrapAll);
         }
+    }
+
+    /// <summary>
+    /// Plays entry <paramref name="index"/> of <paramref name="context"/>: the list the user clicked in (an album, a
+    /// playlist, the Tracks view). When that list is what the queue is playing (the same tracks in the same order, or in
+    /// any order with shuffle on), the queue stays and playback jumps to the clicked track; the up-next entries (queued
+    /// with "Play next" or "Add to queue") are kept and move along to follow it, so they still play right after it.
+    /// Anything else (a different list, or while radio plays) starts the list as a new queue, like <see cref="SetQueue"/>,
+    /// which drops everything queued: choosing something else to play is how the queue is replaced.
+    /// <para>Entries are compared by track id (path when an entry has none). Entries the queue gained at its end are not
+    /// part of the list, so such a queue counts as a different one.</para>
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidArgument when <paramref name="index"/> is outside the list; FileNotFound
+    /// when nothing from the clicked track on can be opened (the queue is kept and the current track keeps playing).</exception>
+    public PlayerStatus PlayFromContext(IReadOnlyList<QueueItem> context, int index)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ValidateItems(context);
+        if (context.Count == 0)
+        {
+            throw Invalid("The list to play must contain at least one entry.");
+        }
+
+        if (index < 0 || index >= context.Count)
+        {
+            throw Invalid($"start index {index} is outside the list (0-{context.Count - 1}).");
+        }
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (_radio is null && _index >= 0 && _index < _items.Count && FindInContext(context, index) is { } target)
+            {
+                return JumpTo(target);
+            }
+
+            return SetQueue(context, index);
+        }
+    }
+
+    /// <summary>The queue's slot for <c>context[index]</c> when the queue's own entries (not up next) are exactly the context's; else null.</summary>
+    private Slot? FindInContext(IReadOnlyList<QueueItem> context, int index)
+    {
+        var own = _items.Where(s => !s.UpNext).OrderBy(s => s.Order).ToList();
+        if (own.Count != context.Count)
+        {
+            return null;
+        }
+
+        if (!_shuffle)
+        {
+            // Played in order, the list has to be in the queue's order too: a list the user sorted differently is a new queue.
+            for (var i = 0; i < own.Count; i++)
+            {
+                if (!SameTrack(own[i].Item, context[i]))
+                {
+                    return null;
+                }
+            }
+
+            return own[index];
+        }
+
+        // Shuffled, the queue is the list in any order: pair every list entry with a slot of the same track. A track that
+        // is in the list twice pairs its n-th entry with the n-th slot of its kind in the original order, so the click
+        // lands on the occurrence the user chose. Entries with an id pair first (they survive a path change); what is
+        // left pairs by path.
+        var slotOf = new Slot?[context.Count];
+        var taken = new bool[own.Count];
+        for (var pass = 0; pass < 2; pass++)
+        {
+            for (var i = 0; i < context.Count; i++)
+            {
+                if (slotOf[i] is not null)
+                {
+                    continue;
+                }
+
+                for (var j = 0; j < own.Count; j++)
+                {
+                    if (!taken[j] && (pass == 1 || BothHaveIds(own[j].Item, context[i])) && SameTrack(own[j].Item, context[i]))
+                    {
+                        slotOf[i] = own[j];
+                        taken[j] = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return slotOf.All(s => s is not null) ? slotOf[index] : null;
+    }
+
+    private static bool BothHaveIds(QueueItem a, QueueItem b) => a.TrackId is not null && b.TrackId is not null;
+
+    /// <summary>
+    /// Whether two entries are the same track: by track id when both have one (a track the library moved has a new path
+    /// and the same id), by path when either has none (a file added by path, or an entry from the CLI).
+    /// </summary>
+    private static bool SameTrack(QueueItem a, QueueItem b)
+        => BothHaveIds(a, b) ? string.Equals(a.TrackId, b.TrackId, StringComparison.Ordinal) : string.Equals(a.Path, b.Path, StringComparison.Ordinal);
+
+    /// <summary>Plays <paramref name="target"/> keeping the queue; the up-next run moves to follow the new current entry.</summary>
+    private PlayerStatus JumpTo(Slot target)
+    {
+        // The run stays where it is while the target loads, so a failure to open anything leaves the queue as it was.
+        var run = _items.GetRange(_index + 1, UpNextEnd() - _index - 1);
+        MoveAndPlay(_items.IndexOf(target), +1, wrap: WrapAll, keepPlayingOnFailure: true);
+        var current = _items[_index];
+        run.Remove(current); // the target could not be opened and an up-next entry played instead: it is current now
+        if (run.Count > 0)
+        {
+            var moved = run.ToHashSet();
+            _items.RemoveAll(moved.Contains);
+            _index = _items.IndexOf(current);
+            if (_shuffle)
+            {
+                PlaceInOriginalOrder(current, run);
+            }
+
+            _items.InsertRange(_index + 1, run);
+            if (!_shuffle)
+            {
+                RenumberOrder();
+            }
+        }
+
+        current.UpNext = false;
+        NormalizeUpNext();
+        QueueChanged?.Invoke(this, EventArgs.Empty);
+        return StatusCore();
     }
 
     public PlayerStatus Resume()
@@ -956,6 +1126,10 @@ public sealed class QueuePlayer : IDisposable
         _player.TrackLoaded -= OnTrackLoaded;
         _player.Error -= OnPlayerError;
         _player.TrackAdvanced -= OnTrackAdvanced;
+        if (_normalizer is not null)
+        {
+            _normalizer.Changed -= OnNormalizationChanged;
+        }
         try
         {
             _player.Stop();
@@ -966,8 +1140,8 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
-    /// <summary>Plays the first playable entry from <paramref name="index"/> in <paramref name="direction"/>; with <paramref name="wrap"/> it continues past the ends (each entry tried once).</summary>
-    private PlayerStatus MoveAndPlay(int index, int direction, bool wrap = false)
+    /// <summary>Plays the first playable entry from <paramref name="index"/> in <paramref name="direction"/>; with <paramref name="wrap"/> it continues past the ends (each entry tried once). When none opens the player is stopped, unless <paramref name="keepPlayingOnFailure"/>: then what played before keeps playing (a failed open never touches it).</summary>
+    private PlayerStatus MoveAndPlay(int index, int direction, bool wrap = false, bool keepPlayingOnFailure = false)
     {
         var count = _items.Count;
         for (var step = 0; step < count; step++)
@@ -991,8 +1165,12 @@ public sealed class QueuePlayer : IDisposable
             }
         }
 
-        _stoppedByUser = true;
-        _player.Stop();
+        if (!keepPlayingOnFailure)
+        {
+            _stoppedByUser = true;
+            _player.Stop();
+        }
+
         var from = index + 1 - direction; // 1-based entry the search started next to
         throw new MusicSpinException(MusicSpinErrorCode.FileNotFound, wrap || from < 1 || from > count
             ? $"No playable track in the queue: all {count} entr{(count == 1 ? "y was" : "ies were")} skipped (see 'skipped' in 'music-spin status')."
@@ -1005,6 +1183,7 @@ public sealed class QueuePlayer : IDisposable
         {
             _player.Load(item.Path);
             MarkLoaded(slots ?? _items, index);
+            PrepareLoadedGain(item.Path, slots ?? _items, index);
             return true;
         }
         catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.FileNotFound && TryLoadMoved(item, index, slots ?? _items))
@@ -1048,6 +1227,7 @@ public sealed class QueuePlayer : IDisposable
         }
 
         MarkLoaded(slots, index);
+        PrepareLoadedGain(moved.Path, slots, index);
         if (index >= 0 && index < slots.Count && ReferenceEquals(slots[index].Item, item))
         {
             slots[index].Item = moved;
@@ -1149,7 +1329,22 @@ public sealed class QueuePlayer : IDisposable
             diagnostics?.Underruns,
             _radio is null ? null : new RadioInfo(_radio.Filter, _radio.Filter.Describe(), _radio.PoolSize),
             has ? UpNextEnd() - _index - 1 : 0,
-            _mutedLevel is not null);
+            _mutedLevel is not null,
+            NormalizationState());
+    }
+
+    private NormalizationStatus? NormalizationState()
+    {
+        if (_normalizer is not { } normalizer)
+        {
+            return null;
+        }
+
+        var settings = normalizer.Settings;
+        var level = CurrentLoaded() ? _levelGain : null;
+        return new NormalizationStatus(
+            NormalizationSettings.Name(settings.Mode), settings.TargetLufs, settings.PreampDb,
+            level is { } l ? Math.Round(l.Db, 2) : null, level?.SourceName, level?.Limited ?? false);
     }
 
     private const int MaxNextTracks = 16;
@@ -1163,12 +1358,21 @@ public sealed class QueuePlayer : IDisposable
         }
 
         TopUpRadio();
-        var next = new List<NextTrack>();
+        var next = BuildNext();
+        _player.SetNextTracks([.. next.Select(n => n.Entry)]);
+        ApplyGains(next);
+    }
+
+    /// <summary>The entries that follow the current one in play order, with their positions in the queue.</summary>
+    private List<(NextTrack Entry, int Index)> BuildNext()
+    {
+        var next = new List<(NextTrack, int)>();
         if (!_ended && CurrentLoaded())
         {
             if (_repeat == RepeatMode.One)
             {
-                next.AddRange(Enumerable.Repeat(new NextTrack(_items[_index].Item.Path, _items[_index]), MaxNextTracks));
+                var again = new NextTrack(_items[_index].Item.Path, _items[_index]);
+                next.AddRange(Enumerable.Repeat((again, _index), MaxNextTracks));
             }
             else
             {
@@ -1187,12 +1391,95 @@ public sealed class QueuePlayer : IDisposable
                         break;
                     }
 
-                    next.Add(new NextTrack(slot.Item.Path, slot));
+                    next.Add((new NextTrack(slot.Item.Path, slot), i));
                 }
             }
         }
 
-        _player.SetNextTracks(next);
+        return next;
+    }
+
+    // ------------------------------------------------------------------------------------------------ volume levelling
+
+    /// <summary>
+    /// The loaded track starts at the gain known for it. Never reads the library here (this runs under the gate, on the track-start path):
+    /// a track that is not known yet is looked up first by the resolver thread and moves to its gain (a short ramp) when it is.
+    /// </summary>
+    private void PrepareLoadedGain(string path, List<Slot> slots, int index)
+    {
+        if (_normalizer is not { } normalizer)
+        {
+            return;
+        }
+
+        var gain = normalizer.Prepare(path, AlbumContext(slots, index));
+        _levelGain = gain;
+        _player.SetGains((float)gain.Linear, []);
+    }
+
+    /// <summary>Gains for the current track and the ones decoded ahead; also tells the resolver which tracks to look at.</summary>
+    private void ApplyGains(List<(NextTrack Entry, int Index)> next)
+    {
+        if (_normalizer is not { } normalizer || _disposed)
+        {
+            return;
+        }
+
+        var loaded = !_ended && CurrentLoaded();
+        var wanted = new List<string>(next.Count + 1);
+        if (loaded)
+        {
+            wanted.Add(_items[_index].Item.Path);
+        }
+
+        wanted.AddRange(next.Select(n => n.Entry.Path));
+        normalizer.Want(wanted);
+        var current = loaded ? normalizer.GainFor(_items[_index].Item.Path, AlbumContext(_items, _index)) : (NormalizationGain?)null;
+        _levelGain = current;
+        var gains = new List<TrackGain>(next.Count + 1);
+        if (current is { } now)
+        {
+            // the playing entry by token too: once the player has moved on to it gaplessly it is no longer the loaded track
+            gains.Add(new TrackGain(_items[_index], (float)now.Linear));
+        }
+
+        foreach (var (entry, index) in next)
+        {
+            gains.Add(new TrackGain(entry.Token, (float)normalizer.GainFor(entry.Path, AlbumContext(_items, index)).Linear));
+        }
+
+        _player.SetGains((float)(current?.Linear ?? 1.0), gains);
+    }
+
+    /// <summary>
+    /// Whether the entry plays as part of its album: in order (no shuffle, no radio) next to a neighbour of the same album.
+    /// Only matters in the "auto" mode.
+    /// </summary>
+    private bool AlbumContext(List<Slot> slots, int index)
+    {
+        if (index < 0 || index >= slots.Count)
+        {
+            return false;
+        }
+
+        static (string?, string?) Album(Slot slot) => (slot.Item.Album, slot.Item.AlbumArtist);
+        return GainCalculator.IsAlbumContext(
+            Album(slots[index]),
+            index > 0 ? Album(slots[index - 1]) : null,
+            index + 1 < slots.Count ? Album(slots[index + 1]) : null,
+            _shuffle,
+            _radio is not null);
+    }
+
+    private void OnNormalizationChanged(object? sender, EventArgs e)
+    {
+        lock (_gate)
+        {
+            if (!_disposed)
+            {
+                ApplyGains(BuildNext());
+            }
+        }
     }
 
     private void OnTrackAdvanced(object? sender, TrackAdvancedEventArgs e)

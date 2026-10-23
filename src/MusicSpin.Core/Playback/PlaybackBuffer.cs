@@ -24,6 +24,15 @@ internal sealed class TrackSegment(IAudioDecoder decoder, object? token, TimeSpa
     public IReadOnlyList<NextTrack> Entries { get; } = entries;
 
     public IReadOnlyList<SkippedNextTrack> Skipped { get; } = skipped;
+
+    private float _gain = 1f;
+
+    /// <summary>Volume-levelling gain (linear, 1 = untouched) for this track's samples. Set from any thread; the output ramps to it.</summary>
+    public float Gain
+    {
+        get => Volatile.Read(ref _gain);
+        set => Volatile.Write(ref _gain, float.IsFinite(value) && value >= 0f ? value : 1f);
+    }
 }
 
 internal enum MarkerKind
@@ -74,6 +83,16 @@ internal sealed class PlaybackBuffer : IPcmSource
     private long _underruns;
     private long _crossed;
 
+    // Levelling gain as applied (consumer only). NaN until the first block: the first track's gain is adopted at once.
+    private float _levelGain = float.NaN;
+    private float _levelFrom;
+    private float _levelTo;
+    private int _levelStep;
+    private readonly int _levelFrames;
+
+    /// <summary>A change of the levelling gain (a new track's, or a late analysis) takes this long: too short to hear as a fade, too long to click.</summary>
+    public const int LevelRampMilliseconds = 5;
+
     public PlaybackBuffer(PcmFormat format, int capacitySamples, TrackSegment first, Func<float> volume, Action signal, SpectrumTap? tap = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(capacitySamples, format.Channels);
@@ -81,6 +100,7 @@ internal sealed class PlaybackBuffer : IPcmSource
         _ring = new float[capacitySamples - (capacitySamples % format.Channels)];
         _current = first;
         _volume = volume;
+        _levelFrames = Math.Max(1, (int)((long)Math.Max(format.SampleRate, 1) * LevelRampMilliseconds / 1000));
         _signal = signal;
         _tap = tap;
     }
@@ -185,14 +205,7 @@ internal sealed class PlaybackBuffer : IPcmSource
                     tap.Write(target, Format); // before volume: a muted player still shows the music
                 }
 
-                var gain = _volume();
-                if (gain < 1f)
-                {
-                    for (var i = 0; i < target.Length; i++)
-                    {
-                        target[i] *= gain;
-                    }
-                }
+                ApplyGain(target, _volume(), Volatile.Read(ref _current).Gain);
 
                 Volatile.Write(ref _read, _read + count);
                 done += count;
@@ -203,6 +216,55 @@ internal sealed class PlaybackBuffer : IPcmSource
         finally
         {
             Volatile.Write(ref _guard, 0);
+        }
+    }
+
+    /// <summary>
+    /// Volume times the track's levelling gain. When both are 1 the samples are not touched at all (bit-exact); when the
+    /// levelling gain changes (a gapless boundary into a track with another gain, a late analysis) it moves linearly to the
+    /// new value over <see cref="LevelRampMilliseconds"/> instead of stepping.
+    /// </summary>
+    private void ApplyGain(Span<float> target, float volume, float level)
+    {
+        if (float.IsNaN(_levelGain))
+        {
+            _levelGain = _levelTo = level;
+            _levelStep = _levelFrames;
+        }
+        else if (level != _levelTo)
+        {
+            _levelFrom = _levelGain;
+            _levelTo = level;
+            _levelStep = 0;
+        }
+
+        if (_levelStep >= _levelFrames && _levelGain * volume == 1f)
+        {
+            return; // nothing to do: bit-exact
+        }
+
+        var gain = _levelGain * volume;
+        if (_levelStep >= _levelFrames)
+        {
+            for (var i = 0; i < target.Length; i++)
+            {
+                target[i] *= gain;
+            }
+
+            return;
+        }
+
+        var channels = Math.Max(Format.Channels, 1);
+        for (var i = 0; i < target.Length; i++)
+        {
+            if (i % channels == 0 && _levelStep < _levelFrames)
+            {
+                _levelStep++;
+                _levelGain = _levelStep >= _levelFrames ? _levelTo : _levelFrom + (_levelTo - _levelFrom) * _levelStep / _levelFrames;
+                gain = _levelGain * volume;
+            }
+
+            target[i] *= gain;
         }
     }
 

@@ -71,7 +71,7 @@ public sealed class McpServerTests : IAsyncDisposable
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
                      "queue_add", "queue_remove", "queue_move", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
                      "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio", "radio_end", "radio_stations", "radio_save", "radio_delete",
-                     "favorites", "favorite_add", "favorite_remove" })
+                     "favorites", "favorite_add", "favorite_remove", "normalize" })
         {
             Assert.Contains(name, names);
         }
@@ -505,6 +505,35 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.Equal(25, (await Call("seek", new() { ["position"] = "+5" })).GetProperty("positionSeconds").GetDouble(), 0);
         Assert.Equal(0.5, (await Call("volume", new() { ["level"] = "50%" })).GetProperty("volume").GetDouble(), 3);
         Assert.Equal(0.6, (await Call("volume", new() { ["level"] = "+10%" })).GetProperty("volume").GetDouble(), 3);
+    }
+
+    [Fact]
+    public async Task The_normalize_tool_shows_and_changes_the_volume_levelling()
+    {
+        await StartAsync();
+        await Call("play", new() { ["files"] = new[] { Long[0] } });
+
+        Assert.Equal("auto", (await Call("normalize")).GetProperty("normalization").GetProperty("mode").GetString());
+        var off = (await Call("normalize", new() { ["mode"] = "OFF" })).GetProperty("normalization");
+        Assert.Equal("off", off.GetProperty("mode").GetString());
+        var tuned = (await Call("normalize", new() { ["mode"] = "album", ["target"] = -16.0, ["preamp"] = 2.0 })).GetProperty("normalization");
+        Assert.Equal(("album", -16.0, 2.0), (tuned.GetProperty("mode").GetString(), tuned.GetProperty("targetLufs").GetDouble(), tuned.GetProperty("preampDb").GetDouble()));
+    }
+
+    [Theory]
+    [Trait("Category", "Unhappy")]
+    [InlineData("loud", null, null)]
+    [InlineData(null, -40.0, null)]
+    [InlineData(null, null, 13.0)]
+    public async Task The_normalize_tool_rejects_bad_values_and_changes_nothing(string? mode, double? target, double? preamp)
+    {
+        await StartAsync();
+        await Call("play", new() { ["files"] = new[] { Long[0] } });
+
+        var args = new Dictionary<string, object?> { ["mode"] = mode, ["target"] = target, ["preamp"] = preamp };
+        Assert.StartsWith("usage:", await CallError("normalize", args), StringComparison.Ordinal);
+
+        Assert.Equal("auto", (await Call("normalize")).GetProperty("normalization").GetProperty("mode").GetString());
     }
 
     [Fact]

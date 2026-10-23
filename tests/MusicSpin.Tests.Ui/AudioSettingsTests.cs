@@ -517,6 +517,105 @@ public sealed class AudioSettingsTests
         await Gui.UntilAsync(() => Audio(app).InUse == "In use now: no audio device (silent output)", "the silent output");
     }
 
+    // ---- volume levelling (#139) --------------------------------------------------------------------------------
+
+    /// <summary>Flips the Volume levelling switch with the mouse and returns what it shows after.</summary>
+    private static bool FlipLevelling(AppHarness app)
+    {
+        var levelling = Gui.Find<ToggleButton>(app.Window, "VolumeLevelling");
+        var was = levelling.IsChecked;
+        levelling.BringIntoView();
+        Gui.Settle();
+        var point = levelling.TranslatePoint(new Point(levelling.Bounds.Width / 2, levelling.Bounds.Height / 2), app.Window)!.Value;
+        app.Window.MouseMove(point);
+        app.Window.MouseDown(point, MouseButton.Left);
+        app.Window.MouseUp(point, MouseButton.Left);
+        Gui.Settle();
+        Assert.NotEqual(was, levelling.IsChecked);
+        return levelling.IsChecked == true;
+    }
+
+    [AvaloniaFact]
+    public async Task Volume_levelling_is_on_by_default_and_the_switch_turns_it_off_and_on_in_the_running_player_without_a_restart()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        Assert.True(Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked);
+
+        Assert.False(FlipLevelling(app));
+        await Gui.UntilAsync(() => app.Scripted!.Count("normalize") == 1, "the player told");
+        Assert.Equal("off", app.Scripted!.Sent("normalize")[0].GetProperty("mode").GetString());
+        Assert.Equal("off", new SettingsStore(app.Data).Load().Normalization);
+
+        Assert.True(FlipLevelling(app));
+        await Gui.UntilAsync(() => app.Scripted.Count("normalize") == 2, "the player told again");
+        Assert.Equal("auto", app.Scripted.Sent("normalize")[1].GetProperty("mode").GetString());
+        Assert.Equal("auto", new SettingsStore(app.Data).Load().Normalization);
+        Assert.Equal(1, app.Scripted.AppStarts); // no restart
+    }
+
+    [AvaloniaFact]
+    public async Task Turning_levelling_back_on_restores_the_mode_the_CLI_chose()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { Normalization = "album" });
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        Assert.True(Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked);
+
+        FlipLevelling(app);
+        FlipLevelling(app);
+
+        await Gui.UntilAsync(() => app.Scripted!.Count("normalize") == 2, "the player told twice");
+        Assert.Equal("album", app.Scripted!.Sent("normalize")[1].GetProperty("mode").GetString());
+        Assert.Equal("album", new SettingsStore(app.Data).Load().Normalization);
+    }
+
+    [AvaloniaFact]
+    public async Task A_saved_off_shows_the_switch_off_and_turning_it_on_means_auto()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { Normalization = "off" });
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        Assert.False(Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked);
+
+        Assert.True(FlipLevelling(app));
+
+        await Gui.UntilAsync(() => app.Scripted!.Count("normalize") == 1, "the player told");
+        Assert.Equal("auto", app.Scripted!.Sent("normalize")[0].GetProperty("mode").GetString());
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_mode_changed_behind_the_apps_back_shows_on_the_switch_when_Settings_opens_and_nothing_is_saved_or_sent()
+    {
+        await using var app = await OpenAsync(); // saved: auto
+        await PlayingAsync(app);
+        app.Scripted!.Status = app.Scripted.Status with { Normalization = new NormalizationStatus("off", -18, 0) }; // `music-spin normalize off`
+
+        await OpenSettingsAsync(app);
+
+        await Gui.UntilAsync(() => Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked == false, "the switch following the player");
+        Assert.Equal(0, app.Scripted.Count("normalize"));
+        Assert.NotEqual("off", new SettingsStore(app.Data).Load().Normalization);
+    }
+
+    [AvaloniaFact]
+    public async Task The_switch_follows_the_player_while_Settings_is_open_and_turning_it_on_restores_the_mode_the_player_had()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { Normalization = "off" });
+        await PlayingAsync(app);
+        app.Scripted!.Status = app.Scripted.Status with { Normalization = new NormalizationStatus("album", -18, 0) };
+        await OpenSettingsAsync(app);
+        await Gui.UntilAsync(() => Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked == true, "the switch following the player");
+
+        FlipLevelling(app); // off
+        FlipLevelling(app); // on again
+
+        await Gui.UntilAsync(() => app.Scripted.Count("normalize") == 2, "the player told twice");
+        Assert.Equal("album", app.Scripted.Sent("normalize")[1].GetProperty("mode").GetString());
+    }
+
     // ---- snapshots ----------------------------------------------------------------------------------------------
 
     [AvaloniaTheory]
@@ -581,11 +680,46 @@ public sealed class AudioSettingsViewModelTests : IAsyncDisposable
         Assert.Single(_posted);
     }
 
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Without_a_running_player_the_levelling_switch_only_saves_the_setting()
+    {
+        var settings = new RecordingSettings();
+        var vm = Create(settings);
+        Assert.False(_playerVm.IsConnected);
+
+        vm.Levelling = false;
+
+        Assert.Equal("off", settings.Current.Normalization); // the next player starts with it
+        Assert.Equal(0, _player.Count("normalize"));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_levelling_the_settings_file_wont_take_turns_the_switch_back_and_tells_no_player()
+    {
+        var vm = Create(new UnwritableSettings());
+        Assert.True(vm.Levelling);
+
+        vm.Levelling = false;
+
+        Assert.True(vm.Levelling);
+        Assert.Equal(0, _player.Count("normalize"));
+        Assert.Single(_posted);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _playerVm.DisposeAsync();
         await _player.DisposeAsync();
         TempDir.TryDelete(_root);
+    }
+
+    private sealed class RecordingSettings : ISettingsService
+    {
+        public AppSettings Current { get; private set; } = new();
+
+        public void Update(Func<AppSettings, AppSettings> change) => Current = change(Current);
     }
 
     private sealed class UnwritableSettings : ISettingsService

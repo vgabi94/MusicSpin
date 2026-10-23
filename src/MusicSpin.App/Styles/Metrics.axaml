@@ -259,6 +259,8 @@
       the group's icons are divided by .62 to stay that size. The side panel is 280 wide, 30 from the crates.
     -->
     <sys:Double x:Key="CrateRecordSize">300</sys:Double>
+    <!-- The widest a crate shows a record's cover: the front one leaning out at you (Views/Pages/AlbumsPage.axaml.cs decodes covers for it). -->
+    <sys:Double x:Key="CrateCoverMost">330</sys:Double>
     <Thickness x:Key="CrateRecordMargin">0,0,0,70</Thickness>
     <sys:Double x:Key="CrateBoxWidth">380</sys:Double>
     <sys:Double x:Key="CrateBoxHeight">100</sys:Double>

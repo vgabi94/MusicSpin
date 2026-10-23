@@ -333,10 +333,12 @@ public sealed class MenusAndDragTests
             RightClick(app.Window, Aim(app.Window, item));
             Gui.Click(app.Window, Entries(app)[0]);
 
-            var set = await SentAsync(app, "queue.set");
+            // a row plays from the list it is in (queue.play); an album, a card or a record replaces the queue
+            var byRow = kind is Kind.TrackRow or Kind.NowPlayingTrack;
+            var set = await SentAsync(app, byRow ? "queue.play" : "queue.set");
             var start = set.TryGetProperty("start", out var s) ? s.GetInt32() : 0;
             Assert.Equal(expected.Ids[0], TrackIds(set)[start]);
-            Assert.True(set.GetProperty("play").GetBoolean());
+            if (!byRow) Assert.True(set.GetProperty("play").GetBoolean());
         }
         finally
         {
@@ -567,7 +569,7 @@ public sealed class MenusAndDragTests
         app.Window.MouseUp(at + new Point(2, 1), MouseButton.Left);
         Gui.Settle();
         Assert.False(Ghost(app).IsVisible);
-        Assert.Equal(SampleLibrary.TrackId(8, 2), TrackIds(await SentAsync(app, "queue.set"))[(await SentAsync(app, "queue.set")).GetProperty("start").GetInt32()]);
+        Assert.Equal(SampleLibrary.TrackId(8, 2), TrackIds(await SentAsync(app, "queue.play"))[(await SentAsync(app, "queue.play")).GetProperty("start").GetInt32()]);
     }
 
     [AvaloniaFact]

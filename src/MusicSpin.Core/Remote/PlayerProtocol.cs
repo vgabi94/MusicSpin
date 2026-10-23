@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MusicSpin.Core.Audio;
+using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Playback;
 
 namespace MusicSpin.Core.Remote;
@@ -48,9 +49,12 @@ public static class ProtocolMessages
 /// Events (no id): <c>{"event":"stateChanged","data":{...}}</c>.
 /// <para>Commands: hello, status, load(path), play(index?), pause, resume, toggle, stop, next, prev,
 /// seek(seconds | delta), volume(value | delta; unmutes), mute(mode? = on|off|toggle), info(path), queue(offset?, limit?),
-/// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.add(items, position? = end|next|upnext),
+/// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.play(items, start), queue.add(items, position? = end|next|upnext),
 /// queue.remove(index), queue.move(from, to), queue.clear(upNext?),
 /// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), radio.end, subscribe(spectrum?), quit.
+/// <c>queue.play</c> plays entry <c>start</c> of the list <c>items</c> (an album, a playlist: what a user clicked in): when that
+/// list is what the queue is playing, the queue is kept and playback jumps to the entry (up-next entries follow it), otherwise it
+/// replaces the queue like <c>queue.set</c> (see <see cref="QueuePlayer.PlayFromContext"/>).
 /// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle/mute without a mode just return the status.</para>
 /// </summary>
 public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory decoders, Func<object>? hello = null)
@@ -60,7 +64,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
     public static IReadOnlyList<string> Commands { get; } =
     [
         "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "mute", "info",
-        "queue", "queue.set", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "radio.end", "subscribe", "quit",
+        "queue", "queue.set", "queue.play", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "radio.end", "subscribe", "quit",
+        "normalize",
     ];
 
     public QueuePlayer Player { get; } = player ?? throw new ArgumentNullException(nameof(player));
@@ -160,6 +165,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                 return (Player.SetQueue(Items(root), OptionalInt(root, "start"), OptionalBool(root, "play") ?? true,
                     OptionalNumber(root, "startSeconds") is { } s ? TimeSpan.FromSeconds(s) : null,
                     OptionalBool(root, "shuffle"), OptionalInt(root, "seed")), ProtocolAction.None);
+            case "queue.play":
+                return (Player.PlayFromContext(Items(root), RequiredInt(root, "start")), ProtocolAction.None);
             case "queue.add":
                 return (Player.Add(Items(root), Position(root)), ProtocolAction.None);
             case "queue.remove":
@@ -176,6 +183,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                     : Player.Status(), ProtocolAction.None);
             case "shuffle":
                 return (Shuffle(root), ProtocolAction.None);
+            case "normalize":
+                return (Normalize(root), ProtocolAction.None);
             case "radio":
                 return (Player.StartRadio(RadioFilterOf(root), OptionalBool(root, "play") ?? true), ProtocolAction.None);
             case "radio.end":
@@ -226,6 +235,46 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
         }
 
         return Player.SetShuffle(enabled, seed);
+    }
+
+    /// <summary><c>mode</c>: off | track | album | auto, <c>target</c> (LUFS) and <c>preamp</c> (dB); without any, just the status.</summary>
+    private PlayerStatus Normalize(JsonElement root)
+    {
+        var mode = OptionalString(root, "mode");
+        var target = OptionalNumber(root, "target");
+        var preamp = OptionalNumber(root, "preamp");
+        if (mode is null && target is null && preamp is null)
+        {
+            return Player.Status();
+        }
+
+        var normalizer = Player.Normalizer
+            ?? throw new MusicSpinException(MusicSpinErrorCode.InvalidState, "This player has no volume levelling.");
+        var current = normalizer.Settings;
+        var next = current;
+        if (mode is not null)
+        {
+            next = NormalizationSettings.TryParseMode(mode, out var parsed)
+                ? next with { Mode = parsed }
+                : throw new FormatException($"Unknown normalization mode '{mode}'. Use {NormalizationSettings.ModeValues}.");
+        }
+
+        if (target is { } t)
+        {
+            next = t is >= NormalizationSettings.MinTargetLufs and <= NormalizationSettings.MaxTargetLufs
+                ? next with { TargetLufs = t }
+                : throw new FormatException($"\"target\" must be between {NormalizationSettings.MinTargetLufs} and {NormalizationSettings.MaxTargetLufs} LUFS.");
+        }
+
+        if (preamp is { } p)
+        {
+            next = p is >= NormalizationSettings.MinPreampDb and <= NormalizationSettings.MaxPreampDb
+                ? next with { PreampDb = p }
+                : throw new FormatException($"\"preamp\" must be between {NormalizationSettings.MinPreampDb} and {NormalizationSettings.MaxPreampDb} dB.");
+        }
+
+        normalizer.Configure(next);
+        return Player.Status();
     }
 
     /// <summary><c>"filter": {artists, albums, genres, years: [{from, to}], formats, searches, hiRes}</c>; missing = whole library.</summary>

@@ -121,7 +121,7 @@ A track or playlist id that is not a GUID is exit **2 `usage`**; a well-formed G
 
 ### Schema version
 
-The database records a **schema version** (LiteDB user version, currently **1**). Until the first release there are **no migrations**: the schema may change freely between development builds. A `library.db` written with another schema version is refused with exit **10 `library_corrupt`** ("created by a different MusicSpin version"; nothing is changed). Delete `library.db` from the data folder (your music files are untouched; playlists saved in the library are lost), then `library add` your folders again and `library scan`.
+The database records a **schema version** (LiteDB user version, currently **2**). Until the first release there are **no migrations**: the schema may change freely between development builds. A `library.db` written with another schema version is refused with exit **10 `library_corrupt`** ("created by a different MusicSpin version"; nothing is changed). Delete `library.db` from the data folder (your music files are untouched; playlists saved in the library are lost), then `library add` your folders again and `library scan`.
 
 ### Watching
 
@@ -154,6 +154,7 @@ Fingerprinting made no measurable difference to full scans here (the differences
 | File | path, directory, file name, size, modification time (UTC ticks), date added, fingerprint (size + hash of the first/last 64 KB) |
 | Tags | title, artist, album artist, album, track number/total, disc number/total, year, genre, compilation flag, ReplayGain track/album gain and peak, embedded cover present |
 | Audio | duration, format id (`flac`, `alac`, `pcm`, `dsd`, `wavpack`, `ape`, `tta`, `mp3`, `aac`, `vorbis`, `opus`, `wma`, ...), codec, sample rate, bits per sample, bitrate, channels, lossless, hi-res |
+| Loudness | analysed integrated loudness (LUFS) and true peak, with the size and modification time they were measured on ([Volume levelling](playback.md#volume-levelling-replaygain--r128)) |
 | Provenance | `tagSource` (`taglib`, `taglib+ffmpeg`, `ffmpeg`) |
 | Derived | effective album artist, normalized keys, album id, sort key, folded search keys (title, artists, album, genre, file name, combined) |
 

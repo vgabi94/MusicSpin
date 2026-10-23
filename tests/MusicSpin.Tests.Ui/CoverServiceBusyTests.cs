@@ -54,7 +54,8 @@ public sealed class CoverServiceBusyTests : IDisposable
     [AvaloniaFact]
     public async Task A_cover_asked_for_while_the_library_is_held_waits_and_comes_once_it_is_free()
     {
-        Task<Avalonia.Media.Imaging.Bitmap?> cover;
+        Task<CoverLease?> cover;
+        Task<CoverLease?> again;
         using (Hold())
         {
             cover = _covers.CoverAsync(_albumId, CoverSize.Small);
@@ -67,12 +68,15 @@ public sealed class CoverServiceBusyTests : IDisposable
             Assert.False(cover.IsCompleted);
 
             // asked for again meanwhile (another card scrolled into view): the same wait, not another
-            Assert.Same(cover, _covers.CoverAsync(_albumId, CoverSize.Small));
+            again = _covers.CoverAsync(_albumId, CoverSize.Small);
         }
 
         Assert.False(cover.IsCompleted); // freed, but not tried again before the next check
         _time.Advance(LibraryService.PollInterval);
-        Assert.NotNull(await cover.WaitAsync(Patience, TestContext.Current.CancellationToken));
+        using var lease = await cover.WaitAsync(Patience, TestContext.Current.CancellationToken);
+        using var other = await again.WaitAsync(Patience, TestContext.Current.CancellationToken);
+        Assert.Same(lease?.Bitmap, other?.Bitmap);
+        Assert.NotNull(lease);
         Assert.Equal(1, _covers.BitmapsLoaded);
         Assert.Equal(0, _refusals.CurrentCount); // two refusals, both seen above
     }

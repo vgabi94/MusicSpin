@@ -101,8 +101,9 @@ public sealed class ArtworkTests
         scroller.Offset = default;
         Gui.Settle();
 
+        // Scrolled away, a card lets go of its cover (#134) and asks again when back: the cover service still has it.
         Assert.Contains(first.Album.Id, firstShown);
-        Assert.All(firstShown, id => Assert.Equal(1, covers.Requests[id]));
+        Assert.All(firstShown, id => Assert.InRange(covers.Requests[id], 1, 2));
         Assert.Contains(last.Album.Id, covers.Requests.Keys);
         Assert.Same(cover, AlbumCard(app.Window, first.Title).GetVisualDescendants().OfType<CoverView>().Single().Source);
     }

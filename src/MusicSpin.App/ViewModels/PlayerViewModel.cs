@@ -223,6 +223,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [RelayCommand]
     private Task SetRepeat(RepeatMode mode) => SendAsync("repeat", new { mode = mode.ToString().ToLowerInvariant() });
 
+    /// <summary>
+    /// Tells a running player the volume levelling mode now (<c>normalize</c>: off | track | album | auto). A player that is
+    /// not running is left alone: it takes the saved setting when it starts.
+    /// </summary>
+    public Task SetNormalizationAsync(string mode) => IsConnected ? SendAsync("normalize", new { mode }) : Task.CompletedTask;
+
     [RelayCommand]
     private Task SetShuffle(bool on) => SendAsync("shuffle", new { mode = on ? "on" : "off" });
 
@@ -237,6 +243,19 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         return tracks.Count == 0 ? Task.CompletedTask
             : start is { } from ? SendAsync("queue.set", new { items, start = Math.Clamp(from, 0, tracks.Count - 1), play = true })
             : SendAsync("queue.set", new { items, play = true });
+    }
+
+    /// <summary>
+    /// Plays entry <paramref name="index"/> of <paramref name="tracks"/>, the list the user clicked a row in (an album, a
+    /// playlist, the Tracks page). When the player is already playing that list, it jumps to the track and keeps the queue,
+    /// with what the user queued up next still playing right after it; otherwise the list becomes the queue, as
+    /// <see cref="PlayTracksAsync"/> does (<c>queue.play</c>).
+    /// </summary>
+    public Task PlayFromListAsync(IReadOnlyList<TrackSummary> tracks, int index)
+    {
+        ArgumentNullException.ThrowIfNull(tracks);
+        return tracks.Count == 0 ? Task.CompletedTask
+            : SendAsync("queue.play", new { items = tracks.Select(ToItem).ToArray(), start = Math.Clamp(index, 0, tracks.Count - 1) });
     }
 
     /// <summary>

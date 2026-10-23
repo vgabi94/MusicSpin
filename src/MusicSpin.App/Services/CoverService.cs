@@ -9,8 +9,12 @@ namespace MusicSpin.App.Services;
 /// <summary>Album covers as bitmaps, and each album's accent colour; both cached for the session.</summary>
 public interface ICoverService
 {
-    /// <summary>The album's cover at <paramref name="size"/>, or null when it has none.</summary>
-    Task<Bitmap?> CoverAsync(string albumId, CoverSize size);
+    /// <summary>
+    /// A hold on the album's cover at <paramref name="size"/>, decoded no wider than <paramref name="pixels"/> (rounded up
+    /// to <see cref="CoverService.PixelStep"/>; 0: as cached), or null when it has none. Its bitmap stays whole while the
+    /// lease is held: dispose the lease once nothing shows the bitmap, not before.
+    /// </summary>
+    Task<CoverLease?> CoverAsync(string albumId, CoverSize size, int pixels = 0);
 
     /// <summary>The album's accent base colour (see <see cref="AccentColors.Base"/>), or null when it has no cover.</summary>
     Task<Rgb?> AccentAsync(string albumId);
@@ -30,10 +34,29 @@ public interface ICoverObserver
 }
 
 /// <summary>
-/// Reads covers through Core's cover cache (<see cref="CoverStore"/>, files in the data folder) and keeps the decoded
-/// bitmaps, so scrolling back to an album reuses them. The bitmaps kept are bounded (<see cref="DefaultCacheBytes"/>): past
-/// that the least recently asked for are let go (not disposed: a view may still show one; the GC frees it once none does)
-/// and decoded again if asked for. A failed read is retried the next time it is asked for. While another process (a
+/// A hold on a cover's bitmap (<see cref="ICoverService.CoverAsync"/>): the bitmap isn't disposed while it is held.
+/// Disposing it lets go (once; again does nothing).
+/// </summary>
+public sealed class CoverLease(Bitmap bitmap, Action? release = null) : IDisposable
+{
+    private Action? _release = release ?? (() => { });
+
+    public Bitmap Bitmap { get; } = bitmap;
+
+    /// <summary>Let go already.</summary>
+    public bool IsReleased => Volatile.Read(ref _release) is null;
+
+    public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();
+}
+
+/// <summary>
+/// Reads covers through Core's cover cache (<see cref="CoverStore"/>, files in the data folder), decodes them at the size
+/// asked for (a cover shown 200 pixels across needn't be decoded 720), and keeps the bitmaps, so scrolling back to an
+/// album reuses them. A bitmap is handed out in leases (<see cref="CoverLease"/>): one held is never disposed. Those let
+/// go are kept too, up to <see cref="DefaultCacheBytes"/> with the held ones; past that the least recently asked for are
+/// disposed (their pixels are native memory, which the GC doesn't see) and decoded again if asked for. A bitmap dropped
+/// while held (its cover changed) is disposed when its last lease lets go. Disposing waits for the UI thread's next turn,
+/// after whatever let go has shown what replaces it. A failed read is retried the next time it is asked for. While another process (a
 /// scan, say) holds the library, a request doesn't fail: it is tried again at each of the library's checks
 /// (<see cref="LibraryService.PollInterval"/>) and completes once the holder lets go, so a cover asked for once (a
 /// card's, the player bar's) still shows. When the library changes (<see cref="ILibraryService.Changed"/>) the kept
@@ -41,8 +64,14 @@ public interface ICoverObserver
 /// </summary>
 public sealed class CoverService : ICoverService
 {
-    /// <summary>About 90 Medium covers (2 MB each) or 12 Large ones (16 MB each).</summary>
-    public const long DefaultCacheBytes = 192L * 1024 * 1024;
+    /// <summary>
+    /// About 48 Medium covers as cached (720 px, 2 MB each), three times as many decoded for cards at 100%; a few
+    /// screens of them.
+    /// </summary>
+    public const long DefaultCacheBytes = 96L * 1024 * 1024;
+
+    /// <summary>The widths covers are decoded at go up in steps of this many pixels (so a resize rarely decodes again).</summary>
+    public const int PixelStep = 128;
 
     private readonly DataDirectory _directory;
     private readonly ICoverResizer _resizer;
@@ -53,13 +82,14 @@ public sealed class CoverService : ICoverService
 
     // Guarded by _gate: the entries, the recency list of the decoded covers, their bytes, and the observers.
     private readonly Lock _gate = new();
-    private readonly Dictionary<(string AlbumId, CoverSize Size), Entry<Bitmap?>> _covers = [];
+    private readonly Dictionary<(string AlbumId, CoverSize Size, int Width), Entry<Bitmap?>> _covers = [];
     private readonly Dictionary<string, Entry<Rgb?>> _accents = new(StringComparer.Ordinal);
     private readonly LinkedList<Entry<Bitmap?>> _recent = []; // most recently asked for first; loaded covers only
     private readonly Dictionary<string, List<WeakReference<ICoverObserver>>> _observers = new(StringComparer.Ordinal);
     private long _bytes;
 
     private int _bitmapsLoaded;
+    private int _bitmapsDisposed;
     private int _accentsComputed;
     private int _checking; // 1 while a check of the kept covers runs
     private int _checkAgain; // 1 when the library changed again since that check started
@@ -70,7 +100,7 @@ public sealed class CoverService : ICoverService
     /// <param name="time">The clock of the library's checks (default: the system's).</param>
     /// <param name="lockTimeout">How long each try waits for the library (default <see cref="MusicLibrary.DefaultLockTimeout"/>).</param>
     /// <param name="library">Whose <see cref="ILibraryService.Changed"/> makes the kept covers be looked up again (none: they are kept as read).</param>
-    /// <param name="ui">Where observers are told (none: on the thread that found the change).</param>
+    /// <param name="ui">Where observers are told and bitmaps disposed (none: on the thread that found the change or let go).</param>
     /// <param name="cacheBytes">How many bytes of decoded bitmaps to keep (default <see cref="DefaultCacheBytes"/>).</param>
     public CoverService(DataDirectory directory, ICoverResizer resizer, TimeProvider? time = null, TimeSpan? lockTimeout = null,
         ILibraryService? library = null, IUiDispatcher? ui = null, long? cacheBytes = null)
@@ -92,10 +122,15 @@ public sealed class CoverService : ICoverService
     /// <summary>Bitmaps decoded so far (diagnostics and tests: a cached cover is not decoded again).</summary>
     public int BitmapsLoaded => Volatile.Read(ref _bitmapsLoaded);
 
+    /// <summary>Bitmaps disposed so far (tests: the ones let go past the cache size, and the dropped ones once let go).</summary>
+    public int BitmapsDisposed => Volatile.Read(ref _bitmapsDisposed);
+
     /// <summary>Accent colours computed so far (once per album, until its cover changes).</summary>
     public int AccentsComputed => Volatile.Read(ref _accentsComputed);
 
-    /// <summary>The bytes of the decoded bitmaps kept now (at most the cache size, unless one cover alone is bigger).</summary>
+    /// <summary>
+    /// The bytes of the decoded bitmaps kept now: at most the cache size, unless those held (shown) alone are more.
+    /// </summary>
     public long CachedBytes
     {
         get
@@ -116,10 +151,18 @@ public sealed class CoverService : ICoverService
     /// </summary>
     internal Task Checked { get; private set; } = Task.CompletedTask;
 
-    public Task<Bitmap?> CoverAsync(string albumId, CoverSize size)
+    /// <summary>
+    /// The width a cover at <paramref name="size"/> is decoded at for <paramref name="pixels"/>: rounded up to
+    /// <see cref="PixelStep"/>, at most the size's (0 or less: the size's).
+    /// </summary>
+    public static int Width(CoverSize size, int pixels) =>
+        pixels <= 0 ? size.Pixels() : Math.Min(size.Pixels(), (int)Math.Ceiling(pixels / (double)PixelStep) * PixelStep);
+
+    public Task<CoverLease?> CoverAsync(string albumId, CoverSize size, int pixels = 0)
     {
         ArgumentException.ThrowIfNullOrEmpty(albumId);
-        var key = (albumId, size);
+        var key = (albumId, size, Width(size, pixels));
+        Entry<Bitmap?> entry;
         lock (_gate)
         {
             if (_covers.TryGetValue(key, out var kept) && !kept.Task.IsFaulted)
@@ -130,13 +173,114 @@ public sealed class CoverService : ICoverService
                     _recent.AddFirst(node);
                 }
 
-                return kept.Task;
+                entry = kept;
+            }
+            else
+            {
+                entry = new Entry<Bitmap?> { Changes = Volatile.Read(ref _changes) };
+                _covers[key] = entry;
+                entry.Task = LoadCoverAsync(key, entry);
             }
 
-            var entry = new Entry<Bitmap?> { Changes = Volatile.Read(ref _changes) };
-            _covers[key] = entry;
-            entry.Task = LoadCoverAsync(key, entry);
-            return entry.Task;
+            entry.Holds++; // held from the asking: not let go while it loads
+        }
+
+        return LeaseAsync(entry);
+    }
+
+    /// <summary>A lease on <paramref name="entry"/>'s bitmap once loaded (at once when it is), or none, letting go of the hold.</summary>
+    private async Task<CoverLease?> LeaseAsync(Entry<Bitmap?> entry)
+    {
+        Bitmap? bitmap;
+        try
+        {
+            bitmap = await entry.Task.ConfigureAwait(false);
+        }
+        catch
+        {
+            Release(entry);
+            throw;
+        }
+
+        if (bitmap is null)
+        {
+            Release(entry);
+            return null;
+        }
+
+        return new CoverLease(bitmap, () => Release(entry));
+    }
+
+    /// <summary>
+    /// One hold on <paramref name="entry"/> let go. Unheld, a bitmap the cache no longer keeps (dropped, or not admitted)
+    /// is disposed; one it keeps may now be what goes for the cache's size.
+    /// </summary>
+    private void Release(Entry<Bitmap?> entry)
+    {
+        List<Bitmap> disposed = [];
+        lock (_gate)
+        {
+            if (--entry.Holds > 0)
+            {
+                return;
+            }
+
+            if (entry.Node is null)
+            {
+                if (entry.Loaded && entry.Value is { } bitmap)
+                {
+                    entry.Value = null;
+                    disposed.Add(bitmap);
+                }
+            }
+            else
+            {
+                Trim(disposed);
+            }
+        }
+
+        Dispose(disposed);
+    }
+
+    /// <summary>Lets go of the least recently asked for bitmaps nobody holds, past the cache size (under <see cref="_gate"/>).</summary>
+    private void Trim(List<Bitmap> disposed)
+    {
+        for (var node = _recent.Last; node is not null && _bytes > _cacheBytes;)
+        {
+            var newer = node.Previous;
+            if (node.Value.Holds == 0)
+            {
+                Drop(node.Value, disposed);
+            }
+
+            node = newer;
+        }
+    }
+
+    /// <summary>Disposes bitmaps let go, on the UI thread's next turn: whatever showed one shows what replaced it by then.</summary>
+    private void Dispose(List<Bitmap> bitmaps)
+    {
+        if (bitmaps.Count == 0)
+        {
+            return;
+        }
+
+        void Now()
+        {
+            foreach (var bitmap in bitmaps)
+            {
+                bitmap.Dispose();
+                Interlocked.Increment(ref _bitmapsDisposed);
+            }
+        }
+
+        if (_ui is null)
+        {
+            Now();
+        }
+        else
+        {
+            _ui.Post(Now);
         }
     }
 
@@ -173,7 +317,7 @@ public sealed class CoverService : ICoverService
         }
     }
 
-    private async Task<Bitmap?> LoadCoverAsync((string AlbumId, CoverSize Size) key, Entry<Bitmap?> entry)
+    private async Task<Bitmap?> LoadCoverAsync((string AlbumId, CoverSize Size, int Width) key, Entry<Bitmap?> entry)
     {
         try
         {
@@ -186,7 +330,7 @@ public sealed class CoverService : ICoverService
                 }
 
                 Interlocked.Increment(ref _bitmapsLoaded);
-                return (new Bitmap(path), path);
+                return (Decode(path, key.Width), path);
             }).ConfigureAwait(false);
             Admit(key, entry, bitmap, path);
             CheckIfChangedSince(entry);
@@ -242,31 +386,56 @@ public sealed class CoverService : ICoverService
         }
     }
 
-    /// <summary>Records a loaded cover as the most recent and lets go of the least recent ones past the cache size.</summary>
-    private void Admit((string AlbumId, CoverSize Size) key, Entry<Bitmap?> entry, Bitmap? bitmap, string? path)
+    /// <summary>
+    /// The image at <paramref name="path"/>, decoded <paramref name="width"/> pixels across when it is wider (covers are
+    /// square: its height follows), else as it is.
+    /// </summary>
+    private static Bitmap Decode(string path, int width)
     {
+        bool wider;
+        using (var codec = SKCodec.Create(path))
+        {
+            wider = codec is not null && codec.Info.Width > width; // else no wider, or not an image Skia knows (Bitmap says why)
+        }
+
+        if (!wider)
+        {
+            return new Bitmap(path);
+        }
+
+        using var stream = File.OpenRead(path);
+        return Bitmap.DecodeToWidth(stream, width, BitmapInterpolationMode.HighQuality);
+    }
+
+    /// <summary>Records a loaded cover as the most recent and lets go of the least recent ones past the cache size.</summary>
+    private void Admit((string AlbumId, CoverSize Size, int Width) key, Entry<Bitmap?> entry, Bitmap? bitmap, string? path)
+    {
+        List<Bitmap> disposed = [];
         lock (_gate)
         {
             entry.Path = path;
+            entry.Value = bitmap;
             entry.Loaded = true;
             if (!_covers.TryGetValue(key, out var current) || !ReferenceEquals(current, entry))
             {
-                return; // dropped while it loaded (its cover changed): the caller still gets it, the cache doesn't keep it
+                return; // dropped while it loaded (its cover changed): the callers still get it, disposed once they let go
             }
 
             entry.Bytes = bitmap is null ? 0 : (long)bitmap.PixelSize.Width * bitmap.PixelSize.Height * 4;
             entry.Key = key;
             entry.Node = _recent.AddFirst(entry);
             _bytes += entry.Bytes;
-            while (_bytes > _cacheBytes && _recent.Last is { } oldest && !ReferenceEquals(oldest.Value, entry))
-            {
-                Drop(oldest.Value);
-            }
+            Trim(disposed); // not this one: those who asked hold it
         }
+
+        Dispose(disposed);
     }
 
-    /// <summary>Removes a loaded cover from the cache (under <see cref="_gate"/>).</summary>
-    private void Drop(Entry<Bitmap?> entry)
+    /// <summary>
+    /// Removes a loaded cover from the cache (under <see cref="_gate"/>): its bitmap is disposed now if nobody holds it,
+    /// else when the last hold lets go.
+    /// </summary>
+    private void Drop(Entry<Bitmap?> entry, List<Bitmap> disposed)
     {
         if (entry.Node is { } node)
         {
@@ -278,6 +447,12 @@ public sealed class CoverService : ICoverService
         if (entry.Key is { } key && _covers.TryGetValue(key, out var current) && ReferenceEquals(current, entry))
         {
             _covers.Remove(key);
+        }
+
+        if (entry.Holds == 0 && entry.Value is { } bitmap)
+        {
+            entry.Value = null;
+            disposed.Add(bitmap);
         }
     }
 
@@ -341,7 +516,7 @@ public sealed class CoverService : ICoverService
 
     private async Task CheckOnceAsync()
     {
-        List<((string AlbumId, CoverSize Size) Key, Entry<Bitmap?> Entry)> covers;
+        List<((string AlbumId, CoverSize Size, int Width) Key, Entry<Bitmap?> Entry)> covers;
         List<(string AlbumId, Entry<Rgb?> Entry)> accents;
         lock (_gate)
         {
@@ -372,11 +547,12 @@ public sealed class CoverService : ICoverService
 
         var albums = new HashSet<string>(StringComparer.Ordinal);
         var told = new List<ICoverObserver>();
+        List<Bitmap> disposed = [];
         lock (_gate)
         {
             foreach (var (key, entry) in changed.Covers)
             {
-                Drop(entry);
+                Drop(entry, disposed);
                 albums.Add(key.AlbumId);
             }
 
@@ -404,6 +580,7 @@ public sealed class CoverService : ICoverService
             }
         }
 
+        Dispose(disposed);
         if (told.Count > 0)
         {
             void Tell() => told.ForEach(o => o.CoverChanged());
@@ -475,7 +652,13 @@ public sealed class CoverService : ICoverService
 
         public string? Path { get; set; }
 
-        public (string AlbumId, CoverSize Size)? Key { get; set; }
+        public (string AlbumId, CoverSize Size, int Width)? Key { get; set; }
+
+        /// <summary>What it read, until disposed (covers).</summary>
+        public T? Value { get; set; }
+
+        /// <summary>Its leases not let go yet, and the requests still waiting for it (covers).</summary>
+        public int Holds { get; set; }
 
         public long Bytes { get; set; }
 
