@@ -438,10 +438,21 @@ internal sealed class StubLibrary : ILibraryService
     }
 }
 
-/// <summary>Covers from a function, counting requests per album.</summary>
+/// <summary>Covers from a function, counting requests per album and the leases not let go.</summary>
 internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<string, Rgb?>? accent = null) : ICoverService
 {
+    private int _held;
+
     public ConcurrentDictionary<string, int> Requests { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>The pixels each request asked for, in order.</summary>
+    public ConcurrentQueue<(string AlbumId, CoverSize Size, int Pixels)> Asked { get; } = new();
+
+    /// <summary>Leases handed out and not let go yet.</summary>
+    public int Held => Volatile.Read(ref _held);
+
+    /// <summary>The leases not let go yet: whose cover, at which size.</summary>
+    public ConcurrentDictionary<CoverLease, (string AlbumId, CoverSize Size)> Leases { get; } = new();
 
     /// <summary>An album's covers wait for its gate (a cover service waiting out a busy library).</summary>
     public ConcurrentDictionary<string, TaskCompletionSource<Bitmap?>> Gates { get; } = new(StringComparer.Ordinal);
@@ -452,20 +463,42 @@ internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<strin
     /// <summary>One size of an album's cover waits for its gate (the other sizes don't).</summary>
     public ConcurrentDictionary<(string AlbumId, CoverSize Size), TaskCompletionSource<Bitmap?>> SizeGates { get; } = new();
 
-    public Task<Bitmap?> CoverAsync(string albumId, CoverSize size)
+    public Task<CoverLease?> CoverAsync(string albumId, CoverSize size, int pixels = 0)
     {
         Requests.AddOrUpdate(albumId, 1, (_, n) => n + 1);
+        Asked.Enqueue((albumId, size, pixels));
         if (Failures.TryGetValue((albumId, size), out var failure))
         {
-            return Task.FromException<Bitmap?>(failure);
+            return Task.FromException<CoverLease?>(failure);
         }
 
         if (SizeGates.TryGetValue((albumId, size), out var sizeGate))
         {
-            return sizeGate.Task;
+            return LeaseAsync(albumId, size, sizeGate.Task);
         }
 
-        return Gates.TryGetValue(albumId, out var gate) ? gate.Task : Task.FromResult(cover?.Invoke(albumId));
+        return LeaseAsync(albumId, size, Gates.TryGetValue(albumId, out var gate) ? gate.Task : Task.FromResult(cover?.Invoke(albumId)));
+    }
+
+    private async Task<CoverLease?> LeaseAsync(string albumId, CoverSize size, Task<Bitmap?> read)
+    {
+        // On the caller's thread, so a gate opened on the UI thread leases before Gui.Settle() returns. The real service
+        // may lease off the UI thread, which is safe (CoverLease.Dispose is atomic, Release locks, bitmaps are disposed
+        // on the UI thread); the tests don't cover that.
+        if (await read.ConfigureAwait(true) is not { } bitmap)
+        {
+            return null;
+        }
+
+        Interlocked.Increment(ref _held);
+        CoverLease? lease = null;
+        lease = new CoverLease(bitmap, () =>
+        {
+            Interlocked.Decrement(ref _held);
+            Leases.TryRemove(lease!, out _);
+        });
+        Leases[lease] = (albumId, size);
+        return lease;
     }
 
     public Task<Rgb?> AccentAsync(string albumId) => Task.FromResult(accent?.Invoke(albumId));
