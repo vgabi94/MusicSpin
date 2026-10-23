@@ -181,6 +181,41 @@ Details:
 - **Unplayable entries** are skipped as usual. Under `repeat all`, `next` tries every other entry once and comes back around to the current one; if nothing is playable it fails (exit 3) instead of looping.
 - `play --foreground --shuffle` (no background player) shuffles the list once; there is no repeat in foreground mode.
 
+## Volume levelling (ReplayGain / R128)
+
+Tracks are played at an even loudness, so a quiet album and a loud one do not need the volume knob in between. This is **on by default** (mode `auto`) and is one setting: `music-spin normalize off` (or the **Volume levelling** switch in Settings › Audio) leaves the samples untouched.
+
+| Mode | The gain of a track |
+|---|---|
+| `auto` (default) | The album's gain while an album plays in order from the queue; the track's own gain for shuffle, radio and mixed queues |
+| `track` | Every track to the target level, whatever it is played with |
+| `album` | The album's gain, so an album keeps its internal dynamics; a track without an album gain uses its own |
+| `off` | No gain at all. The samples reach the output exactly as decoded (bit-exact; only the volume setting applies) |
+
+Where the gain comes from, in this order:
+
+1. **Tags.** ReplayGain `REPLAYGAIN_TRACK_GAIN` / `_ALBUM_GAIN` / `_PEAK` (as the tag reader finds them: ID3, Vorbis comments, APE, MP4), and for Opus the `R128_TRACK_GAIN` / `R128_ALBUM_GAIN` tags (a Q7.8 number relative to -23 LUFS). Tag gains are relative to the ReplayGain 2.0 reference of -18 LUFS and are moved to the target level. Tags are read by the scan, so a tagged track needs nothing else.
+2. **Analysis.** A track without a track gain is measured once: integrated loudness (EBU R128 / ITU-R BS.1770-4: K-weighted, 400 ms blocks, absolute gate -70 LUFS, relative gate -10 LU) and the true peak (oversampled 4x, 2x from 96 kHz, not above 192 kHz). The gain is `target - loudness`. A silent track is left unchanged.
+3. Until a track's gain is known it plays **unchanged**; `status` then says `unknown`.
+
+Analysis never delays playback. The current and next tracks are looked up in the library when they are queued; an untagged one is measured by a low-priority background worker (one file at a time, the playing track and the next ones first; a track that is no longer queued is dropped). When the result arrives the playing track's gain **ramps over 5 ms** to the new value (no click), and later tracks get their gain before they start, also across a gapless boundary. The result is kept in `library.db` (`LoudnessLufs`, `LoudnessTruePeak`) with the file's size and modification time: a file that changed is measured again. A failed analysis (unreadable file) is not retried in the same session.
+
+Settings (`settings.json`, changed by `music-spin normalize`, the MCP `normalize` tool or the app switch):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `normalization` | `auto` | `off`, `track`, `album` or `auto` |
+| `normalizationTargetLufs` | `-18` | The level tracks are brought to, -30 to -8 LUFS. -18 is ReplayGain 2.0's reference; EBU R128 broadcast uses -23 (quieter, more headroom) |
+| `normalizationPreampDb` | `0` | Added to every gain, -12 to +12 dB |
+
+**Clipping prevention.** A gain never lifts a track's peak above full scale: it is lowered to `-20·log10(peak)` (the peak from the tags, else the analysed true peak) and `status` reports `limited: true`. A tagged track without a peak value is not boosted at all. This is a gain limit, not a dynamic limiter, so the music's dynamics are not changed. Gains are also limited to +20 dB and -40 dB.
+
+**Bit-exactness.** With levelling off, or a gain under 0.005 dB, no sample is touched. Levelling happens before the volume stage and after the spectrum tap. The shared-mode output stays bit-exact otherwise as before; [exclusive/bit-perfect](#hi-res-and-bit-perfect) users who want an untouched stream should set levelling to `off`.
+
+`status` (JSON `normalization`: `mode`, `targetLufs`, `preampDb`, `gainDb`, `source` = `track-tag`, `album-tag`, `analysis`, `unknown` or `off`, `limited`) and the text line `Levelling: ...` show what the current track gets.
+
+Limitations: the gain of a file that is changed while MusicSpin runs is used until the next session's lookup; analysis of very long files (DJ mixes) takes as long as decoding them; a very quiet track is boosted by at most 20 dB.
+
 ## Radio
 
 `music-spin radio` (MCP tool `radio`, protocol command `radio`) plays the library endlessly in random order. Filters narrow the **pool** of tracks it picks from; see the [CLI reference](cli-reference.md#radio) for the options and their matching rules (values of one filter are ORed, different filters ANDed, and any `--exclude-*` match leaves a track out even when an include matches it).

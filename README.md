@@ -15,6 +15,7 @@ An open-source (MIT), cross-platform **desktop music player for hi-res audio**, 
 - **Playlists:** saved in the library (case-insensitive unique names, entries keep track id + path, missing files kept and flagged), M3U/M3U8/PLS import (encodings, relative/Windows/`file://` paths) and export, `play --playlist`, `queue save`. The player's queue persists across restarts (restored paused).
 - **Favorites:** heart library tracks (`favorite add`, `--current` for the one playing), list them newest first (`favorites`), filter with `tracks --favorites`, play them (`play --favorites`) or run a favorites radio. Favorites follow their tracks through rescans, moves and `library relocate`.
 - **Radio:** `music-spin radio` plays the whole library (or the part you filter by artist, album, genre, year/range, format, hi-res or search, minus anything you `--exclude-*`) endlessly in random order. No track repeats within the last 100, the same artist or album is not played twice in a row when there is a choice, `prev` goes back through what played, gapless between same-format tracks, and the station survives a player restart. See [Playback → Radio](docs/playback.md#radio).
+- **Volume levelling:** ReplayGain / R128 tags, or a background EBU R128 analysis for untagged files, bring tracks to one loudness (track, album or auto mode; clipping-safe; on by default, one switch turns it off, bit-exact when off).
 - **Repeat and shuffle:** repeat off/one/all and a shuffle toggle on the running queue (the current track keeps playing; `off` restores the original order; reproducible with `--seed`), saved as defaults.
 - **Agent-friendly:** `--json` on every command (one JSON object per line, errors included), stable exit codes, an **MCP server** (`music-spin mcp`), and a JSON-lines `serve` mode.
 - **Portable:** one self-contained executable per platform. All data lives in the [data folder](docs/getting-started.md#data-folder): by default `.usrdata/` next to it. `--data-dir` or `MUSICSPIN_DATA_DIR` can point it elsewhere (optional).
@@ -91,7 +92,7 @@ Every command and option, with the exit code table, is in the [CLI reference](do
 }
 ```
 
-40 tools (`play`, `pause`, `next`, `seek`, `volume`, `status`, `queue_add`, `repeat`, `shuffle`, `search`, `tracks`, `albums`, `favorite_add`, `favorites`, `playlist_*`, `library_relocate`, ...) drive the same background player and library as the CLI. Setup for Claude Desktop, Cursor, Claude Code and Grok CLI: [MCP server](docs/mcp.md).
+41 tools (`play`, `pause`, `next`, `seek`, `volume`, `status`, `queue_add`, `repeat`, `shuffle`, `search`, `tracks`, `albums`, `favorite_add`, `favorites`, `playlist_*`, `library_relocate`, ...) drive the same background player and library as the CLI. Setup for Claude Desktop, Cursor, Claude Code and Grok CLI: [MCP server](docs/mcp.md).
 
 ## Build and test
 
@@ -114,7 +115,7 @@ Projects: `MusicSpin.Core` (engine, no UI), `MusicSpin.App` (Avalonia, `MusicSpi
 | [Getting started](docs/getting-started.md) | portable layout, the data folder (`.usrdata`), FFmpeg, first commands |
 | [CLI reference](docs/cli-reference.md) | every command and option, `--json`, exit codes |
 | [Music library](docs/library.md) | scanning, change detection, renames/moves and relocate, stored metadata, search/filter semantics |
-| [Playback](docs/playback.md) | formats, bit-perfect/exclusive mode, DSD, background player, queue, repeat and shuffle |
+| [Playback](docs/playback.md) | formats, bit-perfect/exclusive mode, DSD, background player, queue, repeat and shuffle, volume levelling |
 | [AI agents](docs/ai-agents.md) | JSON conventions, background-player workflow, `serve` protocol |
 | [MCP server](docs/mcp.md) | transport, client configuration, tools, errors |
 | [Diagnostics](docs/diagnostics.md) | `doctor`, `devices`, logs, common problems |

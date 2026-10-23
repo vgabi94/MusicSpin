@@ -13,6 +13,7 @@ MusicSpin.slnx
 │   │   ├── Decoding/FFmpeg/   FFmpegRuntime (loads the shared libraries), FFmpegAudioDecoder, FFmpegDecoderFactory
 │   │   ├── Output/      MiniAudio/ (miniaudio device output via native/msaudio, WASAPI exclusive), NullAudioOutput (no sound card)
 │   │   ├── Hosting/     AppPaths: resolves the data folder (default .usrdata)
+│   │   ├── Normalization/ Volume levelling: ReplayGain/R128 tags, EBU R128 meter and analyzer, gain calculation, background service
 │   │   ├── Settings/    AppSettings + SettingsStore (settings.json)
 │   │   └── Library/     MusicLibrary facade, LiteDB store, scanner, tag reader, queries, watcher
 │   ├── MusicSpin.App    Avalonia 12 desktop app, executable `MusicSpin` (see Desktop app below)

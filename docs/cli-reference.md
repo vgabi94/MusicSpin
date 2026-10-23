@@ -18,7 +18,7 @@ Every command accepts these, before or after the subcommand:
 | Area | Commands |
 |---|---|
 | Files and environment | [`info`](#info) · [`formats`](#formats) · [`devices`](#devices) · [`doctor`](#doctor) |
-| Playback | [`play`](#play) · [`radio`](#radio) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
+| Playback | [`play`](#play) · [`radio`](#radio) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`normalize`](#normalize) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
 | Library | [`library add/remove/folders/scan/relocate/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) · [`favorite add/remove`](#favorite--favorites) · [`favorites`](#favorite--favorites) |
 | Playlists | [`playlist list/show/create/rename/delete/add/remove/move/clear/import/export`](#playlist) · [`queue save`](#queue) |
 | Integration | [`serve`](#serve) · [`mcp`](#mcp) |
@@ -201,6 +201,18 @@ Without a mode: show the status (nothing changes). Aliases: `none`/`no` = off, `
 
 Without a mode: show the status. Aliases: `true`/`yes`/`1`, `false`/`no`/`0`. Unknown mode: exit 2. Needs a running player (exit 13). With an empty queue it only sets the mode; new queues and added entries follow it (see [Playback](playback.md#shuffle-and-repeat)). Saved as the default in `settings.json` (`shuffle`).
 
+## normalize
+
+`music-spin normalize [off|track|album|auto] [--target <lufs>] [--preamp <db>]`
+
+Volume levelling (ReplayGain / EBU R128, see [Playback → Volume levelling](playback.md#volume-levelling-replaygain--r128)). On by default (`auto`).
+
+- `off`: no gain; the samples are not touched.
+- `track`: every track to the target level. `album`: the album's gain (a track without one uses its own). `auto`: album gain for an album played in order, track gain for shuffle and radio.
+- `--target <lufs>`: the level, -30 to -8 (default -18). `--preamp <db>`: added to every gain, -12 to +12 (default 0). Either can be given without a mode.
+
+Without arguments: show the status (`normalization`: mode, target, pre-amp, the current track's gain and where it came from). Case-insensitive. An unknown mode or a value out of range is exit 2 (checked before contacting the player). Needs a running player (exit 13). Saved as the default in `settings.json` (`normalization`, `normalizationTargetLufs`, `normalizationPreampDb`); a failure to save is a warning. Tracks without tags are measured in the background; until then they play unchanged.
+
 ## status
 
 State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, duration, volume, repeat mode, shuffle (and its seed), queue index/length, the queue item, output backend/device, exclusive mode, skipped files, and `queueMode` (`queue` or `radio`) with `radio` (filters, description, pool size) while a radio station plays.
@@ -227,7 +239,7 @@ The queue is persisted in `queue.json` in the data folder and restored (paused) 
 | `player quit`, `player stop` | Same as `quit` |
 | `player run` | Hidden. The background player process itself (started by `play`/`queue add`; not meant to be called by hand) |
 
-Control commands (`pause` … `quit`, `repeat`, `shuffle`, `queue save`) **never start** a player. Without one they exit **13 `player_not_running`**. The one exception is `resume` when a saved queue exists.
+Control commands (`pause` … `quit`, `repeat`, `shuffle`, `normalize`, `queue save`) **never start** a player. Without one they exit **13 `player_not_running`**. The one exception is `resume` when a saved queue exists.
 
 ---
 
