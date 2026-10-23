@@ -12,17 +12,48 @@ using MusicSpin.Core.Playback;
 namespace MusicSpin.App.ViewModels;
 
 /// <summary>
-/// An album's cover at one size, and its colour, each read on first use (only shown items ask), then kept by
-/// <see cref="ICoverService"/>. When the service finds the album's cover changed (a rescan), both are read again; the
-/// old ones show until the new ones arrive.
+/// An album's cover at one size, and its colour, each read on first use (only shown items ask). The cover is held
+/// (<see cref="CoverLease"/>) while something watches the art, a binding of a shown item: when the last one lets go, so
+/// does the art, and <see cref="ICoverService"/> keeps the cover a while for scrolling back; it is asked for again when
+/// next shown. A view model holding thousands of albums so pins none of their pixels. When the service finds the album's
+/// cover changed (a rescan), both are read again; the old ones show until the new ones arrive.
 /// </summary>
-public sealed class AlbumArt(string albumId, CoverSize size, ICoverService covers) : ObservableObject, ICoverObserver
+public sealed class AlbumArt(string albumId, CoverSize size, ICoverService covers) : INotifyPropertyChanged, ICoverObserver
 {
+    private PropertyChangedEventHandler? _changed;
+    private int _watchers;
+    private CoverLease? _lease;
     private bool _requested;
     private bool _accentRequested;
     private bool _observing;
     private int _coverReads; // the latest read wins: an older one finishing later doesn't overwrite it
     private int _accentReads;
+
+    /// <summary>
+    /// Raised as the cover or colour arrives. Its handlers are the art's watchers: the cover is let go when the last one
+    /// is removed.
+    /// </summary>
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add
+        {
+            _changed += value;
+            if (value is not null)
+            {
+                _watchers++;
+            }
+        }
+
+        remove
+        {
+            var before = _changed;
+            _changed -= value;
+            if (!ReferenceEquals(before, _changed) && --_watchers == 0)
+            {
+                LetGo();
+            }
+        }
+    }
 
     public Bitmap? Cover
     {
@@ -35,10 +66,26 @@ public sealed class AlbumArt(string albumId, CoverSize size, ICoverService cover
                 _ = LoadAsync();
             }
 
-            return field;
+            return _lease?.Bitmap;
         }
+    }
 
-        private set => SetProperty(ref field, value);
+    /// <summary>
+    /// The pixels across the cover shows at, at most (0: as cached): it is decoded no larger. One that needs another
+    /// decoding reads it again, when asked for already.
+    /// </summary>
+    public int Pixels
+    {
+        get;
+        set
+        {
+            var redecode = CoverService.Width(size, value) != CoverService.Width(size, field);
+            field = value;
+            if (redecode && _requested)
+            {
+                _ = LoadAsync();
+            }
+        }
     }
 
     /// <summary>The album's colour (a shelf sleeve's spine); null without a cover.</summary>
@@ -56,8 +103,24 @@ public sealed class AlbumArt(string albumId, CoverSize size, ICoverService cover
             return field;
         }
 
-        private set => SetProperty(ref field, value);
+        private set
+        {
+            if (field != value)
+            {
+                field = value;
+                _changed?.Invoke(this, new PropertyChangedEventArgs(nameof(Accent)));
+            }
+        }
     }
+
+    /// <summary>
+    /// The cover held now, without asking for it: for code, not bindings (a drag's ghost copies what its item shows). A
+    /// read of <see cref="Cover"/> asks for it, and only a watcher letting go lets go of it.
+    /// </summary>
+    public Bitmap? Loaded => _lease?.Bitmap;
+
+    /// <summary>Holding its cover now (tests: only while watched).</summary>
+    internal bool IsHolding => _lease is not null;
 
     void ICoverObserver.CoverChanged()
     {
@@ -89,18 +152,40 @@ public sealed class AlbumArt(string albumId, CoverSize size, ICoverService cover
         }
 
         var read = ++_coverReads;
+        CoverLease? lease;
         try
         {
-            var cover = await covers.CoverAsync(albumId, size).ConfigureAwait(true);
-            if (read == _coverReads)
-            {
-                Cover = cover;
-            }
+            lease = await covers.CoverAsync(albumId, size, Pixels).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is MusicSpinException or IOException or UnauthorizedAccessException)
         {
-            // no cover: the placeholder stays
+            return; // no cover: the placeholder (or the one before) stays
         }
+
+        if (read != _coverReads)
+        {
+            lease?.Dispose(); // a later read's, or let go meanwhile
+            return;
+        }
+
+        var old = _lease;
+        _lease = lease;
+        if (!ReferenceEquals(lease?.Bitmap, old?.Bitmap))
+        {
+            _changed?.Invoke(this, new PropertyChangedEventArgs(nameof(Cover)));
+        }
+
+        old?.Dispose(); // after the new one shows
+    }
+
+    /// <summary>Nothing watches any more: the cover is let go, and read again when next asked for.</summary>
+    private void LetGo()
+    {
+        _requested = false;
+        _coverReads++; // one on its way is let go as it comes
+        var old = _lease;
+        _lease = null;
+        old?.Dispose();
     }
 
     private async Task LoadAccentAsync()
@@ -323,6 +408,28 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial int PerBoard { get; set; } = 1;
 
+    /// <summary>
+    /// The most pixels across the page has shown a cover at (the view reports it from its layout and the screen's
+    /// scaling): covers are decoded no larger. It only grows, so a smaller window doesn't decode them all again.
+    /// </summary>
+    public int CoverPixels
+    {
+        get;
+        set
+        {
+            if (value <= field)
+            {
+                return;
+            }
+
+            field = value;
+            foreach (var album in _all)
+            {
+                album.Art.Pixels = value;
+            }
+        }
+    }
+
     /// <summary>The albums shown, in order.</summary>
     [ObservableProperty]
     public partial IReadOnlyList<AlbumItemViewModel> Albums { get; private set; } = [];
@@ -365,7 +472,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     public override async Task LoadAsync()
     {
         var albums = await _library.AlbumsAsync().ConfigureAwait(true);
-        var all = AlbumItems.Reuse(albums, _all, a => new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Medium, _covers)));
+        var all = AlbumItems.Reuse(albums, _all, a => new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Medium, _covers) { Pixels = CoverPixels }));
         var same = _loaded && all.SequenceEqual(_all);
         _all = all;
         _loaded = true;

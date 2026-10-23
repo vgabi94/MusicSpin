@@ -271,7 +271,9 @@ internal sealed class LibraryDrag
         }
 
         _ghost.IsVisible = false;
+        var ghost = _ghost.DataContext as DragGhostViewModel;
         _ghost.DataContext = null;
+        ghost?.Dispose(); // its copy of the cover, now nothing shows it
     }
 
     private bool IsOverDrawer(Point at)

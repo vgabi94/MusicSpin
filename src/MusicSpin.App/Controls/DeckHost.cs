@@ -50,6 +50,9 @@ public sealed class DeckHost : Control
     public static readonly DirectProperty<DeckHost, BitmapCache> SoftCacheProperty =
         AvaloniaProperty.RegisterDirect<DeckHost, BitmapCache>(nameof(SoftCache), h => h.SoftCache);
 
+    public static readonly DirectProperty<DeckHost, int> CoverPixelsProperty =
+        AvaloniaProperty.RegisterDirect<DeckHost, int>(nameof(CoverPixels), h => h.CoverPixels);
+
     /// <summary>The steps <see cref="SoftCache"/>'s scale moves in: a new image only when the deck has grown or shrunk by one.</summary>
     public const double SoftCacheStep = 0.125;
 
@@ -160,6 +163,16 @@ public sealed class DeckHost : Control
         private set => SetAndRaise(SoftCacheProperty, ref field, value);
     } = new();
 
+    /// <summary>
+    /// The screen's pixels across the platter (the record and its label are no wider): what its cover need be decoded at
+    /// (Views/NowPlayingView tells Now Playing's view model).
+    /// </summary>
+    public int CoverPixels
+    {
+        get;
+        private set => SetAndRaise(CoverPixelsProperty, ref field, value);
+    }
+
     protected override void OnAttachedToLogicalTree(LogicalTreeAttachmentEventArgs e)
     {
         base.OnAttachedToLogicalTree(e);
@@ -171,6 +184,7 @@ public sealed class DeckHost : Control
         base.OnAttachedToVisualTree(e);
         _topLevel = TopLevel.GetTopLevel(this);
         _windowSize = _topLevel?.GetObservable(TopLevel.ClientSizeProperty).Subscribe(new AnonymousObserver<Size>(_ => Scale()));
+        _topLevel?.ScalingChanged += OnScalingChanged;
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -178,8 +192,11 @@ public sealed class DeckHost : Control
         base.OnDetachedFromVisualTree(e);
         _windowSize?.Dispose();
         _windowSize = null;
+        _topLevel?.ScalingChanged -= OnScalingChanged;
         _topLevel = null;
     }
+
+    private void OnScalingChanged(object? sender, EventArgs e) => Scale();
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -232,6 +249,7 @@ public sealed class DeckHost : Control
         var size = Math.Min(top.ClientSize.Height * HeightShare, top.ClientSize.Width * WidthShare);
         var scale = size / DeckView.BaseSize;
         _scaler.LayoutTransform = new ScaleTransform(scale, scale);
+        CoverPixels = (int)Math.Ceiling(size * top.RenderScaling);
 
         var pixels = scale * (Deck?.UnitScale ?? 1);
         var at = Math.Max(1, Math.Ceiling((pixels / SoftCacheStep) - SoftCacheSlack)) * SoftCacheStep;

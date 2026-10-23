@@ -90,9 +90,11 @@ public sealed partial class TurntableSceneViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     public partial Rect Landing { get; private set; }
 
-    /// <summary>The album's cover: the travelling sleeve and the record's label.</summary>
+    /// <summary>The album's cover: the travelling sleeve and the record's label. Held while the scene runs.</summary>
     [ObservableProperty]
     public partial Bitmap? Cover { get; private set; }
+
+    private CoverLease? _cover;
 
     /// <summary>Plays <paramref name="albumId"/> from its first track, with the scene when it can.</summary>
     public Task PlayAlbumAsync(string albumId)
@@ -108,46 +110,63 @@ public sealed partial class TurntableSceneViewModel : ObservableObject, IDisposa
         return _notices.GuardAsync(async () =>
         {
             var tracks = _library.AlbumTracksAsync(albumId);
-            var cover = _covers.CoverAsync(albumId, CoverSize.Large);
-            await Task.WhenAll(tracks, cover).ConfigureAwait(true);
-            if (tracks.Result.Count == 0)
+            var cover = _covers.CoverAsync(albumId, CoverSize.Large, _nowPlaying.CoverPixels); // as Now Playing's, where it lands
+            try
             {
-                return;
+                await Task.WhenAll(tracks, cover).ConfigureAwait(true);
+                await FlyOrPlayAsync(albumId, tracks.Result, cover.Result).ConfigureAwait(true);
             }
-
-            if (IsRunning)
+            finally
             {
-                _next = albumId;
-                return;
+                if (cover.IsCompletedSuccessfully && !ReferenceEquals(cover.Result, _cover))
+                {
+                    cover.Result?.Dispose(); // not flown: nothing shows it
+                }
             }
-
-            // Now Playing open covers the page: nothing to fly from.
-            var multiplier = MotionModes.Multiplier(_settings.Motion);
-            if (multiplier <= 0 || _nowPlaying.IsOpen || Places?.Source(albumId) is not { } source)
-            {
-                await PlayAtOnceAsync(albumId, tracks.Result).ConfigureAwait(true);
-                return;
-            }
-
-            // Now Playing goes in place, invisible, so the record's spot on the deck is final.
-            // Measured before the platter is emptied (an empty deck hides its record).
-            IsRunning = true;
-            if (Places.Landing() is not { Width: > 0 } landing)
-            {
-                IsRunning = false;
-                await PlayAtOnceAsync(albumId, tracks.Result).ConfigureAwait(true);
-                return;
-            }
-
-            _nowPlaying.HoldDeck(ArmState.Parked, spinning: false, empty: true);
-            _player.HoldInput();
-            (_albumId, _multiplier, _start, _finishing) = (albumId, multiplier, _time.GetTimestamp(), false);
-            (Source, Landing, Cover, Time, Step, IsFlying) = (source, landing, cover.Result, 0, SceneStep.Flying, true);
-            Places.HideSource(albumId, hidden: true);
-            _ = _nowPlaying.ShowAlbumAsync(albumId);
-            _timer = _time.CreateTimer(_ => _ui.Post(Tick), null, SpinClock.FrameInterval, SpinClock.FrameInterval);
-            await _player.LoadTracksAsync(tracks.Result).ConfigureAwait(true);
         });
+    }
+
+    /// <summary>Starts the scene with the album's cover (<paramref name="cover"/>, held till it ends), or plays at once.</summary>
+    private async Task FlyOrPlayAsync(string albumId, IReadOnlyList<TrackSummary> tracks, CoverLease? cover)
+    {
+        if (tracks.Count == 0)
+        {
+            return;
+        }
+
+        if (IsRunning)
+        {
+            _next = albumId;
+            return;
+        }
+
+        // Now Playing open covers the page: nothing to fly from.
+        var multiplier = MotionModes.Multiplier(_settings.Motion);
+        if (multiplier <= 0 || _nowPlaying.IsOpen || Places?.Source(albumId) is not { } source)
+        {
+            await PlayAtOnceAsync(albumId, tracks).ConfigureAwait(true);
+            return;
+        }
+
+        // Now Playing goes in place, invisible, so the record's spot on the deck is final.
+        // Measured before the platter is emptied (an empty deck hides its record).
+        IsRunning = true;
+        if (Places.Landing() is not { Width: > 0 } landing)
+        {
+            IsRunning = false;
+            await PlayAtOnceAsync(albumId, tracks).ConfigureAwait(true);
+            return;
+        }
+
+        _nowPlaying.HoldDeck(ArmState.Parked, spinning: false, empty: true);
+        _player.HoldInput();
+        (_albumId, _multiplier, _start, _finishing) = (albumId, multiplier, _time.GetTimestamp(), false);
+        _cover = cover;
+        (Source, Landing, Cover, Time, Step, IsFlying) = (source, landing, cover?.Bitmap, 0, SceneStep.Flying, true);
+        Places.HideSource(albumId, hidden: true);
+        _ = _nowPlaying.ShowAlbumAsync(albumId);
+        _timer = _time.CreateTimer(_ => _ui.Post(Tick), null, SpinClock.FrameInterval, SpinClock.FrameInterval);
+        await _player.LoadTracksAsync(tracks).ConfigureAwait(true);
     }
 
     public void Dispose()
@@ -211,6 +230,8 @@ public sealed partial class TurntableSceneViewModel : ObservableObject, IDisposa
             (Step, IsRunning) = (SceneStep.None, false);
             _nowPlaying.ReleaseDeck();
             Cover = null;
+            _cover?.Dispose(); // once nothing shows it
+            _cover = null;
         }
 
         await _player.ReleaseInputAsync().ConfigureAwait(true);
