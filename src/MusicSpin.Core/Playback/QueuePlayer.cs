@@ -540,6 +540,123 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Plays entry <paramref name="index"/> of <paramref name="context"/>: the list the user clicked in (an album, a
+    /// playlist, the Tracks view). When that list is what the queue is playing (the same tracks in the same order, or in
+    /// any order with shuffle on), the queue stays and playback jumps to the clicked track; the up-next entries (queued
+    /// with "Play next" or "Add to queue") are kept and move along to follow it, so they still play right after it.
+    /// Anything else (a different list, or while radio plays) starts the list as a new queue, like <see cref="SetQueue"/>,
+    /// which drops everything queued: choosing something else to play is how the queue is replaced.
+    /// <para>Entries are compared by track id (path when an entry has none). Entries the queue gained at its end are not
+    /// part of the list, so such a queue counts as a different one.</para>
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidArgument when <paramref name="index"/> is outside the list; FileNotFound
+    /// when nothing from the clicked track on can be opened (the queue is kept).</exception>
+    public PlayerStatus PlayFromContext(IReadOnlyList<QueueItem> context, int index)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ValidateItems(context);
+        if (context.Count == 0)
+        {
+            throw Invalid("The list to play must contain at least one entry.");
+        }
+
+        if (index < 0 || index >= context.Count)
+        {
+            throw Invalid($"start index {index} is outside the list (0-{context.Count - 1}).");
+        }
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (_radio is null && _index >= 0 && _index < _items.Count && FindInContext(context, index) is { } target)
+            {
+                return JumpTo(target);
+            }
+
+            return SetQueue(context, index);
+        }
+    }
+
+    /// <summary>The queue's slot for <c>context[index]</c> when the queue's own entries (not up next) are exactly the context's; else null.</summary>
+    private Slot? FindInContext(IReadOnlyList<QueueItem> context, int index)
+    {
+        var own = _items.Where(s => !s.UpNext).OrderBy(s => s.Order).ToList();
+        if (own.Count != context.Count)
+        {
+            return null;
+        }
+
+        if (!_shuffle)
+        {
+            // Played in order, the list has to be in the queue's order too: a list the user sorted differently is a new queue.
+            return own.Select(s => IdentityOf(s.Item)).SequenceEqual(context.Select(IdentityOf), StringComparer.Ordinal) ? own[index] : null;
+        }
+
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var item in context)
+        {
+            counts[IdentityOf(item)] = counts.GetValueOrDefault(IdentityOf(item)) + 1;
+        }
+
+        foreach (var slot in own)
+        {
+            var key = IdentityOf(slot.Item);
+            if (!counts.TryGetValue(key, out var left) || left == 0)
+            {
+                return null;
+            }
+
+            counts[key] = left - 1;
+        }
+
+        // The same track may be in the list twice: pick the same occurrence (n-th of its kind) in the original order.
+        var wanted = IdentityOf(context[index]);
+        var occurrence = 0;
+        for (var i = 0; i < index; i++)
+        {
+            if (IdentityOf(context[i]) == wanted)
+            {
+                occurrence++;
+            }
+        }
+
+        return own.Where(s => IdentityOf(s.Item) == wanted).ElementAt(occurrence);
+    }
+
+    private static string IdentityOf(QueueItem item) => item.TrackId is { } id ? "id:" + id : "path:" + item.Path;
+
+    /// <summary>Plays <paramref name="target"/> keeping the queue; the up-next run moves to follow the new current entry.</summary>
+    private PlayerStatus JumpTo(Slot target)
+    {
+        // The run stays where it is while the target loads, so a failure to open anything leaves the queue as it was.
+        var run = _items.GetRange(_index + 1, UpNextEnd() - _index - 1);
+        MoveAndPlay(_items.IndexOf(target), +1, wrap: WrapAll);
+        var current = _items[_index];
+        run.Remove(current); // the target could not be opened and an up-next entry played instead: it is current now
+        if (run.Count > 0)
+        {
+            var moved = run.ToHashSet();
+            _items.RemoveAll(moved.Contains);
+            _index = _items.IndexOf(current);
+            if (_shuffle)
+            {
+                PlaceInOriginalOrder(current, run);
+            }
+
+            _items.InsertRange(_index + 1, run);
+            if (!_shuffle)
+            {
+                RenumberOrder();
+            }
+        }
+
+        current.UpNext = false;
+        NormalizeUpNext();
+        QueueChanged?.Invoke(this, EventArgs.Empty);
+        return StatusCore();
+    }
+
     public PlayerStatus Resume()
     {
         lock (_gate)

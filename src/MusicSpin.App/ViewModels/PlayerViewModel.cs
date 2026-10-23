@@ -240,6 +240,19 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     }
 
     /// <summary>
+    /// Plays entry <paramref name="index"/> of <paramref name="tracks"/>, the list the user clicked a row in (an album, a
+    /// playlist, the Tracks page). When the player is already playing that list, it jumps to the track and keeps the queue,
+    /// with what the user queued up next still playing right after it; otherwise the list becomes the queue, as
+    /// <see cref="PlayTracksAsync"/> does (<c>queue.play</c>).
+    /// </summary>
+    public Task PlayFromListAsync(IReadOnlyList<TrackSummary> tracks, int index)
+    {
+        ArgumentNullException.ThrowIfNull(tracks);
+        return tracks.Count == 0 ? Task.CompletedTask
+            : SendAsync("queue.play", new { items = tracks.Select(ToItem).ToArray(), start = Math.Clamp(index, 0, tracks.Count - 1) });
+    }
+
+    /// <summary>
     /// The turntable scene's own commands (never held): loads <paramref name="tracks"/> without playing, so
     /// <see cref="ResumeAsync"/> starts the sound with no delay when the arm lands.
     /// </summary>

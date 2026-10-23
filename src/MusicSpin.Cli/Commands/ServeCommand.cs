@@ -16,7 +16,7 @@ internal static class ServeCommand
             "Run a long-lived player controlled by JSON lines on stdin; responses/events are JSON lines on stdout. " +
             "Same protocol as the background player: {\"id\":1,\"cmd\":\"load\",\"path\":\"a.flac\"} with cmd = " +
             "hello|status|load(path)|play(index?)|pause|resume|toggle|stop|next|prev|seek(seconds|delta)|volume(value|delta)|info(path)|" +
-            "queue|queue.set(items)|queue.add(items)|queue.clear|repeat(mode)|shuffle(mode)|radio(filter)|quit.")
+            "queue|queue.set(items)|queue.play(items,start)|queue.add(items)|queue.clear|repeat(mode)|shuffle(mode)|radio(filter)|quit.")
         {
             backend, device, exclusive,
         };

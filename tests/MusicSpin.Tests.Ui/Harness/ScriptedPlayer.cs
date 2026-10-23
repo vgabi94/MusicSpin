@@ -46,7 +46,7 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
 
     /// <summary>
     /// Seeks, volume changes and mutes update <see cref="Status"/> before the answer, as a real player's would, queue.add and
-    /// queue.move edit <see cref="Queue"/>, queue.set replaces it (ending radio), and radio puts the station on air.
+    /// queue.move edit <see cref="Queue"/>, queue.set and queue.play replace it (ending radio; queue.play's keep-the-queue jump is the player's, tested against the real one in PlayFromListTests), and radio puts the station on air.
     /// </summary>
     public bool FollowsCommands { get; set; }
 
@@ -361,7 +361,7 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
             queue.InsertRange(at,(ProtocolJson.Deserialize<QueueItem[]>(items) ?? []).Select(item => new QueueEntry(0, false, item, position != "end")));
             Queue = Renumber(queue);
         }
-        else if (cmd == "queue.set" && (!request.TryGetProperty("play", out var play) || play.GetBoolean())
+        else if (cmd is "queue.set" or "queue.play" && (!request.TryGetProperty("play", out var play) || play.GetBoolean())
                  && request.TryGetProperty("items", out var set) && ProtocolJson.Deserialize<QueueItem[]>(set) is { Length: > 0 } entries)
         {
             // As the player does: a new queue playing from the start entry, and a station on air goes off. A load that

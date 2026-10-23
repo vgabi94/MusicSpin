@@ -231,7 +231,7 @@ src/MusicSpin.App/
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
-  an index (skipping to a row drops the up-next entries above it), `queue.remove`, `queue.clear` with `upNext`, and
+  an index (skipping to a row drops the up-next entries above it; a row of the list that is playing in the app's Now playing and Tracks pages sends `queue.play`, which keeps them, #140), `queue.remove`, `queue.clear` with `upNext`, and
   `radio.end` to end radio while keeping the current track and the rows (one atomic player command, #37; the Radio page's End radio uses it too). A drop between rows adds the tracks up next and
   then moves them into place with `queue.move`, at indices from the queue read again after the add (it may have moved
   on since the rows were read); a row dragged while the rows were read again is found by its file. Save as playlist writes a library playlist. Rows that were not there at

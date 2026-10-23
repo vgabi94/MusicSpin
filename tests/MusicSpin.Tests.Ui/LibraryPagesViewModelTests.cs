@@ -276,7 +276,7 @@ public sealed class LibraryPagesViewModelTests : IAsyncDisposable
 
         await vm.TracksPage.PlayTrackCommand.ExecuteAsync(vm.TracksPage.Tracks[2]);
 
-        var sent = Assert.Single(_player.Sent("queue.set"));
+        var sent = Assert.Single(_player.Sent("queue.play"));
         Assert.Equal(2, sent.GetProperty("start").GetInt32());
         Assert.Equal(vm.TracksPage.Tracks.Select(t => t.Track.Path), Paths(sent));
     }

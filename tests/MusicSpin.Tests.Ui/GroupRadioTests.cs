@@ -484,10 +484,10 @@ public sealed class GroupRadioTests
         async Task EndsAsync(string what, Func<Task> play)
         {
             await OnAirAsync(app, new RadioFilter { Genres = ["Jazz"] });
-            var sent = app.Scripted!.Count("queue.set");
+            var sent = app.Scripted!.Count("queue.set") + app.Scripted.Count("queue.play");
             await play();
             await Gui.UntilAsync(() => !vm.Radio.IsOnAir, $"radio ended by {what}");
-            Assert.True(app.Scripted.Count("queue.set") > sent, $"{what} sent a new queue");
+            Assert.True(app.Scripted.Count("queue.set") + app.Scripted.Count("queue.play") > sent, $"{what} sent a new queue");
         }
 
         await EndsAsync("an album", async () =>
