@@ -306,16 +306,19 @@ public sealed class ShelfTests
         var after = Gui.BoundsIn(window, sleeves[2]).Left;
 
         Gui.Hover(window, hovered);
+        var turning = 0;
         for (var t = 0; t < 50; t++)
         {
             app.Advance(UiTime.Frame);
             Assert.All(sleeves.Where(s => s != hovered), s => Assert.True(Cached(s), $"{s.Title} at {t} frames"));
-            if (hovered.Turn is > 0 and < 1)
+            if (hovered.Turn is > ShelfSleeve.RestTolerance and < 1 - ShelfSleeve.RestTolerance)
             {
+                turning++;
                 Assert.False(Cached(hovered)); // turning: drawn live
             }
         }
 
+        Assert.True(turning > 10, $"turning for {turning} of 50 frames");
         Assert.True(Gui.BoundsIn(window, sleeves[2]).Left > after, "the slot widens: the sleeves after it move along");
         Gui.FinishAnimations(Settled);
         Assert.Equal(1, hovered.Turn);
@@ -340,6 +343,33 @@ public sealed class ShelfTests
         Gui.FinishAnimations(Settled);
         Assert.Equal(0, sleeve.Turn);
         Assert.True(Cached(sleeve));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_turn_or_a_record_that_settles_a_hair_off_its_end_still_counts_as_at_rest()
+    {
+        await using var app = await OpenAsync();
+        var sleeve = Sleeves(Boards(app.Window)[0])[2];
+
+        sleeve.Turn = 1 - 1e-10; // an animator that stops just short of facing you
+        Gui.FinishAnimations(Settled);
+        Assert.True(sleeve.IsAtRest, "a hair short of facing you: at rest");
+        Assert.True(Cached(sleeve), "a hair short of facing you: from its image");
+        sleeve.Turn = 1e-17; // or just past closed
+        sleeve.RecordOut = 1e-17;
+        Gui.FinishAnimations(Settled);
+        Assert.True(sleeve.IsAtRest, "a hair past closed: at rest");
+        Assert.True(Cached(sleeve), "a hair past closed: from its image");
+        Assert.False(Record(sleeve).IsVisible);
+
+        foreach (var turned in new[] { 0.5, 1.2, -0.3 }) // really turned, or past either end (an easing that overshoots)
+        {
+            sleeve.Turn = turned;
+            Gui.FinishAnimations(Settled);
+            Assert.False(sleeve.IsAtRest, $"turned {turned}: not at rest");
+            Assert.False(Cached(sleeve), $"turned {turned}: drawn live");
+        }
     }
 
     [AvaloniaFact]
@@ -384,18 +414,7 @@ public sealed class ShelfTests
     {
         using var fromImages = await ShelfAsync(live: false);
         using var live = await ShelfAsync(live: true);
-        var path = Path.Combine(Path.GetTempPath(), $"musicspin-shelf-live-{Guid.NewGuid():N}.png");
-        try
-        {
-            Snapshots.Save(live, path);
-            var result = Snapshots.Compare(fromImages, path, Path.Combine(Snapshots.FailureDirectory, $"shelf-cache-{depth}-{tilt}"),
-                channelTolerance: 8, pixelTolerance: 0.0005);
-            Assert.True(result.Matches, result.Problem);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        AssertSame(fromImages, live, $"shelf-cache-{depth}-{tilt}");
 
         // The shelf at this depth and tilt, its second sleeve facing you: every sleeve at rest.
         async Task<SkiaSharp.SKBitmap> ShelfAsync(bool live)
@@ -419,6 +438,50 @@ public sealed class ShelfTests
             }
 
             return Capture(window);
+        }
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_sleeve_whose_cover_spine_or_theme_changes_while_at_rest_shows_the_change_not_its_old_image()
+    {
+        using var fromImages = await ChangedAsync(live: false);
+        using var live = await ChangedAsync(live: true);
+        AssertSame(fromImages, live, "shelf-cache-changed");
+
+        // Every sleeve drawn and at rest; then a sleeve gets another cover and spine (a late cover, a row reused for
+        // another album) and the theme flips.
+        static async Task<SkiaSharp.SKBitmap> ChangedAsync(bool live)
+        {
+            await using var app = await OpenAsync(AppTheme.Dark, live: live);
+            var window = app.Window;
+            Gui.FinishAnimations(Settled);
+            Capture(window).Dispose();
+            var sleeve = Sleeve(window, "Cello Suites");
+            Assert.True(Cached(sleeve) != live);
+
+            sleeve.Source = TestImages.Bitmap(TestImages.Png(64, 64, (x, y) => ((x / 8) + (y / 8)) % 2 == 0 ? SkiaSharp.SKColors.OrangeRed : SkiaSharp.SKColors.Teal));
+            sleeve.SpineColor = Avalonia.Media.Color.FromRgb(20, 200, 90);
+            app.ViewModel.Settings.SetTheme(AppTheme.Light);
+            Gui.FinishAnimations(Settled);
+            Assert.True(Cached(sleeve) != live);
+            return Capture(window);
+        }
+    }
+
+    /// <summary>The shelf drawn from the sleeves' images is the same, near enough, as drawn live.</summary>
+    private static void AssertSame(SkiaSharp.SKBitmap fromImages, SkiaSharp.SKBitmap live, string name)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"musicspin-shelf-live-{Guid.NewGuid():N}.png");
+        try
+        {
+            Snapshots.Save(live, path);
+            var result = Snapshots.Compare(fromImages, path, Path.Combine(Snapshots.FailureDirectory, name), channelTolerance: 8, pixelTolerance: 0.0005);
+            Assert.True(result.Matches, result.Problem);
+        }
+        finally
+        {
+            File.Delete(path);
         }
     }
 
