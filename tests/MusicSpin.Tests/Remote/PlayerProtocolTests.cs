@@ -378,4 +378,45 @@ public sealed class PlayerProtocolTests : IDisposable
 
         public IReadOnlyList<AudioFormatSupport> GetSupportedFormats() => [];
     }
+
+    [Fact]
+    public void Queue_play_jumps_in_the_playing_list_and_keeps_what_was_queued_up_next()
+    {
+        SetQueue();
+        _decoders.Files["/music/extra.flac"] = TestAudio.Track("/music/extra.flac", sampleRate: 8000, seconds: 30);
+        Ok(new { id = 2, cmd = "queue.add", items = new[] { "/music/extra.flac" }, position = "upnext" });
+
+        var data = Ok(new { id = 3, cmd = "queue.play", items = _paths, start = 2 });
+
+        Assert.Equal(2, data.GetProperty("queueIndex").GetInt32());
+        Assert.Equal(1, data.GetProperty("upNext").GetInt32());
+        var queue = Ok(new { id = 4, cmd = "queue" });
+        Assert.Equal([_paths[0], _paths[1], _paths[2], "/music/extra.flac"], queue.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("item").GetProperty("path").GetString()));
+        Assert.True(queue.GetProperty("items")[3].GetProperty("upNext").GetBoolean());
+    }
+
+    [Fact]
+    public void Queue_play_of_another_list_replaces_the_queue_like_queue_set()
+    {
+        SetQueue();
+
+        var data = Ok(new { id = 2, cmd = "queue.play", items = new[] { _paths[2], _paths[1] }, start = 1 });
+
+        Assert.Equal(1, data.GetProperty("queueIndex").GetInt32());
+        Assert.Equal(2, data.GetProperty("queueLength").GetInt32());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Queue_play_needs_items_and_a_start_inside_them()
+    {
+        SetQueue();
+
+        Assert.Equal("usage", Fail(new { id = 2, cmd = "queue.play", items = _paths }).Code);
+        Assert.Equal("usage", Fail(new { id = 3, cmd = "queue.play", start = 0 }).Code);
+        Assert.Equal("usage", Fail(new { id = 4, cmd = "queue.play", items = _paths, start = 3 }).Code);
+        Assert.Equal("usage", Fail(new { id = 5, cmd = "queue.play", items = Array.Empty<string>(), start = 0 }).Code);
+        Assert.Equal(3, Ok(new { id = 6, cmd = "status" }).GetProperty("queueLength").GetInt32());
+        Assert.Contains("queue.play", PlayerProtocol.Commands);
+    }
 }

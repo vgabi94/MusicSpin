@@ -49,9 +49,12 @@ public static class ProtocolMessages
 /// Events (no id): <c>{"event":"stateChanged","data":{...}}</c>.
 /// <para>Commands: hello, status, load(path), play(index?), pause, resume, toggle, stop, next, prev,
 /// seek(seconds | delta), volume(value | delta; unmutes), mute(mode? = on|off|toggle), info(path), queue(offset?, limit?),
-/// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.add(items, position? = end|next|upnext),
+/// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.play(items, start), queue.add(items, position? = end|next|upnext),
 /// queue.remove(index), queue.move(from, to), queue.clear(upNext?),
 /// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), radio.end, subscribe(spectrum?), quit.
+/// <c>queue.play</c> plays entry <c>start</c> of the list <c>items</c> (an album, a playlist: what a user clicked in): when that
+/// list is what the queue is playing, the queue is kept and playback jumps to the entry (up-next entries follow it), otherwise it
+/// replaces the queue like <c>queue.set</c> (see <see cref="QueuePlayer.PlayFromContext"/>).
 /// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle/mute without a mode just return the status.</para>
 /// </summary>
 public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory decoders, Func<object>? hello = null)
@@ -61,7 +64,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
     public static IReadOnlyList<string> Commands { get; } =
     [
         "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "mute", "info",
-        "queue", "queue.set", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "radio.end", "subscribe", "quit",
+        "queue", "queue.set", "queue.play", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "radio.end", "subscribe", "quit",
         "normalize",
     ];
 
@@ -162,6 +165,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                 return (Player.SetQueue(Items(root), OptionalInt(root, "start"), OptionalBool(root, "play") ?? true,
                     OptionalNumber(root, "startSeconds") is { } s ? TimeSpan.FromSeconds(s) : null,
                     OptionalBool(root, "shuffle"), OptionalInt(root, "seed")), ProtocolAction.None);
+            case "queue.play":
+                return (Player.PlayFromContext(Items(root), RequiredInt(root, "start")), ProtocolAction.None);
             case "queue.add":
                 return (Player.Add(Items(root), Position(root)), ProtocolAction.None);
             case "queue.remove":

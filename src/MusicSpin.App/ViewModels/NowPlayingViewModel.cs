@@ -386,12 +386,12 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
         ShowBackdrop(null);
     }
 
-    /// <summary>A click on a track: the album plays from it (which ends radio).</summary>
+    /// <summary>A click on a track: the album plays from it. When the player is playing this album already the queue stays (up next included); otherwise it ends radio and replaces the queue.</summary>
     [RelayCommand]
     private Task PlayTrack(NowPlayingTrackViewModel track)
     {
         ArgumentNullException.ThrowIfNull(track);
-        return _notices.GuardAsync(() => _player.PlayTracksAsync([.. Tracks.Select(t => t.Track)], track.Index));
+        return _notices.GuardAsync(() => _player.PlayFromListAsync([.. Tracks.Select(t => t.Track)], track.Index));
     }
 
     /// <summary>A track's heart: it becomes a favorite, or stops being one.</summary>

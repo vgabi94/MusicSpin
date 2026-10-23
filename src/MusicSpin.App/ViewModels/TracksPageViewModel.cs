@@ -211,7 +211,10 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
     /// <summary>The tracks the search lets through, in the order shown.</summary>
     protected virtual IEnumerable<TrackItemViewModel> Shown() => _all.Where(t => Matches(t.Title, t.Artist, t.Album));
 
-    /// <summary>Plays the list as shown from <paramref name="track"/>; entries whose files are missing are left out.</summary>
+    /// <summary>
+    /// Plays the list as shown from <paramref name="track"/>; entries whose files are missing are left out. When the player is
+    /// already playing this list it jumps to the track and keeps the queue (what was queued up next included).
+    /// </summary>
     [RelayCommand]
     private Task PlayTrack(TrackItemViewModel track)
     {
@@ -222,7 +225,7 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
         }
 
         var playable = Playable();
-        return Notices.GuardAsync(() => Player.PlayTracksAsync([.. playable.Select(t => t.Track)], Math.Max(0, IndexOf(playable, track))));
+        return Notices.GuardAsync(() => Player.PlayFromListAsync([.. playable.Select(t => t.Track)], Math.Max(0, IndexOf(playable, track))));
     }
 
     /// <summary>A row's ＋: Play next, Add to queue.</summary>
