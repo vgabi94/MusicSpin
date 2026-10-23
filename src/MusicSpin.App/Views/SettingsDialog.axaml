@@ -303,6 +303,19 @@
                                           AutomationProperties.Name="Exclusive mode" />
                         </Grid>
                     </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Volume levelling" />
+                                <TextBlock Classes="settingNote" Text="{x:Static vm:AudioSettingsViewModel.LevellingNote}" />
+                            </StackPanel>
+                            <ToggleButton Name="VolumeLevelling"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Audio.Levelling, FallbackValue=False}"
+                                          AutomationProperties.Name="Volume levelling" />
+                        </Grid>
+                    </Border>
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

@@ -139,7 +139,7 @@ public sealed class TrackIdUnhappyTests : LibraryTestBase
 
     [Theory]
     [InlineData(0)]
-    [InlineData(2)]
+    [InlineData(1)] // before the loudness fields (#139): refused, delete library.db and rescan
     [InlineData(3)]
     [InlineData(99)]
     public void A_database_with_another_schema_version_is_refused_and_left_as_it_was(int version)

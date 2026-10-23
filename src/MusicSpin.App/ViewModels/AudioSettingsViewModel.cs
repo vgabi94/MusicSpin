@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Services;
 using MusicSpin.Core;
+using MusicSpin.Core.Normalization;
 
 namespace MusicSpin.App.ViewModels;
 
@@ -17,6 +18,8 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
 
     public const string ExclusiveNote = "Other apps go silent and the system doesn't resample";
 
+    public const string LevellingNote = "Evens out track loudness (ReplayGain / R128)";
+
     private readonly IAudioDevices _devices;
     private readonly ISettingsService _settings;
     private readonly PlayerViewModel _player;
@@ -24,6 +27,7 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     private readonly Notices _notices;
     private IReadOnlyList<string> _names = [];
     private bool _ready;
+    private NormalizationMode _levellingMode;
 
     public AudioSettingsViewModel(IAudioDevices devices, ISettingsService settings, PlayerViewModel player, MenuViewModel menu, Notices notices)
     {
@@ -37,6 +41,13 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
         var output = PlayerOutput.From(settings.Current);
         Device = output.Device;
         Exclusive = output.Exclusive;
+        _levellingMode = NormalizationSettings.ModeOrDefault(settings.Current.Normalization);
+        Levelling = _levellingMode != NormalizationMode.Off;
+        if (_levellingMode == NormalizationMode.Off)
+        {
+            _levellingMode = NormalizationMode.Auto; // what the switch turns on
+        }
+
         _player.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PlayerViewModel.Output))
@@ -58,6 +69,13 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     /// <summary>Exclusive mode: the switch; a change restarts the player.</summary>
     [ObservableProperty]
     public partial bool Exclusive { get; set; }
+
+    /// <summary>
+    /// Volume levelling (#139): the switch. On keeps the mode saved (auto unless <c>music-spin normalize</c> chose track or
+    /// album); off leaves the samples untouched. Applies at once, without a restart.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool Levelling { get; set; }
 
     /// <summary>A change is restarting the player: the controls wait.</summary>
     [ObservableProperty]
@@ -127,6 +145,25 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
         }
 
         _ = RestartAsync();
+    }
+
+    partial void OnLevellingChanged(bool value)
+    {
+        if (!_ready)
+        {
+            return;
+        }
+
+        var mode = value ? _levellingMode : NormalizationMode.Off;
+        if (!Save(s => s with { Normalization = NormalizationSettings.Name(mode) }))
+        {
+            _ready = false; // the switch goes back: the player keeps the mode it has
+            Levelling = !value;
+            _ready = true;
+            return;
+        }
+
+        _ = _player.SetNormalizationAsync(NormalizationSettings.Name(mode));
     }
 
     /// <summary>A device's name in the menu and on the button; a saved one the list doesn't have now says so.</summary>

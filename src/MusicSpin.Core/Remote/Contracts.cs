@@ -94,6 +94,7 @@ public sealed record OutputFormat(int SampleRate, int Channels, string SampleFor
 /// <param name="UpNext">How many entries after the current one are up next (added to play next; see <see cref="QueueEntry.UpNext"/>).</param>
 /// <param name="Volume">The volume level, 0..1; while <paramref name="Muted"/>, the level unmuting goes back to.</param>
 /// <param name="Muted">Muted: the player plays at 0 and keeps <paramref name="Volume"/> (the <c>mute</c> command; a volume unmutes).</param>
+/// <param name="Normalization">Volume levelling (ReplayGain / R128); null when the host has none.</param>
 public sealed record PlayerStatus(
     PlayerState State,
     double PositionSeconds,
@@ -114,7 +115,8 @@ public sealed record PlayerStatus(
     long? Underruns = null,
     RadioInfo? Radio = null,
     int UpNext = 0,
-    bool Muted = false)
+    bool Muted = false,
+    NormalizationStatus? Normalization = null)
 {
     /// <summary>
     /// "radio" while a radio station plays (see <see cref="Radio"/>), else "queue". (Named so it does not clash with the
@@ -122,6 +124,15 @@ public sealed record PlayerStatus(
     /// </summary>
     public string QueueMode => Radio is null ? "queue" : "radio";
 }
+
+/// <summary>Volume levelling in a <see cref="PlayerStatus"/>: the setting and what it does to the current track.</summary>
+/// <param name="Mode">"off", "track", "album" or "auto".</param>
+/// <param name="TargetLufs">The loudness tracks are brought to.</param>
+/// <param name="PreampDb">Added to every gain.</param>
+/// <param name="GainDb">The current track's gain in dB; null when nothing is loaded.</param>
+/// <param name="Source">Where it came from: "track-tag", "album-tag", "analysis", "unknown" (not known yet: plays unchanged) or "off".</param>
+/// <param name="Limited">The gain was lowered so the track's peak stays below full scale.</param>
+public sealed record NormalizationStatus(string Mode, double TargetLufs, double PreampDb, double? GainDb = null, string? Source = null, bool Limited = false);
 
 /// <summary>The radio station in a <see cref="PlayerStatus"/>: its filters, a description and how many tracks matched at the last top-up.</summary>
 public sealed record RadioInfo(MusicSpin.Core.Library.RadioFilter Filter, string Description, int PoolSize);

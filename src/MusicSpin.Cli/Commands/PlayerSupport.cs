@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MusicSpin.Cli.Output;
 using MusicSpin.Core;
+using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Playback;
 
 namespace MusicSpin.Cli.Commands;
@@ -116,6 +117,41 @@ internal static class PlayerSupport
     }
 
     /// <summary>
+    /// Remembers the player's volume levelling (mode, target, pre-amp) as the defaults in settings.json.
+    /// Returns a warning instead of failing: the player already changed.
+    /// </summary>
+    public static string? SaveNormalization(CommandRunner runner, ParseResult parseResult, JsonElement status)
+    {
+        try
+        {
+            var parsed = ProtocolJson.Deserialize<PlayerStatus>(status);
+            if (parsed?.Normalization is not { } n)
+            {
+                return null;
+            }
+
+            var store = new MusicSpin.Core.Settings.SettingsStore(runner.DataDirectory(parseResult));
+            var settings = store.Load();
+            if (store.LoadWarning is not null)
+            {
+                return $"Not saved as the default: {store.LoadWarning}";
+            }
+
+            var next = new NormalizationSettings(NormalizationSettings.ModeOrDefault(n.Mode), n.TargetLufs, n.PreampDb).ApplyTo(settings);
+            if (next != settings)
+            {
+                store.Save(next);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is MusicSpinException or IOException or UnauthorizedAccessException or JsonException)
+        {
+            return $"Not saved as the default in settings.json: {ex.Message}";
+        }
+    }
+
+    /// <summary>
     /// Remembers the player's repeat/shuffle modes as the defaults in settings.json (used when a player starts).
     /// Returns a warning instead of failing: the player already changed.
     /// </summary>
@@ -203,6 +239,20 @@ internal static class PlayerSupport
             ? $"  Radio: {radio.Description} ({radio.PoolSize} track{(radio.PoolSize == 1 ? string.Empty : "s")}) · Repeat: {PlaybackModes.Name(s.Repeat)}"
             : $"  Repeat: {PlaybackModes.Name(s.Repeat)} · Shuffle: {(s.Shuffle ? s.ShuffleSeed is { } seed ? $"on (seed {seed})" : "on" : "off")}";
 
+    private static string Levelling(NormalizationStatus n)
+    {
+        var settings = string.Create(CultureInfo.InvariantCulture, $"{n.Mode}");
+        if (n.Mode == "off")
+        {
+            return $"  Levelling: {settings}";
+        }
+
+        var gain = n.GainDb is { } db && n.Source is not "unknown"
+            ? string.Create(CultureInfo.InvariantCulture, $" · {db:+0.0;-0.0;0.0} dB ({n.Source}{(n.Limited ? ", limited to avoid clipping" : string.Empty)})")
+            : n.Source is "unknown" ? " · not analysed yet (plays unchanged)" : string.Empty;
+        return string.Create(CultureInfo.InvariantCulture, $"  Levelling: {settings} · target {n.TargetLufs:0.#} LUFS{(n.PreampDb != 0 ? $" · pre-amp {n.PreampDb:+0.#;-0.#} dB" : string.Empty)}{gain}");
+    }
+
     public static IEnumerable<string> Describe(PlayerStatus s)
     {
         var state = s.Ended ? "Ended" : s.State switch
@@ -228,6 +278,10 @@ internal static class PlayerSupport
         yield return string.Create(CultureInfo.InvariantCulture,
             $"  {format}    {Human.Time(TimeSpan.FromSeconds(s.PositionSeconds))} / {Human.Time(TimeSpan.FromSeconds(s.DurationSeconds))}    volume {s.Volume * 100:0}%{(s.Muted ? " (muted)" : string.Empty)}");
         yield return Modes(s);
+        if (s.Normalization is { } levelling)
+        {
+            yield return Levelling(levelling);
+        }
 
         if (s.Output is { } o)
         {
