@@ -139,12 +139,15 @@ public sealed class Player : IPlayer
                 throw new ObjectDisposedException(nameof(Player));
             }
 
-            ReleaseOutput();
+            StopPositionTimer();
             lock (_decodeLock)
             {
                 ResetDecoding(decoder);
             }
 
+            // Keep the device open when the new track needs it as it is (the common case: the same rate and channels);
+            // otherwise release it, and Play opens it for the new format.
+            RetargetOrReleaseOutput(Volatile.Read(ref _buffer)!);
             _ended = false;
             SetState(PlayerState.Stopped);
             EnsureDecodeThread();
@@ -876,6 +879,33 @@ public sealed class Player : IPlayer
         {
             Error?.Invoke(this, new PlayerErrorEventArgs(new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, message)));
         }
+    }
+
+    /// <summary>
+    /// A track change: moves the open output to <paramref name="buffer"/> without closing the device, which is what makes
+    /// a switch instant (a new device stream can take far longer than opening and decoding the file). Falls back to
+    /// releasing it, so <see cref="Play"/> reopens, when there is no open output, the device would need another
+    /// configuration, or the output refuses. Caller holds _sync.
+    /// </summary>
+    private void RetargetOrReleaseOutput(PlaybackBuffer buffer)
+    {
+        if (_output is { IsOpen: true } output)
+        {
+            try
+            {
+                if (output.Retarget(buffer))
+                {
+                    _outputSource = buffer;
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Error?.Invoke(this, new PlayerErrorEventArgs(ex));
+            }
+        }
+
+        ReleaseOutput();
     }
 
     private void ReleaseOutput()

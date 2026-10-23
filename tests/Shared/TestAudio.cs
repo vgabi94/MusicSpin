@@ -200,11 +200,50 @@ internal sealed class ManualAudioOutput : IAudioOutput
 
     public OpenedOutput? Opened { get; private set; }
 
+    /// <summary>Opening throws this (a device that cannot be opened) while set.</summary>
+    public Exception? OpenError { get; set; }
+
+    /// <summary>How many track changes kept the device open (<see cref="Retarget"/> returned true).</summary>
+    public int RetargetCount { get; private set; }
+
     public void Open(IPcmSource source)
     {
+        if (OpenError is not null)
+        {
+            Source = null;
+            Opened = null;
+            throw OpenError;
+        }
+
         Source = source;
         Opened = OpenedAs?.Invoke(source);
         OpenCount++;
+    }
+
+    /// <summary>Retargeting throws this (a device that fails while being moved) while set.</summary>
+    public Exception? RetargetError { get; set; }
+
+    /// <summary>An exclusive device is configured for the source's sample depth too, so a different depth needs a reopen.</summary>
+    public bool Exclusive { get; set; }
+
+    /// <summary>Like a real device: kept open for the same rate and channels, left paused on the new source.</summary>
+    public bool Retarget(IPcmSource next)
+    {
+        if (RetargetError is not null)
+        {
+            throw RetargetError;
+        }
+
+        if (_source is not { } current || current.Format.SampleRate != next.Format.SampleRate || current.Format.Channels != next.Format.Channels
+            || (Exclusive && current.Format.SourceBitsPerSample != next.Format.SourceBitsPerSample))
+        {
+            return false;
+        }
+
+        Started = false;
+        Source = next;
+        RetargetCount++;
+        return true;
     }
 
     public void Start() => Started = true;
