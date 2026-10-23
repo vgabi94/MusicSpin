@@ -41,6 +41,16 @@
     <sys:TimeSpan x:Key="NowPlayingFadeDuration">0:0:0.8</sys:TimeSpan>
     <!-- The queue drawer sliding in from the right and back out (mockup: .queue, translate .45s, cubic-bezier(.2,.8,.2,1)). -->
     <sys:TimeSpan x:Key="QueueSlideDuration">0:0:0.45</sys:TimeSpan>
+    <!--
+      While Now Playing or the queue drawer slides or fades, it and what is under it are each drawn once into an image at
+      the window's scale, and each step copies those images (pixel-aligned, so they stay sharp).
+    -->
+    <BitmapCache x:Key="MotionCache" SnapsToDevicePixels="True" />
+    <!--
+      A shadow beside a spinning record (a card's cover and Play button), drawn once into an image. A deck's soft shadows
+      have their own, the size the deck is shown at (controls:DeckHost.SoftCache).
+    -->
+    <BitmapCache x:Key="ShadowCache" />
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 

@@ -107,12 +107,15 @@
                                                         CommandParameter="{Binding}"
                                                         ToolTip.Tip="Play/pause"
                                                         AutomationProperties.Name="Play or pause">
-                                                    <Border>
-                                                        <Panel>
-                                                            <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !ShowsPause}" />
-                                                            <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding ShowsPause}" />
-                                                        </Panel>
-                                                    </Border>
+                                                    <Panel>
+                                                        <Border Classes="fabShadow" />
+                                                        <Border Classes="fab">
+                                                            <Panel>
+                                                                <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !ShowsPause}" />
+                                                                <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding ShowsPause}" />
+                                                            </Panel>
+                                                        </Border>
+                                                    </Panel>
                                                 </Button>
                                             </Panel>
                                             <TextBlock Classes="cardTitle" Text="{Binding Title}" />

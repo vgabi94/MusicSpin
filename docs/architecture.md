@@ -325,8 +325,25 @@ src/MusicSpin.App/
   lifts the arm where it is, nothing loaded parks it. `SlidePanel` sets its `Shown` (0 down, 1 in place) as a local
   value and its transition animates it, so a closing panel slides back from wherever it is. Once it is all the way in
   (`Covers`), the sidebar and the page under it are hidden, so they aren't drawn; they show again as it starts to go,
-  and while the turntable scene fades it in. Its background is the small cover blurred once per album
-  (`Theming/BlurredCover`, a 64-pixel image) and stretched: no blur runs per frame.
+  and while the turntable scene fades it in. While it, or the queue drawer, slides or fades (`IsMoving`), what it
+  holds and the sidebar and page under it (`.underMotion`) draw through a `BitmapCache`: each is drawn once into an
+  image and each step copies the images, redrawing only what changes in them (a spinning record). The cache is on
+  what the panel holds, not on the panel: under the panel's own opacity (the fade), a cache on it came out fainter
+  than drawn live. Its background is the small cover blurred once per album (`Theming/BlurredCover`, a 64-pixel
+  image) and stretched: no blur runs per frame.
+- **Shadows under a spinning record.** A blurred shadow (a `BoxShadow` or an effect) is blurred again every frame
+  it is drawn, and anything under a spinning record is drawn every frame. So each soft shadow there is on its own
+  element, drawn after the hard edge or ring it shared a border with (as Avalonia drew the pair): the decks' plinth
+  shadows, Carbon's slab, Classic's arm and the loaded album's card (its cover's and Play button's) draw through a
+  `BitmapCache` (in Now Playing's deck only; Settings' still previews don't), and round things draw `DiscShadow`, a
+  radial gradient as a Gaussian blurs a disc, with no blur at all: the platters' rims and the scene's record. A box
+  shadow's offset is in the window's pixels whatever the scale (Avalonia applies it after the transform), so
+  `DiscShadow.PixelOffsetY` is too. A deck's images are drawn at the pixels the deck shows its drawing at
+  (`DeckHost.SoftCache`, in eighths, from `DeckView.UnitScale` and the host's scale): Avalonia draws a cache at the
+  screen's scaling times its own, not at its ancestors' scale, so a fixed one would come out stretched on a big
+  window. It sizes a cache by its content as if nothing in it were turned, so Classic's arm shadow (its headshell is)
+  holds a transparent frame. Drawn live, Avalonia fades each part under an opacity on its own, so the arm's tube and
+  headshell darkened where they overlap; from its image the shadow is one shape faded, as the mockup's.
 - **Records.** A `VinylView` draws its two parts once each into an image as large as it shows on screen: what stays
   still (the disc, its edge and grooves) and what turns (the label and the hole). The label turns on its composition
   visual (a rotation about its centre), so a spinning record draws nothing new: the compositor turns an image. The
@@ -359,8 +376,9 @@ src/MusicSpin.App/
   things are (`IScenePlaces`): the sleeve marked with `SceneSource.AlbumId`, if it is inside its scroller's view, and
   the deck's record, measured with Now Playing put in place invisibly (`SlidePanel.IsFading`, which then fades it in
   instead of sliding). `SceneFlight`, in the window's overlay layer, draws the travelling sleeve and record from the
-  scene's time with the mockup's keyframes and easings; the deck shows an empty platter, then spins up and moves its
-  own arm from the arm state. At Motion None, with the sleeve off screen or Now Playing open, the album plays at once
+  scene's time with the mockup's keyframes and easings: it lays the pack out when where it flies from or lands changes,
+  and each step only moves its transforms; the record's shadow is a `DiscShadow` under it. The deck shows an empty
+  platter, then spins up and moves its own arm from the arm state. At Motion None, with the sleeve off screen or Now Playing open, the album plays at once
   and Now Playing opens; the album already playing just opens it.
 
 ### UI tests
