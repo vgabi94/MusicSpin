@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MusicSpin.Cli.Output;
 using MusicSpin.Core;
+using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Library;
 using ModelContextProtocol.Protocol;
@@ -241,6 +242,33 @@ internal static class McpCommand
 
                     var status = await SendAsync("shuffle", mode is null ? null : new { mode = mode.Trim().ToLowerInvariant(), seed }, ct).ConfigureAwait(false);
                     return mode is null ? status : WithWarning(status, PlayerSupport.SaveModes(runner, parseResult, status));
+                }));
+            yield return Tool("normalize", "Show or change volume levelling (ReplayGain / EBU R128). track: every track to the target level; album: an album's " +
+                "tracks keep their level to each other; auto: album gain for an album played in order, track gain for shuffle and radio; off: samples untouched. " +
+                "Gains come from ReplayGain/R128 tags, else a background analysis cached in the library. Saved as the default for new players.",
+                ([Description("off | track | album | auto. Omit to keep the mode.")] string? mode = null,
+                 [Description("Target loudness in LUFS, -30 to -8 (default -18).")] double? target = null,
+                 [Description("Pre-amp in dB, -12 to 12 (default 0).")] double? preamp = null,
+                 CancellationToken ct = default) => Guard(async () =>
+                {
+                    if (mode is not null && !NormalizationSettings.TryParseMode(mode, out _))
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, $"Unknown normalization mode '{mode}'. Use {NormalizationSettings.ModeValues}.");
+                    }
+
+                    if (target is { } t && !(t is >= NormalizationSettings.MinTargetLufs and <= NormalizationSettings.MaxTargetLufs))
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, $"target must be between {NormalizationSettings.MinTargetLufs} and {NormalizationSettings.MaxTargetLufs} LUFS.");
+                    }
+
+                    if (preamp is { } p && !(p is >= NormalizationSettings.MinPreampDb and <= NormalizationSettings.MaxPreampDb))
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, $"preamp must be between {NormalizationSettings.MinPreampDb} and {NormalizationSettings.MaxPreampDb} dB.");
+                    }
+
+                    var changes = mode is not null || target is not null || preamp is not null;
+                    var status = await SendAsync("normalize", changes ? new { mode = mode?.Trim().ToLowerInvariant(), target, preamp } : null, ct).ConfigureAwait(false);
+                    return changes ? WithWarning(status, PlayerSupport.SaveNormalization(runner, parseResult, status)) : status;
                 }));
             yield return Tool("quit_player", "Shut the background player down.", (CancellationToken ct = default) => Guard(async () =>
             {

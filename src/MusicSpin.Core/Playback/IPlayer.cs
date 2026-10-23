@@ -30,6 +30,9 @@ public sealed class TrackLoadedEventArgs(TrackInfo track) : EventArgs
 /// <summary>An entry the player may continue with gaplessly; <paramref name="Token"/> identifies it to the caller (a queue slot).</summary>
 public sealed record NextTrack(string Path, object Token);
 
+/// <summary>The volume-levelling gain (linear; 1 = untouched) for the entry identified by <paramref name="Token"/>.</summary>
+public sealed record TrackGain(object Token, float Gain);
+
 /// <summary>A next-track entry that could not be opened while preparing gapless playback.</summary>
 public sealed record SkippedNextTrack(NextTrack Entry, MusicSpinException Error);
 
@@ -120,6 +123,16 @@ public interface IPlayer : IDisposable
     /// ahead for gapless playback. Call again whenever the order changes.
     /// </summary>
     void SetNextTracks(IReadOnlyList<NextTrack> next);
+
+    /// <summary>
+    /// Volume levelling: the gain of the track that was loaded (<paramref name="current"/>), and of the entries that came
+    /// after it gaplessly or are decoded ahead (identified by their <see cref="NextTrack.Token"/>, the entry that plays now
+    /// included once the player moved on to it; entries not listed play at 1). Tracks are matched by identity, never by
+    /// position, so a call that races a gapless boundary cannot give the new track the old one's gain. Applies to the samples at the
+    /// output, moving to a new value over a few milliseconds, so it can be called at any time (a late analysis, a changed
+    /// setting) and at gapless boundaries without a click. At 1 the samples are not touched (bit-exact).
+    /// </summary>
+    void SetGains(float current, IReadOnlyList<TrackGain> next);
 
     /// <summary>Raised instead of <see cref="PlaybackEnded"/> when playback continued gaplessly into a <see cref="NextTrack"/>.</summary>
     event EventHandler<TrackAdvancedEventArgs>? TrackAdvanced;

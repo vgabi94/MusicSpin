@@ -87,6 +87,7 @@ Notes:
 - After a crash (e.g. `kill -9`), commands exit 13 and mention the stale pid. The next `play` cleans up the leftovers.
 - `player status` is the cheap "is anything running?" check. It exits 0 either way.
 - `repeat off|one|all` and `shuffle on|off|toggle [--seed N]` change the running queue; `status` reports `repeat`, `shuffle` and `shuffleSeed`. Changes are saved as defaults for the next player (see [Playback](playback.md#shuffle-and-repeat)).
+- `normalize off|track|album|auto [--target LUFS] [--preamp DB]` (MCP `normalize`) turns volume levelling (ReplayGain / R128, on by default) off or picks its mode; `status` reports `normalization` (`mode`, `gainDb`, `source`: `track-tag`, `album-tag`, `analysis`, `unknown`, `off`). Saved as the default. See [Playback](playback.md#volume-levelling-replaygain--r128).
 - Queue editing: `queue add --next` / `--up-next` (play next), `queue remove <pos>`, `queue move <from> <to>` (1-based), `queue clear --up-next`. See [Playback → Up next](playback.md#up-next).
 - Favorites: `favorite add|remove <files> | --album ... | --search ... | --track-id <id> | --current` (idempotent; JSON `requested`/`changed`/`unchanged`/`favorites`), `favorites [--missing]` (newest first; `missing` counts favorites no longer in the library), and `--favorites` on `tracks`, `filter`, `play`, `queue add` and `radio`. MCP: `favorite_add`, `favorite_remove`, `favorites`, and `favorites: true` on `play`, `queue_add`, `tracks`, `radio`. See [Music library → Favorites](library.md#favorites).
 - Playlists: `playlist create/add/show/...` (positions are 1-based), `play --playlist <name>`, `queue add --playlist <name>`, `queue save <name>`, `playlist import/export` for M3U/M3U8/PLS. Missing entries come back as `warnings` when played. See [Music library → Playlists](library.md#playlists).
@@ -127,6 +128,7 @@ One request per line on stdin; one response per line on stdout with the same `id
 {"id":18,"cmd":"queue","offset":0,"limit":50}  {"id":19,"cmd":"queue.clear"}  {"id":20,"cmd":"hello"}
 {"id":21,"cmd":"repeat","mode":"all"}          // off|one|all; without "mode": just the status
 {"id":22,"cmd":"shuffle","mode":"on","seed":7} // on|off|toggle (or "enabled":true/false); without "mode": just the status
+{"id":30,"cmd":"normalize","mode":"off"}       // off|track|album|auto, optional "target" (LUFS) and "preamp" (dB); without any: just the status; in serve only for this session (settings.json is not written)
 {"id":23,"cmd":"queue.set","items":["/music/a.flac","/music/b.flac"],"shuffle":true,"seed":7}  // turn shuffle on for the new queue
 {"id":29,"cmd":"queue.play","items":["/music/a.flac","/music/b.flac","/music/c.flac"],"start":1}  // play entry 1 of the list shown: keeps the queue (and its up next run) when it is that list, else like queue.set
 {"id":24,"cmd":"radio","filter":{"artists":["Miles Davis"],"genres":["Jazz"],"years":[{"from":1955,"to":1965}],"formats":["flac"],"searches":["blue"],"hiRes":false,"favorites":false,"excludeArtists":["Kenny G"],"excludeYears":[{"from":1960,"to":1960}]},"play":true}  {"id":25,"cmd":"radio.end"}

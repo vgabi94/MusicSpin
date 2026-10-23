@@ -2,6 +2,7 @@ using System.Text.Json;
 using MusicSpin.Cli;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Decoding.FFmpeg;
+using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Output;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Remote;
@@ -79,6 +80,7 @@ internal sealed class CliHarness : IAsyncDisposable
             IdleTimeout = PlayerIdleTimeout,
             InitialRepeat = PlaybackModes.TryParseRepeat(settings.Repeat, out var repeat) ? repeat : RepeatMode.Off,
             InitialShuffle = settings.Shuffle,
+            Normalization = NormalizationSettings.From(settings),
         });
         if (host is not null)
         {

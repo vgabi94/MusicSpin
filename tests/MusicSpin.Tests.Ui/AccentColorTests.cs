@@ -88,15 +88,15 @@ public sealed class AccentColorTests
 
             var accents = await Task.WhenAll(covers.AccentAsync(albumId), covers.AccentAsync(albumId));
             await covers.AccentAsync(albumId);
-            var first = await covers.CoverAsync(albumId, CoverSize.Small);
-            var again = await covers.CoverAsync(albumId, CoverSize.Small);
+            using var first = await covers.CoverAsync(albumId, CoverSize.Small);
+            using var again = await covers.CoverAsync(albumId, CoverSize.Small);
 
             var accent = Assert.NotNull(accents[0]); // orange: the most saturated quadrant (the small cover is a JPEG)
             Assert.True(Math.Abs(accent.R - 232) + Math.Abs(accent.G - 106) + Math.Abs(accent.B - 60) < 24, accent.ToString());
             Assert.Equal(accent, accents[1]);
             Assert.Equal(1, covers.AccentsComputed);
             Assert.NotNull(first);
-            Assert.Same(first, again);
+            Assert.Same(first.Bitmap, again?.Bitmap); // two leases on the one bitmap
             Assert.Equal(1, covers.BitmapsLoaded);
         }
         finally

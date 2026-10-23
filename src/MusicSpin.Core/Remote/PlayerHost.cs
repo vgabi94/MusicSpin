@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
+using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Settings;
 
@@ -32,6 +33,9 @@ public sealed record PlayerHostOptions
 
     /// <summary>Shuffle mode at start (settings.json "shuffle").</summary>
     public bool InitialShuffle { get; init; }
+
+    /// <summary>Volume levelling at start (settings.json "normalization*"). Off unless the starter passes the settings.</summary>
+    public NormalizationSettings Normalization { get; init; } = NormalizationSettings.Disabled;
 
     /// <summary>Decode-ahead buffer (settings.json "playbackBufferMs"); clamped by <see cref="PlayerOptions.ClampBuffer"/>.</summary>
     public int BufferMilliseconds { get; init; } = PlayerOptions.DefaultBufferMilliseconds;
@@ -103,6 +107,7 @@ public sealed class PlayerHost : IAsyncDisposable
     private readonly RadioPoolCache _radioPools;
     private readonly StationStore? _stations;
     private readonly SpectrumMeter _spectrum;
+    private readonly NormalizationService _normalization;
 
     private PlayerHost(PlayerHostOptions options, PlayerEndpoint endpoint, FileStream lockFile, IPlayerListener listener)
     {
@@ -118,6 +123,9 @@ public sealed class PlayerHost : IAsyncDisposable
             Volume = Math.Clamp(options.InitialVolume, 0f, 1f),
         };
         _queue = new QueuePlayer(_player, output);
+        _normalization = new NormalizationService(options.Decoders,
+            options.ResolveFromLibrary ? new LibraryLoudnessStore(options.DataDirectory) : new NoLoudnessStore(), options.Normalization, line => Log(line));
+        _queue.Normalizer = _normalization;
         _player.OutputOpened += (_, e) => OnOutputOpened(output, e.Opened);
         _spectrum = new SpectrumMeter(_player, options.Time);
         if (options.ResolveFromLibrary)
@@ -359,6 +367,7 @@ public sealed class PlayerHost : IAsyncDisposable
 
             _spectrum.Dispose();
             _queue.Dispose();
+            _normalization.Dispose();
             _player.Dispose();
             (_options.Outputs as IDisposable)?.Dispose();
             TryDelete(Endpoint.InfoFile);

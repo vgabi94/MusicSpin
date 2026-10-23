@@ -165,9 +165,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     [ObservableProperty]
     public partial string? PlayingAlbumId { get; private set; }
 
-    /// <summary>The playing album's cover for the player bar.</summary>
+    /// <summary>The playing album's cover for the player bar. Held while shown.</summary>
     [ObservableProperty]
     public partial Bitmap? PlayingCover { get; private set; }
+
+    private CoverLease? _playingCover;
 
     /// <summary>"—" when nothing is loaded.</summary>
     public string PlayerTitle => Player.Title ?? "—";
@@ -622,24 +624,37 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         {
             // A cover waits out a busy library (see CoverService), so another album may be playing by the time it comes:
             // only the playing album's cover and colour are shown.
-            var read = albumId is null ? Task.FromResult<Bitmap?>(null) : _services.Covers.CoverAsync(albumId, CoverSize.Small);
+            var read = albumId is null ? Task.FromResult<CoverLease?>(null) : _services.Covers.CoverAsync(albumId, CoverSize.Small);
             if (!read.IsCompleted)
             {
-                PlayingCover = null; // not the last album's cover meanwhile
+                ShowPlayingCover(null); // not the last album's cover meanwhile
             }
 
             var cover = await read.ConfigureAwait(true);
             if (PlayingAlbumId != albumId)
             {
+                cover?.Dispose();
                 return;
             }
 
-            PlayingCover = cover;
+            ShowPlayingCover(cover);
             var accent = albumId is null ? null : await _services.Covers.AccentAsync(albumId).ConfigureAwait(true);
             if (PlayingAlbumId == albumId)
             {
                 _services.Appearance.SetAccent(accent);
             }
         }).ConfigureAwait(true);
+    }
+
+    /// <summary>Shows <paramref name="lease"/>'s cover in the player bar, and lets go of the one it replaces once it shows.</summary>
+    private void ShowPlayingCover(CoverLease? lease)
+    {
+        var old = _playingCover;
+        _playingCover = lease;
+        PlayingCover = lease?.Bitmap;
+        if (!ReferenceEquals(old, lease))
+        {
+            old?.Dispose();
+        }
     }
 }
