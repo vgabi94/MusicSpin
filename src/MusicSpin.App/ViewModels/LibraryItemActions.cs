@@ -1,13 +1,37 @@
+using Avalonia;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using MusicSpin.App.Services;
 using MusicSpin.Core.Playback;
 
 namespace MusicSpin.App.ViewModels;
 
 /// <summary>What a drag shows under the pointer (mockup: .drag-ghost): the cover, a title and a detail.</summary>
-/// <param name="Cover">The cover; null shows the placeholder, which names <paramref name="Album"/> and <paramref name="Artist"/>.</param>
+/// <param name="Cover">
+/// The cover; null shows the placeholder, which names <paramref name="Album"/> and <paramref name="Artist"/>. Its own small
+/// copy (<see cref="Copy"/>): the row it came from may scroll away, or Now Playing move on, and let go of theirs mid-drag.
+/// </param>
 /// <param name="Detail">"8 tracks" for an album, the artist for a track.</param>
-public sealed record DragGhostViewModel(IImage? Cover, string Album, string Artist, string Title, string Detail);
+public sealed record DragGhostViewModel(IImage? Cover, string Album, string Artist, string Title, string Detail) : IDisposable
+{
+    /// <summary>The copy's width, in pixels: a ghost's cover is small (Styles/Metrics.axaml: GhostCoverSize).</summary>
+    public const int CopyPixels = 128;
+
+    /// <summary>A ghost's own copy of <paramref name="cover"/>, at most <see cref="CopyPixels"/> wide.</summary>
+    public static IImage? Copy(IImage? cover)
+    {
+        if (cover is not Bitmap { PixelSize: { Width: > 0, Height: > 0 } size } bitmap)
+        {
+            return cover;
+        }
+
+        var width = Math.Min(CopyPixels, size.Width);
+        return bitmap.CreateScaledBitmap(new PixelSize(width, Math.Max(1, size.Height * width / size.Width)));
+    }
+
+    /// <summary>The drag is over: its copy goes.</summary>
+    public void Dispose() => (Cover as Bitmap)?.Dispose();
+}
 
 /// <summary>
 /// The queue choices every menu offers (mockup: queueMenu): Play next and Add to queue, then Add to playlist › (#33).
@@ -119,16 +143,17 @@ public sealed class LibraryItemActions(
         AlbumItemViewModel album => AlbumGhost(album),
         CrateRecordViewModel record => AlbumGhost(record.Album),
         TrackAlbumHeaderViewModel header => AlbumGhost(header.Album, header.Tracks.Count),
-        TrackItemViewModel track => new DragGhostViewModel(track.Art.Cover, track.Album, track.AlbumArtist, track.Title, track.Artist),
-        NowPlayingTrackViewModel track => new DragGhostViewModel(nowPlaying.Cover, track.Track.Album, nowPlaying.ArtistLine ?? track.Track.Artist,
-            track.Title, track.Track.Artist),
-        QueueRowViewModel row => new DragGhostViewModel(row.Art?.Cover, row.Album, row.Artist, row.Title, row.Artist),
+        TrackItemViewModel track => new DragGhostViewModel(DragGhostViewModel.Copy(track.Art.Loaded), track.Album, track.AlbumArtist, track.Title, track.Artist),
+        NowPlayingTrackViewModel track => new DragGhostViewModel(DragGhostViewModel.Copy(nowPlaying.Cover), track.Track.Album,
+            nowPlaying.ArtistLine ?? track.Track.Artist, track.Title, track.Track.Artist),
+        QueueRowViewModel row => new DragGhostViewModel(DragGhostViewModel.Copy(row.Art?.Loaded), row.Album, row.Artist, row.Title, row.Artist),
         _ => null,
     };
 
     private static DragGhostViewModel AlbumGhost(AlbumItemViewModel album, int? tracks = null)
     {
         var count = tracks ?? album.Album.TrackCount;
-        return new DragGhostViewModel(album.Art.Cover, album.Title, album.Artist, album.Title, count == 1 ? "1 track" : $"{count} tracks");
+        return new DragGhostViewModel(DragGhostViewModel.Copy(album.Art.Loaded), album.Title, album.Artist, album.Title,
+            count == 1 ? "1 track" : $"{count} tracks");
     }
 }

@@ -10,6 +10,7 @@ namespace MusicSpin.App.Views.Pages;
 public partial class AlbumsPage : UserControl
 {
     private AlbumsPageViewModel? _viewModel;
+    private TopLevel? _topLevel;
 
     public AlbumsPage()
     {
@@ -24,6 +25,7 @@ public partial class AlbumsPage : UserControl
         _viewModel?.Settings.PropertyChanged -= OnSettingsChanged;
         _viewModel = DataContext as AlbumsPageViewModel;
         _viewModel?.Settings.PropertyChanged += OnSettingsChanged;
+        ReportCoverPixels(0);
         ReportWidth(AlbumGrid.Bounds.Width);
         ReportCrateColumns(CrateGrid.Bounds.Width);
     }
@@ -51,7 +53,46 @@ public partial class AlbumsPage : UserControl
         if (_viewModel is { } viewModel && width > 0 && Resource<double>("CardMinWidth") is { } minWidth && Resource<double>("CardColumnGap") is { } gap)
         {
             viewModel.Columns = Math.Max(1, (int)((width + gap) / (minWidth + gap)));
+            ReportCoverPixels(((width + gap) / viewModel.Columns) - gap);
         }
+    }
+
+    /// <summary>
+    /// The most pixels across a cover shows at: a card's art is scaled to the card's width, a crate's front record leans
+    /// out to CrateCoverMost; a shelf's sleeves are smaller than either. Covers are decoded no larger.
+    /// </summary>
+    private void ReportCoverPixels(double cardWidth)
+    {
+        if (_viewModel is { } viewModel && TopLevel.GetTopLevel(this) is { } top && Resource<double>("CrateCoverMost") is { } crate)
+        {
+            viewModel.CoverPixels = (int)Math.Ceiling(Math.Max(cardWidth, crate) * top.RenderScaling);
+        }
+    }
+
+    /// <summary>
+    /// Before its items are laid out (and ask for their covers), the crate's size, and the screen's scaling, are known:
+    /// the first covers are decoded for those, and again only for cards wider than that.
+    /// </summary>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _topLevel = TopLevel.GetTopLevel(this);
+        _topLevel?.ScalingChanged += OnScalingChanged;
+        ReportCoverPixels(0);
+        ReportWidth(AlbumGrid.Bounds.Width);
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _topLevel?.ScalingChanged -= OnScalingChanged;
+        _topLevel = null;
+    }
+
+    private void OnScalingChanged(object? sender, EventArgs e)
+    {
+        ReportCoverPixels(0);
+        ReportWidth(AlbumGrid.Bounds.Width);
     }
 
     /// <summary>The mockup's shelfPerRow: as many sleeves as fit on a board at the current tilt (see <see cref="ShelfGeometry"/>).</summary>
