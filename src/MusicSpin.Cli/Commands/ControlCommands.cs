@@ -4,6 +4,7 @@ using System.Text.Json;
 using MusicSpin.Cli.Output;
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
+using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Settings;
 
@@ -24,6 +25,7 @@ internal static class ControlCommands
         yield return Volume(runner);
         yield return Repeat(runner);
         yield return Shuffle(runner);
+        yield return Normalize(runner);
         yield return Simple(runner, "status", "status",
             "Player status: state, track (codec, sample rate, bit depth, tags), position, duration, volume, queue index/length, output device, exclusive mode.");
         yield return Queue(runner);
@@ -186,6 +188,66 @@ internal static class ControlCommands
                 cancellationToken).ConfigureAwait(false);
             var warning = text is null ? null : PlayerSupport.SaveModes(runner, parseResult, data);
             PlayerSupport.WriteStatus(runner, json, "shuffle", data, new Dictionary<string, object?>
+            {
+                ["warnings"] = warning is null ? null : new[] { warning },
+            });
+            return ExitCodes.Success;
+        });
+        return command;
+    }
+
+    private static Command Normalize(CommandRunner runner)
+    {
+        var mode = new Argument<string?>("mode")
+        {
+            Description = $"{NormalizationSettings.ModeValues}. Without a mode: show the current settings.",
+            Arity = ArgumentArity.ZeroOrOne,
+        };
+        var target = new Option<double?>("--target")
+        {
+            Description = $"Loudness the tracks are brought to, in LUFS ({NormalizationSettings.MinTargetLufs} to {NormalizationSettings.MaxTargetLufs}; default {NormalizationSettings.DefaultTargetLufs}).",
+        };
+        var preamp = new Option<double?>("--preamp")
+        {
+            Description = $"Added to every track's gain, in dB ({NormalizationSettings.MinPreampDb} to {NormalizationSettings.MaxPreampDb}; default 0).",
+        };
+        var command = new Command("normalize",
+            "Show or change volume levelling (ReplayGain / EBU R128). track: every track to the target level; album: an album's tracks keep their level to " +
+            "each other; auto (default): album gain for an album played in order, track gain for shuffle and radio; off: the samples are not touched. " +
+            "Gains come from ReplayGain / R128 tags, else from an analysis of the track that runs in the background (cached in the library). " +
+            "Saved as the default in settings.json.")
+        {
+            mode, target, preamp,
+        };
+        command.Validators.Add(r =>
+        {
+            if (Options.Get(r, mode) is { } text && !NormalizationSettings.TryParseMode(text, out _))
+            {
+                r.AddError($"Unknown normalization mode '{text}'. Use {NormalizationSettings.ModeValues}.");
+            }
+
+            if (Options.Get(r, target) is { } t && !(t is >= NormalizationSettings.MinTargetLufs and <= NormalizationSettings.MaxTargetLufs))
+            {
+                r.AddError($"--target must be between {NormalizationSettings.MinTargetLufs} and {NormalizationSettings.MaxTargetLufs} LUFS.");
+            }
+
+            if (Options.Get(r, preamp) is { } p && !(p is >= NormalizationSettings.MinPreampDb and <= NormalizationSettings.MaxPreampDb))
+            {
+                r.AddError($"--preamp must be between {NormalizationSettings.MinPreampDb} and {NormalizationSettings.MaxPreampDb} dB.");
+            }
+        });
+        runner.SetAction(command, async (parseResult, json, cancellationToken) =>
+        {
+            var text = parseResult.GetValue(mode);
+            var targetValue = parseResult.GetValue(target);
+            var preampValue = parseResult.GetValue(preamp);
+            var changes = text is not null || targetValue is not null || preampValue is not null;
+            await using var client = await PlayerSupport.ConnectAsync(runner, parseResult, cancellationToken).ConfigureAwait(false);
+            var data = await client.SendAsync("normalize", changes
+                ? new { mode = text?.Trim().ToLowerInvariant(), target = targetValue, preamp = preampValue }
+                : null, cancellationToken).ConfigureAwait(false);
+            var warning = changes ? PlayerSupport.SaveNormalization(runner, parseResult, data) : null;
+            PlayerSupport.WriteStatus(runner, json, "normalize", data, new Dictionary<string, object?>
             {
                 ["warnings"] = warning is null ? null : new[] { warning },
             });
@@ -447,6 +509,7 @@ internal static class ControlCommands
                 InitialVolume = (float)Math.Clamp(double.IsFinite(settings.Volume) ? settings.Volume : 1, 0, 1),
                 InitialRepeat = PlaybackModes.TryParseRepeat(settings.Repeat, out var repeatMode) ? repeatMode : RepeatMode.Off,
                 InitialShuffle = settings.Shuffle,
+                Normalization = NormalizationSettings.From(settings),
                 BufferMilliseconds = settings.PlaybackBufferMs,
                 Gapless = settings.Gapless,
                 Log = log,

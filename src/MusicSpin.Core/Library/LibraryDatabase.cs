@@ -49,7 +49,7 @@ internal sealed class LibraryDatabase : IDisposable
     /// Schema version, stored as LiteDB's user version. There are no migrations before the first release: the schema may
     /// change freely, and a database with any other version is refused (delete library.db and rescan).
     /// </summary>
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
 
     public LiteDatabase Db { get; }
     public bool ReadOnly { get; }

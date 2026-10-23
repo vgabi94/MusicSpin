@@ -1,6 +1,7 @@
 using System.Globalization;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Metadata;
+using MusicSpin.Core.Normalization;
 using TagLib;
 
 namespace MusicSpin.Core.Library;
@@ -124,10 +125,12 @@ public sealed class TrackReader : ITrackReader
         r.DiscCount = Positive(tag.DiscCount);
         r.Year = Positive(tag.Year);
         r.Genre = Clean(tag.JoinedGenres);
-        r.ReplayGainTrackGain = Finite(tag.ReplayGainTrackGain);
-        r.ReplayGainTrackPeak = Finite(tag.ReplayGainTrackPeak);
-        r.ReplayGainAlbumGain = Finite(tag.ReplayGainAlbumGain);
-        r.ReplayGainAlbumPeak = Finite(tag.ReplayGainAlbumPeak);
+        var (r128Track, r128Album) = R128Tags(file);
+        SetReplayGain(r, new ReplayGainTags(
+            ReplayGainTags.ValidGain(tag.ReplayGainTrackGain) ?? ReplayGainTags.ParseR128(r128Track),
+            ReplayGainTags.ValidPeak(tag.ReplayGainTrackPeak),
+            ReplayGainTags.ValidGain(tag.ReplayGainAlbumGain) ?? ReplayGainTags.ParseR128(r128Album),
+            ReplayGainTags.ValidPeak(tag.ReplayGainAlbumPeak)));
         r.HasEmbeddedCover = tag.Pictures is { Length: > 0 };
         r.IsCompilation = IsCompilation(file);
 
@@ -184,10 +187,33 @@ public sealed class TrackReader : ITrackReader
         (r.DiscNumber, r.DiscCount) = NumberPair(Get(t, "disc"));
         r.Year = Year(Get(t, "date") ?? Get(t, "year"));
         r.IsCompilation = Get(t, "compilation") is "1" or "true";
-        r.ReplayGainTrackGain = Db(Get(t, "replaygain_track_gain"));
-        r.ReplayGainTrackPeak = Db(Get(t, "replaygain_track_peak"));
-        r.ReplayGainAlbumGain = Db(Get(t, "replaygain_album_gain"));
-        r.ReplayGainAlbumPeak = Db(Get(t, "replaygain_album_peak"));
+        SetReplayGain(r, ReplayGainTags.FromText(
+            Get(t, "replaygain_track_gain"), Get(t, "replaygain_track_peak"),
+            Get(t, "replaygain_album_gain"), Get(t, "replaygain_album_peak"),
+            Get(t, "r128_track_gain"), Get(t, "r128_album_gain")));
+    }
+
+    private static void SetReplayGain(TrackRecord r, ReplayGainTags tags)
+    {
+        r.ReplayGainTrackGain = tags.TrackGainDb;
+        r.ReplayGainTrackPeak = tags.TrackPeak;
+        r.ReplayGainAlbumGain = tags.AlbumGainDb;
+        r.ReplayGainAlbumPeak = tags.AlbumPeak;
+    }
+
+    /// <summary>Opus keeps its loudness in <c>R128_TRACK_GAIN</c> / <c>R128_ALBUM_GAIN</c> (Q7.8 fixed point, text).</summary>
+    private static (string? Track, string? Album) R128Tags(TagLib.File file)
+    {
+        try
+        {
+            return file.GetTag(TagTypes.Xiph) is TagLib.Ogg.XiphComment xiph
+                ? (xiph.GetFirstField("R128_TRACK_GAIN"), xiph.GetFirstField("R128_ALBUM_GAIN"))
+                : (null, null);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return (null, null);
+        }
     }
 
     private static bool IsCompilation(TagLib.File file)
@@ -225,8 +251,6 @@ public sealed class TrackReader : ITrackReader
 
     private static int? Positive(uint value) => value is > 0 and < int.MaxValue ? (int)value : null;
 
-    private static double? Finite(double value) => double.IsFinite(value) ? value : null;
-
     private static (int?, int?) NumberPair(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -241,17 +265,6 @@ public sealed class TrackReader : ITrackReader
 
     private static int? Year(string? value)
         => value is { Length: >= 4 } && int.TryParse(value.AsSpan(0, 4), NumberStyles.Integer, CultureInfo.InvariantCulture, out var y) && y > 0 ? y : null;
-
-    private static double? Db(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var cleaned = value.Replace("dB", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
-        return double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && double.IsFinite(d) ? d : null;
-    }
 
     private static bool IsBrokenTagLibInstall(Exception ex) => ex switch
     {

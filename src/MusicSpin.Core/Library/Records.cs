@@ -55,6 +55,17 @@ public sealed class TrackRecord
     public double? ReplayGainAlbumPeak { get; set; }
     public bool HasEmbeddedCover { get; set; }
 
+    // Analysed loudness (#139): measured on first play of an untagged file, valid for the file with the size and modification
+    // time below (a changed file gets a fresh record from the scan, which clears all of it).
+    public double? LoudnessLufs { get; set; }
+    public double? LoudnessTruePeak { get; set; }
+    public bool LoudnessAnalyzed { get; set; }
+
+    /// <summary>The <see cref="MusicSpin.Core.Normalization.LoudnessMeter.AlgorithmVersion"/> that measured it; 0 (not stored) never matches, so such a result is measured again.</summary>
+    public int LoudnessVersion { get; set; }
+    public long LoudnessSizeBytes { get; set; }
+    public long LoudnessModifiedUtcTicks { get; set; }
+
     // Audio properties
     public double DurationSeconds { get; set; }
     public string Format { get; set; } = string.Empty;

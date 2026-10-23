@@ -223,6 +223,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [RelayCommand]
     private Task SetRepeat(RepeatMode mode) => SendAsync("repeat", new { mode = mode.ToString().ToLowerInvariant() });
 
+    /// <summary>
+    /// Tells a running player the volume levelling mode now (<c>normalize</c>: off | track | album | auto). A player that is
+    /// not running is left alone: it takes the saved setting when it starts.
+    /// </summary>
+    public Task SetNormalizationAsync(string mode) => IsConnected ? SendAsync("normalize", new { mode }) : Task.CompletedTask;
+
     [RelayCommand]
     private Task SetShuffle(bool on) => SendAsync("shuffle", new { mode = on ? "on" : "off" });
 

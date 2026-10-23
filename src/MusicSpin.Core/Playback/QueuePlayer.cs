@@ -1,4 +1,5 @@
 using MusicSpin.Core.Library;
+using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Remote;
 
 namespace MusicSpin.Core.Playback;
@@ -72,6 +73,8 @@ public sealed class QueuePlayer : IDisposable
     private Slot? _loadedSlot;
     private int _rapidLoops;
     private RadioSession? _radio;
+    private IGainResolver? _normalizer;
+    private NormalizationGain? _levelGain; // the current track's gain, for status
 
     /// <summary>Radio keeps this many tracks queued after the current one...</summary>
     public const int RadioLookahead = 20;
@@ -91,6 +94,41 @@ public sealed class QueuePlayer : IDisposable
         _player.TrackLoaded += OnTrackLoaded;
         _player.Error += OnPlayerError;
         _player.TrackAdvanced += OnTrackAdvanced;
+    }
+
+    /// <summary>
+    /// Volume levelling (#139): gives each track a gain from its ReplayGain / R128 tags or an analysis. Null: tracks play as
+    /// they are. Set before playing.
+    /// </summary>
+    public IGainResolver? Normalizer
+    {
+        get { lock (_gate) { return _normalizer; } }
+        set
+        {
+            lock (_gate)
+            {
+                if (ReferenceEquals(_normalizer, value))
+                {
+                    return;
+                }
+
+                if (_normalizer is not null)
+                {
+                    _normalizer.Changed -= OnNormalizationChanged;
+                }
+
+                _normalizer = value;
+                _levelGain = null;
+                if (value is not null)
+                {
+                    value.Changed += OnNormalizationChanged;
+                    if (!_disposed)
+                    {
+                        ApplyGains(BuildNext());
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>The output in status: the requested one, then what the device really opened at (set by the host).</summary>
@@ -310,6 +348,7 @@ public sealed class QueuePlayer : IDisposable
         {
             ThrowIfDisposed();
             _player.Load(path); // throws before touching the queue when the file is bad
+            PrepareLoadedGain(path, [], -1);
             _items.Clear();
             _items.Add(_loadedSlot = new Slot(new QueueItem(path), 0));
             _radio = null;
@@ -950,6 +989,10 @@ public sealed class QueuePlayer : IDisposable
         _player.TrackLoaded -= OnTrackLoaded;
         _player.Error -= OnPlayerError;
         _player.TrackAdvanced -= OnTrackAdvanced;
+        if (_normalizer is not null)
+        {
+            _normalizer.Changed -= OnNormalizationChanged;
+        }
         try
         {
             _player.Stop();
@@ -999,6 +1042,7 @@ public sealed class QueuePlayer : IDisposable
         {
             _player.Load(item.Path);
             MarkLoaded(slots ?? _items, index);
+            PrepareLoadedGain(item.Path, slots ?? _items, index);
             return true;
         }
         catch (MusicSpinException ex) when (ex.Code == MusicSpinErrorCode.FileNotFound && TryLoadMoved(item, index, slots ?? _items))
@@ -1042,6 +1086,7 @@ public sealed class QueuePlayer : IDisposable
         }
 
         MarkLoaded(slots, index);
+        PrepareLoadedGain(moved.Path, slots, index);
         if (index >= 0 && index < slots.Count && ReferenceEquals(slots[index].Item, item))
         {
             slots[index].Item = moved;
@@ -1143,7 +1188,22 @@ public sealed class QueuePlayer : IDisposable
             diagnostics?.Underruns,
             _radio is null ? null : new RadioInfo(_radio.Filter, _radio.Filter.Describe(), _radio.PoolSize),
             has ? UpNextEnd() - _index - 1 : 0,
-            _mutedLevel is not null);
+            _mutedLevel is not null,
+            NormalizationState());
+    }
+
+    private NormalizationStatus? NormalizationState()
+    {
+        if (_normalizer is not { } normalizer)
+        {
+            return null;
+        }
+
+        var settings = normalizer.Settings;
+        var level = CurrentLoaded() ? _levelGain : null;
+        return new NormalizationStatus(
+            NormalizationSettings.Name(settings.Mode), settings.TargetLufs, settings.PreampDb,
+            level is { } l ? Math.Round(l.Db, 2) : null, level?.SourceName, level?.Limited ?? false);
     }
 
     private const int MaxNextTracks = 16;
@@ -1157,12 +1217,21 @@ public sealed class QueuePlayer : IDisposable
         }
 
         TopUpRadio();
-        var next = new List<NextTrack>();
+        var next = BuildNext();
+        _player.SetNextTracks([.. next.Select(n => n.Entry)]);
+        ApplyGains(next);
+    }
+
+    /// <summary>The entries that follow the current one in play order, with their positions in the queue.</summary>
+    private List<(NextTrack Entry, int Index)> BuildNext()
+    {
+        var next = new List<(NextTrack, int)>();
         if (!_ended && CurrentLoaded())
         {
             if (_repeat == RepeatMode.One)
             {
-                next.AddRange(Enumerable.Repeat(new NextTrack(_items[_index].Item.Path, _items[_index]), MaxNextTracks));
+                var again = new NextTrack(_items[_index].Item.Path, _items[_index]);
+                next.AddRange(Enumerable.Repeat((again, _index), MaxNextTracks));
             }
             else
             {
@@ -1181,12 +1250,95 @@ public sealed class QueuePlayer : IDisposable
                         break;
                     }
 
-                    next.Add(new NextTrack(slot.Item.Path, slot));
+                    next.Add((new NextTrack(slot.Item.Path, slot), i));
                 }
             }
         }
 
-        _player.SetNextTracks(next);
+        return next;
+    }
+
+    // ------------------------------------------------------------------------------------------------ volume levelling
+
+    /// <summary>
+    /// The loaded track starts at the gain known for it. Never reads the library here (this runs under the gate, on the track-start path):
+    /// a track that is not known yet is looked up first by the resolver thread and moves to its gain (a short ramp) when it is.
+    /// </summary>
+    private void PrepareLoadedGain(string path, List<Slot> slots, int index)
+    {
+        if (_normalizer is not { } normalizer)
+        {
+            return;
+        }
+
+        var gain = normalizer.Prepare(path, AlbumContext(slots, index));
+        _levelGain = gain;
+        _player.SetGains((float)gain.Linear, []);
+    }
+
+    /// <summary>Gains for the current track and the ones decoded ahead; also tells the resolver which tracks to look at.</summary>
+    private void ApplyGains(List<(NextTrack Entry, int Index)> next)
+    {
+        if (_normalizer is not { } normalizer || _disposed)
+        {
+            return;
+        }
+
+        var loaded = !_ended && CurrentLoaded();
+        var wanted = new List<string>(next.Count + 1);
+        if (loaded)
+        {
+            wanted.Add(_items[_index].Item.Path);
+        }
+
+        wanted.AddRange(next.Select(n => n.Entry.Path));
+        normalizer.Want(wanted);
+        var current = loaded ? normalizer.GainFor(_items[_index].Item.Path, AlbumContext(_items, _index)) : (NormalizationGain?)null;
+        _levelGain = current;
+        var gains = new List<TrackGain>(next.Count + 1);
+        if (current is { } now)
+        {
+            // the playing entry by token too: once the player has moved on to it gaplessly it is no longer the loaded track
+            gains.Add(new TrackGain(_items[_index], (float)now.Linear));
+        }
+
+        foreach (var (entry, index) in next)
+        {
+            gains.Add(new TrackGain(entry.Token, (float)normalizer.GainFor(entry.Path, AlbumContext(_items, index)).Linear));
+        }
+
+        _player.SetGains((float)(current?.Linear ?? 1.0), gains);
+    }
+
+    /// <summary>
+    /// Whether the entry plays as part of its album: in order (no shuffle, no radio) next to a neighbour of the same album.
+    /// Only matters in the "auto" mode.
+    /// </summary>
+    private bool AlbumContext(List<Slot> slots, int index)
+    {
+        if (index < 0 || index >= slots.Count)
+        {
+            return false;
+        }
+
+        static (string?, string?) Album(Slot slot) => (slot.Item.Album, slot.Item.AlbumArtist);
+        return GainCalculator.IsAlbumContext(
+            Album(slots[index]),
+            index > 0 ? Album(slots[index - 1]) : null,
+            index + 1 < slots.Count ? Album(slots[index + 1]) : null,
+            _shuffle,
+            _radio is not null);
+    }
+
+    private void OnNormalizationChanged(object? sender, EventArgs e)
+    {
+        lock (_gate)
+        {
+            if (!_disposed)
+            {
+                ApplyGains(BuildNext());
+            }
+        }
     }
 
     private void OnTrackAdvanced(object? sender, TrackAdvancedEventArgs e)

@@ -339,6 +339,100 @@ public sealed class TrackReaderTests : IDisposable
         Assert.Equal(expected, record.IsHiRes);
     }
 
+    [Fact]
+    public void Replaygain_tags_of_a_flac_are_read_as_decibels_and_linear_peaks()
+    {
+        var path = Copy("tiny-16bit-44k.flac");
+        using (var file = TagLib.File.Create(path))
+        {
+            file.Tag.ReplayGainTrackGain = -6.5;
+            file.Tag.ReplayGainTrackPeak = 0.93;
+            file.Tag.ReplayGainAlbumGain = -7.25;
+            file.Tag.ReplayGainAlbumPeak = 0.99;
+            file.Save();
+        }
+
+        var r = new TrackReader(null).Read(path);
+
+        Assert.Equal((-6.5, 0.93, -7.25, 0.99), (r.ReplayGainTrackGain, r.ReplayGainTrackPeak, r.ReplayGainAlbumGain, r.ReplayGainAlbumPeak));
+    }
+
+    [Fact]
+    public void An_untagged_file_has_no_replaygain_values()
+    {
+        var r = new TrackReader(null).Read(Copy("tiny-16bit-44k.flac"));
+
+        Assert.Equal((null, null, null, null), (r.ReplayGainTrackGain, r.ReplayGainTrackPeak, r.ReplayGainAlbumGain, r.ReplayGainAlbumPeak));
+    }
+
+    [Fact]
+    public void R128_tags_in_vorbis_comments_are_converted_to_a_gain_against_the_replaygain_reference()
+    {
+        // R128_TRACK_GAIN is Q7.8 dB relative to -23 LUFS: -1280 is -5 dB, i.e. a gain of 0 dB against -18 LUFS.
+        var path = Copy("tiny-16bit-44k.flac");
+        using (var file = TagLib.File.Create(path))
+        {
+            var xiph = (TagLib.Ogg.XiphComment)file.GetTag(TagLib.TagTypes.Xiph, true);
+            xiph.SetField("R128_TRACK_GAIN", "-1280");
+            xiph.SetField("R128_ALBUM_GAIN", "256");
+            file.Save();
+        }
+
+        var r = new TrackReader(null).Read(path);
+
+        Assert.Equal(0.0, r.ReplayGainTrackGain!.Value, 9);
+        Assert.Equal(6.0, r.ReplayGainAlbumGain!.Value, 9);
+    }
+
+    [Fact]
+    public void A_replaygain_tag_wins_over_an_r128_tag()
+    {
+        var path = Copy("tiny-16bit-44k.flac");
+        using (var file = TagLib.File.Create(path))
+        {
+            file.Tag.ReplayGainTrackGain = -3;
+            ((TagLib.Ogg.XiphComment)file.GetTag(TagLib.TagTypes.Xiph, true)).SetField("R128_TRACK_GAIN", "-1280");
+            file.Save();
+        }
+
+        Assert.Equal(-3, new TrackReader(null).Read(path).ReplayGainTrackGain);
+    }
+
+    [Theory]
+    [InlineData("not a number")]
+    [InlineData("")]
+    [InlineData("99999999")]
+    public void Unusable_r128_values_are_ignored(string value)
+    {
+        var path = Copy("tiny-16bit-44k.flac");
+        using (var file = TagLib.File.Create(path))
+        {
+            ((TagLib.Ogg.XiphComment)file.GetTag(TagLib.TagTypes.Xiph, true)).SetField("R128_TRACK_GAIN", value);
+            file.Save();
+        }
+
+        Assert.Null(new TrackReader(null).Read(path).ReplayGainTrackGain);
+    }
+
+    [Fact]
+    public void Ffmpegs_tags_carry_replaygain_and_r128_too()
+    {
+        var path = Garbage();
+        var ffmpeg = new StubFactory(_ => Probed(path, new()
+        {
+            ["replaygain_track_gain"] = "-4.20 dB",
+            ["replaygain_track_peak"] = "0.88",
+            ["replaygain_album_gain"] = "nonsense",
+            ["r128_album_gain"] = "512",
+        }));
+
+        var r = new TrackReader(ffmpeg).Read(path);
+
+        Assert.Equal((-4.2, 0.88), (r.ReplayGainTrackGain, r.ReplayGainTrackPeak));
+        Assert.Equal(7.0, r.ReplayGainAlbumGain!.Value, 9); // the unusable replaygain tag falls back to R128
+        Assert.Null(r.ReplayGainAlbumPeak);
+    }
+
     private sealed class StubFactory(Func<string, TrackInfo> probe) : IAudioDecoderFactory
     {
         public string Name => "stub";

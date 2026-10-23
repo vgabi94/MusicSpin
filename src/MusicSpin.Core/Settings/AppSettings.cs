@@ -49,6 +49,18 @@ public sealed record AppSettings
     /// <summary>Play consecutive tracks with the same sample rate, channels and bit depth without a gap.</summary>
     public bool Gapless { get; init; } = true;
 
+    /// <summary>
+    /// Volume levelling (ReplayGain / R128, #139): "auto" (the default: album gain for an album played in order, track gain
+    /// otherwise) | "track" | "album" | "off". "off" leaves the samples untouched. Updated by 'music-spin normalize'.
+    /// </summary>
+    public string Normalization { get; init; } = "auto";
+
+    /// <summary>The loudness (LUFS) levelled tracks are brought to: -30..-8, -18 by default (ReplayGain 2.0's reference).</summary>
+    public double NormalizationTargetLufs { get; init; } = global::MusicSpin.Core.Normalization.NormalizationSettings.DefaultTargetLufs;
+
+    /// <summary>Added to every levelled track's gain, in dB: -12..+12.</summary>
+    public double NormalizationPreampDb { get; init; }
+
     // ---- Desktop app (Settings in the app; the CLI ignores them) ----
 
     /// <summary>The app's colour theme: "dark" | "light".</summary>
