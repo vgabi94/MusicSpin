@@ -16,7 +16,7 @@ Decoding is done by FFmpeg 9.0 (shared libraries, loaded at runtime). `music-spi
 file → FFmpegAudioDecoder (libavformat + libavcodec)
      → libswresample: interleaved float32 at the source sample rate and channel layout (no resampling)
      → Player / PlaybackSource (volume; skipped at 1.0)
-     → IAudioOutput: SoundFlow/miniaudio (or the null output)
+     → IAudioOutput: miniaudio (native/msaudio; WASAPI exclusive on Windows) (or the null output)
      → device opened at the source sample rate, as S16 (≤16-bit source), S24 (17-24-bit) or F32 (32-bit, float, DSD)
 ```
 
@@ -42,6 +42,13 @@ MusicSpin **aims for** bit-perfect output:
 Without `--exclusive` the OS mixer (Windows audio engine, PulseAudio/PipeWire, CoreAudio) may still resample or mix.
 
 > **Status:** bit-perfect output has been verified in tests up to the output interface (decoded samples). It has **not** been verified on real hardware yet (WASAPI exclusive, ALSA `hw:`, CoreAudio rate switching). **Planned.**
+
+### Pausing, unplugging and device changes
+
+- **Pause in exclusive mode releases the device**, so other apps can use it while MusicSpin is paused; playing again reopens it for the same track and continues from the exact sample. If the device cannot be reopened (another app took it), `play` fails with the reason and the player stays paused, so playing again retries. If the chosen device was unplugged meanwhile, playback continues on the system default and says so. In shared mode pause only stops the device, which stays open.
+- **If the device goes away while playing** (unplugged, disabled, invalidated), or the system default changes under a stream that follows it, MusicSpin reopens on the system default and keeps playing from the same source, with a notice when the chosen device was lost. Only if that fails does playback stop with an error. On Windows this covers a chosen exclusive endpoint too (removal, disabling or unplugging is detected through the endpoint's notifications).
+- The position may differ by up to one device buffer (a few to a few hundred milliseconds, depending on the device) when playback moves to another device: the audio already handed to the old device is not replayed.
+- The **macOS (CoreAudio) and Linux (ALSA `hw:`) exclusive paths are untested on real hardware**: they use miniaudio's own exclusive handling and were only exercised against its Null backend. The Windows exclusive stream (including pause, unplug and default-change handling) is covered by tests of its decision logic but still needs checking on a real DAC.
 
 ## DSD
 

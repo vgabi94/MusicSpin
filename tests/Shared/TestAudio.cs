@@ -195,9 +195,15 @@ internal sealed class ManualAudioOutput : IAudioOutput
 
     public bool IsOpen => Source is not null;
 
+    /// <summary>What <see cref="Opened"/> reports for a source (what a real device would read back); null: nothing.</summary>
+    public Func<IPcmSource, OpenedOutput?>? OpenedAs { get; set; }
+
+    public OpenedOutput? Opened { get; private set; }
+
     public void Open(IPcmSource source)
     {
         Source = source;
+        Opened = OpenedAs?.Invoke(source);
         OpenCount++;
     }
 
@@ -209,9 +215,24 @@ internal sealed class ManualAudioOutput : IAudioOutput
     {
         Started = false;
         Source = null;
+        Opened = null;
     }
 
     public void Dispose() => Stop();
+
+    public event EventHandler<AudioOutputFailedEventArgs>? Failed;
+
+    public event EventHandler<AudioOutputReroutedEventArgs>? Rerouted;
+
+    /// <summary>The output moved to another device by itself and keeps pulling from the same source.</summary>
+    public void Reroute(OpenedOutput opened, string? message) => Rerouted?.Invoke(this, new AudioOutputReroutedEventArgs(opened, message));
+
+    /// <summary>The device goes away mid-play: closes like a real output, then raises <see cref="Failed"/>.</summary>
+    public void Fail(string reason)
+    {
+        Stop();
+        Failed?.Invoke(this, new AudioOutputFailedEventArgs(reason));
+    }
 
     /// <summary>
     /// Pulls <paramref name="samples"/> interleaved samples like a device callback would. By default first waits for the

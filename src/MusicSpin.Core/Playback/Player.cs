@@ -75,6 +75,9 @@ public sealed class Player : IPlayer
     public event EventHandler<PlayerErrorEventArgs>? Error;
     public event EventHandler<TrackAdvancedEventArgs>? TrackAdvanced;
 
+    /// <summary>The device was (re)opened for a track's format; raised on the caller's thread, under the player lock.</summary>
+    public event EventHandler<OutputOpenedEventArgs>? OutputOpened;
+
     public PlayerState State
     {
         get { lock (_sync) { return _state; } }
@@ -156,6 +159,7 @@ public sealed class Player : IPlayer
     public void Play()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        OpenedOutput? openedNow = null;
         lock (_sync)
         {
             var buffer = Volatile.Read(ref _buffer)
@@ -176,9 +180,16 @@ public sealed class Player : IPlayer
             {
                 if (_output is null || !_output.IsOpen || !ReferenceEquals(_outputSource, buffer))
                 {
-                    _output ??= _outputs.Create(_options.Output);
+                    if (_output is null)
+                    {
+                        Volatile.Write(ref _output, _outputs.Create(_options.Output));
+                        _output.Failed += OnOutputFailed;
+                        _output.Rerouted += OnOutputRerouted;
+                    }
+
                     _output.Open(buffer);
                     _outputSource = buffer;
+                    openedNow = _output.Opened;
                 }
 
                 _output.Start();
@@ -191,6 +202,12 @@ public sealed class Player : IPlayer
 
             StartPositionTimer();
             SetState(PlayerState.Playing);
+        }
+
+        // Subscribers run with no lock of ours held: one that calls back into the player must not deadlock.
+        if (openedNow is not null)
+        {
+            OutputOpened?.Invoke(this, new OutputOpenedEventArgs(openedNow));
         }
     }
 
@@ -341,8 +358,13 @@ public sealed class Player : IPlayer
         lock (_sync)
         {
             ReleaseOutput();
-            _output?.Dispose();
-            _output = null;
+            if (_output is not null)
+            {
+                _output.Failed -= OnOutputFailed;
+                _output.Rerouted -= OnOutputRerouted;
+                _output.Dispose();
+                Volatile.Write(ref _output, null);
+            }
             lock (_decodeLock)
             {
                 foreach (var segment in _segments)
@@ -821,6 +843,39 @@ public sealed class Player : IPlayer
 
         RaisePosition();
         PlaybackEnded?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// The device went away mid-play (unplugged, invalidated); the output has closed itself. Report it and pause, so the
+    /// position is kept and Play reopens the device (the same one if it is back, else the error says why).
+    /// </summary>
+    private void OnOutputFailed(object? sender, AudioOutputFailedEventArgs e)
+    {
+        if (_disposed || !ReferenceEquals(sender, Volatile.Read(ref _output)))
+        {
+            return;
+        }
+
+        Error?.Invoke(this, new PlayerErrorEventArgs(new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, e.Reason)));
+        Pause();
+    }
+
+    /// <summary>
+    /// The output moved to another device by itself (a new system default, or the default after the chosen device went
+    /// away) and plays on from the same position: report where it is now, and say so when it is not what was asked.
+    /// </summary>
+    private void OnOutputRerouted(object? sender, AudioOutputReroutedEventArgs e)
+    {
+        if (_disposed || !ReferenceEquals(sender, Volatile.Read(ref _output)))
+        {
+            return;
+        }
+
+        OutputOpened?.Invoke(this, new OutputOpenedEventArgs(e.Opened));
+        if (e.Message is { } message)
+        {
+            Error?.Invoke(this, new PlayerErrorEventArgs(new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, message)));
+        }
     }
 
     private void ReleaseOutput()

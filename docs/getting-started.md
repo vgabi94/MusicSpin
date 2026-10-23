@@ -133,7 +133,7 @@ Real output from the published linux-x64 build:
 $ music-spin doctor
 music-spin 0.1.0+73f41b91588edc1f451c4971ce53b14e24dba5e6 on .NET 10.0.12, Debian GNU/Linux 13 (trixie) (linux-x64)
   [ok]   FFmpeg n9.0.2-23-g27b46f0fbc-20261008, license: LGPL version 3 or later (/home/me/MusicSpin/ffmpeg)
-  [ok]   Audio: SoundFlow/miniaudio (PulseAudio), 1 playback device(s)
+  [ok]   Audio: miniaudio (PulseAudio), 1 playback device(s)
   [ok]   Data: /home/me/MusicSpin/.usrdata (portable)
 
 $ music-spin info "Music/Nils Frahm/Spaces/02 Says.flac"

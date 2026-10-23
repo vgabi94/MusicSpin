@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MusicSpin.Core;
+using MusicSpin.Core.Audio;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Remote;
 using MusicSpin.Tests.Shared;
@@ -25,6 +26,29 @@ public sealed class PlayerHostTests : PlayerHostTestBase
         var listing = ProtocolJson.Deserialize<QueueListing>(await client.SendAsync("queue", null, ct))!;
         Assert.Equal(3, listing.Total);
         Assert.Equal(1, listing.CurrentIndex);
+    }
+
+    [Fact]
+    public async Task Status_and_the_log_report_the_format_the_device_actually_opened_and_its_notice()
+    {
+        var outputs = new ManualOutputProvider();
+        outputs.Output.OpenedAs = s => new OpenedOutput("BTR13", false, s.Format.SampleRate, s.Format.Channels, "s24", 24, Verified: true,
+            Notice: "Exclusive mode unavailable: in use.");
+        var host = StartHost(Options(outputs));
+        await using var client = await ConnectAsync();
+        var ct = TestContext.Current.CancellationToken;
+
+        var status = ProtocolJson.Deserialize<PlayerStatus>(await client.SendAsync("queue.set", QueueSet(Paths), ct))!;
+
+        var output = status.Output!;
+        Assert.False(output.Exclusive); // refused: never reported as exclusive
+        Assert.Equal("BTR13", output.Device);
+        Assert.Equal(new OutputFormat(outputs.Output.Source!.Format.SampleRate, outputs.Output.Source.Format.Channels, "s24", 24, true), output.Format);
+        Assert.Equal("Exclusive mode unavailable: in use.", output.Notice);
+        Assert.Contains("output opened: BTR13, shared, ", Log.ToString());
+        Assert.Contains("s24; notice: Exclusive mode unavailable: in use.", Log.ToString());
+        Assert.DoesNotContain("as requested", Log.ToString());
+        _ = host;
     }
 
     [Fact]

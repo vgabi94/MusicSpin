@@ -1,0 +1,37 @@
+<Project>
+  <!--
+    Builds native/msaudio (miniaudio + the flat C API MusicSpin P/Invokes) for the target RID and copies it next to
+    the app, so a self-contained single-file publish bundles it like any other native library.
+    Windows RIDs use MSVC (eng/build-native.ps1), the others cc/clang (eng/build-native.sh).
+    Set MusicSpinSkipNativeBuild=true to use a prebuilt library already in native/msaudio/bin/<rid>/.
+  -->
+  <PropertyGroup>
+    <MsAudioRid>$(RuntimeIdentifier)</MsAudioRid>
+    <MsAudioRid Condition="'$(MsAudioRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</MsAudioRid>
+    <MsAudioDir>$(MSBuildThisFileDirectory)../native/msaudio/</MsAudioDir>
+    <MsAudioFile Condition="$(MsAudioRid.StartsWith('win'))">msaudio.dll</MsAudioFile>
+    <MsAudioFile Condition="$(MsAudioRid.StartsWith('osx'))">libmsaudio.dylib</MsAudioFile>
+    <MsAudioFile Condition="'$(MsAudioFile)' == ''">libmsaudio.so</MsAudioFile>
+    <MsAudioOut>$(MsAudioDir)bin/$(MsAudioRid)/$(MsAudioFile)</MsAudioOut>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <MsAudioSource Include="$(MsAudioDir)msaudio.c;$(MsAudioDir)msaudio.h;$(MsAudioDir)miniaudio/miniaudio.h" />
+    <None Include="$(MsAudioOut)" Link="$(MsAudioFile)" Visible="false"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="BuildMsAudio" BeforeTargets="AssignTargetPaths;BeforeBuild"
+          Condition="'$(MusicSpinSkipNativeBuild)' != 'true'"
+          Inputs="@(MsAudioSource);$(MSBuildThisFileDirectory)build-native.sh;$(MSBuildThisFileDirectory)build-native.ps1"
+          Outputs="$(MsAudioOut)">
+    <Exec Condition="$(MsAudioRid.StartsWith('win'))"
+          Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)build-native.ps1&quot; -Rid $(MsAudioRid)" />
+    <Exec Condition="!$(MsAudioRid.StartsWith('win'))"
+          Command="bash &quot;$(MSBuildThisFileDirectory)build-native.sh&quot; $(MsAudioRid)" />
+  </Target>
+
+  <Target Name="CheckMsAudio" BeforeTargets="Build" Condition="!Exists('$(MsAudioOut)')">
+    <Error Text="native msaudio for $(MsAudioRid) is missing at $(MsAudioOut): run eng/build-native for that RID." />
+  </Target>
+</Project>

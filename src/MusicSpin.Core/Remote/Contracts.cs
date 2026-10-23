@@ -1,3 +1,4 @@
+using MusicSpin.Core.Audio;
 using MusicSpin.Core.Metadata;
 using MusicSpin.Core.Playback;
 
@@ -51,7 +52,36 @@ public sealed record QueueItem(
 public sealed record SkippedItem(int Index, string Path, string Code, string Message);
 
 /// <summary>Output the player renders to.</summary>
-public sealed record OutputInfo(string Backend, string? Device, bool Exclusive);
+/// <param name="Exclusive">In <c>status.output</c>, once a device opened: whether it really is exclusive; before, what was asked.</param>
+/// <param name="Format">What the device opened at (rate, sample format); null until a track opened it.</param>
+/// <param name="Notice">Why the output is not what was asked (exclusive refused, resampled); null when it is.</param>
+public sealed record OutputInfo(string Backend, string? Device, bool Exclusive, OutputFormat? Format = null, string? Notice = null)
+{
+    /// <summary>The requested output updated with what the device really opened at.</summary>
+    public OutputInfo With(OpenedOutput opened)
+    {
+        ArgumentNullException.ThrowIfNull(opened);
+        return this with
+        {
+            Device = opened.Device ?? Device,
+            Exclusive = opened.Exclusive,
+            Format = new OutputFormat(opened.SampleRate, opened.Channels, opened.SampleFormat, opened.BitsPerSample, opened.Verified),
+            Notice = opened.Notice,
+        };
+    }
+
+    /// <summary>"exclusive, 44.1 kHz 24-bit" (plus the format when known).</summary>
+    public string Describe()
+        => Format is { } f
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{(Exclusive ? "exclusive" : "shared")}, {f.SampleRate / 1000.0:0.###} kHz {f.BitsPerSample}-bit{(f.SampleFormat == "f32" ? " float" : string.Empty)}")
+            : Exclusive ? "exclusive" : "shared";
+}
+
+/// <summary>The format a device opened at.</summary>
+/// <param name="SampleFormat">s16 | s24 | s24in32 | s32 | f32.</param>
+/// <param name="Verified">Read back from the device (WASAPI exclusive) rather than what was asked for.</param>
+public sealed record OutputFormat(int SampleRate, int Channels, string SampleFormat, int BitsPerSample, bool Verified);
 
 /// <summary>Snapshot returned by most player commands.</summary>
 /// <param name="QueueIndex">0-based index of the current queue entry (in play order); null when the queue is empty.</param>

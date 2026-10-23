@@ -22,5 +22,5 @@ public sealed record AppServices(
     public IFolderPicker FolderPicker { get; init; } = new AvaloniaFolderPicker();
 
     /// <summary>The audio output devices (Settings › Audio).</summary>
-    public IAudioDevices AudioDevices { get; init; } = new SoundFlowAudioDevices();
+    public IAudioDevices AudioDevices { get; init; } = new MiniAudioDevices();
 }

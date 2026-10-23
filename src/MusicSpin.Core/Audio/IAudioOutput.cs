@@ -24,7 +24,7 @@ public sealed record AudioDeviceInfo(
 /// <summary>Enumerates devices and creates outputs. One implementation per audio backend.</summary>
 public interface IAudioOutputProvider
 {
-    /// <summary>Backend name, e.g. "SoundFlow/miniaudio (PulseAudio)".</summary>
+    /// <summary>Backend name, e.g. "miniaudio (PulseAudio)".</summary>
     string Name { get; }
 
     /// <exception cref="MusicSpinException">AudioDeviceError if the backend cannot be initialised.</exception>
@@ -43,12 +43,91 @@ public interface IAudioOutput : IDisposable
     /// <exception cref="MusicSpinException">AudioDeviceError.</exception>
     void Open(IPcmSource source);
 
+    /// <summary>
+    /// Starts playing, or resumes after <see cref="Pause"/>: an exclusive device that the pause released is reopened for
+    /// the same source first.
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidState when not open; AudioDeviceError when a released device cannot be reopened (still paused, so it can be retried).</exception>
     void Start();
 
+    /// <summary>
+    /// Stops reading the source once the audio already handed to the device has played out, so the source's position is
+    /// where <see cref="Start"/> continues. An exclusive device is released meanwhile (other apps can use it); the output
+    /// still counts as <see cref="IsOpen"/>.
+    /// </summary>
     void Pause();
 
     /// <summary>Stops and releases the device.</summary>
     void Stop();
 
     bool IsOpen { get; }
+
+    /// <summary>
+    /// What the device actually opened at (share mode, rate, sample format), read back after <see cref="Open"/>;
+    /// null while closed or when the output cannot tell.
+    /// </summary>
+    OpenedOutput? Opened => null;
+
+    /// <summary>
+    /// The device failed while open (unplugged, invalidated); the output has closed itself. Raised on a pool thread.
+    /// </summary>
+    event EventHandler<AudioOutputFailedEventArgs>? Failed
+    {
+        add { }
+        remove { }
+    }
+
+    /// <summary>
+    /// The output moved to another device without stopping (the system default changed, or the device was lost and it
+    /// reopened on the default, or resuming after a pause landed on another device): the source keeps its position, give
+    /// or take the audio the old device had buffered. Raised on a pool thread, or on the thread that resumed.
+    /// </summary>
+    event EventHandler<AudioOutputReroutedEventArgs>? Rerouted
+    {
+        add { }
+        remove { }
+    }
+}
+
+/// <summary>Where an output moved to, and what to tell the user about it (null when the move needs no word).</summary>
+public sealed class AudioOutputReroutedEventArgs(OpenedOutput opened, string? message) : EventArgs
+{
+    public OpenedOutput Opened { get; } = opened;
+
+    /// <summary>E.g. the chosen device was disconnected, or exclusive mode was refused on the new device.</summary>
+    public string? Message { get; } = message;
+}
+
+/// <summary>Why an open output stopped on its own.</summary>
+public sealed class AudioOutputFailedEventArgs(string reason) : EventArgs
+{
+    public string Reason { get; } = reason;
+}
+
+/// <summary>The format a device really opened at, as read back from the backend after opening it.</summary>
+/// <param name="Device">The device's name; null when unknown.</param>
+/// <param name="Exclusive">True only when the device is held exclusively (no OS mixer in between).</param>
+/// <param name="SampleRate">The device's rate in Hz.</param>
+/// <param name="Channels">The device's channel count.</param>
+/// <param name="SampleFormat">"s16", "s24" (packed), "s24in32" (24 valid bits in a 32-bit container), "s32" or "f32".</param>
+/// <param name="BitsPerSample">Valid bits per sample (24 for s24in32).</param>
+/// <param name="Verified">
+/// True when the values were read back from the device (miniaudio's internal device format, WASAPI exclusive);
+/// false when they are what was asked for and the output cannot tell what it opened.
+/// </param>
+/// <param name="Notice">Why the output is not what was asked for (e.g. exclusive refused, a resampled rate); null when it is.</param>
+public sealed record OpenedOutput(
+    string? Device,
+    bool Exclusive,
+    int SampleRate,
+    int Channels,
+    string SampleFormat,
+    int BitsPerSample,
+    bool Verified,
+    string? Notice = null)
+{
+    /// <summary>"exclusive, 44.1 kHz 24-bit" / "shared, 48 kHz 32-bit float".</summary>
+    public string Describe()
+        => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{(Exclusive ? "exclusive" : "shared")}, {SampleRate / 1000.0:0.###} kHz {BitsPerSample}-bit{(SampleFormat == "f32" ? " float" : string.Empty)}");
 }
