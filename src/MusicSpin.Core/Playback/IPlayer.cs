@@ -90,6 +90,10 @@ public interface IPlayer : IDisposable
     /// <exception cref="MusicSpinException">InvalidState when no track is loaded; AudioDeviceError.</exception>
     void Play();
 
+    /// <summary>
+    /// Pauses playback. When nothing is playing it still hands back an exclusive device that a <see cref="Load"/> kept
+    /// held for a <see cref="Play"/> that did not follow (a loaded, stopped player holds no exclusive device).
+    /// </summary>
     void Pause();
 
     /// <summary>Stops playback and rewinds to the start. Releases the audio device.</summary>

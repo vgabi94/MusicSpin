@@ -140,14 +140,19 @@ public sealed class Player : IPlayer
             }
 
             StopPositionTimer();
-            lock (_decodeLock)
-            {
-                ResetDecoding(decoder);
-            }
 
             // Keep the device open when the new track needs it as it is (the common case: the same rate and channels);
-            // otherwise release it, and Play opens it for the new format.
-            RetargetOrReleaseOutput(Volatile.Read(ref _buffer)!);
+            // otherwise release it, and Play opens it for the new format. This comes first: the output stops reading the
+            // old track before the new one replaces it, so no stale audio of the old buffer (or its end markers) reaches
+            // the device, or the player's notifications, after the switch.
+            var first = new TrackSegment(decoder, null, TimeSpan.Zero, [], []);
+            var buffer = NewBuffer(first);
+            RetargetOrReleaseOutput(buffer);
+            lock (_decodeLock)
+            {
+                ResetDecoding(first, buffer);
+            }
+
             _ended = false;
             SetState(PlayerState.Stopped);
             EnsureDecodeThread();
@@ -220,6 +225,9 @@ public sealed class Player : IPlayer
         {
             if (_state != PlayerState.Playing)
             {
+                // Nothing plays, but a track switch may have left an exclusive device held for the play that usually
+                // follows: a caller that loads without playing says so with this, and the device is handed back.
+                _output?.Pause();
                 return;
             }
 
@@ -273,12 +281,9 @@ public sealed class Player : IPlayer
                 throw new MusicSpinException(MusicSpinErrorCode.InvalidState, "No track loaded.");
             }
 
-            if (_state == PlayerState.Playing)
-            {
-                _output?.Pause();
-                StopPositionTimer();
-            }
-
+            // Paused holds no exclusive device, whatever the player was doing before (a switch can leave it held).
+            _output?.Pause();
+            StopPositionTimer();
             SeekCore(position < TimeSpan.Zero ? TimeSpan.Zero : position);
             _ended = false;
             SetState(PlayerState.Paused);
@@ -390,18 +395,24 @@ public sealed class Player : IPlayer
 
     // ------------------------------------------------------------------------------------------------ decoding
 
-    private void ResetDecoding(IAudioDecoder decoder)
+    private PlaybackBuffer NewBuffer(TrackSegment first)
+    {
+        var format = first.Decoder.Format;
+        var frames = Math.Max(1024L, (long)Math.Max(format.SampleRate, 1) * _options.EffectiveBufferMilliseconds / 1000);
+        var channels = Math.Max(format.Channels, 1);
+        return new PlaybackBuffer(format, (int)Math.Min(frames * channels, int.MaxValue / 2), first, () => Volume, _notifier.Signal, SpectrumTap);
+    }
+
+    /// <summary>Makes <paramref name="first"/> (read through <paramref name="buffer"/>) the only track. Caller holds _decodeLock.</summary>
+    private void ResetDecoding(TrackSegment first, PlaybackBuffer buffer)
     {
         _generation++;
         _retired.AddRange(_segments.Select(x => x.Decoder));
         _segments.Clear();
-        var first = new TrackSegment(decoder, null, TimeSpan.Zero, [], []);
-        var format = decoder.Format;
-        var frames = Math.Max(1024L, (long)Math.Max(format.SampleRate, 1) * _options.EffectiveBufferMilliseconds / 1000);
-        var channels = Math.Max(format.Channels, 1);
+        var channels = Math.Max(first.Decoder.Format.Channels, 1);
         var old = _buffer;
         _underrunsBefore += old?.Underruns ?? 0;
-        Volatile.Write(ref _buffer, new PlaybackBuffer(format, (int)Math.Min(frames * channels, int.MaxValue / 2), first, () => Volume, _notifier.Signal, SpectrumTap));
+        Volatile.Write(ref _buffer, buffer);
         _segments.Add(first);
         _writing = first;
         _writingDone = false;
