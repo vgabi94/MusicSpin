@@ -68,11 +68,11 @@ public sealed class GainCalculatorTests
     [Fact]
     public void Boosting_stops_where_the_peak_would_clip()
     {
-        // +10 dB wanted, but the peak is 0.5 (-6.02 dBFS): only 6.02 dB fit below full scale.
-        var gain = GainCalculator.Compute(Auto(), Tagged(track: 10, trackPeak: 0.5), false);
+        // +10 dB wanted, but the peak is 0.7 (-3.1 dBFS): only 3.1 dB fit below full scale.
+        var gain = GainCalculator.Compute(Auto(), Tagged(track: 10, trackPeak: 0.7), false);
         Assert.True(gain.Limited);
-        Assert.Equal(-20 * Math.Log10(0.5), gain.Db, 9);
-        Assert.Equal(1.0, 0.5 * gain.Linear, 9); // the peak ends exactly at full scale
+        Assert.Equal(-20 * Math.Log10(0.7), gain.Db, 9);
+        Assert.Equal(1.0, 0.7 * gain.Linear, 9); // the peak ends exactly at full scale
     }
 
     [Fact]
@@ -102,20 +102,85 @@ public sealed class GainCalculatorTests
     [Fact]
     public void A_tagged_track_without_a_peak_uses_the_analysed_peak_when_there_is_one()
     {
-        var loudness = new TrackLoudness(new ReplayGainTags(10, null, null, null), -23, 0.5, Analyzed: true);
-        Assert.Equal(-20 * Math.Log10(0.5), GainCalculator.Compute(Auto(), loudness, false).Db, 9);
+        var loudness = new TrackLoudness(new ReplayGainTags(10, null, null, null), -23, 0.9, Analyzed: true);
+        var gain = GainCalculator.Compute(Auto(), loudness, false);
+        Assert.Equal(-20 * Math.Log10(0.9), gain.Db, 9); // 0.92 dB: the peak, not the +10 dB tag or the 6 dB cap, decides
+        Assert.True(gain.Limited);
     }
 
     [Fact]
     public void The_gain_stays_between_the_cut_and_boost_limits()
     {
         var quiet = new TrackLoudness(ReplayGainTags.None, -80, 0.0001, Analyzed: true);
-        var boosted = GainCalculator.Compute(Auto(preamp: 12), quiet, false);
+        var boosted = GainCalculator.Compute(Auto(preamp: 12), quiet, false); // 6 dB, not the +20 dB it used to be
         Assert.Equal(GainCalculator.MaxBoostDb, boosted.Db, 9);
 
         var loud = new TrackLoudness(ReplayGainTags.None, 40, 1.0, Analyzed: true);
         var cut = GainCalculator.Compute(Auto(preamp: -12), loud, false);
         Assert.Equal(GainCalculator.MaxCutDb, cut.Db, 9);
+    }
+
+    [Fact]
+    public void The_boost_is_capped_at_a_safe_6_dB_whatever_the_loudness_the_tags_or_the_preamp_ask_for()
+    {
+        Assert.Equal(6.0, GainCalculator.MaxBoostDb);
+        Assert.Equal(-40.0, GainCalculator.MaxCutDb);
+
+        // A track 30 LU too quiet: the old limit would have lifted it by 20 dB.
+        var quiet = new TrackLoudness(ReplayGainTags.None, -48, 0.001, Analyzed: true);
+        var analysed = GainCalculator.Compute(Auto(), quiet, false);
+        Assert.Equal(6.0, analysed.Db, 9);
+        Assert.False(analysed.Limited); // the cap is not the clipping limit
+        Assert.Equal(Math.Pow(10, 6.0 / 20), analysed.Linear, 9);
+
+        // A tag asking for +15 dB, with a +12 dB pre-amp on top.
+        Assert.Equal(6.0, GainCalculator.Compute(Auto(preamp: 12), Tagged(track: 15, trackPeak: 0.01), false).Db, 9);
+
+        // A boost that is within the cap is left alone, and so are cuts (down to the cut limit).
+        Assert.Equal(5.5, GainCalculator.Compute(Auto(), Tagged(track: 5.5, trackPeak: 0.1), false).Db, 9);
+        Assert.Equal(-30.0, GainCalculator.Compute(Auto(), Tagged(track: -30, trackPeak: 1.0), false).Db, 9);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_loudness_that_is_not_a_finite_number_leaves_the_track_unchanged_instead_of_boosting_or_muting_it()
+    {
+        foreach (var bad in new[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+        {
+            var analysis = GainCalculator.Compute(Auto(), new TrackLoudness(ReplayGainTags.None, bad, 0.5, Analyzed: true), false);
+            Assert.Equal((1.0, 0.0, GainSource.Unknown), (analysis.Linear, analysis.Db, analysis.Source));
+
+            // Tag gains from a damaged library row are as bad as a bad analysis; the next good value is used.
+            var tag = GainCalculator.Compute(Auto(), new TrackLoudness(new ReplayGainTags(bad, 0.5, null, null), -24, 0.5, Analyzed: true), false);
+            Assert.Equal(GainSource.Analysis, tag.Source);
+            Assert.True(double.IsFinite(tag.Linear) && tag.Linear > 0);
+
+            var album = GainCalculator.Compute(Auto(), new TrackLoudness(new ReplayGainTags(-3, 0.9, bad, 0.9)), albumContext: true);
+            Assert.Equal((GainSource.TrackTag, -3.0), (album.Source, album.Db));
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_bad_peak_is_ignored_and_the_next_peak_or_none_is_used()
+    {
+        // Peak 0 would mean "no clipping limit at all"; NaN and infinity would too, or poison the gain.
+        foreach (var bad in new[] { double.NaN, double.PositiveInfinity, 0.0, -1.0, 1000.0 })
+        {
+            // No usable peak at all: a boost is refused, a cut is kept.
+            var boost = GainCalculator.Compute(Auto(), Tagged(track: 5, trackPeak: bad), false);
+            Assert.Equal((1.0, true), (boost.Linear, boost.Limited));
+            Assert.Equal(-4.0, GainCalculator.Compute(Auto(), Tagged(track: -4, trackPeak: bad), false).Db, 9);
+
+            // The analysed true peak takes over when the tag's peak is bad ...
+            var fallback = GainCalculator.Compute(Auto(), new TrackLoudness(new ReplayGainTags(5, bad, null, null), null, 0.8, Analyzed: true), false);
+            Assert.Equal(-20 * Math.Log10(0.8), fallback.Db, 9);
+
+            // ... and a bad analysed peak counts as none.
+            var analysis = GainCalculator.Compute(Auto(), new TrackLoudness(ReplayGainTags.None, -24, bad, Analyzed: true), false);
+            Assert.Equal((0.0, true), (analysis.Db, analysis.Limited));
+            Assert.True(double.IsFinite(analysis.Linear));
+        }
     }
 
     [Fact]

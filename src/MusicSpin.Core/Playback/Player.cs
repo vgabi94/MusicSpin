@@ -296,14 +296,11 @@ public sealed class Player : IPlayer
         lock (_decodeLock)
         {
             _gains = next;
-            foreach (var segment in _segments.Skip(1))
+            // By identity, never by position: the track that was loaded has no token (it takes `current`), every track that
+            // came in gaplessly is found by its token, so a call that races a boundary cannot give the new track the old one's gain.
+            foreach (var segment in _segments)
             {
-                segment.Gain = GainOf(segment.Token);
-            }
-
-            if (_segments.Count > 0)
-            {
-                _segments[0].Gain = current;
+                segment.Gain = segment.Token is null ? current : GainOf(segment.Token);
             }
         }
     }

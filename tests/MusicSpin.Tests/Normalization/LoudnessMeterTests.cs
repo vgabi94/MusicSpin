@@ -62,10 +62,78 @@ public sealed class LoudnessMeterTests
     }
 
     [Fact]
-    public void One_channel_alone_is_three_decibels_quieter_than_two()
+    public void A_mono_file_reads_like_the_same_signal_on_both_speakers()
     {
+        // BS.1770 / libebur128 (EBUR128_DUAL_MONO): mono plays on both speakers, so it is counted twice.
         var mono = Measure(48_000, 1, Sine(48_000, 1, 10, -23));
-        Assert.InRange(mono.IntegratedLufs!.Value, -26.15, -25.85);
+        var stereo = Measure(48_000, 2, Sine(48_000, 2, 10, -23));
+        Assert.InRange(mono.IntegratedLufs!.Value, -23.1, -22.9);
+        Assert.Equal(stereo.IntegratedLufs!.Value, mono.IntegratedLufs.Value, 3);
+    }
+
+    [Fact]
+    public void One_channel_of_a_stereo_file_is_three_decibels_quieter_than_two()
+    {
+        var both = Sine(48_000, 2, 10, -23);
+        var left = (float[])both.Clone();
+        for (var i = 1; i < left.Length; i += 2)
+        {
+            left[i] = 0;
+        }
+
+        Assert.InRange(Measure(48_000, 2, left).IntegratedLufs!.Value, -26.15, -25.85);
+    }
+
+    [Theory]
+    [InlineData(1, null, new[] { 2.0 })]
+    [InlineData(1, "mono", new[] { 2.0 })]
+    [InlineData(2, "stereo", new[] { 1.0, 1.0 })]
+    [InlineData(2, null, new[] { 1.0, 1.0 })]
+    [InlineData(4, null, new[] { 1.0, 1.0, S, S })] // by count: quad
+    [InlineData(4, "quad", new[] { 1.0, 1.0, S, S })]
+    [InlineData(4, "4.0", new[] { 1.0, 1.0, 1.0, 1.0 })] // L R C Cs: no surround pair, not a quad
+    [InlineData(6, null, new[] { 1.0, 1.0, 1.0, 0.0, S, S })]
+    [InlineData(6, "5.1", new[] { 1.0, 1.0, 1.0, 0.0, S, S })]
+    [InlineData(6, "5.1(side)", new[] { 1.0, 1.0, 1.0, 0.0, S, S })]
+    [InlineData(6, "6.0", new[] { 1.0, 1.0, 1.0, 1.0, S, S })] // no LFE: nothing is dropped
+    [InlineData(3, "FL+FR+LFE", new[] { 1.0, 1.0, 0.0 })]
+    [InlineData(3, "3 channels (FL+FR+LFE)", new[] { 1.0, 1.0, 0.0 })]
+    [InlineData(6, "5.1(side) ", new[] { 1.0, 1.0, 1.0, 0.0, S, S })]
+    public void Channels_are_weighed_by_what_they_are(int channels, string? layout, double[] expected)
+        => Assert.Equal(expected, LoudnessMeter.ChannelWeights(channels, layout).Select(w => Math.Round(w, 6)).ToArray(), new WeightComparer());
+
+    private const double S = 1.412538; // +1.5 dB
+
+    private sealed class WeightComparer : IEqualityComparer<double>
+    {
+        public bool Equals(double x, double y) => Math.Abs(x - y) < 1e-5;
+
+        public int GetHashCode(double obj) => 0;
+    }
+
+    [Theory]
+    [InlineData("2 channels")] // unspecified order: nothing to read
+    [InlineData("")]
+    [InlineData("garbage")]
+    [InlineData("FL+FR")] // does not match the 4 channels: counted by number
+    [Trait("Category", "Unhappy")]
+    public void A_layout_that_is_unknown_or_does_not_fit_falls_back_to_the_count(string layout)
+        => Assert.Equal(
+            LoudnessMeter.ChannelWeights(4),
+            LoudnessMeter.ChannelWeights(4, layout));
+
+    [Fact]
+    public void A_four_channel_file_that_is_not_a_quad_is_not_given_surround_weights()
+    {
+        // 4.0 (L R C Cs) at the same level on all channels: four plain channels = +6.02 dB over one; a quad adds 1.5 dB to two of them.
+        var data = Sine(48_000, 4, 10, -30);
+        var plain = new LoudnessMeter(48_000, 4, "4.0");
+        plain.Add(data);
+        var quad = new LoudnessMeter(48_000, 4, "quad");
+        quad.Add(data);
+
+        var difference = quad.Finish().IntegratedLufs!.Value - plain.Finish().IntegratedLufs!.Value;
+        Assert.Equal(10 * Math.Log10((2 + (2 * 1.41253754462275)) / 4), difference, 2);
     }
 
     [Fact]

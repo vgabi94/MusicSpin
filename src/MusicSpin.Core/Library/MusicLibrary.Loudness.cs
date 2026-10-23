@@ -7,7 +7,7 @@ public sealed partial class MusicLibrary
     /// <summary>
     /// What the library knows about the loudness of files, by <see cref="NormalizationService.KeyOf"/>: their ReplayGain / R128
     /// tags and, when it ran, the analysis. An analysis counts only while the file still has the size and modification time it
-    /// was measured on. Files that are not library tracks are left out.
+    /// was measured on and was measured by the current <see cref="LoudnessMeter.AlgorithmVersion"/>. Files that are not library tracks are left out.
     /// </summary>
     public IReadOnlyDictionary<string, TrackLoudness> LoudnessFor(IEnumerable<string> paths) => Guard(() =>
     {
@@ -22,7 +22,7 @@ public sealed partial class MusicLibrary
             }
 
             var tags = new ReplayGainTags(track.ReplayGainTrackGain, track.ReplayGainTrackPeak, track.ReplayGainAlbumGain, track.ReplayGainAlbumPeak);
-            var valid = track.LoudnessAnalyzed && FileStamp.Read(track.Path) == new FileStamp(track.LoudnessSizeBytes, track.LoudnessModifiedUtcTicks);
+            var valid = track.LoudnessAnalyzed && track.LoudnessVersion == LoudnessMeter.AlgorithmVersion && FileStamp.Read(track.Path) == new FileStamp(track.LoudnessSizeBytes, track.LoudnessModifiedUtcTicks);
             result[key] = valid
                 ? new TrackLoudness(tags, track.LoudnessLufs, track.LoudnessTruePeak, Analyzed: true)
                 : new TrackLoudness(tags);
@@ -48,6 +48,7 @@ public sealed partial class MusicLibrary
             track.LoudnessLufs = update.Lufs;
             track.LoudnessTruePeak = update.TruePeak;
             track.LoudnessAnalyzed = true;
+            track.LoudnessVersion = update.Version;
             track.LoudnessSizeBytes = update.SizeBytes;
             track.LoudnessModifiedUtcTicks = update.ModifiedUtcTicks;
             _db.Tracks.Update(track);

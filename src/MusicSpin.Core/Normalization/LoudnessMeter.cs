@@ -36,7 +36,8 @@ public sealed class LoudnessMeter
     private double _allSum;
     private bool _finished;
 
-    public LoudnessMeter(int sampleRate, int channels)
+    /// <param name="channelLayout">FFmpeg's description of the channel layout ("stereo", "5.1(side)", "4.0"), when known: it decides how each channel is weighed.</param>
+    public LoudnessMeter(int sampleRate, int channels, string? channelLayout = null)
     {
         if (sampleRate < 8000 || sampleRate > 768_000)
         {
@@ -50,7 +51,7 @@ public sealed class LoudnessMeter
 
         _sampleRate = sampleRate;
         _channels = channels;
-        _weights = ChannelWeights(channels);
+        _weights = ChannelWeights(channels, channelLayout);
         _shelf = new Biquad[channels];
         _highPass = new Biquad[channels];
         var (shelf, highPass) = KWeighting(sampleRate);
@@ -64,35 +65,124 @@ public sealed class LoudnessMeter
         _subBlockFrames = Math.Max(1, (int)Math.Round(sampleRate * StepSeconds));
     }
 
-    /// <summary>BS.1770 channel weights for the usual layouts: surround channels +1.5 dB, LFE left out, the rest 1.</summary>
-    internal static double[] ChannelWeights(int channels)
+    /// <summary>
+    /// Bumped whenever a change here alters the numbers a file measures (the library keeps results per version, an older one is
+    /// measured again). 1: the first versioned meter, with mono counted as dual mono and weights by channel layout.
+    /// </summary>
+    public const int AlgorithmVersion = 1;
+
+    private const double SurroundWeight = 1.41253754462275; // +1.5 dB
+
+    /// <summary>The channels of the layouts FFmpeg names (<c>av_channel_layout_describe</c>), in the order the samples are interleaved.</summary>
+    private static readonly Dictionary<string, string[]> NamedLayouts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["mono"] = ["FC"],
+        ["stereo"] = ["FL", "FR"],
+        ["2.1"] = ["FL", "FR", "LFE"],
+        ["3.0"] = ["FL", "FR", "FC"],
+        ["3.0(back)"] = ["FL", "FR", "BC"],
+        ["4.0"] = ["FL", "FR", "FC", "BC"],
+        ["quad"] = ["FL", "FR", "BL", "BR"],
+        ["quad(side)"] = ["FL", "FR", "SL", "SR"],
+        ["3.1"] = ["FL", "FR", "FC", "LFE"],
+        ["5.0"] = ["FL", "FR", "FC", "BL", "BR"],
+        ["5.0(side)"] = ["FL", "FR", "FC", "SL", "SR"],
+        ["4.1"] = ["FL", "FR", "FC", "LFE", "BC"],
+        ["5.1"] = ["FL", "FR", "FC", "LFE", "BL", "BR"],
+        ["5.1(side)"] = ["FL", "FR", "FC", "LFE", "SL", "SR"],
+        ["6.0"] = ["FL", "FR", "FC", "BC", "SL", "SR"],
+        ["6.0(front)"] = ["FL", "FR", "FLC", "FRC", "SL", "SR"],
+        ["hexagonal"] = ["FL", "FR", "FC", "BL", "BR", "BC"],
+        ["6.1"] = ["FL", "FR", "FC", "LFE", "BC", "SL", "SR"],
+        ["6.1(back)"] = ["FL", "FR", "FC", "LFE", "BL", "BR", "BC"],
+        ["6.1(front)"] = ["FL", "FR", "LFE", "FLC", "FRC", "SL", "SR"],
+        ["7.0"] = ["FL", "FR", "FC", "BL", "BR", "SL", "SR"],
+        ["7.0(front)"] = ["FL", "FR", "FC", "FLC", "FRC", "SL", "SR"],
+        ["7.1"] = ["FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR"],
+        ["7.1(wide)"] = ["FL", "FR", "FC", "LFE", "BL", "BR", "FLC", "FRC"],
+        ["7.1(wide-side)"] = ["FL", "FR", "FC", "LFE", "FLC", "FRC", "SL", "SR"],
+        ["octagonal"] = ["FL", "FR", "FC", "BL", "BR", "BC", "SL", "SR"],
+    };
+
+    /// <summary>
+    /// BS.1770 channel weights. With a known <paramref name="layout"/> (FFmpeg's description: "5.1(side)", "4.0", "FL+FR+LFE") each
+    /// channel is weighed by what it is: left/right surround (back and side) +1.5 dB, LFE left out, everything else 1.
+    /// Without one, by count: 4 = quad, 5 = 5.0, 6 = 5.1, 7 = 6.1, 8 = 7.1 (what libebur128 assumes). A mono file is counted
+    /// twice (<c>EBUR128_DUAL_MONO</c>, weight 2): it plays on both speakers, so it measures like the same signal on L and R.
+    /// </summary>
+    internal static double[] ChannelWeights(int channels, string? layout = null)
     {
         var w = new double[channels];
         Array.Fill(w, 1.0);
-        const double Surround = 1.41253754462275; // +1.5 dB
+        if (channels == 1)
+        {
+            w[0] = 2.0;
+            return w;
+        }
+
+        if (LayoutChannels(layout) is { } names && names.Length == channels)
+        {
+            for (var i = 0; i < channels; i++)
+            {
+                w[i] = names[i] switch
+                {
+                    "LFE" or "LFE2" => 0,
+                    "BL" or "BR" or "SL" or "SR" or "SDL" or "SDR" => SurroundWeight,
+                    _ => 1.0,
+                };
+            }
+
+            return w;
+        }
+
         switch (channels)
         {
             case 4: // quad: L R Ls Rs
-                w[2] = w[3] = Surround;
+                w[2] = w[3] = SurroundWeight;
                 break;
             case 5: // 5.0: L R C Ls Rs
-                w[3] = w[4] = Surround;
+                w[3] = w[4] = SurroundWeight;
                 break;
             case 6: // 5.1: L R C LFE Ls Rs
                 w[3] = 0;
-                w[4] = w[5] = Surround;
+                w[4] = w[5] = SurroundWeight;
                 break;
             case 7: // 6.1: L R C LFE Cs Ls Rs
                 w[3] = 0;
-                w[4] = w[5] = w[6] = Surround;
+                w[4] = w[5] = w[6] = SurroundWeight;
                 break;
             case 8: // 7.1: L R C LFE Lb Rb Ls Rs
                 w[3] = 0;
-                w[4] = w[5] = w[6] = w[7] = Surround;
+                w[4] = w[5] = w[6] = w[7] = SurroundWeight;
                 break;
         }
 
         return w;
+    }
+
+    /// <summary>The channel names of a layout description, or null when it is not one this knows ("2 channels", garbage).</summary>
+    internal static string[]? LayoutChannels(string? layout)
+    {
+        if (string.IsNullOrWhiteSpace(layout))
+        {
+            return null;
+        }
+
+        var text = layout.Trim();
+        if (NamedLayouts.TryGetValue(text, out var named))
+        {
+            return named;
+        }
+
+        var open = text.IndexOf('(', StringComparison.Ordinal);
+        if (open > 0 && text.EndsWith(')') && text[..open].Contains("channels", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[(open + 1)..^1]; // "6 channels (FL+FR+FC+LFE+BL+BR)"
+        }
+
+        return text.Contains('+', StringComparison.Ordinal)
+            ? [.. text.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(n => n.ToUpperInvariant())]
+            : null;
     }
 
     /// <summary>The two K-weighting biquads (pre-filter high shelf, RLB high-pass) for a sample rate.</summary>

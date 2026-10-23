@@ -1260,7 +1260,10 @@ public sealed class QueuePlayer : IDisposable
 
     // ------------------------------------------------------------------------------------------------ volume levelling
 
-    /// <summary>The loaded track starts at its gain: its tags are looked up now (briefly); an analysis, if needed, follows in the background.</summary>
+    /// <summary>
+    /// The loaded track starts at the gain known for it. Never reads the library here (this runs under the gate, on the track-start path):
+    /// a track that is not known yet is looked up first by the resolver thread and moves to its gain (a short ramp) when it is.
+    /// </summary>
     private void PrepareLoadedGain(string path, List<Slot> slots, int index)
     {
         if (_normalizer is not { } normalizer)
@@ -1292,7 +1295,13 @@ public sealed class QueuePlayer : IDisposable
         normalizer.Want(wanted);
         var current = loaded ? normalizer.GainFor(_items[_index].Item.Path, AlbumContext(_items, _index)) : (NormalizationGain?)null;
         _levelGain = current;
-        var gains = new List<TrackGain>(next.Count);
+        var gains = new List<TrackGain>(next.Count + 1);
+        if (current is { } now)
+        {
+            // the playing entry by token too: once the player has moved on to it gaplessly it is no longer the loaded track
+            gains.Add(new TrackGain(_items[_index], (float)now.Linear));
+        }
+
         foreach (var (entry, index) in next)
         {
             gains.Add(new TrackGain(entry.Token, (float)normalizer.GainFor(entry.Path, AlbumContext(_items, index)).Linear));

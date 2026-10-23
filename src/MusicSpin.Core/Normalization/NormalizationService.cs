@@ -25,8 +25,8 @@ public sealed class NoLoudnessStore : ILoudnessStore
     public bool Save(IReadOnlyList<LoudnessUpdate> updates) => true;
 }
 
-/// <summary>An analysis to keep, with the file's size and modification time it was measured on.</summary>
-public sealed record LoudnessUpdate(string Path, double? Lufs, double TruePeak, long SizeBytes, long ModifiedUtcTicks);
+/// <summary>An analysis to keep, with the file's size and modification time it was measured on and the meter's <see cref="LoudnessMeter.AlgorithmVersion"/>.</summary>
+public sealed record LoudnessUpdate(string Path, double? Lufs, double TruePeak, long SizeBytes, long ModifiedUtcTicks, int Version = LoudnessMeter.AlgorithmVersion);
 
 /// <summary>Size and modification time of a file: an analysis is valid only for the file it was measured on.</summary>
 public readonly record struct FileStamp(long SizeBytes, long ModifiedUtcTicks)
@@ -59,7 +59,11 @@ public interface IGainResolver
     /// <summary>The track's gain from what is known now; never blocks. An unknown track plays unchanged until it is known (<see cref="Changed"/>).</summary>
     NormalizationGain GainFor(string path, bool albumContext);
 
-    /// <summary>Like <see cref="GainFor"/>, but reads the library's tags first (a short lookup) so a track starts at its gain; analysis stays in the background.</summary>
+    /// <summary>
+    /// For a track that is starting now: like <see cref="GainFor"/> (what is known, never blocks, never reads the library on the
+    /// caller's thread) but a track that is not known yet goes to the front of the lookup, so its gain follows within a moment
+    /// (<see cref="Changed"/>). The tracks that play next are looked up ahead (<see cref="Want"/>), so most are known by then.
+    /// </summary>
     NormalizationGain Prepare(string path, bool albumContext);
 
     /// <summary>The tracks that play now and next, in order: what to look up and analyse (anything else queued earlier is dropped).</summary>
@@ -68,13 +72,16 @@ public interface IGainResolver
 
 /// <summary>
 /// Volume levelling (#139): per-track gains from ReplayGain / R128 tags, or from an EBU R128 analysis for untagged files,
-/// computed on a low-priority background thread and kept in the library. Nothing here blocks playback: a track whose
+/// computed on background threads (below normal priority where the OS honours that) and kept in the library. Nothing here blocks playback: a track whose
 /// loudness is not known yet plays unchanged and is brought to its gain (a short ramp) when it is.
 /// </summary>
 public sealed class NormalizationService : IGainResolver, IDisposable
 {
-    private const int MaxEntries = 8192;
+    private const int DefaultMaxEntries = 8192;
     private const int ResolveBatch = 32;
+
+    /// <summary>How long <see cref="Dispose"/> waits for each worker thread (a decoder stuck on a dead disk must not hang the app on exit).</summary>
+    internal static readonly TimeSpan DefaultJoinTimeout = TimeSpan.FromSeconds(3);
 
     private readonly IAudioDecoderFactory _decoders;
     private readonly ILoudnessStore _store;
@@ -85,6 +92,7 @@ public sealed class NormalizationService : IGainResolver, IDisposable
     private readonly List<string> _analyzeQueue = [];
     private readonly List<LoudnessUpdate> _unsaved = [];
     private readonly CancellationTokenSource _stopping = new();
+    private HashSet<string> _wantedKeys = new(StringComparer.Ordinal);
     private NormalizationSettings _settings;
     private CancellationTokenSource? _analysis;
     private Thread? _resolver;
@@ -102,6 +110,12 @@ public sealed class NormalizationService : IGainResolver, IDisposable
     }
 
     public event EventHandler? Changed;
+
+    /// <summary>How many tracks are remembered before the ones nobody wants are dropped (tests lower it).</summary>
+    internal int MaxEntries { get; init; } = DefaultMaxEntries;
+
+    /// <summary>How long <see cref="Dispose"/> waits for each worker (tests shorten it).</summary>
+    internal TimeSpan JoinTimeout { get; init; } = DefaultJoinTimeout;
 
     public NormalizationSettings Settings
     {
@@ -182,28 +196,13 @@ public sealed class NormalizationService : IGainResolver, IDisposable
                 return NormalizationGain.Unity(GainSource.Off);
             }
 
-            if (_entries.TryGetValue(key, out var known) && known.Resolved)
+            if (_entries.TryGetValue(key, out var entry) && entry.Resolved)
             {
-                return GainCalculator.Compute(_settings, known.Loudness, albumContext);
-            }
-        }
-
-        var loaded = Load([path]);
-        lock (_gate)
-        {
-            if (_disposed || !_settings.IsOn)
-            {
-                return NormalizationGain.Unity(_settings.IsOn ? GainSource.Unknown : GainSource.Off);
+                return GainCalculator.Compute(_settings, entry.Loudness, albumContext);
             }
 
-            if (loaded is null)
-            {
-                QueueResolve(path, key);
-                return NormalizationGain.Unity(GainSource.Unknown);
-            }
-
-            var entry = Resolve(key, path, loaded);
-            return GainCalculator.Compute(_settings, entry.Loudness, albumContext);
+            QueueResolve(path, key, first: true);
+            return NormalizationGain.Unity(GainSource.Unknown);
         }
     }
 
@@ -218,6 +217,7 @@ public sealed class NormalizationService : IGainResolver, IDisposable
             }
 
             var wanted = new HashSet<string>(StringComparer.Ordinal);
+            _wantedKeys = wanted;
             foreach (var path in paths)
             {
                 var key = KeyOf(path);
@@ -272,14 +272,28 @@ public sealed class NormalizationService : IGainResolver, IDisposable
             Monitor.PulseAll(_gate);
         }
 
-        resolver?.Join();
-        analyzer?.Join();
+        var stopped = JoinWorker(resolver);
+        stopped &= JoinWorker(analyzer);
         if (unsaved.Count > 0)
         {
             TrySave(unsaved);
         }
 
-        _stopping.Dispose();
+        if (stopped)
+        {
+            _stopping.Dispose(); // a worker that is still running may yet use it
+        }
+    }
+
+    private bool JoinWorker(Thread? worker)
+    {
+        if (worker is null || worker.Join(JoinTimeout))
+        {
+            return true;
+        }
+
+        _log?.Invoke($"loudness: '{worker.Name}' did not stop in time; leaving it to finish in the background");
+        return false;
     }
 
     // ------------------------------------------------------------------------------------------------ queues
@@ -287,14 +301,33 @@ public sealed class NormalizationService : IGainResolver, IDisposable
     private static bool NeedsAnalysis(Entry e) => !e.Failed && !e.Analyzing && e.Loudness is { IsKnown: false };
 
     /// <summary>Caller holds the gate.</summary>
-    private void QueueResolve(string path, string key)
+    private void QueueResolve(string path, string key, bool first = false)
     {
-        if (_disposed || _resolveQueue.Exists(p => KeyOf(p) == key))
+        if (_disposed)
         {
             return;
         }
 
-        _resolveQueue.Add(path);
+        var queued = _resolveQueue.FindIndex(p => KeyOf(p) == key);
+        if (queued == 0 || (queued > 0 && !first))
+        {
+            return;
+        }
+
+        if (queued > 0)
+        {
+            _resolveQueue.RemoveAt(queued); // a track that starts now goes ahead of the rest
+        }
+
+        if (first)
+        {
+            _resolveQueue.Insert(0, path);
+        }
+        else
+        {
+            _resolveQueue.Add(path);
+        }
+
         EnsureThreads();
         Monitor.PulseAll(_gate);
     }
@@ -317,7 +350,8 @@ public sealed class NormalizationService : IGainResolver, IDisposable
     {
         if (_entries.Count >= MaxEntries)
         {
-            foreach (var stale in _entries.Where(e => !e.Value.Analyzing).Select(e => e.Key).ToList())
+            // never the tracks that play now and next (they are asked for again each time the queue moves), nor one being measured
+            foreach (var stale in _entries.Where(e => !e.Value.Analyzing && !_wantedKeys.Contains(e.Key) && e.Key != key).Select(e => e.Key).ToList())
             {
                 _entries.Remove(stale);
             }
@@ -497,6 +531,12 @@ public sealed class NormalizationService : IGainResolver, IDisposable
                     if (before is not null)
                     {
                         _unsaved.Add(update);
+                    }
+                    else
+                    {
+                        // A file whose size and time cannot be read cannot be told apart from a changed one later, so the result is
+                        // only kept for this session, not in the library.
+                        update = null;
                     }
                 }
                 else if (result is not null)

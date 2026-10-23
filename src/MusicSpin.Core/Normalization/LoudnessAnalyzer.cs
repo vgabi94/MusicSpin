@@ -11,10 +11,16 @@ public static class LoudnessAnalyzer
     /// <exception cref="OperationCanceledException">Cancelled.</exception>
     /// <exception cref="MusicSpinException">The file cannot be opened or decoded.</exception>
     public static LoudnessResult Analyze(IPcmSource source, CancellationToken cancellationToken = default)
+        => Analyze(source, null, cancellationToken);
+
+    /// <param name="source">The decoded audio.</param>
+    /// <param name="channelLayout">FFmpeg's description of its channel layout, when known (see <see cref="LoudnessMeter"/>).</param>
+    /// <param name="cancellationToken">Stops the measurement.</param>
+    public static LoudnessResult Analyze(IPcmSource source, string? channelLayout, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         var format = source.Format;
-        var meter = new LoudnessMeter(format.SampleRate, format.Channels);
+        var meter = new LoudnessMeter(format.SampleRate, format.Channels, channelLayout);
         var chunk = new float[ChunkSamples - ChunkSamples % Math.Max(format.Channels, 1)];
         while (true)
         {
@@ -26,7 +32,7 @@ public static class LoudnessAnalyzer
             }
 
             meter.Add(chunk.AsSpan(0, read - read % format.Channels));
-            Thread.Yield(); // a low-priority worker: let playback's threads go first
+            Thread.Yield(); // a background worker: let playback's threads go first
         }
 
         return meter.Finish();
@@ -36,6 +42,6 @@ public static class LoudnessAnalyzer
     {
         ArgumentNullException.ThrowIfNull(decoders);
         using var decoder = decoders.Open(path);
-        return Analyze(decoder, cancellationToken);
+        return Analyze(decoder, decoder.Track.ChannelLayout, cancellationToken);
     }
 }

@@ -125,8 +125,10 @@ public interface IPlayer : IDisposable
     void SetNextTracks(IReadOnlyList<NextTrack> next);
 
     /// <summary>
-    /// Volume levelling: the gain of the track now playing (<paramref name="current"/>) and of the entries decoded ahead
-    /// (identified by their <see cref="NextTrack.Token"/>; entries not listed play at 1). Applies to the samples at the
+    /// Volume levelling: the gain of the track that was loaded (<paramref name="current"/>), and of the entries that came
+    /// after it gaplessly or are decoded ahead (identified by their <see cref="NextTrack.Token"/>, the entry that plays now
+    /// included once the player moved on to it; entries not listed play at 1). Tracks are matched by identity, never by
+    /// position, so a call that races a gapless boundary cannot give the new track the old one's gain. Applies to the samples at the
     /// output, moving to a new value over a few milliseconds, so it can be called at any time (a late analysis, a changed
     /// setting) and at gapless boundaries without a click. At 1 the samples are not touched (bit-exact).
     /// </summary>

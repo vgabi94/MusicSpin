@@ -49,6 +49,12 @@ public readonly record struct ReplayGainTags(double? TrackGainDb, double? TrackP
         return ValidGain(q78 / 256.0 + R128ReferenceOffsetDb);
     }
 
+    /// <summary>The gain when it is a usable number, else null.</summary>
+    public static double? ValidGainOrNull(double? value) => value is { } v ? ValidGain(v) : null;
+
+    /// <summary>The peak when it is a usable number, else null.</summary>
+    public static double? ValidPeakOrNull(double? value) => value is { } v ? ValidPeak(v) : null;
+
     public static double? ValidGain(double value) => double.IsFinite(value) && Math.Abs(value) <= MaxAbsGainDb ? value : null;
 
     public static double? ValidPeak(double value) => double.IsFinite(value) && value > 0 && value <= MaxPeak ? value : null;

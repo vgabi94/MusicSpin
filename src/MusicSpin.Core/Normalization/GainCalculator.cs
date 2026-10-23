@@ -7,8 +7,11 @@ namespace MusicSpin.Core.Normalization;
 /// <param name="Analyzed">The analysis ran (and <paramref name="Lufs"/> is null when the track is silent).</param>
 public sealed record TrackLoudness(ReplayGainTags Tags, double? Lufs = null, double? TruePeak = null, bool Analyzed = false)
 {
-    /// <summary>The tags give a track gain, or the analysis did: nothing more to measure.</summary>
-    public bool IsKnown => Tags.TrackGainDb is not null || Analyzed;
+    /// <summary>
+    /// Nothing more to measure: the analysis ran, or the tags give a track gain <em>and</em> its peak. A tagged track without
+    /// a peak (Opus R128 tags, a gain-only MP3) is measured too: without a peak its gain could never lift it above 0 dB.
+    /// </summary>
+    public bool IsKnown => Analyzed || (ReplayGainTags.ValidGainOrNull(Tags.TrackGainDb) is not null && ReplayGainTags.ValidPeakOrNull(Tags.TrackPeak) is not null);
 }
 
 /// <summary>Where a track's gain came from.</summary>
@@ -54,8 +57,11 @@ public static class GainCalculator
     /// <summary>The ReplayGain 2.0 reference the tag gains are relative to.</summary>
     public const double ReplayGainReferenceLufs = -18;
 
-    /// <summary>No track is boosted more than this (a very quiet recording is not worth +30 dB of noise).</summary>
-    public const double MaxBoostDb = 20;
+    /// <summary>
+    /// No track is boosted more than this, preamp included. A very quiet recording stays quiet rather than being lifted
+    /// by +20 dB (that is hard on the ears, and the noise comes with it); a cut can be much larger than a boost.
+    /// </summary>
+    public const double MaxBoostDb = 6;
 
     /// <summary>No track is cut more than this.</summary>
     public const double MaxCutDb = -40;
@@ -65,8 +71,10 @@ public static class GainCalculator
     /// <summary>
     /// The gain for a track. <paramref name="albumContext"/> says the track plays as part of its album in order
     /// (used by <see cref="NormalizationMode.Auto"/>; <see cref="NormalizationMode.Album"/> always counts as such).
-    /// Preference: album tag (album context), track tag, analysis. The gain never lifts the track's peak above full scale,
-    /// and a track whose peak is unknown is never boosted.
+    /// Preference: album tag (album context), track tag, analysis. The gain avoids lifting the track's peak above full scale
+    /// (measured on the peak the tags or the analysis give; a track whose peak is unknown is never boosted) and is limited
+    /// to <see cref="MaxCutDb"/> .. <see cref="MaxBoostDb"/>. Values that are not finite numbers (a damaged library) are
+    /// ignored: a bad loudness leaves the track <see cref="GainSource.Unknown"/>, a bad peak counts as no peak.
     /// </summary>
     public static NormalizationGain Compute(NormalizationSettings settings, TrackLoudness? loudness, bool albumContext)
     {
@@ -84,25 +92,26 @@ public static class GainCalculator
 
         var wantAlbum = s.Mode == NormalizationMode.Album || (s.Mode == NormalizationMode.Auto && albumContext);
         var tags = loudness.Tags;
+        var truePeak = ValidPeak(loudness.TruePeak);
         double db;
         double? peak;
         GainSource source;
-        if (wantAlbum && tags.AlbumGainDb is { } albumGain)
+        if (wantAlbum && ValidGain(tags.AlbumGainDb) is { } albumGain)
         {
             db = albumGain + (s.TargetLufs - ReplayGainReferenceLufs);
-            peak = tags.AlbumPeak ?? tags.TrackPeak ?? loudness.TruePeak;
+            peak = ValidPeak(tags.AlbumPeak) ?? ValidPeak(tags.TrackPeak) ?? truePeak;
             source = GainSource.AlbumTag;
         }
-        else if (tags.TrackGainDb is { } trackGain)
+        else if (ValidGain(tags.TrackGainDb) is { } trackGain)
         {
             db = trackGain + (s.TargetLufs - ReplayGainReferenceLufs);
-            peak = tags.TrackPeak ?? loudness.TruePeak;
+            peak = ValidPeak(tags.TrackPeak) ?? truePeak;
             source = GainSource.TrackTag;
         }
-        else if (loudness.Lufs is { } lufs)
+        else if (loudness.Lufs is { } lufs && double.IsFinite(lufs))
         {
             db = s.TargetLufs - lufs;
-            peak = loudness.TruePeak;
+            peak = truePeak;
             source = GainSource.Analysis;
         }
         else
@@ -119,6 +128,11 @@ public static class GainCalculator
             limited = true;
         }
 
+        if (!double.IsFinite(db))
+        {
+            return NormalizationGain.Unity(GainSource.Unknown);
+        }
+
         db = Math.Clamp(db, MaxCutDb, MaxBoostDb);
         if (Math.Abs(db) < UnityBelowDb)
         {
@@ -127,6 +141,10 @@ public static class GainCalculator
 
         return new NormalizationGain(Math.Pow(10.0, db / 20.0), db, source, limited);
     }
+
+    private static double? ValidGain(double? value) => ReplayGainTags.ValidGainOrNull(value);
+
+    private static double? ValidPeak(double? value) => ReplayGainTags.ValidPeakOrNull(value);
 
     /// <summary>
     /// Whether an entry plays as part of its album in order: not shuffled, not radio, and the entry before or after it is on

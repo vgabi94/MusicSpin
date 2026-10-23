@@ -65,15 +65,70 @@ public sealed class NormalizationServiceTests : IDisposable
         }
     }
 
+    /// <summary>Starts a track the way the queue does and waits for the resolver thread to deliver what it knows.</summary>
+    private NormalizationGain Prepared(NormalizationService service, string path, bool albumContext = false)
+    {
+        service.Prepare(path, albumContext);
+        WaitUntil(() => service.Known(path) is not null, "the lookup");
+        return service.Prepare(path, albumContext);
+    }
+
     [Fact]
-    public void A_tagged_track_gets_its_tag_gain_at_once_and_is_never_analysed()
+    public void A_track_that_starts_is_not_looked_up_on_the_callers_thread_and_gets_its_gain_when_the_resolver_delivers_it()
+    {
+        var path = File("start.flac");
+        var store = new FakeStore().With(path, new TrackLoudness(new ReplayGainTags(-5, 0.8, null, null)));
+        var service = Create(Decoders((path, -30)), store);
+        var caller = Environment.CurrentManagedThreadId;
+
+        var first = service.Prepare(path, false);
+
+        Assert.Equal(GainSource.Unknown, first.Source); // the answer for a track nobody has asked about does not wait for the library
+        WaitUntil(() => service.Known(path) is not null, "the lookup");
+        Assert.Equal((-5.0, GainSource.TrackTag), (service.Prepare(path, false).Db, service.Prepare(path, false).Source));
+        Assert.DoesNotContain(caller, store.LoadThreads); // the library was read on the resolver's thread
+        Assert.NotEmpty(store.LoadThreads);
+    }
+
+    [Fact]
+    public void A_track_that_starts_goes_to_the_front_of_the_lookup()
+    {
+        var a = File("a-front.flac");
+        var b = File("b-front.flac");
+        var c = File("c-front.flac");
+        var store = new FakeStore().With(a, new TrackLoudness(new ReplayGainTags(-1, 0.9, null, null)))
+            .With(b, new TrackLoudness(new ReplayGainTags(-2, 0.9, null, null)))
+            .With(c, new TrackLoudness(new ReplayGainTags(-3, 0.9, null, null)));
+        using var inLoad = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        store.BeforeFirstLoad = () =>
+        {
+            inLoad.Set();
+            release.Wait(TimeSpan.FromSeconds(20));
+        };
+        var service = Create(Decoders((a, -30), (b, -30), (c, -30)), store);
+        service.Want([a]);
+        Assert.True(inLoad.Wait(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken)); // the resolver is busy with a
+        service.Want([a, b, c]); // b and c wait their turn ...
+        service.Prepare(c, false); // ... but c starts now: it jumps the queue
+
+        release.Set();
+        WaitUntil(() => service.Known(b) is not null && service.Known(c) is not null, "b and c");
+
+        var batches = store.LoadedBatches;
+        Assert.Equal(a, batches[0][0]);
+        Assert.Equal(c, batches[1][0]); // c leads the batch that followed
+    }
+
+    [Fact]
+    public void A_tagged_track_gets_its_tag_gain_and_is_never_analysed()
     {
         var path = File("tagged.flac");
         var decoders = Decoders((path, -30));
         var store = new FakeStore().With(path, new TrackLoudness(new ReplayGainTags(-5, 0.8, null, null)));
         using var service = Create(decoders, store);
 
-        var gain = service.Prepare(path, albumContext: false);
+        var gain = Prepared(service, path);
 
         Assert.Equal((-5.0, GainSource.TrackTag), (gain.Db, gain.Source));
         service.Want([path]);
@@ -95,9 +150,10 @@ public sealed class NormalizationServiceTests : IDisposable
 
         WaitUntil(() => service.GainFor(path, false).Source == GainSource.Analysis, "the analysis");
         var gain = service.GainFor(path, false);
-        // A -30 dBFS stereo sine measures about -30 LUFS: +12 dB to reach -18 (its peak, -30 dBFS, leaves plenty of room).
-        Assert.InRange(gain.Db, 11.8, 12.2);
-        Assert.False(gain.Limited);
+        // A -30 dBFS stereo sine measures about -30 LUFS: +12 dB would reach -18 (its peak, -30 dBFS, leaves plenty of room),
+        // but a boost never goes past the safe maximum.
+        Assert.Equal(GainCalculator.MaxBoostDb, gain.Db, 6);
+        Assert.False(gain.Limited); // the cap is not the clipping limit
 
         WaitUntil(() => store.Saved.Count == 1, "the result to be kept");
         var saved = Assert.Single(store.Saved);
@@ -116,11 +172,11 @@ public sealed class NormalizationServiceTests : IDisposable
         var store = new FakeStore().With(path, new TrackLoudness(ReplayGainTags.None, -26, 0.2, Analyzed: true));
         var service = Create(decoders, store);
 
-        var gain = service.Prepare(path, false);
+        var gain = Prepared(service, path);
         service.Want([path]);
         service.Dispose();
 
-        Assert.Equal((8.0, GainSource.Analysis), (Math.Round(gain.Db, 6), gain.Source));
+        Assert.Equal((GainCalculator.MaxBoostDb, GainSource.Analysis), (Math.Round(gain.Db, 6), gain.Source));
         Assert.Empty(decoders.OpenedPaths);
     }
 
@@ -172,10 +228,11 @@ public sealed class NormalizationServiceTests : IDisposable
         var service = Create(Decoders((path, -30)), store);
 
         Assert.Equal(GainSource.Unknown, service.Prepare(path, false).Source);
+        WaitUntil(() => store.LoadCalls >= 1, "the first attempt, while the library is busy");
         Assert.Null(service.Known(path)); // not remembered as "no tags"
 
         store.Busy = false;
-        Assert.Equal(GainSource.TrackTag, service.Prepare(path, false).Source);
+        Assert.Equal(GainSource.TrackTag, Prepared(service, path).Source);
     }
 
     [Fact]
@@ -188,6 +245,7 @@ public sealed class NormalizationServiceTests : IDisposable
         var service = Create(Decoders((path, -30)), store, log: log.Enqueue);
 
         var gain = service.Prepare(path, false);
+        WaitUntil(() => !log.IsEmpty, "the failure to be logged");
 
         Assert.Equal((1.0, GainSource.Unknown), (gain.Linear, gain.Source));
         Assert.Contains(log, l => l.Contains("could not read the library", StringComparison.Ordinal));
@@ -288,7 +346,7 @@ public sealed class NormalizationServiceTests : IDisposable
         var path = File("settings.flac");
         var store = new FakeStore().With(path, new TrackLoudness(new ReplayGainTags(-6, 0.5, null, null)));
         var service = Create(Decoders((path, -30)), store);
-        Assert.Equal(-6.0, service.Prepare(path, false).Db, 6);
+        Assert.Equal(-6.0, Prepared(service, path).Db, 6);
 
         var raised = 0;
         service.Changed += (_, _) => raised++;
@@ -357,7 +415,7 @@ public sealed class NormalizationServiceTests : IDisposable
         var spelled = Path.Combine(_dir, ".", "Spelling.flac");
 
         Assert.Equal(NormalizationService.KeyOf(path), NormalizationService.KeyOf(spelled));
-        Assert.Equal(-3.0, service.Prepare(spelled, false).Db, 6);
+        Assert.Equal(-3.0, Prepared(service, spelled).Db, 6);
     }
 
     // -------------------------------------------------------------------------------------------- fakes
@@ -367,7 +425,22 @@ public sealed class NormalizationServiceTests : IDisposable
         private readonly Dictionary<string, TrackLoudness> _known = new(StringComparer.Ordinal);
         private readonly object _gate = new();
 
-        public bool Busy { get; set; }
+        private int _loadCalls;
+
+        public volatile bool Busy;
+
+        /// <summary>Runs inside the first <see cref="Load"/> (a gate for the test).</summary>
+        public Action? BeforeFirstLoad { get; set; }
+
+        public int LoadCalls => Volatile.Read(ref _loadCalls);
+
+        public ConcurrentQueue<int> LoadThreadQueue { get; } = new();
+
+        public List<int> LoadThreads => [.. LoadThreadQueue];
+
+        public ConcurrentQueue<string[]> LoadedBatchQueue { get; } = new();
+
+        public List<string[]> LoadedBatches => [.. LoadedBatchQueue];
 
         public bool ThrowOnLoad { get; set; }
 
@@ -385,6 +458,13 @@ public sealed class NormalizationServiceTests : IDisposable
 
         public IReadOnlyDictionary<string, TrackLoudness>? Load(IReadOnlyCollection<string> paths)
         {
+            LoadThreadQueue.Enqueue(Environment.CurrentManagedThreadId);
+            LoadedBatchQueue.Enqueue([.. paths]);
+            if (Interlocked.Increment(ref _loadCalls) == 1)
+            {
+                BeforeFirstLoad?.Invoke();
+            }
+
             if (ThrowOnLoad)
             {
                 throw new InvalidOperationException("library exploded");

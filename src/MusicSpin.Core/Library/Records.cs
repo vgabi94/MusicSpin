@@ -60,6 +60,9 @@ public sealed class TrackRecord
     public double? LoudnessLufs { get; set; }
     public double? LoudnessTruePeak { get; set; }
     public bool LoudnessAnalyzed { get; set; }
+
+    /// <summary>The <see cref="MusicSpin.Core.Normalization.LoudnessMeter.AlgorithmVersion"/> that measured it; 0 (not stored) never matches, so such a result is measured again.</summary>
+    public int LoudnessVersion { get; set; }
     public long LoudnessSizeBytes { get; set; }
     public long LoudnessModifiedUtcTicks { get; set; }
 
