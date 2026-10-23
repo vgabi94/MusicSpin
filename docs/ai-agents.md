@@ -128,7 +128,7 @@ One request per line on stdin; one response per line on stdout with the same `id
 {"id":18,"cmd":"queue","offset":0,"limit":50}  {"id":19,"cmd":"queue.clear"}  {"id":20,"cmd":"hello"}
 {"id":21,"cmd":"repeat","mode":"all"}          // off|one|all; without "mode": just the status
 {"id":22,"cmd":"shuffle","mode":"on","seed":7} // on|off|toggle (or "enabled":true/false); without "mode": just the status
-{"id":30,"cmd":"normalize","mode":"off"}       // off|track|album|auto, optional "target" (LUFS) and "preamp" (dB); without any: just the status
+{"id":30,"cmd":"normalize","mode":"off"}       // off|track|album|auto, optional "target" (LUFS) and "preamp" (dB); without any: just the status; in serve only for this session (settings.json is not written)
 {"id":23,"cmd":"queue.set","items":["/music/a.flac","/music/b.flac"],"shuffle":true,"seed":7}  // turn shuffle on for the new queue
 {"id":24,"cmd":"radio","filter":{"artists":["Miles Davis"],"genres":["Jazz"],"years":[{"from":1955,"to":1965}],"formats":["flac"],"searches":["blue"],"hiRes":false,"favorites":false,"excludeArtists":["Kenny G"],"excludeYears":[{"from":1960,"to":1960}]},"play":true}  {"id":25,"cmd":"radio.end"}
                                                // endless random playback; every filter is optional ("filter" omitted = whole library); exclude* lists also: excludeAlbums, excludeGenres, excludeFormats, excludeSearches

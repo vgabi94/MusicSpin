@@ -211,7 +211,7 @@ Volume levelling (ReplayGain / EBU R128, see [Playback → Volume levelling](pla
 - `track`: every track to the target level. `album`: the album's gain (a track without one uses its own). `auto`: album gain for an album played in order, track gain for shuffle and radio.
 - `--target <lufs>`: the level, -30 to -8 (default -18). `--preamp <db>`: added to every gain, -12 to +12 (default 0). Either can be given without a mode.
 
-Without arguments: show the status (`normalization`: mode, target, pre-amp, the current track's gain and where it came from). Case-insensitive. An unknown mode or a value out of range is exit 2 (checked before contacting the player). Needs a running player (exit 13). Saved as the default in `settings.json` (`normalization`, `normalizationTargetLufs`, `normalizationPreampDb`); a failure to save is a warning. Tracks without tags are measured in the background; until then they play unchanged.
+Without arguments: show the status (`normalization`: mode, target, pre-amp, the current track's gain and where it came from). Case-insensitive. An unknown mode or a value out of range is exit 2 (checked before contacting the player). Needs a running player (exit 13). Saved as the default in `settings.json` (`normalization`, `normalizationTargetLufs`, `normalizationPreampDb`); a failure to save is a warning. Tracks without tags are measured in the background; until then they play unchanged. A gain is never more than +6 dB (or less than -40 dB).
 
 ## status
 
@@ -365,7 +365,7 @@ JSON results: `list` → `{total, items}`; `show` → `{playlist, entries: {tota
 
 ## serve
 
-`music-spin serve [--backend] [--device] [--exclusive]`: a long-running player in this process, controlled by JSON lines on stdin, with responses and events as JSON lines on stdout. It uses the same protocol as the background player. See [AI agents → serve](ai-agents.md#serve-json-lines-protocol-v1).
+`music-spin serve [--backend] [--device] [--exclusive]`: a long-running player in this process, controlled by JSON lines on stdin, with responses and events as JSON lines on stdout. It uses the same protocol as the background player, and levels volume the same way (the saved `settings.json` values at start; `normalize` in `serve` is for the session only). See [AI agents → serve](ai-agents.md#serve-json-lines-protocol-v1).
 
 ## mcp
 

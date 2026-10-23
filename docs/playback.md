@@ -196,9 +196,11 @@ Where the gain comes from, in this order:
 
 1. **Tags.** ReplayGain `REPLAYGAIN_TRACK_GAIN` / `_ALBUM_GAIN` / `_PEAK` (as the tag reader finds them: ID3, Vorbis comments, APE, MP4), and for Opus the `R128_TRACK_GAIN` / `R128_ALBUM_GAIN` tags (a Q7.8 number relative to -23 LUFS). Tag gains are relative to the ReplayGain 2.0 reference of -18 LUFS and are moved to the target level. Tags are read by the scan, so a tagged track needs nothing else.
 2. **Analysis.** A track without a track gain is measured once: integrated loudness (EBU R128 / ITU-R BS.1770-4: K-weighted, 400 ms blocks, absolute gate -70 LUFS, relative gate -10 LU) and the true peak (oversampled 4x, 2x from 96 kHz, not above 192 kHz). The gain is `target - loudness`. A silent track is left unchanged.
-3. Until a track's gain is known it plays **unchanged**; `status` then says `unknown`.
+   A tag gain is only trusted together with its peak: a track with a gain but no peak (an Opus `R128_*` tag, a gain-only MP3) is also measured once for its true peak, and then gets the tag's gain limited by that peak.
+   Mono is measured as dual mono (a mono file is as loud as the same signal on both speakers, as in libebur128). For files with more than two channels the channel layout decides the weights (LFE not counted, surround channels +1.5 dB); a four-channel file is only taken for quad when its layout says so or says nothing.
+3. Until a track's gain is known it plays **unchanged**; `status` then says `unknown`. A track that starts before its library lookup has answered is unchanged for that moment, and its gain ramps in when the answer arrives.
 
-Analysis never delays playback. The current and next tracks are looked up in the library when they are queued; an untagged one is measured by a low-priority background worker (one file at a time, the playing track and the next ones first; a track that is no longer queued is dropped). When the result arrives the playing track's gain **ramps over 5 ms** to the new value (no click), and later tracks get their gain before they start, also across a gapless boundary. The result is kept in `library.db` (`LoudnessLufs`, `LoudnessTruePeak`) with the file's size and modification time: a file that changed is measured again. A failed analysis (unreadable file) is not retried in the same session.
+Analysis never holds playback back: starting a track never waits for the library or for a measurement (a gain that is not known yet is applied when it arrives, see above). The current and next tracks are looked up in the library by a background thread as soon as they are queued; an untagged one is measured by a background worker (one file at a time, the playing track and the next ones first; a track that is no longer queued is dropped). When the result arrives the playing track's gain **ramps over 5 ms** to the new value (no click), and later tracks get their gain before they start, also across a gapless boundary. The result is kept in `library.db` (`LoudnessLufs`, `LoudnessTruePeak`, `LoudnessVersion`) with the file's size and modification time: a file that changed is measured again, and so is one measured by an older version of the meter. A file whose size or time cannot be read is levelled for the session only and not stored. A failed analysis (unreadable file) is not retried in the same session. The worker asks for below-normal thread priority; Windows and macOS honour it, Linux ignores it for ordinary users, so there it only runs one file at a time.
 
 Settings (`settings.json`, changed by `music-spin normalize`, the MCP `normalize` tool or the app switch):
 
@@ -206,15 +208,17 @@ Settings (`settings.json`, changed by `music-spin normalize`, the MCP `normalize
 |---|---|---|
 | `normalization` | `auto` | `off`, `track`, `album` or `auto` |
 | `normalizationTargetLufs` | `-18` | The level tracks are brought to, -30 to -8 LUFS. -18 is ReplayGain 2.0's reference; EBU R128 broadcast uses -23 (quieter, more headroom) |
-| `normalizationPreampDb` | `0` | Added to every gain, -12 to +12 dB |
+| `normalizationPreampDb` | `0` | Added to every gain, -12 to +12 dB. The sum is still limited to +6 dB (see below), so a pre-amp above that only helps tracks that are being cut |
 
-**Clipping prevention.** A gain never lifts a track's peak above full scale: it is lowered to `-20·log10(peak)` (the peak from the tags, else the analysed true peak) and `status` reports `limited: true`. A tagged track without a peak value is not boosted at all. This is a gain limit, not a dynamic limiter, so the music's dynamics are not changed. Gains are also limited to +20 dB and -40 dB.
+**Clipping prevention.** A gain never lifts a track's peak above full scale: it is lowered to `-20·log10(peak)` (the peak from the tags, else the analysed true peak) and `status` reports `limited: true`. A tagged track whose peak is not known yet is not boosted until the analysis has measured it. This is a gain limit, not a dynamic limiter, so the music's dynamics are not changed. The peak used is the sample or true peak of the file, so it avoids clipping of the decoded samples; it cannot know what a DAC or the volume stage after it does.
+
+**Safe volume.** A gain is never more than **+6 dB** and never less than **-40 dB**, whatever the target, the pre-amp or the tags say (`GainCalculator.MaxBoostDb`). A very quiet recording is therefore brought up by at most 6 dB; a larger boost would be a sudden jump in level that is hard on the ears and on the speakers, and the volume knob is the right tool for the rest. A damaged tag or library value (not a finite number) counts as no value.
 
 **Bit-exactness.** With levelling off, or a gain under 0.005 dB, no sample is touched. Levelling happens before the volume stage and after the spectrum tap. The shared-mode output stays bit-exact otherwise as before; [exclusive/bit-perfect](#hi-res-and-bit-perfect) users who want an untouched stream should set levelling to `off`.
 
 `status` (JSON `normalization`: `mode`, `targetLufs`, `preampDb`, `gainDb`, `source` = `track-tag`, `album-tag`, `analysis`, `unknown` or `off`, `limited`) and the text line `Levelling: ...` show what the current track gets.
 
-Limitations: the gain of a file that is changed while MusicSpin runs is used until the next session's lookup; analysis of very long files (DJ mixes) takes as long as decoding them; a very quiet track is boosted by at most 20 dB.
+Limitations: the gain of a file that is changed while MusicSpin runs is used until the next session's lookup; analysis of very long files (DJ mixes) takes as long as decoding them; a very quiet track is boosted by at most 6 dB (the safe-volume limit above); `serve` levels like the background player, with the saved settings as its start values, and a `normalize` sent to `serve` is for that session only (nothing is written to `settings.json`).
 
 ## Radio
 
