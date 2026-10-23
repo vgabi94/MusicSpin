@@ -150,6 +150,32 @@ public sealed class QueueLevellingTests : IDisposable
 
     [Fact]
     [Trait("Category", "Unhappy")]
+    public async Task A_gains_call_that_races_a_gapless_boundary_cannot_give_the_new_track_the_old_ones_gain()
+    {
+        // The queue computes the gains for "the current track" from its own bookkeeping, which can still say A after the
+        // player has crossed into B. The player must find B by its token, not take the first segment for the current one.
+        var a = new RampSpec(1, 400);
+        var b = new RampSpec(2, 400);
+        var (player, queue, resolver) = Create();
+        resolver.Set(Add(a), Gain(1.0));
+        resolver.Set(Add(b), Gain(0.5));
+        var crossed = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        player.TrackAdvanced += (_, e) => crossed.TrySetResult(e.Token);
+        queue.SetQueue([new QueueItem("/l/1.flac"), new QueueItem("/l/2.flac")]);
+        var head = _outputs.Output.Pump((400 + 50) * 2); // all of A and 50 frames of B
+        var tokenB = await crossed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        // the stale call: A is still "current" at its gain, B is known only as a queued entry
+        player.SetGains(1f, [new TrackGain(tokenB, 0.5f)]);
+        var all = head.Concat(Drain()).ToArray();
+
+        Assert.Equal(800 * 2, all.Length); // both tracks played in full
+        var fb = Factors(all, 400, b);
+        Assert.All(fb.Skip(RampFrames), f => Assert.Equal(0.5, f, 6)); // B stayed at 0.5 through the stale call
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
     public void Missing_gains_are_refused()
     {
         var (player, _, _) = Create(resolver: false);

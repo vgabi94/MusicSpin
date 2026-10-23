@@ -45,9 +45,14 @@ public sealed class NormalizationServiceTests : IDisposable
         return decoders;
     }
 
-    private NormalizationService Create(TestDecoders decoders, FakeStore? store = null, NormalizationSettings? settings = null, Action<string>? log = null)
+    private NormalizationService Create(TestDecoders decoders, FakeStore? store = null, NormalizationSettings? settings = null, Action<string>? log = null,
+        int? maxEntries = null, TimeSpan? joinTimeout = null)
     {
-        var service = new NormalizationService(decoders, store ?? new FakeStore(), settings, log);
+        var service = new NormalizationService(decoders, store ?? new FakeStore(), settings, log)
+        {
+            MaxEntries = maxEntries ?? 8192,
+            JoinTimeout = joinTimeout ?? NormalizationService.DefaultJoinTimeout,
+        };
         service.Changed += (_, _) => _changes.Release();
         _services.Add(service);
         return service;
@@ -165,6 +170,101 @@ public sealed class NormalizationServiceTests : IDisposable
     }
 
     [Fact]
+    public void A_tag_gain_without_a_peak_is_held_back_until_the_true_peak_is_measured_then_it_may_boost()
+    {
+        // An Opus R128 tag or a gain-only MP3: +4 dB, but no peak to say how far it may be boosted.
+        var path = File("opus.opus");
+        var decoders = Decoders((path, -30));
+        var store = new FakeStore().With(path, new TrackLoudness(new ReplayGainTags(4, null, null, null)));
+        var service = Create(decoders, store);
+
+        Assert.Equal((1.0, true), (Prepared(service, path).Linear, service.GainFor(path, false).Limited)); // no boost without a peak
+        service.Want([path]);
+        WaitUntil(() => service.GainFor(path, false).Db > 3.9, "the analysis");
+
+        var gain = service.GainFor(path, false);
+        Assert.Equal((4.0, GainSource.TrackTag, false), (Math.Round(gain.Db, 6), gain.Source, gain.Limited)); // the tag's gain, the measured peak
+        Assert.Contains(path, decoders.OpenedPaths);
+    }
+
+    [Fact]
+    public void A_tag_gain_with_its_peak_is_never_measured()
+    {
+        var path = File("both.flac");
+        var decoders = Decoders((path, -30));
+        var store = new FakeStore().With(path, new TrackLoudness(new ReplayGainTags(4, 0.5, null, null)));
+        var service = Create(decoders, store);
+        Prepared(service, path);
+
+        service.Want([path]);
+        service.Dispose();
+
+        Assert.Empty(decoders.OpenedPaths);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_file_whose_size_and_time_cannot_be_read_is_levelled_for_the_session_but_not_kept_in_the_library()
+    {
+        var ghost = Path.Combine(_dir, "ghost.flac"); // the fake decoder serves it, the disk has no such file
+        var store = new FakeStore();
+        var service = Create(Decoders((ghost, -30)), store);
+
+        service.Want([ghost]);
+        WaitUntil(() => service.GainFor(ghost, false).Source == GainSource.Analysis, "the analysis");
+        service.Dispose();
+
+        Assert.Empty(store.SaveAttempts);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void The_tracks_that_play_now_and_next_are_never_dropped_when_the_memory_of_tracks_is_full()
+    {
+        var paths = Enumerable.Range(1, 6).Select(i => File($"t{i}.flac")).ToArray();
+        var store = new FakeStore();
+        foreach (var path in paths)
+        {
+            store.With(path, new TrackLoudness(new ReplayGainTags(-2, 0.9, null, null)));
+        }
+
+        var service = Create(Decoders(), store, maxEntries: 3);
+        service.Want(paths[..3]);
+        WaitUntil(() => paths[..3].All(p => service.Known(p) is not null), "the first three");
+
+        service.Want([paths[2], paths[3]]); // t3 plays, t4 is next: the memory is full, t1 and t2 are not needed any more
+        WaitUntil(() => service.Known(paths[3]) is not null, "t4");
+
+        Assert.NotNull(service.Known(paths[2])); // the playing track keeps its gain
+        Assert.Null(service.Known(paths[0]));
+        Assert.Null(service.Known(paths[1]));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Disposing_does_not_wait_for_ever_for_a_decoder_that_is_stuck()
+    {
+        var path = File("stuck.flac");
+        var decoders = Decoders((path, -30));
+        using var started = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        decoders.BeforeFirstRead = _ =>
+        {
+            started.Set();
+            release.Wait(TimeSpan.FromSeconds(30)); // a disk that never answers
+        };
+        var log = new ConcurrentQueue<string>();
+        var service = Create(decoders, log: log.Enqueue, joinTimeout: TimeSpan.FromMilliseconds(100));
+        service.Want([path]);
+        Assert.True(started.Wait(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken));
+
+        await Task.Run(service.Dispose, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+
+        Assert.Contains(log, l => l.Contains("did not stop in time", StringComparison.Ordinal));
+        release.Set();
+    }
+
+    [Fact]
     public void A_cached_analysis_is_used_without_decoding_again()
     {
         var path = File("cached.flac");
@@ -228,7 +328,7 @@ public sealed class NormalizationServiceTests : IDisposable
         var service = Create(Decoders((path, -30)), store);
 
         Assert.Equal(GainSource.Unknown, service.Prepare(path, false).Source);
-        WaitUntil(() => store.LoadCalls >= 1, "the first attempt, while the library is busy");
+        Assert.True(store.Loads.Wait(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken)); // the first attempt, while the library is busy
         Assert.Null(service.Known(path)); // not remembered as "no tags"
 
         store.Busy = false;
@@ -242,10 +342,15 @@ public sealed class NormalizationServiceTests : IDisposable
         var path = File("broken-store.flac");
         var log = new ConcurrentQueue<string>();
         var store = new FakeStore { ThrowOnLoad = true };
-        var service = Create(Decoders((path, -30)), store, log: log.Enqueue);
+        using var logged = new SemaphoreSlim(0);
+        var service = Create(Decoders((path, -30)), store, log: m =>
+        {
+            log.Enqueue(m);
+            logged.Release();
+        });
 
         var gain = service.Prepare(path, false);
-        WaitUntil(() => !log.IsEmpty, "the failure to be logged");
+        Assert.True(logged.Wait(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken)); // the resolver thread logged it
 
         Assert.Equal((1.0, GainSource.Unknown), (gain.Linear, gain.Source));
         Assert.Contains(log, l => l.Contains("could not read the library", StringComparison.Ordinal));
@@ -429,6 +534,9 @@ public sealed class NormalizationServiceTests : IDisposable
 
         public volatile bool Busy;
 
+        /// <summary>Released after every <see cref="Load"/> call (the resolver thread's attempts).</summary>
+        public SemaphoreSlim Loads { get; } = new(0);
+
         /// <summary>Runs inside the first <see cref="Load"/> (a gate for the test).</summary>
         public Action? BeforeFirstLoad { get; set; }
 
@@ -465,6 +573,7 @@ public sealed class NormalizationServiceTests : IDisposable
                 BeforeFirstLoad?.Invoke();
             }
 
+            Loads.Release();
             if (ThrowOnLoad)
             {
                 throw new InvalidOperationException("library exploded");

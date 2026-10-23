@@ -67,6 +67,52 @@ public sealed class LibraryLoudnessTests : LibraryTestBase
     }
 
     [Fact]
+    [Trait("Category", "Unhappy")]
+    public void An_analysis_from_another_version_of_the_meter_is_measured_again()
+    {
+        var path = Track();
+        AddAndScan();
+        using (var library = Open())
+        {
+            library.StoreLoudness([Update(path) with { Version = LoudnessMeter.AlgorithmVersion - 1 }]);
+        }
+
+        using var read = OpenRead();
+        var loudness = read.LoudnessFor([path])[NormalizationService.KeyOf(path)];
+        Assert.False(loudness.Analyzed); // its numbers may not mean what they mean now
+        Assert.False(loudness.IsKnown);
+    }
+
+    [Fact]
+    public void A_tagged_gain_without_a_peak_is_not_enough_to_be_known_and_the_analysis_completes_it()
+    {
+        var path = Track();
+        using (var file = TagLib.File.Create(path))
+        {
+            file.Tag.ReplayGainTrackGain = 3; // gain-only tag: no peak to say how far it may be boosted
+            file.Save();
+        }
+
+        AddAndScan();
+        using (var read = OpenRead())
+        {
+            var tagged = read.LoudnessFor([path])[NormalizationService.KeyOf(path)];
+            Assert.Equal(3.0, tagged.Tags.TrackGainDb);
+            Assert.False(tagged.IsKnown);
+        }
+
+        using (var library = Open())
+        {
+            library.StoreLoudness([Update(path, -20, 0.4)]);
+        }
+
+        using var after = OpenRead();
+        var done = after.LoudnessFor([path])[NormalizationService.KeyOf(path)];
+        Assert.True(done.IsKnown);
+        Assert.Equal((3.0, 0.4), (done.Tags.TrackGainDb, done.TruePeak));
+    }
+
+    [Fact]
     public void A_rescan_of_a_changed_file_drops_its_analysis_and_reads_its_tags_again()
     {
         var path = Track();
