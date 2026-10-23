@@ -43,8 +43,18 @@ public interface IAudioOutput : IDisposable
     /// <exception cref="MusicSpinException">AudioDeviceError.</exception>
     void Open(IPcmSource source);
 
+    /// <summary>
+    /// Starts playing, or resumes after <see cref="Pause"/>: an exclusive device that the pause released is reopened for
+    /// the same source first.
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidState when not open; AudioDeviceError when a released device cannot be reopened (still paused, so it can be retried).</exception>
     void Start();
 
+    /// <summary>
+    /// Stops reading the source once the audio already handed to the device has played out, so the source's position is
+    /// where <see cref="Start"/> continues. An exclusive device is released meanwhile (other apps can use it); the output
+    /// still counts as <see cref="IsOpen"/>.
+    /// </summary>
     void Pause();
 
     /// <summary>Stops and releases the device.</summary>
@@ -69,7 +79,8 @@ public interface IAudioOutput : IDisposable
 
     /// <summary>
     /// The output moved to another device without stopping (the system default changed, or the device was lost and it
-    /// reopened on the default): the source keeps its position. Raised on a pool thread.
+    /// reopened on the default, or resuming after a pause landed on another device): the source keeps its position, give
+    /// or take the audio the old device had buffered. Raised on a pool thread, or on the thread that resumed.
     /// </summary>
     event EventHandler<AudioOutputReroutedEventArgs>? Rerouted
     {

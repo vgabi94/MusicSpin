@@ -634,6 +634,249 @@ public class MiniAudioOutputTests
         Assert.All(backend.Streams.Take(2), s => Assert.True(s.Disposed)); // each reopen released the previous device
     }
 
+    // The audio thread of a real device is joined when the device closes; if it reports a loss meanwhile (Windows reports
+    // the default change and the invalidated device together), nothing the report needs may be held across that close.
+    // FakeStream.WhileClosing runs such a report on its own thread and waits for it, like the join does.
+
+    [Fact]
+    public async Task Stop_returns_when_the_closing_devices_audio_thread_reports_a_loss_meanwhile()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        backend.Streams[0].WhileClosing = s => { s.Lose("The audio device stopped: invalidated."); s.ChangeDefault(); };
+
+        await Task.Run(output.Stop, TestContext.Current.CancellationToken).WaitAsync(Bound, TestContext.Current.CancellationToken);
+        posted.RunAll();
+
+        Assert.False(output.IsOpen);
+        Assert.True(backend.Streams[0].Disposed);
+        Assert.Single(backend.Opened); // the report belonged to the device being closed: no reopen
+    }
+
+    [Fact]
+    public async Task Opening_the_next_track_returns_when_the_closing_devices_audio_thread_reports_a_loss_meanwhile()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        backend.Streams[0].WhileClosing = s => s.Lose("unplugged");
+        var next = new Source(new PcmFormat(96_000, 2, 24));
+
+        await Task.Run(() => output.Open(next), TestContext.Current.CancellationToken).WaitAsync(Bound, TestContext.Current.CancellationToken);
+        posted.RunAll();
+
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Same(next, backend.Opened[1].Data);
+        Assert.False(backend.Streams[1].Disposed); // the stale report did not touch the new device
+    }
+
+    [Fact]
+    public async Task Moving_to_the_default_returns_when_the_replaced_devices_audio_thread_reports_again_meanwhile()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var moves = 0;
+        output.Rerouted += (_, _) => moves++;
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        backend.Streams[0].WhileClosing = s => { s.Lose("again"); s.ChangeDefault(); };
+
+        backend.Streams[0].Lose("unplugged");
+        await Task.Run(posted.RunAll, TestContext.Current.CancellationToken).WaitAsync(Bound, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, moves);
+        Assert.Equal(0, posted.Count); // the second report was about the replaced device: it queued nothing
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Same(backend.Streams[1], ((MiniAudioOutput)output).Stream);
+    }
+
+    [Fact]
+    public async Task Outcomes_are_raised_outside_the_outputs_own_lock()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var stopped = false;
+        // A handler that waits for another thread to use the output (the Player's handlers take the Player's lock, which
+        // another thread may hold while it calls into the output): it would hang if the output still held its own lock.
+        output.Rerouted += (_, _) => Task.Run(() => { _ = output.IsOpen; output.Stop(); stopped = true; }).Wait(Bound);
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+
+        backend.Streams[0].Lose("unplugged");
+        await Task.Run(posted.RunAll, TestContext.Current.CancellationToken).WaitAsync(Bound, TestContext.Current.CancellationToken);
+
+        Assert.True(stopped);
+        Assert.False(output.IsOpen);
+    }
+
+    [Fact]
+    public void Pausing_in_exclusive_mode_releases_the_device_and_resuming_reopens_it_on_the_same_source()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        var moves = 0;
+        output.Rerouted += (_, _) => moves++;
+        var source = new Source(new PcmFormat(44_100, 2, 24));
+        output.Open(source);
+        output.Start();
+        var opened = output.Opened;
+
+        output.Pause();
+
+        Assert.Equal(["start", "pause"], backend.Streams[0].Calls); // drained first, then released
+        Assert.True(backend.Streams[0].Disposed);
+        Assert.True(output.IsOpen); // paused, not closed: the player keeps its output
+        Assert.Equal(opened, output.Opened);
+
+        output.Start();
+
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Same(source, backend.Opened[1].Data);
+        Assert.Equal(backend.Opened[0].Request, backend.Opened[1].Request);
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+        Assert.Same(backend.Streams[1], ((MiniAudioOutput)output).Stream);
+        posted.RunAll();
+        Assert.Equal(0, moves); // the same device, the same format: nothing to report
+    }
+
+    [Fact]
+    public void Pausing_in_shared_mode_keeps_the_device_open()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+
+        output.Pause();
+        output.Start();
+
+        Assert.Single(backend.Opened);
+        Assert.False(backend.Streams[0].Disposed);
+        Assert.Equal(["start", "pause", "start"], backend.Streams[0].Calls);
+    }
+
+    [Fact]
+    public void A_loss_reported_just_before_an_exclusive_pause_does_not_reopen_the_released_device()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+
+        backend.Streams[0].Lose("unplugged");
+        output.Pause();
+        posted.RunAll();
+
+        Assert.Single(backend.Opened); // paused devices are released, not reopened behind the listener's back
+        Assert.True(output.IsOpen);
+    }
+
+    [Fact]
+    public void A_resume_that_cannot_reopen_the_device_says_so_and_can_be_tried_again()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        var source = new Source(new PcmFormat(44_100, 2, 16));
+        output.Open(source);
+        output.Start();
+        output.Pause();
+        backend.OpenError = new InvalidOperationException("another app is using the device");
+
+        var ex = Assert.Throws<MusicSpinException>(output.Start);
+
+        Assert.Equal(MusicSpinErrorCode.AudioDeviceError, ex.Code);
+        Assert.Contains("another app is using the device", ex.Message, StringComparison.Ordinal);
+        Assert.True(output.IsOpen); // still paused on its source: the player stays paused and Play can retry
+        backend.OpenError = null;
+
+        output.Start();
+
+        Assert.Same(source, backend.Opened[1].Data);
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+        Assert.False(backend.Streams[1].Disposed);
+    }
+
+    [Fact]
+    public void A_resume_whose_chosen_device_is_gone_plays_on_the_default_and_says_so()
+    {
+        var dac = Device("FiiO BTR13", isDefault: false);
+        var backend = new FakeBackend(Device("Speakers", isDefault: true), dac);
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions("FiiO BTR13", Exclusive: true));
+        var moves = new List<AudioOutputReroutedEventArgs>();
+        output.Rerouted += (_, e) => moves.Add(e);
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        output.Pause();
+        backend.Devices.Remove(dac); // unplugged while paused: nothing was open to notice
+
+        output.Start();
+        posted.RunAll();
+
+        Assert.Null(backend.Opened[1].Device);
+        var move = Assert.Single(moves);
+        Assert.Contains("'FiiO BTR13' is not available", move.Message, StringComparison.Ordinal);
+        Assert.Contains("not available", output.Opened!.Notice, StringComparison.Ordinal);
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+    }
+
+    [Fact]
+    public void A_resume_that_ends_up_in_shared_mode_reports_why()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        var moves = new List<AudioOutputReroutedEventArgs>();
+        output.Rerouted += (_, e) => moves.Add(e);
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        output.Pause();
+        backend.OpenedAs = (_, r) => new OpenedOutput(null, false, r.SampleRate, r.Channels, "f32", 32, Verified: true, "Exclusive mode unavailable: another app has it. Playing in shared mode.");
+
+        output.Start();
+        posted.RunAll();
+
+        var move = Assert.Single(moves);
+        Assert.Equal("Exclusive mode unavailable: another app has it. Playing in shared mode.", move.Message);
+        Assert.False(output.Opened!.Exclusive);
+    }
+
+    [Fact]
+    public void Stopping_a_paused_exclusive_output_forgets_its_source()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        output.Pause();
+
+        output.Stop();
+
+        Assert.False(output.IsOpen);
+        Assert.Equal(MusicSpinErrorCode.InvalidState, Assert.Throws<MusicSpinException>(output.Start).Code);
+        Assert.Single(backend.Opened); // nothing reopened
+    }
+
     private static BackendDevice Device(string name, bool isDefault, params (string, int, int)[] formats)
         => new(name, isDefault, new byte[256], formats);
 
@@ -663,8 +906,17 @@ public class MiniAudioOutputTests
 
     private sealed record OpenCall(BackendDevice? Device, OpenRequest Request, IPcmSource Data);
 
+    /// <summary>Longest a test waits for work that must not block; reached only by a deadlock.</summary>
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+
     private sealed class FakeStream(OpenedOutput opened, Exception? startError) : IPlaybackStream
     {
+        /// <summary>
+        /// What the device's audio thread does while the device closes: it runs on its own thread and Dispose waits for
+        /// it, as closing a real device joins its audio thread.
+        /// </summary>
+        public Action<FakeStream>? WhileClosing { get; set; }
+
         public OpenedOutput Opened { get; set; } = opened;
 
         public List<string> Calls { get; } = [];
@@ -696,7 +948,15 @@ public class MiniAudioOutputTests
 
         public void ChangeDefault() => DefaultDeviceChanged?.Invoke(this, EventArgs.Empty);
 
-        public void Dispose() => Disposed = true;
+        public void Dispose()
+        {
+            if (WhileClosing is { } audioThread)
+            {
+                Task.Run(() => audioThread(this)).Wait();
+            }
+
+            Disposed = true;
+        }
     }
 
     /// <summary>The hand-off queue, drained by the test: device changes run exactly when the test says.</summary>

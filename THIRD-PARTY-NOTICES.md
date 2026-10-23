@@ -7,7 +7,7 @@ MusicSpin itself is MIT licensed (see `LICENSE`). Release builds contain or load
 | [FFmpeg](https://ffmpeg.org) (libavcodec, libavformat, libavutil, libswresample) | LGPL-2.1-or-later / LGPL-3.0-or-later (LGPL builds only) | Separate shared libraries in `ffmpeg/` next to the executable (or installed by the user / found on the system). Never linked into MusicSpin; replace them with any ABI-compatible FFmpeg 9.0 build. Source: https://ffmpeg.org/download.html, build scripts: https://github.com/BtbN/FFmpeg-Builds |
 | [TagLib#](https://github.com/mono/taglib-sharp) (TagLibSharp 2.3.0) | LGPL-2.1-only | Separate `TagLibSharp.dll` next to the executable (excluded from the single-file bundle so it can be replaced). Source: https://github.com/mono/taglib-sharp |
 | [FFmpeg.AutoGen](https://github.com/Ruslan-B/FFmpeg.AutoGen) 9.0.1.1 | MIT | Inside the executable |
-| [miniaudio](https://miniaud.io) 0.11.25 | Public domain / MIT-0 | Compiled into the native `msaudio` library (native/msaudio), inside the executable, extracted on first run. License: native/msaudio/LICENSE |
+| [miniaudio](https://miniaud.io) 0.11.25 | Public domain / MIT-0 | Compiled into the native `msaudio` library (native/msaudio), inside the executable, extracted on first run. License: native/msaudio/miniaudio/LICENSE |
 | [LiteDB](https://github.com/litedb-org/LiteDB) 5.0.21 | MIT | Inside the executable |
 | [System.CommandLine](https://github.com/dotnet/command-line-api) | MIT | Inside the CLI executable |
 | [ModelContextProtocol.Core](https://github.com/modelcontextprotocol/csharp-sdk) 2.2.0 (official MCP C# SDK) | Apache-2.0 | Inside the CLI executable (`music-spin mcp`) |

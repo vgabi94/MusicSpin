@@ -27,6 +27,11 @@ struct msa_device {
     msa_data_callback data;
     msa_notify_callback notify;
     void* user;
+    /* What the device runs at, as of open and of the latest reroute. The device thread rewrites ma.playback.* while it
+       reroutes, so other threads read this copy (under the mutex) instead of those fields. */
+    ma_mutex lock;
+    msa_opened snapshot;
+    int has_snapshot;
 };
 
 MSA_API int32_t msa_abi_version(void) { return MSA_ABI_VERSION; }
@@ -154,7 +159,9 @@ MSA_API int32_t msa_device_info_at(msa_context* context, int32_t index, msa_devi
     return MA_SUCCESS;
 }
 
-static void msa_read_opened(msa_device* d, msa_opened* opened)
+/* Reads the live device fields: only from the thread that changes them (a notification callback) or before the device
+   is shared. */
+static void msa_read_live(msa_device* d, msa_opened* opened)
 {
     memset(opened, 0, sizeof(*opened));
     opened->format = (int32_t)d->ma.playback.internalFormat;
@@ -163,6 +170,25 @@ static void msa_read_opened(msa_device* d, msa_opened* opened)
     opened->exclusive = d->ma.playback.shareMode == ma_share_mode_exclusive ? 1 : 0;
     opened->period_frames = (int32_t)d->ma.playback.internalPeriodSizeInFrames;
     snprintf(opened->name, MSA_NAME_BYTES, "%s", d->ma.playback.name);
+}
+
+static void msa_snapshot(msa_device* d, int overwrite)
+{
+    msa_opened now;
+    msa_read_live(d, &now);
+    ma_mutex_lock(&d->lock);
+    if (overwrite || !d->has_snapshot) {
+        d->snapshot = now;
+        d->has_snapshot = 1;
+    }
+    ma_mutex_unlock(&d->lock);
+}
+
+static void msa_read_opened(msa_device* d, msa_opened* opened)
+{
+    ma_mutex_lock(&d->lock);
+    *opened = d->snapshot;
+    ma_mutex_unlock(&d->lock);
 }
 
 static void msa_on_data(ma_device* device, void* output, const void* input, ma_uint32 frames)
@@ -175,6 +201,8 @@ static void msa_on_data(ma_device* device, void* output, const void* input, ma_u
 static void msa_on_notification(const ma_device_notification* notification)
 {
     msa_device* d = (msa_device*)notification->pDevice->pUserData;
+    /* The device thread has finished rewriting its format for the new device: keep a copy others can read. */
+    if (notification->type == ma_device_notification_type_rerouted) msa_snapshot(d, 1);
     if (d->notify != NULL) d->notify(d->user, (int32_t)notification->type);
 }
 
@@ -198,6 +226,11 @@ MSA_API int32_t msa_device_open(msa_context* context, const msa_open_params* par
     d->data = data;
     d->notify = notify;
     d->user = user;
+    result = ma_mutex_init(&d->lock);
+    if (result != MA_SUCCESS) {
+        free(d);
+        return result;
+    }
 
     config = ma_device_config_init(ma_device_type_playback);
     config.playback.format = (ma_format)params->format;
@@ -227,10 +260,12 @@ MSA_API int32_t msa_device_open(msa_context* context, const msa_open_params* par
 
     result = ma_device_init(&context->ma, &config, &d->ma);
     if (result != MA_SUCCESS) {
+        ma_mutex_uninit(&d->lock);
         free(d);
         return result;
     }
 
+    msa_snapshot(d, 0); /* a reroute during init already took a newer one */
     msa_read_opened(d, opened);
     *device = d;
     return MA_SUCCESS;
@@ -244,6 +279,7 @@ MSA_API void msa_device_close(msa_device* device)
 {
     if (device == NULL) return;
     ma_device_uninit(&device->ma);
+    ma_mutex_uninit(&device->lock);
     free(device);
 }
 

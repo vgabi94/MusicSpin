@@ -36,9 +36,15 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     private readonly ManualResetEventSlim _ready = new();
     private readonly AutoResetEvent _audioEvent = new(false);
     private readonly AutoResetEvent _control = new(false);
+    private readonly ManualResetEventSlim _parked = new();
+    private readonly ManualResetEventSlim _exited = new();
     private volatile bool _quit;
-    private volatile bool _startRequested;
-    private volatile bool _paused;
+
+    // Start sets it, Pause clears it: the render thread plays real audio only while it is set.
+    private volatile bool _wantPlaying;
+
+    // True from just before the client is started until it is stopped for a pause: Pause waits for the stop only then.
+    private volatile bool _clientRunning;
     private Exception? _initError;
 
     private WasapiExclusiveStream(string? endpointId, string? deviceName, PcmFormat source, IPcmSource data)
@@ -55,13 +61,6 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
 
     /// <inheritdoc />
     public event EventHandler<string>? Lost;
-
-    /// <summary>Never raised: an exclusive stream stays on its endpoint; a new default is <see cref="DefaultDeviceChanged"/>.</summary>
-    public event EventHandler? Rerouted
-    {
-        add { }
-        remove { }
-    }
 
     /// <inheritdoc />
     public event EventHandler? DefaultDeviceChanged;
@@ -84,12 +83,28 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
 
     public void Start()
     {
-        _paused = false;
-        _startRequested = true;
+        _wantPlaying = true;
         _control.Set();
     }
 
-    public void Pause() => _paused = true;
+    /// <summary>
+    /// Stops feeding the source, waits for the render thread to stop the client at its next audio event (by then the
+    /// buffer it filled last has been played, so nothing read from the source is still in flight), and returns. The
+    /// device stays held until <see cref="Dispose"/>: the owner closes an exclusive stream it pauses.
+    /// </summary>
+    public void Pause()
+    {
+        _parked.Reset();
+        _wantPlaying = false;
+        _control.Set();
+        if (_clientRunning && Thread.CurrentThread != _thread)
+        {
+            // Bounded: a render thread stuck in the driver must not freeze the caller (Dispose follows a pause anyway).
+            WaitHandle.WaitAny([_parked.WaitHandle, _exited.WaitHandle], PauseWait);
+        }
+    }
+
+    private static readonly TimeSpan PauseWait = TimeSpan.FromSeconds(2);
 
     public void Dispose()
     {
@@ -103,12 +118,14 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
         _ready.Dispose();
         _audioEvent.Dispose();
         _control.Dispose();
+        _parked.Dispose();
+        _exited.Dispose();
     }
 
     private void Run()
     {
         object? enumeratorObj = null, deviceObj = null, clientObj = null, renderObj = null;
-        DefaultWatcher? watcher = null;
+        EndpointWatcher? watcher = null;
         var formatPtr = IntPtr.Zero;
         var mmcss = IntPtr.Zero;
         try
@@ -177,12 +194,13 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
 
             var floats = new float[bufferFrames * _source.Channels];
             Fill(render, format, bufferFrames, floats); // pre-roll, as WASAPI requires before Start
-            if (_endpointId is null && device.GetId(out var idPtr) == 0)
+            if (device.GetId(out var idPtr) == 0)
             {
-                // Opened on the system default: hear when Windows picks another one, so playback can follow it.
+                // Hear about this endpoint going away (a chosen endpoint as well as the default), and about Windows
+                // picking another default when this stream follows it, so playback can move to the default.
                 var openedId = Marshal.PtrToStringUni(idPtr);
                 Marshal.FreeCoTaskMem(idPtr);
-                watcher = new DefaultWatcher(openedId, this);
+                watcher = new EndpointWatcher(openedId, followsDefault: _endpointId is null, this);
                 if (enumerator.RegisterEndpointNotificationCallback(watcher) != 0)
                 {
                     watcher = null; // no notifications: a lost device still reopens on the default through Lost
@@ -194,6 +212,7 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
             mmcss = AvSetMmThreadCharacteristicsW("Pro Audio", out _);
             WaitHandle[] waits = [_audioEvent, _control];
             var started = false;
+            var needPreroll = false; // after a pause the client was reset: its buffer is empty and needs real audio first
             while (!_quit)
             {
                 var which = WaitHandle.WaitAny(waits);
@@ -202,10 +221,35 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
                     break;
                 }
 
-                if (_startRequested && !started)
+                if (!_wantPlaying)
                 {
+                    if (started && which == 0)
+                    {
+                        // The buffer filled last has been played and nothing more is read: stop the device and park.
+                        client.Stop();
+                        client.Reset();
+                        started = false;
+                        needPreroll = true;
+                        _clientRunning = false;
+                        _parked.Set();
+                    }
+
+                    continue; // else paused mid-buffer (wait for the event that says it was played) or not started yet
+                }
+
+                if (!started)
+                {
+                    if (needPreroll && Fill(render, format, bufferFrames, floats) is var prerolled and not 0)
+                    {
+                        RaiseLost($"The audio device stopped: {Describe(prerolled)}.");
+                        break;
+                    }
+
+                    needPreroll = false;
+                    _clientRunning = true;
                     Check(client.Start(), "start the stream");
                     started = true;
+                    continue; // the running client raises the first audio event
                 }
 
                 if (which == 0 && Fill(render, format, bufferFrames, floats) is var hr and not 0)
@@ -220,6 +264,8 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
             {
                 client.Stop();
             }
+
+            _clientRunning = false;
         }
         catch (Exception ex)
         {
@@ -233,6 +279,8 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
         }
         finally
         {
+            _clientRunning = false;
+            _exited.Set();
             if (watcher is not null && enumeratorObj is IMMDeviceEnumerator registered)
             {
                 registered.UnregisterEndpointNotificationCallback(watcher);
@@ -288,24 +336,39 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     }
 
     /// <summary>
-    /// IMMNotificationClient: tells the stream when the default render device for multimedia becomes another endpoint.
-    /// Windows calls it on its own thread and requires it not to block, so it only raises the event (the output hands off).
+    /// IMMNotificationClient for the endpoint the stream holds: tells it when that endpoint is disabled, unplugged or
+    /// removed, and (for a stream that follows the system default) when the default render device becomes another
+    /// endpoint. Windows calls it on its own thread and requires it not to block, so it only raises events (the output
+    /// hands off, and takes no lock a closing stream could be holding).
     /// </summary>
     [ComVisible(true)]
-    private sealed class DefaultWatcher(string? openedId, WasapiExclusiveStream owner) : IMMNotificationClient
+    private sealed class EndpointWatcher(string? openedId, bool followsDefault, WasapiExclusiveStream owner) : IMMNotificationClient
     {
-        public int OnDeviceStateChanged(string? deviceId, int newState) => 0;
+        public int OnDeviceStateChanged(string? deviceId, int newState)
+        {
+            if (EndpointEvents.LostByState(openedId, deviceId, newState) is { } reason)
+            {
+                owner.RaiseLost(reason);
+            }
+
+            return 0;
+        }
 
         public int OnDeviceAdded(string? deviceId) => 0;
 
-        public int OnDeviceRemoved(string? deviceId) => 0;
+        public int OnDeviceRemoved(string? deviceId)
+        {
+            if (EndpointEvents.LostByRemoval(openedId, deviceId) is { } reason)
+            {
+                owner.RaiseLost(reason);
+            }
+
+            return 0;
+        }
 
         public int OnDefaultDeviceChanged(int flow, int role, string? defaultDeviceId)
         {
-            // eRender, eMultimedia (the role the stream opened with); Windows also reports eConsole and
-            // eCommunications for the same change, which are skipped. No default at all: the stream's loss says it.
-            if (flow == 0 && role == 1 && defaultDeviceId is not null
-                && !string.Equals(defaultDeviceId, openedId, StringComparison.OrdinalIgnoreCase))
+            if (EndpointEvents.DefaultMovedAway(followsDefault, openedId, flow, role, defaultDeviceId))
             {
                 owner.OnDefaultChanged();
             }
@@ -343,7 +406,7 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
             return hr;
         }
 
-        if (_paused || !_startRequested)
+        if (!_wantPlaying)
         {
             return render.ReleaseBuffer(frames, BufferFlagsSilent);
         }

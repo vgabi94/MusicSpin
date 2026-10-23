@@ -128,6 +128,25 @@ public sealed class PlayerTests : IDisposable
     }
 
     [Fact]
+    public void OutputOpened_subscribers_run_with_no_player_lock_held()
+    {
+        var reachedPlayerFromAnotherThread = false;
+        _outputs.Output.OpenedAs = _ => new OpenedOutput("Speakers", false, 48_000, 2, "f32", 32, true);
+        _player.OutputOpened += (_, _) =>
+        {
+            // A UI handler may hop to another thread that asks the player something while this one waits for it.
+            reachedPlayerFromAnotherThread = Task.Run(() => _player.State, TestContext.Current.CancellationToken)
+                .Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        };
+        _player.Load(Song);
+
+        _player.Play();
+
+        Assert.True(reachedPlayerFromAnotherThread);
+        Assert.Equal(PlayerState.Playing, _player.State);
+    }
+
+    [Fact]
     public void A_reroute_after_dispose_is_ignored()
     {
         var events = 0;

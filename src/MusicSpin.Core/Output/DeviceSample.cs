@@ -69,31 +69,48 @@ internal static class DeviceSamples
             throw new ArgumentException("Destination is too small.", nameof(destination));
         }
 
-        for (var i = 0; i < source.Length; i++)
+        // One tight loop per format: the format is not re-checked for every sample.
+        switch (format)
         {
-            var x = source[i];
-            var d = destination.Slice(i * size, size);
-            switch (format)
-            {
-                case DeviceSample.F32:
-                    BinaryPrimitives.WriteSingleLittleEndian(d, x);
-                    break;
-                case DeviceSample.S16:
-                    BinaryPrimitives.WriteInt16LittleEndian(d, (short)Scale(x, 15));
-                    break;
-                case DeviceSample.S24:
-                    var s24 = (int)Scale(x, 23);
+            case DeviceSample.F32:
+                for (var i = 0; i < source.Length; i++)
+                {
+                    BinaryPrimitives.WriteSingleLittleEndian(destination[(i * 4)..], source[i]);
+                }
+
+                break;
+            case DeviceSample.S16:
+                for (var i = 0; i < source.Length; i++)
+                {
+                    BinaryPrimitives.WriteInt16LittleEndian(destination[(i * 2)..], (short)Scale(source[i], 15));
+                }
+
+                break;
+            case DeviceSample.S24:
+                for (var i = 0; i < source.Length; i++)
+                {
+                    var s24 = (int)Scale(source[i], 23);
+                    var d = destination.Slice(i * 3, 3);
                     d[0] = (byte)s24;
                     d[1] = (byte)(s24 >> 8);
                     d[2] = (byte)(s24 >> 16);
-                    break;
-                case DeviceSample.S24In32:
-                    BinaryPrimitives.WriteInt32LittleEndian(d, (int)Scale(x, 23) << 8);
-                    break;
-                default:
-                    BinaryPrimitives.WriteInt32LittleEndian(d, (int)Scale(x, 31));
-                    break;
-            }
+                }
+
+                break;
+            case DeviceSample.S24In32:
+                for (var i = 0; i < source.Length; i++)
+                {
+                    BinaryPrimitives.WriteInt32LittleEndian(destination[(i * 4)..], (int)Scale(source[i], 23) << 8);
+                }
+
+                break;
+            default:
+                for (var i = 0; i < source.Length; i++)
+                {
+                    BinaryPrimitives.WriteInt32LittleEndian(destination[(i * 4)..], (int)Scale(source[i], 31));
+                }
+
+                break;
         }
     }
 

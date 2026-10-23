@@ -188,6 +188,56 @@ public sealed unsafe class MsAudioNativeTests : IDisposable
     }
 
     [Fact]
+    public void Pausing_a_running_device_stops_it_without_calling_it_lost_and_starting_again_resumes_it()
+    {
+        var source = new WaitableSource(new PcmFormat(48_000, 2, 16));
+        using var stream = (MiniAudioStream)_backend.Open(null, new OpenRequest(DeviceSample.S16, 48_000, 2, false, 16), source);
+        var lost = new List<string>();
+        stream.Lost += (_, reason) => lost.Add(reason);
+        var bytes = new byte[64 * 2 * 2];
+
+        stream.Start();
+        Assert.True(source.WaitForReads(1)); // the device thread is pulling
+        stream.Pause();
+
+        Assert.Empty(lost); // miniaudio reports its Stopped notification before Stop returns: ours is not a lost device
+        var heard = source.Reads;
+        Assert.Equal(MsAudioNative.Success, stream.RenderForTest(bytes, 64));
+        Assert.Equal(heard, source.Reads); // nothing is read once paused
+        Assert.All(bytes, b => Assert.Equal(0, b));
+
+        stream.Start();
+        Assert.True(source.WaitForReads(heard + 1)); // and the same device plays on
+        stream.Pause();
+        Assert.Empty(lost);
+    }
+
+    [Fact]
+    public void A_stop_that_was_not_ours_is_still_reported_as_a_lost_device()
+    {
+        using var stream = (MiniAudioStream)_backend.Open(null, new OpenRequest(DeviceSample.S16, 48_000, 2, false, 16), Silence(48_000));
+        var lost = new List<string>();
+        stream.Lost += (_, reason) => lost.Add(reason);
+
+        stream.RaiseLost("unplugged"); // what OnNotify does for a Stopped nobody asked for
+
+        Assert.Equal(["unplugged"], lost);
+    }
+
+    [Fact]
+    public void A_period_bigger_than_the_prepared_conversion_buffer_still_converts_every_sample()
+    {
+        using var stream = (MiniAudioStream)_backend.Open(null, new OpenRequest(DeviceSample.S16, 48_000, 2, false, 16), new ConstantSource(new PcmFormat(48_000, 2, 16), 0.5f));
+        stream.ResumeForTest();
+        const int frames = 10_000; // more than the buffer prepared for the device's period
+        var bytes = new byte[frames * 2 * 2];
+
+        Assert.Equal(MsAudioNative.Success, stream.RenderForTest(bytes, frames));
+
+        Assert.All(MemoryMarshal.Cast<byte, short>(bytes).ToArray(), v => Assert.Equal(16_384, v));
+    }
+
+    [Fact]
     public void A_throwing_source_renders_silence_instead_of_crashing_the_audio_thread()
     {
         using var stream = (MiniAudioStream)_backend.Open(null, new OpenRequest(DeviceSample.S16, 48_000, 2, false, 16), new ThrowingSource());
@@ -331,6 +381,63 @@ public sealed unsafe class MsAudioNativeTests : IDisposable
         {
             Reads++;
             buffer.Clear();
+            return buffer.Length;
+        }
+    }
+
+    /// <summary>Counts reads on the device thread and lets a test wait for them without sleeping.</summary>
+    private sealed class WaitableSource(PcmFormat format) : IPcmSource
+    {
+        private readonly object _gate = new();
+        private int _reads;
+
+        public int Reads
+        {
+            get { lock (_gate) { return _reads; } }
+        }
+
+        public PcmFormat Format => format;
+
+        public int Read(Span<float> buffer)
+        {
+            buffer.Clear();
+            lock (_gate)
+            {
+                _reads++;
+                Monitor.PulseAll(_gate);
+            }
+
+            return buffer.Length;
+        }
+
+        /// <summary>True once at least <paramref name="count"/> reads have happened (bounded; a hang means the device never ran).</summary>
+        public bool WaitForReads(int count)
+        {
+            var deadline = TimeSpan.FromSeconds(30);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            lock (_gate)
+            {
+                while (_reads < count)
+                {
+                    var left = deadline - clock.Elapsed;
+                    if (left <= TimeSpan.Zero || !Monitor.Wait(_gate, left))
+                    {
+                        return _reads >= count;
+                    }
+                }
+
+                return true;
+            }
+        }
+    }
+
+    private sealed class ConstantSource(PcmFormat format, float value) : IPcmSource
+    {
+        public PcmFormat Format => format;
+
+        public int Read(Span<float> buffer)
+        {
+            buffer.Fill(value);
             return buffer.Length;
         }
     }

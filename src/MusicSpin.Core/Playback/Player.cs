@@ -159,6 +159,7 @@ public sealed class Player : IPlayer
     public void Play()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        OpenedOutput? openedNow = null;
         lock (_sync)
         {
             var buffer = Volatile.Read(ref _buffer)
@@ -181,17 +182,14 @@ public sealed class Player : IPlayer
                 {
                     if (_output is null)
                     {
-                        _output = _outputs.Create(_options.Output);
+                        Volatile.Write(ref _output, _outputs.Create(_options.Output));
                         _output.Failed += OnOutputFailed;
                         _output.Rerouted += OnOutputRerouted;
                     }
 
                     _output.Open(buffer);
                     _outputSource = buffer;
-                    if (_output.Opened is { } opened)
-                    {
-                        OutputOpened?.Invoke(this, new OutputOpenedEventArgs(opened));
-                    }
+                    openedNow = _output.Opened;
                 }
 
                 _output.Start();
@@ -204,6 +202,12 @@ public sealed class Player : IPlayer
 
             StartPositionTimer();
             SetState(PlayerState.Playing);
+        }
+
+        // Subscribers run with no lock of ours held: one that calls back into the player must not deadlock.
+        if (openedNow is not null)
+        {
+            OutputOpened?.Invoke(this, new OutputOpenedEventArgs(openedNow));
         }
     }
 
@@ -359,7 +363,7 @@ public sealed class Player : IPlayer
                 _output.Failed -= OnOutputFailed;
                 _output.Rerouted -= OnOutputRerouted;
                 _output.Dispose();
-                _output = null;
+                Volatile.Write(ref _output, null);
             }
             lock (_decodeLock)
             {
@@ -847,7 +851,7 @@ public sealed class Player : IPlayer
     /// </summary>
     private void OnOutputFailed(object? sender, AudioOutputFailedEventArgs e)
     {
-        if (_disposed || !ReferenceEquals(sender, _output))
+        if (_disposed || !ReferenceEquals(sender, Volatile.Read(ref _output)))
         {
             return;
         }
@@ -862,7 +866,7 @@ public sealed class Player : IPlayer
     /// </summary>
     private void OnOutputRerouted(object? sender, AudioOutputReroutedEventArgs e)
     {
-        if (_disposed || !ReferenceEquals(sender, _output))
+        if (_disposed || !ReferenceEquals(sender, Volatile.Read(ref _output)))
         {
             return;
         }

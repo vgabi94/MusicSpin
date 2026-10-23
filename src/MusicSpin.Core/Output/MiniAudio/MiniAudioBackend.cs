@@ -192,17 +192,21 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
     private readonly Lock _lock = new();
     private GCHandle _self;
     private nint _device;
-    private float[] _scratch;
+    private volatile float[] _scratch;
     private volatile bool _paused = true;
     private volatile bool _stopping;
+    private volatile bool _pausing;
 
     private MiniAudioStream(IPcmSource source, OpenRequest request)
     {
         _source = source;
         _format = request.Format;
         _channels = request.Channels;
-        _scratch = new float[4096 * Math.Max(1, request.Channels)];
+        _scratch = new float[ScratchFrames(0) * Math.Max(1, request.Channels)];
     }
+
+    /// <summary>The conversion buffer's frames: a period or two, allocated here and never on the audio thread.</summary>
+    private static int ScratchFrames(int periodFrames) => Math.Max(4096, periodFrames * 2);
 
     public OpenedOutput Opened { get; private set; } = null!;
 
@@ -216,13 +220,6 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
     public event EventHandler<string>? Lost;
 
     public event EventHandler? Rerouted;
-
-    /// <summary>Never raised: miniaudio follows the default device itself and reports it as <see cref="Rerouted"/>.</summary>
-    public event EventHandler? DefaultDeviceChanged
-    {
-        add { }
-        remove { }
-    }
 
     /// <summary>The device handle, for <see cref="RenderForTest"/>.</summary>
     internal nint Handle => _device;
@@ -249,6 +246,7 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
             MsAudioNative.FormatName(opened.Format),
             sample is { } s ? DeviceSamples.ValidBits(s) : 8,
             Verified: true);
+        stream._scratch = new float[ScratchFrames(opened.PeriodFrames) * Math.Max(1, opened.Channels)];
         return stream;
     }
 
@@ -258,11 +256,45 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
         {
             ObjectDisposedException.ThrowIf(_device == 0, this);
             _paused = false;
-            MiniAudioBackend.Check(MsAudioNative.DeviceStart(_device), "start the device");
+            try
+            {
+                MiniAudioBackend.Check(MsAudioNative.DeviceStart(_device), "start the device");
+            }
+            catch (Exception)
+            {
+                _paused = true;
+                throw;
+            }
         }
     }
 
-    public void Pause() => _paused = true;
+    /// <summary>
+    /// Stops reading the source, then stops the device: miniaudio plays out what it already holds and returns, so
+    /// everything read has been heard and the source's position is where playback resumes. The device stays open
+    /// (shared mode lets other apps keep using it; an exclusive stream is closed by the owner instead).
+    /// </summary>
+    public void Pause()
+    {
+        lock (_lock)
+        {
+            _paused = true;
+            if (_device == 0)
+            {
+                return;
+            }
+
+            // The Stopped notification of a stop we asked for is not a lost device.
+            _pausing = true;
+            try
+            {
+                _ = MsAudioNative.DeviceStop(_device); // already stopped is fine: the flag keeps it silent
+            }
+            finally
+            {
+                _pausing = false;
+            }
+        }
+    }
 
     /// <summary>Tests: lets <see cref="RenderForTest"/> pull from the source without starting the device thread.</summary>
     internal void ResumeForTest() => _paused = false;
@@ -295,6 +327,11 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
 
         if (type == MsAudioNative.NotifyStopped)
         {
+            if (stream._pausing)
+            {
+                return; // our own Pause
+            }
+
             // Stopped without us asking: the device went away (unplugged, invalidated, the server died).
             stream.RaiseLost("The audio device stopped unexpectedly (disconnected or taken away).");
         }
@@ -312,6 +349,7 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
             var opened = new MsAudioNative.Opened();
             if (_device != 0 && MsAudioNative.DeviceOpened(_device, &opened) == MsAudioNative.Success)
             {
+                _scratch = new float[ScratchFrames(opened.PeriodFrames) * Math.Max(1, opened.Channels)]; // here, off the audio thread
                 var name = MsAudioNative.Utf8(opened.Name, MsAudioNative.NameBytes);
                 var sample = MsAudioNative.ToSample(opened.Format);
                 Opened = Opened with
@@ -364,12 +402,13 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
                 return;
             }
 
-            if (_scratch.Length < samples)
+            var scratch = _scratch;
+            if (scratch.Length < samples)
             {
-                _scratch = new float[samples]; // only if the backend asks for more than its period
+                scratch = _scratch = new float[samples]; // only if the backend asks for more than two periods
             }
 
-            var floats = _scratch.AsSpan(0, samples);
+            var floats = scratch.AsSpan(0, samples);
             PcmReading.Fill(_source, floats);
             DeviceSamples.Convert(floats, bytes, _format);
         }

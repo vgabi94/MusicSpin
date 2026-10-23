@@ -33,24 +33,40 @@ internal interface IPlaybackStream : IDisposable
 {
     void Start();
 
-    /// <summary>Keeps the device open, rendering silence without reading the source.</summary>
+    /// <summary>
+    /// Stops reading the source and returns once what was already handed to the device has played out, so a later
+    /// <see cref="Start"/> goes on from exactly where the listener stopped hearing. The device itself stays open (an
+    /// exclusive one stays held: the owner disposes it to let other apps in).
+    /// </summary>
     void Pause();
 
     /// <summary>What the device opened at, read back from the backend.</summary>
     OpenedOutput Opened { get; }
 
-    /// <summary>The device stopped on its own (unplugged, invalidated); the argument says why. Raised on the audio thread.</summary>
+    /// <summary>
+    /// The device stopped on its own (unplugged, invalidated); the argument says why. Raised on the audio thread or a
+    /// notification thread, which the stream's <see cref="IDisposable.Dispose"/> waits for: handlers must never block on
+    /// anything that is held while the stream is disposed.
+    /// </summary>
     event EventHandler<string>? Lost;
 
     /// <summary>
     /// The backend moved this stream to the new system default device by itself (miniaudio reroutes default devices);
     /// <see cref="Opened"/> now describes the new device. Raised on a backend thread.
     /// </summary>
-    event EventHandler? Rerouted;
+    event EventHandler? Rerouted
+    {
+        add { }
+        remove { }
+    }
 
     /// <summary>
     /// The system default device changed while this stream, opened on the default, stays on the old one (the WASAPI
     /// exclusive path cannot follow by itself): the owner reopens on the new default. Raised on a backend thread.
     /// </summary>
-    event EventHandler? DefaultDeviceChanged;
+    event EventHandler? DefaultDeviceChanged
+    {
+        add { }
+        remove { }
+    }
 }
