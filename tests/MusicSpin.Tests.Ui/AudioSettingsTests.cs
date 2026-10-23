@@ -585,6 +585,37 @@ public sealed class AudioSettingsTests
         Assert.Equal("auto", app.Scripted!.Sent("normalize")[0].GetProperty("mode").GetString());
     }
 
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_mode_changed_behind_the_apps_back_shows_on_the_switch_when_Settings_opens_and_nothing_is_saved_or_sent()
+    {
+        await using var app = await OpenAsync(); // saved: auto
+        await PlayingAsync(app);
+        app.Scripted!.Status = app.Scripted.Status with { Normalization = new NormalizationStatus("off", -18, 0) }; // `music-spin normalize off`
+
+        await OpenSettingsAsync(app);
+
+        await Gui.UntilAsync(() => Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked == false, "the switch following the player");
+        Assert.Equal(0, app.Scripted.Count("normalize"));
+        Assert.NotEqual("off", new SettingsStore(app.Data).Load().Normalization);
+    }
+
+    [AvaloniaFact]
+    public async Task The_switch_follows_the_player_while_Settings_is_open_and_turning_it_on_restores_the_mode_the_player_had()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { Normalization = "off" });
+        await PlayingAsync(app);
+        app.Scripted!.Status = app.Scripted.Status with { Normalization = new NormalizationStatus("album", -18, 0) };
+        await OpenSettingsAsync(app);
+        await Gui.UntilAsync(() => Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked == true, "the switch following the player");
+
+        FlipLevelling(app); // off
+        FlipLevelling(app); // on again
+
+        await Gui.UntilAsync(() => app.Scripted.Count("normalize") == 2, "the player told twice");
+        Assert.Equal("album", app.Scripted.Sent("normalize")[1].GetProperty("mode").GetString());
+    }
+
     // ---- snapshots ----------------------------------------------------------------------------------------------
 
     [AvaloniaTheory]

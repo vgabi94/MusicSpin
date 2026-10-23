@@ -340,6 +340,10 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         {
             Status = Status with { Volume = value.GetSingle(), Muted = false }; // a volume unmutes
         }
+        else if (cmd == "normalize" && request.TryGetProperty("mode", out var levelling) && levelling.GetString() is { } named)
+        {
+            Status = Status with { Normalization = (Status.Normalization ?? new NormalizationStatus("auto", -18, 0)) with { Mode = named } };
+        }
         else if (cmd == "mute" && request.TryGetProperty("mode", out var mode))
         {
             Status = Status with { Muted = mode.GetString() switch { "on" => true, "off" => false, _ => !Status.Muted } };

@@ -48,6 +48,7 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
             _levellingMode = NormalizationMode.Auto; // what the switch turns on
         }
 
+        _player.StatusApplied += (_, _) => FollowPlayer(); // the CLI or an agent may change the mode while Settings is open
         _player.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PlayerViewModel.Output))
@@ -94,10 +95,44 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     /// <summary>Reads the devices (when Settings opens: one may have been plugged in).</summary>
     public Task LoadAsync() => _notices.GuardAsync(async () =>
     {
+        FollowPlayer(); // the mode the player has now: music-spin normalize may have changed it since the app started
+        if (_player.IsConnected)
+        {
+            await _player.RefreshAsync().ConfigureAwait(true); // the answer comes through StatusApplied
+        }
+
         var devices = await _devices.ListAsync().ConfigureAwait(true);
         _names = [.. devices.Select(d => d.Name).Distinct(StringComparer.Ordinal)];
         OnPropertyChanged(nameof(DeviceLabel));
     });
+
+    /// <summary>
+    /// The switch shows the mode the running player has (its status), not only the one read at start-up: nothing is saved
+    /// and nobody is told, it is only what the player says. A player without levelling says nothing: the switch stays.
+    /// </summary>
+    private void FollowPlayer()
+    {
+        if (_player.Status?.Normalization is not { } status || !NormalizationSettings.TryParseMode(status.Mode, out var mode))
+        {
+            return;
+        }
+
+        var wasReady = _ready;
+        _ready = false;
+        try
+        {
+            if (mode != NormalizationMode.Off)
+            {
+                _levellingMode = mode; // what the switch turns on again
+            }
+
+            Levelling = mode != NormalizationMode.Off;
+        }
+        finally
+        {
+            _ready = wasReady;
+        }
+    }
 
     /// <summary>The device button: "System default", then the devices, the chosen one ticked.</summary>
     [RelayCommand(CanExecute = nameof(CanChange))]
