@@ -29,6 +29,10 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
 
     // Under _gate.
     private IPcmSource? _source;
+
+    // What the open stream actually pulls from: it reads whatever this points at, so a track change can move it to
+    // another source without closing the device. Null while no stream is open.
+    private SwitchableSource? _pump;
     private bool _started;
 
     // An exclusive device was released by Pause: the source is kept and Start reopens the device for it.
@@ -118,7 +122,7 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
                 return;
             }
 
-            stream.Pause();
+            _ = stream.Pause(); // a stream that did not confirm is closed just below (exclusive) or at the next Stop/Open
             if (_opened is { Exclusive: true })
             {
                 // Hand the device back to the system: another app (or this one's next track) can use it while paused.
@@ -127,6 +131,45 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
                 _opened = opened;
                 _suspended = true;
             }
+        }
+    }
+
+    public bool Retarget(IPcmSource next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        lock (_gate)
+        {
+            if (_source is not { } current || (_stream is null && !_suspended))
+            {
+                return false;
+            }
+
+            if (!SameDevice(BuildRequest(current.Format, options), BuildRequest(next.Format, options)))
+            {
+                return false; // the device would have to be reconfigured
+            }
+
+            // Stop reading the old source first (a stopped stream makes no more callbacks), then point the stream at the
+            // new one: the old source is never read again and the new one not before Start. A released exclusive device
+            // stays released: Start reopens it for _source, which is now the new one.
+            if (_started)
+            {
+                var stopped = _stream!.Pause();
+                _started = false;
+                if (!stopped)
+                {
+                    // The device thread did not stop in time (WASAPI waits a bounded 2 s): it may still be reading the old
+                    // source, so the stream must never be pointed at another one. Close it; the caller opens it again.
+                    CloseStream();
+                    _source = null;
+                    _suspended = false;
+                    return false;
+                }
+            }
+
+            _pump?.Switch(next);
+            _source = next;
+            return true;
         }
     }
 
@@ -159,6 +202,15 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
         // 32-bit int sources, float sources and DSD (decoded to float PCM) go out as float.
         _ => DeviceSample.F32,
     };
+
+    /// <summary>
+    /// Whether one open device serves both requests. The request's <see cref="DeviceSample"/> already says what the device
+    /// is opened with (float32 in shared mode, the source's depth class in exclusive), so the track's own bit depth, which
+    /// only picks that, does not matter further: a 16-bit and a 24-bit track share a shared-mode device, and a 32-bit
+    /// integer and a float track share an exclusive float32 one.
+    /// </summary>
+    private static bool SameDevice(OpenRequest a, OpenRequest b)
+        => a with { SourceBits = 0 } == b with { SourceBits = 0 };
 
     internal static OpenRequest BuildRequest(PcmFormat format, AudioOutputOptions options)
         => new(DeviceSampleFormat(format.SourceBitsPerSample, options.Exclusive), format.SampleRate, format.Channels, options.Exclusive, format.SourceBitsPerSample);
@@ -235,7 +287,9 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     /// <summary>Opens a stream (under the gate, none being open) and starts listening to it.</summary>
     private void OpenCore(BackendDevice? device, IPcmSource source)
     {
-        var stream = provider.Engine.Open(device, BuildRequest(source.Format, options), source);
+        var pump = new SwitchableSource(source);
+        var stream = provider.Engine.Open(device, BuildRequest(source.Format, options), pump);
+        _pump = pump;
         _stream = stream;
         _opened = null;
         stream.Lost += (_, reason) => Signal(stream, Change.Lost, reason);
@@ -412,6 +466,7 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     {
         var stream = _stream;
         _stream = null;
+        _pump = null;
         _opened = null;
         _started = false;
         lock (_pendingLock)
@@ -423,4 +478,22 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
 
         stream?.Dispose();
     }
+}
+
+/// <summary>
+/// The source an open stream reads: forwards to a target that <see cref="Switch"/> can move to another source (of the
+/// same device format) while the stream stays open. Read is a volatile load and a call.
+/// </summary>
+internal sealed class SwitchableSource(IPcmSource target) : IPcmSource
+{
+    private IPcmSource _target = target;
+
+    /// <summary>What is read now.</summary>
+    public IPcmSource Target => Volatile.Read(ref _target);
+
+    public PcmFormat Format => Target.Format;
+
+    public int Read(Span<float> buffer) => Target.Read(buffer);
+
+    public void Switch(IPcmSource next) => Volatile.Write(ref _target, next);
 }

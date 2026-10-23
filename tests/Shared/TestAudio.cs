@@ -200,19 +200,89 @@ internal sealed class ManualAudioOutput : IAudioOutput
 
     public OpenedOutput? Opened { get; private set; }
 
+    /// <summary>Opening throws this (a device that cannot be opened) while set.</summary>
+    public Exception? OpenError { get; set; }
+
+    /// <summary>How many track changes kept the device open (<see cref="Retarget"/> returned true).</summary>
+    public int RetargetCount { get; private set; }
+
     public void Open(IPcmSource source)
     {
+        if (OpenError is not null)
+        {
+            Source = null;
+            Opened = null;
+            throw OpenError;
+        }
+
         Source = source;
         Opened = OpenedAs?.Invoke(source);
         OpenCount++;
     }
 
-    public void Start() => Started = true;
+    /// <summary>Retargeting throws this (a device that fails while being moved) while set.</summary>
+    public Exception? RetargetError { get; set; }
 
-    public void Pause() => Started = false;
+    /// <summary>An exclusive device is configured for the source's sample depth too, so a different depth needs a reopen.</summary>
+    public bool Exclusive { get; set; }
+
+    /// <summary>Runs inside <see cref="Retarget"/>, before it decides (what the player's own state is at that moment).</summary>
+    public Action<IPcmSource>? OnRetarget { get; set; }
+
+    /// <summary>
+    /// A device whose stream cannot confirm it stopped (WASAPI's bounded pause): Retarget closes the output and refuses,
+    /// instead of switching.
+    /// </summary>
+    public bool RetargetUnconfirmed { get; set; }
+
+    /// <summary>Like a real device: kept open for the same rate and channels, left paused on the new source.</summary>
+    public bool Retarget(IPcmSource next)
+    {
+        OnRetarget?.Invoke(next);
+        if (RetargetError is not null)
+        {
+            throw RetargetError;
+        }
+
+        if (RetargetUnconfirmed && _source is not null)
+        {
+            Stop();
+            return false;
+        }
+
+        if (_source is not { } current || current.Format.SampleRate != next.Format.SampleRate || current.Format.Channels != next.Format.Channels
+            || (Exclusive && current.Format.SourceBitsPerSample != next.Format.SourceBitsPerSample))
+        {
+            return false;
+        }
+
+        Started = false;
+        Source = next;
+        RetargetCount++;
+        return true;
+    }
+
+    /// <summary>
+    /// An exclusive device that is open but handed back to the system (a pause releases it, as the real output does):
+    /// it stays open as far as the player is concerned, and <see cref="Start"/> takes it again.
+    /// </summary>
+    public bool Released { get; private set; }
+
+    public void Start()
+    {
+        Released = false;
+        Started = true;
+    }
+
+    public void Pause()
+    {
+        Started = false;
+        Released = Exclusive && Source is not null;
+    }
 
     public void Stop()
     {
+        Released = false;
         Started = false;
         Source = null;
         Opened = null;

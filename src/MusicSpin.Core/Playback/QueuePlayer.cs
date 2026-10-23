@@ -326,6 +326,11 @@ public sealed class QueuePlayer : IDisposable
             }
 
             QueueChanged?.Invoke(this, EventArgs.Empty);
+            if (!play)
+            {
+                _player.Pause(); // nothing plays next: hand back an exclusive device the switch kept held for it
+            }
+
             if (start is { } offset && offset > TimeSpan.Zero)
             {
                 SeekCore(offset);
@@ -348,6 +353,7 @@ public sealed class QueuePlayer : IDisposable
         {
             ThrowIfDisposed();
             _player.Load(path); // throws before touching the queue when the file is bad
+            _player.Pause(); // nothing plays next: hand back an exclusive device the switch kept held for it
             PrepareLoadedGain(path, [], -1);
             _items.Clear();
             _items.Add(_loadedSlot = new Slot(new QueueItem(path), 0));
@@ -1601,6 +1607,10 @@ public sealed class QueuePlayer : IDisposable
             if (play)
             {
                 PlayCurrent();
+            }
+            else
+            {
+                _player.Pause(); // nothing plays next: hand back an exclusive device the switch kept held for it
             }
 
             return StatusCore();

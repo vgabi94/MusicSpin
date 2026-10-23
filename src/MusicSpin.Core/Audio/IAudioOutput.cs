@@ -57,6 +57,22 @@ public interface IAudioOutput : IDisposable
     /// </summary>
     void Pause();
 
+    /// <summary>
+    /// Moves an open output to <paramref name="next"/> without closing the device, for a track change: the device must
+    /// already be open, and <paramref name="next"/> must need the same device configuration (rate, channels, and in
+    /// exclusive mode the sample depth) as the source it replaces. The output stops reading the old source before this
+    /// returns (it never reads it again) and is left paused on <paramref name="next"/>: <see cref="Start"/> plays it,
+    /// and nothing of it is read before that. An exclusive device stays held (unlike <see cref="Pause"/>) so the next
+    /// <see cref="Start"/> is instant.
+    /// <para>
+    /// Returns false, changing nothing, when the output is not open or the device would have to be reconfigured (another
+    /// rate or channel count): the caller then <see cref="Stop"/>s and <see cref="Open"/>s as usual. It also returns false,
+    /// with the output closed, when the device could not confirm in time that it stopped reading the old source (the new
+    /// source is then never given to a stream that might still read the old one): the caller opens it again.
+    /// </para>
+    /// </summary>
+    bool Retarget(IPcmSource next) => false;
+
     /// <summary>Stops and releases the device.</summary>
     void Stop();
 

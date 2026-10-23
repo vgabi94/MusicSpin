@@ -273,21 +273,22 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
     /// everything read has been heard and the source's position is where playback resumes. The device stays open
     /// (shared mode lets other apps keep using it; an exclusive stream is closed by the owner instead).
     /// </summary>
-    public void Pause()
+    public bool Pause()
     {
         lock (_lock)
         {
             _paused = true;
             if (_device == 0)
             {
-                return;
+                return true;
             }
 
             // The Stopped notification of a stop we asked for is not a lost device.
             _pausing = true;
             try
             {
-                _ = MsAudioNative.DeviceStop(_device); // already stopped is fine: the flag keeps it silent
+                // Blocks until the device has stopped (already stopped is a success): nothing reads the source after that.
+                return MsAudioNative.DeviceStop(_device) == 0;
             }
             finally
             {

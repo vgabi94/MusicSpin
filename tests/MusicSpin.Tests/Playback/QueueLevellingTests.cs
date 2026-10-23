@@ -101,6 +101,34 @@ public sealed class QueueLevellingTests : IDisposable
     }
 
     [Fact]
+    public void A_track_reached_by_a_retargeted_switch_plays_at_its_gain_from_its_first_sample_and_levels_the_next_one_by_token()
+    {
+        // The switch moves the open device to a new buffer before the track's gain is known to the player; the gain must
+        // still be on the samples the device reads first, and again at the gapless boundary that follows.
+        var a = new RampSpec(1, 400);
+        var b = new RampSpec(2, 400);
+        var c = new RampSpec(3, 400);
+        var (_, queue, resolver) = Create();
+        resolver.Set(Add(a), Gain(1.0));
+        resolver.Set(Add(b), Gain(0.5));
+        resolver.Set(Add(c), Gain(0.25));
+        queue.SetQueue([new QueueItem("/l/1.flac"), new QueueItem("/l/2.flac"), new QueueItem("/l/3.flac")]);
+        Assert.Equal(a.Pcm()[..200], _outputs.Output.Pump(200)); // playing A, the device open
+
+        queue.Play(1);
+
+        Assert.Equal(1, _outputs.Output.OpenCount);
+        Assert.Equal(1, _outputs.Output.RetargetCount); // the device was kept, not reopened
+        var output = Drain();
+        Assert.Equal(800 * 2, output.Length); // B and C in full, nothing of A
+        var fb = Factors(output, 0, b);
+        Assert.All(fb, f => Assert.Equal(0.5, f, 6)); // from the very first frame: no ramp in from 1
+        var fc = Factors(output, 400, c);
+        Assert.All(fc.Skip(RampFrames), f => Assert.Equal(0.25, f, 6));
+        Assert.True(fc[0] < 0.5 && fc[0] > 0.25); // the boundary moves by ramp, so B's token got B's gain and C's got C's
+    }
+
+    [Fact]
     public void A_track_without_a_resolver_plays_untouched()
     {
         var a = new RampSpec(1, 300);

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Output;
@@ -877,6 +878,246 @@ public class MiniAudioOutputTests
         Assert.Single(backend.Opened); // nothing reopened
     }
 
+    // ---- retargeting (track changes without reopening the device) ---------------------------------------------
+
+    [Fact]
+    public void Retargeting_to_a_same_format_source_keeps_the_stream_and_reads_only_the_new_source()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var first = new Source(new PcmFormat(44_100, 2, 16));
+        var second = new Source(new PcmFormat(44_100, 2, 24)); // the depth does not matter in shared mode
+        output.Open(first);
+        output.Start();
+        var stream = backend.Opened[0].Stream;
+        var buffer = new float[8];
+        Assert.Equal(8, stream.Read(buffer));
+        var firstRemaining = first.Remaining;
+
+        Assert.True(output.Retarget(second));
+
+        Assert.Single(backend.Opened); // no new stream
+        Assert.False(backend.Streams[0].Disposed);
+        Assert.Equal(["start", "pause"], backend.Streams[0].Calls); // stopped, so no callback can still be reading the old one
+        Assert.Same(second, backend.Opened[0].Data);
+        Assert.Equal(8, stream.Read(buffer));
+        Assert.Equal(firstRemaining, first.Remaining); // the old source is never read again
+        Assert.Equal(new float[] { 1, 2, 3, 4, 5, 6, 7, 8 }, buffer); // the new source's first samples
+
+        output.Start();
+
+        Assert.Equal(["start", "pause", "start"], backend.Streams[0].Calls);
+        Assert.Single(backend.Opened);
+    }
+
+    [Fact]
+    public void Retargeting_a_paused_output_does_not_pause_it_again()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        output.Pause();
+
+        Assert.True(output.Retarget(new Source(new PcmFormat(44_100, 2, 16))));
+
+        Assert.Equal(["start", "pause"], backend.Streams[0].Calls);
+    }
+
+    [Theory]
+    [InlineData(48_000, 2)] // another sample rate
+    [InlineData(44_100, 1)] // another channel count
+    public void A_source_that_needs_another_rate_or_channel_count_is_refused_and_nothing_changes(int rate, int channels)
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var first = new Source(new PcmFormat(44_100, 2, 16));
+        output.Open(first);
+        output.Start();
+
+        Assert.False(output.Retarget(new Source(new PcmFormat(rate, channels, 16))));
+
+        Assert.Equal(["start"], backend.Streams[0].Calls); // still playing the old track until the caller reopens
+        Assert.Same(first, backend.Opened[0].Data);
+        Assert.True(output.IsOpen);
+    }
+
+    [Fact]
+    public void An_output_that_is_not_open_refuses_to_retarget()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var source = new Source(new PcmFormat(44_100, 2, 16));
+
+        Assert.False(output.Retarget(source)); // never opened
+
+        output.Open(source);
+        output.Stop();
+        Assert.False(output.Retarget(source)); // closed again
+        Assert.Throws<ArgumentNullException>(() => output.Retarget(null!));
+    }
+
+    [Fact]
+    public void An_exclusive_device_is_retargeted_only_for_the_same_depth()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        output.Open(new Source(new PcmFormat(44_100, 2, 24)));
+        output.Start();
+
+        Assert.False(output.Retarget(new Source(new PcmFormat(44_100, 2, 16)))); // the device is configured for 24-bit
+        var same = new Source(new PcmFormat(44_100, 2, 24));
+        Assert.True(output.Retarget(same));
+
+        Assert.Single(backend.Opened);
+        Assert.False(backend.Streams[0].Disposed); // the exclusive device is kept, not handed back and re-acquired
+        Assert.Same(same, backend.Opened[0].Data);
+    }
+
+    [Fact]
+    public void Exclusive_sources_of_one_device_format_share_the_device_whatever_their_own_bit_depth()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        output.Open(new Source(new PcmFormat(44_100, 2, 32))); // 32-bit integer: opened as float32
+        output.Start();
+        var float32 = new Source(new PcmFormat(44_100, 2, 0)); // a float source: the same float32 device
+        var twenty = new Source(new PcmFormat(44_100, 2, 20)); // 17..24 bits: the 24-bit device, not the float one
+
+        Assert.True(output.Retarget(float32));
+        Assert.False(output.Retarget(twenty));
+
+        Assert.Single(backend.Opened);
+        Assert.Same(float32, backend.Opened[0].Data);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [Trait("Category", "Unhappy")]
+    public void A_device_that_does_not_confirm_it_stopped_is_closed_instead_of_being_given_the_next_source(bool exclusive)
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: exclusive));
+        var first = new Source(new PcmFormat(44_100, 2, 24));
+        var second = new Source(new PcmFormat(44_100, 2, 24));
+        output.Open(first);
+        output.Start();
+        backend.Streams[0].PauseConfirmed = false; // the render thread is stuck in the driver and may still read `first`
+
+        Assert.False(output.Retarget(second));
+
+        Assert.True(backend.Streams[0].Disposed);
+        Assert.Same(first, backend.Opened[0].Data); // never switched: the old stream cannot read the new source
+        Assert.False(output.IsOpen);
+        output.Open(second); // what the caller does on false
+        output.Start();
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Same(second, backend.Opened[1].Data);
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_device_lost_on_one_thread_while_another_retargets_leaves_the_output_on_the_last_source()
+    {
+        const int Rounds = 200;
+        var backend = new FakeBackend();
+        var reopenings = new ConcurrentBag<Task>();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = work => reopenings.Add(Task.Run(work, TestContext.Current.CancellationToken)) };
+        using var output = provider.Create(new AudioOutputOptions());
+        var sources = Enumerable.Range(0, Rounds).Select(_ => new Source(new PcmFormat(44_100, 2, 16))).ToArray();
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        using var together = new Barrier(2);
+
+        var retargeting = Task.Run(() =>
+        {
+            together.SignalAndWait(TestContext.Current.CancellationToken);
+            foreach (var source in sources)
+            {
+                Assert.True(output.Retarget(source));
+                output.Start();
+            }
+        }, TestContext.Current.CancellationToken);
+        var losing = Task.Run(() =>
+        {
+            together.SignalAndWait(TestContext.Current.CancellationToken);
+            for (var i = 0; i < Rounds; i++)
+            {
+                FakeStream current;
+                lock (backend.Streams)
+                {
+                    current = backend.Streams[^1];
+                }
+
+                current.Lose("device gone"); // on this thread, as a device's audio thread would
+            }
+        }, TestContext.Current.CancellationToken);
+
+        await Task.WhenAll(retargeting, losing).WaitAsync(Bound, TestContext.Current.CancellationToken);
+        while (reopenings.TryTake(out var reopening))
+        {
+            await reopening.WaitAsync(Bound, TestContext.Current.CancellationToken); // a reopening may itself be lost, and post more
+        }
+
+        Assert.True(output.IsOpen);
+        lock (backend.Streams)
+        {
+            Assert.Same(sources[^1], backend.Opened[^1].Data); // whichever stream plays, it plays the last track
+            Assert.All(backend.Streams.SkipLast(1), stream => Assert.True(stream.Disposed));
+            Assert.False(backend.Streams[^1].Disposed);
+        }
+    }
+
+    [Fact]
+    public void A_paused_exclusive_device_stays_released_when_retargeted_and_resumes_on_the_new_source()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        output.Open(new Source(new PcmFormat(44_100, 2, 24)));
+        output.Start();
+        output.Pause(); // released
+        var next = new Source(new PcmFormat(44_100, 2, 24));
+
+        Assert.True(output.Retarget(next));
+
+        Assert.Single(backend.Opened); // nothing reacquired yet: another app may still use the device
+        output.Start();
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Same(next, backend.Opened[1].Data);
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+    }
+
+    [Fact]
+    public void A_device_lost_after_a_retarget_reopens_on_the_new_source()
+    {
+        var backend = new FakeBackend();
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        var next = new Source(new PcmFormat(44_100, 2, 16));
+        Assert.True(output.Retarget(next));
+        output.Start();
+
+        backend.Streams[0].Lose("unplugged");
+        posted.RunAll();
+
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Same(next, backend.Opened[1].Data); // not the track that was playing before
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+    }
+
     private static BackendDevice Device(string name, bool isDefault, params (string, int, int)[] formats)
         => new(name, isDefault, new byte[256], formats);
 
@@ -904,7 +1145,11 @@ public class MiniAudioOutputTests
         }
     }
 
-    private sealed record OpenCall(BackendDevice? Device, OpenRequest Request, IPcmSource Data);
+    private sealed record OpenCall(BackendDevice? Device, OpenRequest Request, IPcmSource Stream)
+    {
+        /// <summary>What the stream reads right now (the stream gets a switchable wrapper around the caller's source).</summary>
+        public IPcmSource Data => Stream is SwitchableSource pump ? pump.Target : Stream;
+    }
 
     /// <summary>Longest a test waits for work that must not block; reached only by a deadlock.</summary>
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
@@ -939,7 +1184,14 @@ public class MiniAudioOutputTests
             Calls.Add("start");
         }
 
-        public void Pause() => Calls.Add("pause");
+        /// <summary>What Pause reports: false is a device thread that did not stop in time (WASAPI's bounded wait).</summary>
+        public bool PauseConfirmed { get; set; } = true;
+
+        public bool Pause()
+        {
+            Calls.Add("pause");
+            return PauseConfirmed;
+        }
 
         /// <summary>What the audio thread does when the device goes away.</summary>
         public void Lose(string reason) => Lost?.Invoke(this, reason);
@@ -1008,11 +1260,15 @@ public class MiniAudioOutputTests
                 throw OpenError;
             }
 
-            Opened.Add(new OpenCall(device, request, source));
             var stream = new FakeStream(OpenedAs?.Invoke(device, request) ?? new OpenedOutput(
                 device?.Name, request.Exclusive, request.SampleRate, request.Channels,
                 DeviceSamples.Name(request.Format), DeviceSamples.ValidBits(request.Format), Verified: true), StartError);
-            Streams.Add(stream);
+            lock (Streams)
+            {
+                Opened.Add(new OpenCall(device, request, source));
+                Streams.Add(stream);
+            }
+
             return stream;
         }
 
