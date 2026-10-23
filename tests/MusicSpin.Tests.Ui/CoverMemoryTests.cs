@@ -259,6 +259,8 @@ public sealed class CoverMemoryTests
         Gui.Settle();
 
         Assert.DoesNotContain(covers.Leases.Values, l => l.AlbumId == SampleLibrary.AlbumId(6));
+        Assert.Equal("Velvet Hours", app.ViewModel.NowPlaying.Title); // the second album's, its cover shown
+        Assert.Contains(covers.Leases.Values, l => l == (SampleLibrary.AlbumId(7), CoverSize.Large));
     }
 
     [AvaloniaFact]

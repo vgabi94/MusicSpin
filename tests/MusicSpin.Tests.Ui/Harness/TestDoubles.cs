@@ -482,7 +482,8 @@ internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<strin
 
     private async Task<CoverLease?> LeaseAsync(string albumId, CoverSize size, Task<Bitmap?> read)
     {
-        if (await read.ConfigureAwait(false) is not { } bitmap)
+        // On the caller's thread, as the cover service hands them to the UI: a gate opened there leases before it settles.
+        if (await read.ConfigureAwait(true) is not { } bitmap)
         {
             return null;
         }

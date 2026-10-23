@@ -316,12 +316,15 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
         }
     }
 
-    /// <summary>Lets go of a cover nobody will show, once it comes (one that fails to come holds nothing).</summary>
+    /// <summary>
+    /// Lets go of a cover nobody will show, once it comes (one that fails to come holds nothing): on the UI thread, as
+    /// every other is let go.
+    /// </summary>
     private static async Task LetGoAsync(Task<CoverLease?> read)
     {
         try
         {
-            (await read.ConfigureAwait(false))?.Dispose();
+            (await read.ConfigureAwait(true))?.Dispose();
         }
         catch (Exception ex) when (ex is MusicSpinException or IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
