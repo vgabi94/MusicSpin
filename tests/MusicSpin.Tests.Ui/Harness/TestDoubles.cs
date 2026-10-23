@@ -482,7 +482,9 @@ internal sealed class StubCovers(Func<string, Bitmap?>? cover = null, Func<strin
 
     private async Task<CoverLease?> LeaseAsync(string albumId, CoverSize size, Task<Bitmap?> read)
     {
-        // On the caller's thread, as the cover service hands them to the UI: a gate opened there leases before it settles.
+        // On the caller's thread, so a gate opened on the UI thread leases before Gui.Settle() returns. The real service
+        // may lease off the UI thread, which is safe (CoverLease.Dispose is atomic, Release locks, bitmaps are disposed
+        // on the UI thread); the tests don't cover that.
         if (await read.ConfigureAwait(true) is not { } bitmap)
         {
             return null;

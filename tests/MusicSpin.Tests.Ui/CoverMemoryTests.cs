@@ -141,6 +141,24 @@ public sealed class CoverMemoryTests
         Assert.Equal(0, covers.Held);
     }
 
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public void A_drag_ghost_disposes_only_its_own_copy_of_the_cover()
+    {
+        var cover = TestImages.Bitmap(TestImages.Cover(256));
+        var copy = DragGhostViewModel.Copy(cover);
+
+        Assert.NotNull(copy);
+        Assert.NotSame(cover, copy);
+        Assert.Equal(DragGhostViewModel.CopyPixels, copy.PixelSize.Width);
+        new DragGhostViewModel(copy, "Album", "Artist", "Title", "Detail").Dispose();
+        Assert.Equal(new PixelSize(256, 256), cover.PixelSize); // the item's own still shows
+        using var still = cover.CreateScaledBitmap(new PixelSize(8, 8)); // and draws: it wasn't disposed
+
+        Assert.Null(DragGhostViewModel.Copy(null)); // no cover: the placeholder, nothing to dispose
+        new DragGhostViewModel(null, "Album", "Artist", "Title", "Detail").Dispose();
+    }
+
     // ---- the pages -----------------------------------------------------------------------------------------------
 
     [AvaloniaFact]

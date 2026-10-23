@@ -8,8 +8,9 @@ namespace MusicSpin.App.ViewModels;
 
 /// <summary>What a drag shows under the pointer (mockup: .drag-ghost): the cover, a title and a detail.</summary>
 /// <param name="Cover">
-/// The cover; null shows the placeholder, which names <paramref name="Album"/> and <paramref name="Artist"/>. Its own small
-/// copy (<see cref="Copy"/>): the row it came from may scroll away, or Now Playing move on, and let go of theirs mid-drag.
+/// The cover; null shows the placeholder, which names <paramref name="Album"/> and <paramref name="Artist"/>. The ghost's
+/// own small copy (<see cref="Copy"/>), disposed with it: the row it came from may scroll away, or Now Playing move on,
+/// and let go of theirs mid-drag.
 /// </param>
 /// <param name="Detail">"8 tracks" for an album, the artist for a track.</param>
 public sealed record DragGhostViewModel(IImage? Cover, string Album, string Artist, string Title, string Detail) : IDisposable
@@ -17,19 +18,22 @@ public sealed record DragGhostViewModel(IImage? Cover, string Album, string Arti
     /// <summary>The copy's width, in pixels: a ghost's cover is small (Styles/Metrics.axaml: GhostCoverSize).</summary>
     public const int CopyPixels = 128;
 
-    /// <summary>A ghost's own copy of <paramref name="cover"/>, at most <see cref="CopyPixels"/> wide.</summary>
-    public static IImage? Copy(IImage? cover)
+    /// <summary>
+    /// A ghost's own copy of <paramref name="cover"/>, at most <see cref="CopyPixels"/> wide; null (the placeholder) for
+    /// none or an empty one. Never <paramref name="cover"/> itself, so the ghost owns what it disposes.
+    /// </summary>
+    public static Bitmap? Copy(Bitmap? cover)
     {
-        if (cover is not Bitmap { PixelSize: { Width: > 0, Height: > 0 } size } bitmap)
+        if (cover is not { PixelSize: { Width: > 0, Height: > 0 } size } bitmap)
         {
-            return cover;
+            return null;
         }
 
         var width = Math.Min(CopyPixels, size.Width);
         return bitmap.CreateScaledBitmap(new PixelSize(width, Math.Max(1, size.Height * width / size.Width)));
     }
 
-    /// <summary>The drag is over: its copy goes.</summary>
+    /// <summary>The drag is over: its copy goes (<see cref="Cover"/> is always the ghost's own).</summary>
     public void Dispose() => (Cover as Bitmap)?.Dispose();
 }
 
