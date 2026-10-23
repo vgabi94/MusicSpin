@@ -122,7 +122,7 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
                 return;
             }
 
-            stream.Pause();
+            _ = stream.Pause(); // a stream that did not confirm is closed just below (exclusive) or at the next Stop/Open
             if (_opened is { Exclusive: true })
             {
                 // Hand the device back to the system: another app (or this one's next track) can use it while paused.
@@ -154,8 +154,17 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
             // stays released: Start reopens it for _source, which is now the new one.
             if (_started)
             {
-                _stream!.Pause();
+                var stopped = _stream!.Pause();
                 _started = false;
+                if (!stopped)
+                {
+                    // The device thread did not stop in time (WASAPI waits a bounded 2 s): it may still be reading the old
+                    // source, so the stream must never be pointed at another one. Close it; the caller opens it again.
+                    CloseStream();
+                    _source = null;
+                    _suspended = false;
+                    return false;
+                }
             }
 
             _pump?.Switch(next);
@@ -195,11 +204,13 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     };
 
     /// <summary>
-    /// Whether one open device serves both requests. The track's own bit depth only matters to an exclusive device (shared
-    /// mode always gets float32 for the OS mixer), so a 16-bit and a 24-bit track share a shared-mode device.
+    /// Whether one open device serves both requests. The request's <see cref="DeviceSample"/> already says what the device
+    /// is opened with (float32 in shared mode, the source's depth class in exclusive), so the track's own bit depth, which
+    /// only picks that, does not matter further: a 16-bit and a 24-bit track share a shared-mode device, and a 32-bit
+    /// integer and a float track share an exclusive float32 one.
     /// </summary>
     private static bool SameDevice(OpenRequest a, OpenRequest b)
-        => a.Exclusive ? a == b : a with { SourceBits = 0 } == b with { SourceBits = 0 };
+        => a with { SourceBits = 0 } == b with { SourceBits = 0 };
 
     internal static OpenRequest BuildRequest(PcmFormat format, AudioOutputOptions options)
         => new(DeviceSampleFormat(format.SourceBitsPerSample, options.Exclusive), format.SampleRate, format.Channels, options.Exclusive, format.SourceBitsPerSample);

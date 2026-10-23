@@ -66,7 +66,9 @@ public interface IAudioOutput : IDisposable
     /// <see cref="Start"/> is instant.
     /// <para>
     /// Returns false, changing nothing, when the output is not open or the device would have to be reconfigured (another
-    /// rate or channel count): the caller then <see cref="Stop"/>s and <see cref="Open"/>s as usual.
+    /// rate or channel count): the caller then <see cref="Stop"/>s and <see cref="Open"/>s as usual. It also returns false,
+    /// with the output closed, when the device could not confirm in time that it stopped reading the old source (the new
+    /// source is then never given to a stream that might still read the old one): the caller opens it again.
     /// </para>
     /// </summary>
     bool Retarget(IPcmSource next) => false;

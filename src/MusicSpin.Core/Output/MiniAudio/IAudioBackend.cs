@@ -37,8 +37,13 @@ internal interface IPlaybackStream : IDisposable
     /// Stops reading the source and returns once what was already handed to the device has played out, so a later
     /// <see cref="Start"/> goes on from exactly where the listener stopped hearing. The device itself stays open (an
     /// exclusive one stays held: the owner disposes it to let other apps in).
+    /// <para>
+    /// Returns true when the stream is known to read its source no more. False means that could not be confirmed (a
+    /// device thread stuck in its driver): a caller that is about to give the stream another source must then dispose
+    /// the stream instead of switching it.
+    /// </para>
     /// </summary>
-    void Pause();
+    bool Pause();
 
     /// <summary>What the device opened at, read back from the backend.</summary>
     OpenedOutput Opened { get; }

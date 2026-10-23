@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Output;
@@ -979,6 +980,104 @@ public class MiniAudioOutputTests
     }
 
     [Fact]
+    public void Exclusive_sources_of_one_device_format_share_the_device_whatever_their_own_bit_depth()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        output.Open(new Source(new PcmFormat(44_100, 2, 32))); // 32-bit integer: opened as float32
+        output.Start();
+        var float32 = new Source(new PcmFormat(44_100, 2, 0)); // a float source: the same float32 device
+        var twenty = new Source(new PcmFormat(44_100, 2, 20)); // 17..24 bits: the 24-bit device, not the float one
+
+        Assert.True(output.Retarget(float32));
+        Assert.False(output.Retarget(twenty));
+
+        Assert.Single(backend.Opened);
+        Assert.Same(float32, backend.Opened[0].Data);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [Trait("Category", "Unhappy")]
+    public void A_device_that_does_not_confirm_it_stopped_is_closed_instead_of_being_given_the_next_source(bool exclusive)
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: exclusive));
+        var first = new Source(new PcmFormat(44_100, 2, 24));
+        var second = new Source(new PcmFormat(44_100, 2, 24));
+        output.Open(first);
+        output.Start();
+        backend.Streams[0].PauseConfirmed = false; // the render thread is stuck in the driver and may still read `first`
+
+        Assert.False(output.Retarget(second));
+
+        Assert.True(backend.Streams[0].Disposed);
+        Assert.Same(first, backend.Opened[0].Data); // never switched: the old stream cannot read the new source
+        Assert.False(output.IsOpen);
+        output.Open(second); // what the caller does on false
+        output.Start();
+        Assert.Equal(2, backend.Opened.Count);
+        Assert.Same(second, backend.Opened[1].Data);
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_device_lost_on_one_thread_while_another_retargets_leaves_the_output_on_the_last_source()
+    {
+        const int Rounds = 200;
+        var backend = new FakeBackend();
+        var reopenings = new ConcurrentBag<Task>();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = work => reopenings.Add(Task.Run(work, TestContext.Current.CancellationToken)) };
+        using var output = provider.Create(new AudioOutputOptions());
+        var sources = Enumerable.Range(0, Rounds).Select(_ => new Source(new PcmFormat(44_100, 2, 16))).ToArray();
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+        using var together = new Barrier(2);
+
+        var retargeting = Task.Run(() =>
+        {
+            together.SignalAndWait(TestContext.Current.CancellationToken);
+            foreach (var source in sources)
+            {
+                Assert.True(output.Retarget(source));
+                output.Start();
+            }
+        }, TestContext.Current.CancellationToken);
+        var losing = Task.Run(() =>
+        {
+            together.SignalAndWait(TestContext.Current.CancellationToken);
+            for (var i = 0; i < Rounds; i++)
+            {
+                FakeStream current;
+                lock (backend.Streams)
+                {
+                    current = backend.Streams[^1];
+                }
+
+                current.Lose("device gone"); // on this thread, as a device's audio thread would
+            }
+        }, TestContext.Current.CancellationToken);
+
+        await Task.WhenAll(retargeting, losing).WaitAsync(Bound, TestContext.Current.CancellationToken);
+        while (reopenings.TryTake(out var reopening))
+        {
+            await reopening.WaitAsync(Bound, TestContext.Current.CancellationToken); // a reopening may itself be lost, and post more
+        }
+
+        Assert.True(output.IsOpen);
+        lock (backend.Streams)
+        {
+            Assert.Same(sources[^1], backend.Opened[^1].Data); // whichever stream plays, it plays the last track
+            Assert.All(backend.Streams.SkipLast(1), stream => Assert.True(stream.Disposed));
+            Assert.False(backend.Streams[^1].Disposed);
+        }
+    }
+
+    [Fact]
     public void A_paused_exclusive_device_stays_released_when_retargeted_and_resumes_on_the_new_source()
     {
         var backend = new FakeBackend();
@@ -1085,7 +1184,14 @@ public class MiniAudioOutputTests
             Calls.Add("start");
         }
 
-        public void Pause() => Calls.Add("pause");
+        /// <summary>What Pause reports: false is a device thread that did not stop in time (WASAPI's bounded wait).</summary>
+        public bool PauseConfirmed { get; set; } = true;
+
+        public bool Pause()
+        {
+            Calls.Add("pause");
+            return PauseConfirmed;
+        }
 
         /// <summary>What the audio thread does when the device goes away.</summary>
         public void Lose(string reason) => Lost?.Invoke(this, reason);
@@ -1154,11 +1260,15 @@ public class MiniAudioOutputTests
                 throw OpenError;
             }
 
-            Opened.Add(new OpenCall(device, request, source));
             var stream = new FakeStream(OpenedAs?.Invoke(device, request) ?? new OpenedOutput(
                 device?.Name, request.Exclusive, request.SampleRate, request.Channels,
                 DeviceSamples.Name(request.Format), DeviceSamples.ValidBits(request.Format), Verified: true), StartError);
-            Streams.Add(stream);
+            lock (Streams)
+            {
+                Opened.Add(new OpenCall(device, request, source));
+                Streams.Add(stream);
+            }
+
             return stream;
         }
 

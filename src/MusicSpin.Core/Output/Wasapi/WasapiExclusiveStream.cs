@@ -43,7 +43,8 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     // Start sets it, Pause clears it: the render thread plays real audio only while it is set.
     private volatile bool _wantPlaying;
 
-    // True from just before the client is started until it is stopped for a pause: Pause waits for the stop only then.
+    // True from when the render thread may read the source (the pre-roll before the client is started) until the client is
+    // stopped for a pause: Pause waits for the stop only then.
     private volatile bool _clientRunning;
     private Exception? _initError;
 
@@ -92,16 +93,19 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     /// buffer it filled last has been played, so nothing read from the source is still in flight), and returns. The
     /// device stays held until <see cref="Dispose"/>: the owner closes an exclusive stream it pauses.
     /// </summary>
-    public void Pause()
+    public bool Pause()
     {
         _parked.Reset();
         _wantPlaying = false;
         _control.Set();
-        if (_clientRunning && Thread.CurrentThread != _thread)
+        if (!_clientRunning || Thread.CurrentThread == _thread)
         {
-            // Bounded: a render thread stuck in the driver must not freeze the caller (Dispose follows a pause anyway).
-            WaitHandle.WaitAny([_parked.WaitHandle, _exited.WaitHandle], PauseWait);
+            return true; // nothing is being rendered (or this is the render thread itself, which reads nothing right now)
         }
+
+        // Bounded: a render thread stuck in the driver must not freeze the caller. The caller is told, so it never gives
+        // a stream that may still be reading its source another source: it closes the stream instead.
+        return WaitHandle.WaitAny([_parked.WaitHandle, _exited.WaitHandle], PauseWait) != WaitHandle.WaitTimeout;
     }
 
     private static readonly TimeSpan PauseWait = TimeSpan.FromSeconds(2);
@@ -239,6 +243,8 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
 
                 if (!started)
                 {
+                    // From here the render thread reads the source (the pre-roll first), so a Pause that arrives now must wait.
+                    _clientRunning = true;
                     if (needPreroll && Fill(render, format, bufferFrames, floats) is var prerolled and not 0)
                     {
                         RaiseLost($"The audio device stopped: {Describe(prerolled)}.");
@@ -246,7 +252,6 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
                     }
 
                     needPreroll = false;
-                    _clientRunning = true;
                     Check(client.Start(), "start the stream");
                     started = true;
                     continue; // the running client raises the first audio event
