@@ -408,4 +408,163 @@ public sealed class TrackSwitchTests : IDisposable
         Assert.Equal(1, queue.Status().QueueIndex);
         Assert.Equal(1, Output.OpenCount);
     }
+
+    // ---------------------------------------------------------------------------------- shared mode: convert, keep open
+
+    private void SharedMode() => Output.Converter = (from, to) => new StepConverter(from, to);
+
+    [Theory]
+    [InlineData(2000, 2)] // sample rate
+    [InlineData(1000, 1)] // channels
+    [InlineData(500, 1)] // both
+    public void Shared_mode_converts_another_rate_or_channel_count_and_keeps_the_device(int rate, int channels)
+    {
+        SharedMode();
+        var a = new RampSpec(1, 4000);
+        var b = new RampSpec(2, 8000, rate, channels);
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        player.Play();
+        Assert.Equal(a.Pcm()[..64], Pull(64));
+
+        var loaded = player.Load(Add(b));
+        player.Play();
+
+        Assert.Equal(1, Output.OpenCount);
+        Assert.Equal(1, Output.RetargetCount);
+        Assert.Equal(a.Format with { SourceBitsPerSample = b.Bits }, player.Buffer!.Format); // the device's rate and channels
+        Assert.Equal(StepConverter.Expected(b, a.Format)[..300], Pull(300));
+        Assert.Equal(rate, loaded.SampleRate); // the track still says what it is
+        var converter = Assert.IsType<StepConverter>(Assert.Single(Output.Converters));
+        Assert.Equal(b.Format, converter.From);
+    }
+
+    [Fact]
+    public void Shared_mode_seeks_a_converted_track_from_a_clean_converter()
+    {
+        SharedMode();
+        var a = new RampSpec(1, 4000);
+        var b = new RampSpec(2, 8000, SampleRate: 2000);
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        player.Play();
+        Pull(64);
+        player.Load(Add(b));
+        player.Play();
+        Pull(66);
+
+        player.Seek(TimeSpan.FromSeconds(1)); // b's frame 2000, the device's frame 1000
+
+        var converter = Assert.IsType<StepConverter>(Assert.Single(Output.Converters));
+        Assert.Equal(1, converter.Resets);
+        Assert.Equal(TimeSpan.FromSeconds(1), player.Position);
+        Assert.Equal(StepConverter.Expected(b, a.Format).AsSpan(1000 * 2, 200).ToArray(), Pull(200));
+        Assert.Equal(1, Output.OpenCount);
+    }
+
+    [Fact]
+    public void A_converter_that_cannot_be_made_falls_back_to_reopening()
+    {
+        Output.Converter = (_, _) => throw new InvalidOperationException("no converter");
+        var a = new RampSpec(1, 4000);
+        var b = new RampSpec(2, 4000, SampleRate: 2000);
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        player.Play();
+        Pull(64);
+
+        player.Load(Add(b));
+        player.Play();
+
+        Assert.Equal(2, Output.OpenCount);
+        Assert.Equal(0, Output.RetargetCount);
+        Assert.Equal(b.Pcm()[..300], Pull(300)); // its own format, unconverted
+    }
+
+    [Fact]
+    public void A_converted_track_whose_device_was_released_reopens_at_the_converted_format()
+    {
+        SharedMode();
+        var a = new RampSpec(1, 4000);
+        var b = new RampSpec(2, 8000, SampleRate: 2000);
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        player.Play();
+        Pull(64);
+        player.Load(Add(b));
+
+        player.Stop(); // releases the device
+        player.Play();
+
+        Assert.Equal(2, Output.OpenCount);
+        Assert.Equal(a.Format.SampleRate, Output.Source!.Format.SampleRate);
+        Assert.Equal(StepConverter.Expected(b, a.Format)[..100], Pull(100));
+    }
+
+    [Fact]
+    public void Shared_mode_crosses_gaplessly_into_a_track_of_another_rate()
+    {
+        SharedMode();
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var c = new RampSpec(3, 1000, SampleRate: 500, Channels: 1);
+        var (player, queue) = CreateQueue(a, b, c);
+        var advanced = 0;
+        player.TrackAdvanced += (_, _) => Interlocked.Increment(ref advanced);
+
+        Assert.Equal(a.Pcm(), Pull(2000));
+        Assert.Equal(StepConverter.Expected(b, a.Format), Pull(2000)); // no gap, no reopen
+        Assert.Equal(StepConverter.Expected(c, a.Format)[..400], Pull(400));
+
+        Assert.Equal(1, Output.OpenCount);
+        Assert.Equal(0, Output.RetargetCount);
+        Assert.Equal(2, Output.Converters.Count);
+    }
+
+    [Fact]
+    public async Task Without_a_converter_a_rate_change_ends_the_gapless_run_and_reopens()
+    {
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var (player, queue) = CreateQueue(a, b);
+        var replaying = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        player.StateChanged += (_, e) =>
+        {
+            if (e.OldState != PlayerState.Playing && e.NewState == PlayerState.Playing && Output.OpenCount == 2)
+            {
+                replaying.TrySetResult();
+            }
+        };
+
+        var first = Output.Source!;
+        Assert.Equal(a.Pcm(), Pull(2000));
+        // Waits (failure-capped) for the decode thread to end a's stream rather than chain b, and reads that end.
+        Assert.Empty(Pull(64));
+
+        await replaying.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken); // failure cap
+        // a's stream ended at a's end; b got a stream of its own at its own rate (not chained, nothing converted).
+        Assert.NotSame(first, Output.Source);
+        Assert.Equal(b.Format, Output.Source!.Format);
+        Assert.Empty(Output.Converters);
+        Assert.Equal(b.Pcm()[..200], Pull(200));
+        Assert.Equal(1, queue.Status().QueueIndex);
+    }
+
+    [Fact]
+    public void Exclusive_mode_never_converts()
+    {
+        Output.Exclusive = true; // the manual output's converter stays null, like the real exclusive output
+        var a = new RampSpec(1, 4000);
+        var b = new RampSpec(2, 4000, SampleRate: 2000);
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        player.Play();
+
+        player.Load(Add(b));
+        player.Play();
+
+        Assert.Equal(2, Output.OpenCount);
+        Assert.Equal(b.Format, player.Buffer!.Format);
+        Assert.Equal(b.Pcm()[..100], Pull(100));
+    }
 }

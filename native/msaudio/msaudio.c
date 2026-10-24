@@ -295,3 +295,102 @@ MSA_API int32_t msa_device_render(msa_device* device, void* output, uint32_t fra
     if (device == NULL || output == NULL) return MA_INVALID_ARGS;
     return ma_device_handle_backend_data_callback(&device->ma, output, NULL, frames);
 }
+
+/* The miniaudio converter lives in its own allocation: it points into itself (its resampler backend), so it is never
+   copied, and a reset swaps in a freshly initialised one. */
+struct msa_converter {
+    ma_data_converter* ma;
+    ma_data_converter_config config;
+};
+
+static ma_result msa_converter_new(const ma_data_converter_config* config, ma_data_converter** out)
+{
+    ma_data_converter* ma = (ma_data_converter*)calloc(1, sizeof(ma_data_converter));
+    if (ma == NULL) {
+        return MA_OUT_OF_MEMORY;
+    }
+    ma_result result = ma_data_converter_init(config, NULL, ma);
+    if (result != MA_SUCCESS) {
+        free(ma);
+        return result;
+    }
+    *out = ma;
+    return MA_SUCCESS;
+}
+
+static void msa_converter_free(ma_data_converter* ma)
+{
+    if (ma != NULL) {
+        ma_data_converter_uninit(ma, NULL);
+        free(ma);
+    }
+}
+
+MSA_API int32_t msa_converter_init(int32_t in_channels, int32_t in_rate, int32_t out_channels, int32_t out_rate,
+                                   msa_converter** converter)
+{
+    if (converter == NULL) {
+        return MA_INVALID_ARGS;
+    }
+    *converter = NULL;
+    if (in_channels <= 0 || out_channels <= 0 || in_channels > MA_MAX_CHANNELS || out_channels > MA_MAX_CHANNELS ||
+        in_rate <= 0 || out_rate <= 0) {
+        return MA_INVALID_ARGS;
+    }
+
+    msa_converter* c = (msa_converter*)calloc(1, sizeof(msa_converter));
+    if (c == NULL) {
+        return MA_OUT_OF_MEMORY;
+    }
+
+    c->config = ma_data_converter_config_init(ma_format_f32, ma_format_f32, (ma_uint32)in_channels,
+        (ma_uint32)out_channels, (ma_uint32)in_rate, (ma_uint32)out_rate);
+    c->config.resampling.algorithm = ma_resample_algorithm_linear;
+    c->config.resampling.linear.lpfOrder = MA_MAX_FILTER_ORDER; /* steepest anti-alias/anti-image filter it has */
+    c->config.ditherMode = ma_dither_mode_none;
+    ma_result result = msa_converter_new(&c->config, &c->ma);
+    if (result != MA_SUCCESS) {
+        free(c);
+        return result;
+    }
+    *converter = c;
+    return MA_SUCCESS;
+}
+
+MSA_API void msa_converter_uninit(msa_converter* converter)
+{
+    if (converter != NULL) {
+        msa_converter_free(converter->ma);
+        free(converter);
+    }
+}
+
+MSA_API int32_t msa_converter_process(msa_converter* converter, const float* input, uint64_t* in_frames, float* output,
+                                      uint64_t* out_frames)
+{
+    if (converter == NULL || in_frames == NULL || out_frames == NULL) {
+        return MA_INVALID_ARGS;
+    }
+    ma_uint64 in = *in_frames, out = *out_frames;
+    ma_result result = ma_data_converter_process_pcm_frames(converter->ma, input, &in, output, &out);
+    *in_frames = in;
+    *out_frames = out;
+    return result;
+}
+
+MSA_API int32_t msa_converter_reset(msa_converter* converter)
+{
+    if (converter == NULL) {
+        return MA_INVALID_ARGS;
+    }
+    /* Not ma_data_converter_reset: in miniaudio 0.11.25 its biquad cache clear zeroes only the first channel's history
+       (ma_biquad_clear_cache), so the other channels would carry the old position's filter state across a seek. */
+    ma_data_converter* fresh = NULL;
+    ma_result result = msa_converter_new(&converter->config, &fresh);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+    msa_converter_free(converter->ma);
+    converter->ma = fresh;
+    return MA_SUCCESS;
+}

@@ -73,6 +73,15 @@ public interface IAudioOutput : IDisposable
     /// </summary>
     bool Retarget(IPcmSource next) => false;
 
+    /// <summary>
+    /// A converter from <paramref name="from"/> to <paramref name="to"/> (rate and channels) when converting a track to the
+    /// format this output is open at loses nothing the device would keep: shared mode, where the OS mixer resamples
+    /// everything anyway. The caller then feeds the converted track through <see cref="Retarget"/> (or chains it
+    /// gaplessly) instead of reopening the device. Null when the device must play the track's own format (exclusive
+    /// mode) or conversion is unavailable: the caller reopens as usual. Thread-safe; touches no device.
+    /// </summary>
+    IPcmConverter? CreateConverter(PcmFormat from, PcmFormat to) => null;
+
     /// <summary>Stops and releases the device.</summary>
     void Stop();
 

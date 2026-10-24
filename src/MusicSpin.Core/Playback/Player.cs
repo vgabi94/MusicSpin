@@ -146,6 +146,9 @@ public sealed class Player : IPlayer
             // otherwise release it, and Play opens it for the new format. This comes first: the output stops reading the
             // old track before the new one replaces it, so no stale audio of the old buffer (or its end markers) reaches
             // the device, or the player's notifications, after the switch.
+            // Shared mode: a track of another rate or channel count is converted to what the device is open at, so the
+            // switch keeps the device too (the OS mixer resamples everything anyway, so nothing is lost).
+            decoder = ConvertForOutput(decoder);
             var first = new TrackSegment(decoder, null, TimeSpan.Zero, [], []);
             var buffer = NewBuffer(first);
             RetargetOrReleaseOutput(buffer);
@@ -671,7 +674,10 @@ public sealed class Player : IPlayer
                 return Step.Progress;
             }
 
-            var next = OpenNext(_decoders, buffer.Format, candidates, cursor, scratch.AsMemory(0, want));
+            // Shared mode chains a track of another rate or channel count too, converted to the stream's format.
+            var output = Volatile.Read(ref _output);
+            Func<PcmFormat, IPcmConverter?>? convert = output is null ? null : from => output.CreateConverter(from, buffer.Format);
+            var next = OpenNext(_decoders, buffer.Format, candidates, cursor, scratch.AsMemory(0, want), convert);
             lock (_decodeLock)
             {
                 if (generation != _generation || !ReferenceEquals(candidates, _candidates) || cursor != _cursor)
@@ -737,7 +743,7 @@ public sealed class Player : IPlayer
     /// Null when nothing can follow gaplessly: no more entries, a different format, an empty or failing track (the caller
     /// ends the stream there and the normal path takes over, reporting errors and reopening the device as needed).
     /// </summary>
-    private static Opened? OpenNext(IAudioDecoderFactory decoders, PcmFormat format, IReadOnlyList<NextTrack> candidates, int cursor, Memory<float> scratch)
+    private static Opened? OpenNext(IAudioDecoderFactory decoders, PcmFormat format, IReadOnlyList<NextTrack> candidates, int cursor, Memory<float> scratch, Func<PcmFormat, IPcmConverter?>? convert)
     {
         var skipped = new List<SkippedNextTrack>();
         for (var i = cursor; i < candidates.Count; i++)
@@ -761,8 +767,14 @@ public sealed class Player : IPlayer
             int read;
             try
             {
-                // Same rate, channels and bit depth: the open device can play it as is. Anything else needs a reopen.
-                read = decoder.Format == format ? decoder.Read(scratch.Span) : 0;
+                // Same rate, channels and bit depth: the open device can play it as is. Another rate or channel count
+                // goes on through a converter when the output gives one (shared mode). Anything else needs a reopen.
+                if (decoder.Format != format && convert is not null)
+                {
+                    decoder = Converted(decoder, format, convert);
+                }
+
+                read = decoder.Format == format || decoder is ConvertingDecoder ? decoder.Read(scratch.Span) : 0;
             }
             catch (Exception)
             {
@@ -781,6 +793,61 @@ public sealed class Player : IPlayer
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// <paramref name="decoder"/> read through a converter to <paramref name="format"/> when it has another rate or
+    /// channel count and <paramref name="convert"/> gives one; else <paramref name="decoder"/> itself. A converter that
+    /// cannot be made leaves the decoder as is (the caller then treats it as another format).
+    /// </summary>
+    private static IAudioDecoder Converted(IAudioDecoder decoder, PcmFormat format, Func<PcmFormat, IPcmConverter?> convert)
+    {
+        var from = decoder.Format;
+        if (from.SampleRate == format.SampleRate && from.Channels == format.Channels)
+        {
+            return decoder;
+        }
+
+        IPcmConverter? converter;
+        try
+        {
+            converter = convert(from);
+        }
+        catch (Exception)
+        {
+            converter = null;
+        }
+
+        if (converter is null)
+        {
+            return decoder;
+        }
+
+        try
+        {
+            return new ConvertingDecoder(decoder, converter);
+        }
+        catch (Exception)
+        {
+            converter.Dispose();
+            return decoder;
+        }
+    }
+
+    /// <summary>
+    /// For a track switch: when the output is open (shared mode) at another rate or channel count than
+    /// <paramref name="decoder"/>, the decoder converted to it, so <see cref="RetargetOrReleaseOutput"/> keeps the device.
+    /// Caller holds _sync.
+    /// </summary>
+    private IAudioDecoder ConvertForOutput(IAudioDecoder decoder)
+    {
+        if (_output is not { IsOpen: true } output || _outputSource is not { } current)
+        {
+            return decoder;
+        }
+
+        var target = current.Format;
+        return Converted(decoder, target, from => output.CreateConverter(from, target));
     }
 
     // ------------------------------------------------------------------------------------------------ output side
