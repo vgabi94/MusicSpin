@@ -82,6 +82,14 @@ public interface IAudioOutput : IDisposable
     /// </summary>
     IPcmConverter? CreateConverter(PcmFormat from, PcmFormat to) => null;
 
+    /// <summary>
+    /// The rate and channels the open output reads its source at, when that can differ from the source's: shared mode
+    /// opens the device at the OS mixer's own rate and converts every track to it, so a track converted to this format
+    /// beforehand (see <see cref="CreateConverter"/>) plays without further conversion, and one already at it bit for bit.
+    /// Null while closed, or when the output plays each source at its own format.
+    /// </summary>
+    PcmFormat? StreamFormat => null;
+
     /// <summary>Stops and releases the device.</summary>
     void Stop();
 

@@ -19,6 +19,13 @@ public interface IPcmConverter : IDisposable
     /// </summary>
     int Convert(ReadOnlySpan<float> input, Span<float> output, out int consumed);
 
+    /// <summary>
+    /// After the last input: writes what the filter still holds (its last few milliseconds) into
+    /// <paramref name="output"/>. Returns the samples written; 0 once drained. Further input needs a
+    /// <see cref="Reset"/> first.
+    /// </summary>
+    int Drain(Span<float> output) => 0;
+
     /// <summary>Forgets the filter history, for a seek.</summary>
     void Reset();
 }

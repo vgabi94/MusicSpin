@@ -10,7 +10,7 @@ namespace MusicSpin.Core.Output.MiniAudio;
 internal static unsafe partial class MsAudioNative
 {
     public const string Library = "msaudio";
-    public const int AbiVersion = 3;
+    public const int AbiVersion = 4;
     public const int IdBytes = 256;
     public const int NameBytes = 256;
     public const int MaxNativeFormats = 64;
@@ -74,6 +74,7 @@ internal static unsafe partial class MsAudioNative
         public int Exclusive;
         public int PeriodFrames;
         public fixed byte Name[NameBytes];
+        public int ClientSampleRate;
     }
 
     [LibraryImport(Library, EntryPoint = "msa_abi_version")]
@@ -132,7 +133,7 @@ internal static unsafe partial class MsAudioNative
     public static partial void ConverterUninit(nint converter);
 
     [LibraryImport(Library, EntryPoint = "msa_converter_process")]
-    public static partial int ConverterProcess(nint converter, float* input, ref ulong inFrames, float* output, ref ulong outFrames);
+    public static partial int ConverterProcess(nint converter, float* input, ref ulong inFrames, float* output, ref ulong outFrames, int endOfInput);
 
     [LibraryImport(Library, EntryPoint = "msa_converter_reset")]
     public static partial int ConverterReset(nint converter);

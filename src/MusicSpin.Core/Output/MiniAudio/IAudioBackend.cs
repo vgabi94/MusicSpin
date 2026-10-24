@@ -8,7 +8,11 @@ namespace MusicSpin.Core.Output.MiniAudio;
 /// <param name="EndpointId">The WASAPI endpoint id on Windows (for the exclusive path); null elsewhere.</param>
 internal sealed record BackendDevice(string Name, bool IsDefault, byte[] Id, IReadOnlyList<(string Format, int Channels, int SampleRate)> Formats, string? EndpointId = null);
 
-/// <summary>What to open: the format our callback writes, at the track's own rate and channel count.</summary>
+/// <summary>
+/// What to open: the format our callback writes, at the track's channel count, and in exclusive mode the track's own
+/// rate. <see cref="SampleRate"/> 0 (shared mode) asks for the device's own rate (the OS mixer's), so the mixer does not
+/// resample: MusicSpin converts to it instead (<see cref="IPlaybackStream.ClientSampleRate"/>).
+/// </summary>
 /// <param name="Format">The sample format we hand the device (f32 in shared mode, the source's depth in exclusive).</param>
 /// <param name="SourceBits">The track's bit depth (the WASAPI exclusive path picks its container from it).</param>
 internal sealed record OpenRequest(DeviceSample Format, int SampleRate, int Channels, bool Exclusive, int SourceBits);
@@ -47,6 +51,12 @@ internal interface IPlaybackStream : IDisposable
 
     /// <summary>What the device opened at, read back from the backend.</summary>
     OpenedOutput Opened { get; }
+
+    /// <summary>
+    /// The rate the stream reads its source at: the requested one, or the device's own when 0 was requested. It stays
+    /// the same when the backend reroutes the stream to another device (the backend converts then).
+    /// </summary>
+    int ClientSampleRate => Opened.SampleRate;
 
     /// <summary>
     /// The device stopped on its own (unplugged, invalidated); the argument says why. Raised on the audio thread or a

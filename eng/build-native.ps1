@@ -21,11 +21,12 @@ $hostArch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64
 $target = if ($Rid -eq 'win-arm64') { 'arm64' } else { 'x64' }
 $arch = if ($hostArch -eq $target) { $target } else { "${hostArch}_$target" }
 
-$src = Join-Path $root 'native/msaudio/msaudio.c'
+$lsr = Join-Path $root 'native/msaudio/libsamplerate'
+$src = (@((Join-Path $root 'native/msaudio/msaudio.c')) + ('samplerate.c', 'src_sinc.c', 'src_linear.c', 'src_zoh.c' | ForEach-Object { Join-Path $lsr $_ }) | ForEach-Object { "`"$_`"" }) -join ' '
 $obj = Join-Path $Out 'obj'
 New-Item -ItemType Directory -Force -Path $obj | Out-Null
 $dll = Join-Path $Out 'msaudio.dll'
-$cmd = "`"$vcvars`" $arch >nul && cl /nologo /O2 /W3 /LD /MT /Fo`"$obj\\`" `"$src`" /link /OUT:`"$dll`" ole32.lib"
+$cmd = "`"$vcvars`" $arch >nul && cl /nologo /O2 /W3 /LD /MT /DHAVE_CONFIG_H /D_CRT_SECURE_NO_WARNINGS /Fo`"$obj\\`" $src /link /OUT:`"$dll`" ole32.lib"
 cmd /c $cmd
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 Remove-Item -Recurse -Force $obj

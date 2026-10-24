@@ -4,8 +4,10 @@ using MusicSpin.Core.Audio;
 namespace MusicSpin.Core.Output.MiniAudio;
 
 /// <summary>
-/// Opens a playback device at the source's own sample rate and channels. Shared mode hands the OS mixer float32;
-/// exclusive mode hands the device the source's own depth (s16/s24, f32 for 32-bit and float sources), so with
+/// Opens a playback device at the source's channels. Shared mode opens it at the OS mixer's own rate and hands it
+/// float32: a source of another rate is converted here (libsamplerate's best sinc, <see cref="StreamRoute"/>), once,
+/// instead of by the mixer, and one at the mixer's rate passes bit for bit. Exclusive mode opens the source's own rate
+/// and hands the device the source's own depth (s16/s24, f32 for 32-bit and float sources), so with
 /// volume 1.0 the original samples reach the DAC unchanged. When the device goes away mid-play, or the system
 /// default changes under a stream that cannot follow it, the output reopens on the system default from the same source
 /// (<see cref="Rerouted"/>); only when that fails does <see cref="Failed"/> fire and the output close. An exclusive
@@ -32,7 +34,7 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
 
     // What the open stream actually pulls from: it reads whatever this points at, so a track change can move it to
     // another source without closing the device. Null while no stream is open.
-    private SwitchableSource? _pump;
+    private volatile SwitchableSource? _pump;
     private bool _started;
 
     // An exclusive device was released by Pause: the source is kept and Start reopens the device for it.
@@ -149,6 +151,13 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
                 return false; // the device would have to be reconfigured
             }
 
+            // Shared mode: any rate plays on the open stream, converted to the rate it reads at.
+            StreamRoute? route = null;
+            if (_pump is { } open && !TryRoute(next, open.Route.Format.SampleRate, out route))
+            {
+                return false; // no converter: the caller reopens at the track's format... and the mixer converts
+            }
+
             // Stop reading the old source first (a stopped stream makes no more callbacks), then point the stream at the
             // new one: the old source is never read again and the new one not before Start. A released exclusive device
             // stays released: Start reopens it for _source, which is now the new one.
@@ -158,6 +167,7 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
                 _started = false;
                 if (!stopped)
                 {
+                    route?.Dispose();
                     // The device thread did not stop in time (WASAPI waits a bounded 2 s): it may still be reading the old
                     // source, so the stream must never be pointed at another one. Close it; the caller opens it again.
                     CloseStream();
@@ -167,7 +177,11 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
                 }
             }
 
-            _pump?.Switch(next);
+            if (_pump is { } pump && route is not null)
+            {
+                pump.Switch(route).Dispose(); // not read any more: the stream is stopped
+            }
+
             _source = next;
             return true;
         }
@@ -191,6 +205,9 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
             return null; // the caller reopens the device instead
         }
     }
+
+    /// <inheritdoc />
+    public PcmFormat? StreamFormat => options.Exclusive ? null : _pump?.Route.Format;
 
     public void Stop()
     {
@@ -231,8 +248,32 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     private static bool SameDevice(OpenRequest a, OpenRequest b)
         => a with { SourceBits = 0 } == b with { SourceBits = 0 };
 
+    /// <summary>Shared mode asks for rate 0: the device's own (the mixer's), whatever the track's.</summary>
     internal static OpenRequest BuildRequest(PcmFormat format, AudioOutputOptions options)
-        => new(DeviceSampleFormat(format.SourceBitsPerSample, options.Exclusive), format.SampleRate, format.Channels, options.Exclusive, format.SourceBitsPerSample);
+        => new(DeviceSampleFormat(format.SourceBitsPerSample, options.Exclusive), options.Exclusive ? format.SampleRate : 0, format.Channels, options.Exclusive, format.SourceBitsPerSample);
+
+    /// <summary>
+    /// How <paramref name="source"/> is read at <paramref name="rate"/>: as it is when it is at that rate (or the stream
+    /// reads each source at its own, exclusive), else through a converter. False when no converter is available.
+    /// </summary>
+    private bool TryRoute(IPcmSource source, int rate, out StreamRoute? route)
+    {
+        route = null;
+        var from = source.Format;
+        if (options.Exclusive || rate <= 0 || from.SampleRate == rate)
+        {
+            route = new StreamRoute(source, null);
+            return true;
+        }
+
+        if (CreateConverter(from, new PcmFormat(rate, from.Channels, from.SourceBitsPerSample)) is not { } converter)
+        {
+            return false;
+        }
+
+        route = new StreamRoute(source, converter);
+        return true;
+    }
 
     /// <summary>
     /// Reopens the device a pause released, for the same source: the source was not read since, so playback goes on from
@@ -306,8 +347,17 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     /// <summary>Opens a stream (under the gate, none being open) and starts listening to it.</summary>
     private void OpenCore(BackendDevice? device, IPcmSource source)
     {
-        var pump = new SwitchableSource(source);
+        // The stream does not read before Start, so the route can be fitted to the rate it opened at first.
+        var pump = new SwitchableSource(new StreamRoute(source, null));
         var stream = provider.Engine.Open(device, BuildRequest(source.Format, options), pump);
+        if (!TryRoute(source, stream.ClientSampleRate, out var route))
+        {
+            stream.Dispose();
+            throw new MusicSpinException(MusicSpinErrorCode.AudioDeviceError,
+                string.Create(CultureInfo.InvariantCulture, $"Cannot convert {source.Format.SampleRate} Hz to the device's {stream.ClientSampleRate} Hz."));
+        }
+
+        pump.Switch(route!).Dispose();
         _pump = pump;
         _stream = stream;
         _opened = null;
@@ -484,6 +534,7 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     private void CloseStream()
     {
         var stream = _stream;
+        var pump = _pump;
         _stream = null;
         _pump = null;
         _opened = null;
@@ -496,23 +547,115 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
         }
 
         stream?.Dispose();
+        pump?.Route.Dispose(); // after the stream, which no longer reads it
     }
 }
 
 /// <summary>
-/// The source an open stream reads: forwards to a target that <see cref="Switch"/> can move to another source (of the
-/// same device format) while the stream stays open. Read is a volatile load and a call.
+/// The source an open stream reads: forwards to a route that <see cref="Switch"/> can move to another source while the
+/// stream is stopped and stays open. Read is a volatile load and a call.
 /// </summary>
-internal sealed class SwitchableSource(IPcmSource target) : IPcmSource
+internal sealed class SwitchableSource(StreamRoute route) : IPcmSource
 {
-    private IPcmSource _target = target;
+    private StreamRoute _route = route;
 
     /// <summary>What is read now.</summary>
-    public IPcmSource Target => Volatile.Read(ref _target);
+    public StreamRoute Route => Volatile.Read(ref _route);
 
-    public PcmFormat Format => Target.Format;
+    /// <summary>The source read now (the route's).</summary>
+    public IPcmSource Target => Route.Source;
 
-    public int Read(Span<float> buffer) => Target.Read(buffer);
+    public PcmFormat Format => Route.Format;
 
-    public void Switch(IPcmSource next) => Volatile.Write(ref _target, next);
+    public int Read(Span<float> buffer) => Route.Read(buffer);
+
+    /// <summary>Reads <paramref name="next"/> from now on; returns the route it replaces (the caller disposes it).</summary>
+    public StreamRoute Switch(StreamRoute next) => Interlocked.Exchange(ref _route, next);
+}
+
+/// <summary>
+/// A source as a shared-mode stream reads it: as it is, or converted to the stream's rate (the OS mixer's) a few
+/// hundred frames at a time, so the source's position stays within milliseconds of what is played. Read on the audio
+/// thread: no allocation, no lock. A seek of the source keeps the filter's last few milliseconds (like the device's own
+/// buffer does).
+/// </summary>
+internal sealed class StreamRoute : IPcmSource, IDisposable
+{
+    private const int StagedFrames = 256;
+
+    private readonly IPcmConverter? _converter;
+    private readonly float[] _staged = [];
+    private readonly int _channels;
+    private int _stagedStart;
+    private int _stagedEnd;
+
+    public StreamRoute(IPcmSource source, IPcmConverter? converter)
+    {
+        Source = source;
+        _converter = converter;
+        _channels = Math.Max(1, source.Format.Channels);
+        Format = converter is null ? source.Format : new PcmFormat(converter.To.SampleRate, converter.To.Channels, source.Format.SourceBitsPerSample);
+        if (converter is not null)
+        {
+            _staged = new float[StagedFrames * _channels];
+        }
+    }
+
+    public IPcmSource Source { get; }
+
+    /// <summary>The rate and channels the stream reads.</summary>
+    public PcmFormat Format { get; }
+
+    /// <summary>Whether the source is converted.</summary>
+    public bool Converts => _converter is not null;
+
+    public int Read(Span<float> buffer)
+    {
+        if (_converter is null)
+        {
+            return Source.Read(buffer);
+        }
+
+        var outChannels = _converter.To.Channels;
+        var room = buffer.Length - (buffer.Length % outChannels);
+        var written = 0;
+        while (written < room)
+        {
+            if (_stagedStart == _stagedEnd)
+            {
+                // Read only about what the output needs, so little is taken ahead of what is heard.
+                var wantFrames = (long)(room - written) / outChannels * _converter.From.SampleRate / Math.Max(1, _converter.To.SampleRate) + 1;
+                var want = (int)Math.Min(StagedFrames, wantFrames) * _channels;
+                var read = Source.Read(_staged.AsSpan(0, want));
+                read -= read % _channels;
+                _stagedStart = 0;
+                _stagedEnd = Math.Max(read, 0);
+                if (read <= 0)
+                {
+                    break; // nothing now (an underrun, or the end): the filter keeps its history for what follows
+                }
+
+                foreach (ref var x in _staged.AsSpan(0, read))
+                {
+                    if (!float.IsFinite(x))
+                    {
+                        x = 0; // a NaN would smear through the filter
+                    }
+                }
+            }
+
+            var produced = _converter.Convert(_staged.AsSpan(_stagedStart, _stagedEnd - _stagedStart), buffer[written..room], out var consumed);
+            if (produced <= 0 && consumed <= 0)
+            {
+                break; // cannot happen with whole frames on both sides; never spin on the audio thread
+            }
+
+            _stagedStart += consumed;
+            written += produced;
+        }
+
+        return written;
+    }
+
+    public void Dispose() => _converter?.Dispose();
 }

@@ -2,7 +2,10 @@ using MusicSpin.Core.Audio;
 
 namespace MusicSpin.Core.Output.MiniAudio;
 
-/// <summary>miniaudio's data converter (linear resampler behind its steepest low-pass, channel mixing), float32 in and out.</summary>
+/// <summary>
+/// native/msaudio's converter: libsamplerate's best sinc resampler (SRC_SINC_BEST_QUALITY) and miniaudio's channel
+/// mixing, float32 in and out.
+/// </summary>
 internal sealed unsafe class MiniAudioConverter : IPcmConverter
 {
     private nint _handle;
@@ -25,7 +28,11 @@ internal sealed unsafe class MiniAudioConverter : IPcmConverter
 
     public PcmFormat To { get; }
 
-    public int Convert(ReadOnlySpan<float> input, Span<float> output, out int consumed)
+    public int Convert(ReadOnlySpan<float> input, Span<float> output, out int consumed) => Process(input, output, false, out consumed);
+
+    public int Drain(Span<float> output) => Process(ReadOnlySpan<float>.Empty, output, true, out _);
+
+    private int Process(ReadOnlySpan<float> input, Span<float> output, bool end, out int consumed)
     {
         ObjectDisposedException.ThrowIf(_handle == 0, this);
         ulong inFrames = (ulong)(input.Length / From.Channels);
@@ -34,7 +41,7 @@ internal sealed unsafe class MiniAudioConverter : IPcmConverter
         fixed (float* i = input)
         fixed (float* o = output)
         {
-            result = MsAudioNative.ConverterProcess(_handle, i, ref inFrames, o, ref outFrames);
+            result = MsAudioNative.ConverterProcess(_handle, i, ref inFrames, o, ref outFrames, end ? 1 : 0);
         }
 
         if (result != 0)

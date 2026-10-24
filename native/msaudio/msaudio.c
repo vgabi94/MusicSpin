@@ -8,6 +8,7 @@
 #define MA_NO_ENGINE
 #include "miniaudio/miniaudio.h"
 #include "msaudio.h"
+#include "libsamplerate/samplerate.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -83,6 +84,7 @@ MSA_API int32_t msa_layout(int32_t which, int32_t field)
         case 3: return (int32_t)offsetof(msa_opened, exclusive);
         case 4: return (int32_t)offsetof(msa_opened, period_frames);
         case 5: return (int32_t)offsetof(msa_opened, name);
+        case 6: return (int32_t)offsetof(msa_opened, client_sample_rate);
         }
         break;
     }
@@ -170,6 +172,7 @@ static void msa_read_live(msa_device* d, msa_opened* opened)
     opened->exclusive = d->ma.playback.shareMode == ma_share_mode_exclusive ? 1 : 0;
     opened->period_frames = (int32_t)d->ma.playback.internalPeriodSizeInFrames;
     snprintf(opened->name, MSA_NAME_BYTES, "%s", d->ma.playback.name);
+    opened->client_sample_rate = (int32_t)d->ma.sampleRate;
 }
 
 static void msa_snapshot(msa_device* d, int overwrite)
@@ -217,7 +220,8 @@ MSA_API int32_t msa_device_open(msa_context* context, const msa_open_params* par
     if (device != NULL) *device = NULL;
     if (context == NULL || params == NULL || data == NULL || device == NULL || opened == NULL) return MA_INVALID_ARGS;
     if (params->format < MSA_FORMAT_U8 || params->format > MSA_FORMAT_F32 || params->channels < 1
-        || params->channels > MA_MAX_CHANNELS || params->sample_rate < 8000 || params->sample_rate > 768000) {
+        || params->channels > MA_MAX_CHANNELS || params->sample_rate < 0 || (params->sample_rate > 0 && params->sample_rate < 8000)
+        || params->sample_rate > 768000 || (params->sample_rate == 0 && params->exclusive)) {
         return MA_INVALID_ARGS;
     }
 
@@ -245,6 +249,14 @@ MSA_API int32_t msa_device_open(msa_context* context, const msa_open_params* par
     config.noPreSilencedOutputBuffer = MA_TRUE;
     config.noClip = MA_TRUE;
     config.noFixedSizedCallback = MA_TRUE;
+    /* When miniaudio must resample itself (a rerouted device at another rate), its best: linear at the steepest filter. */
+    config.resampling.algorithm = ma_resample_algorithm_linear;
+    config.resampling.linear.lpfOrder = MA_MAX_FILTER_ORDER;
+    if (params->sample_rate == 0) {
+        /* The device's own rate. WASAPI would otherwise ask Windows to convert to 48 kHz (AUTOCONVERTPCM) instead of
+           taking the mix format's rate. */
+        config.wasapi.noAutoConvertSRC = MA_TRUE;
+    }
     if (params->exclusive) {
         config.wasapi.noAutoConvertSRC = MA_TRUE;
         config.wasapi.noDefaultQualitySRC = MA_TRUE;
@@ -296,101 +308,150 @@ MSA_API int32_t msa_device_render(msa_device* device, void* output, uint32_t fra
     return ma_device_handle_backend_data_callback(&device->ma, output, NULL, frames);
 }
 
-/* The miniaudio converter lives in its own allocation: it points into itself (its resampler backend), so it is never
-   copied, and a reset swaps in a freshly initialised one. */
+/* Channels first (miniaudio's channel converter, frame for frame), then the rate (libsamplerate's best sinc) at the
+   output's channel count. Input is staged in chunks; what the filter did not take is reported back as unconsumed. */
+#define MSA_CONVERTER_CHUNK 1024
+
 struct msa_converter {
-    ma_data_converter* ma;
-    ma_data_converter_config config;
+    int32_t in_channels, out_channels, in_rate, out_rate;
+    int channel_convert;
+    ma_channel_converter channels;
+    SRC_STATE* src;                 /* NULL: same rate */
+    float* staged;                  /* channel-converted input, MSA_CONVERTER_CHUNK frames of out_channels */
+    uint64_t staged_frames;         /* frames waiting in staged */
+    uint64_t staged_at;
 };
-
-static ma_result msa_converter_new(const ma_data_converter_config* config, ma_data_converter** out)
-{
-    ma_data_converter* ma = (ma_data_converter*)calloc(1, sizeof(ma_data_converter));
-    if (ma == NULL) {
-        return MA_OUT_OF_MEMORY;
-    }
-    ma_result result = ma_data_converter_init(config, NULL, ma);
-    if (result != MA_SUCCESS) {
-        free(ma);
-        return result;
-    }
-    *out = ma;
-    return MA_SUCCESS;
-}
-
-static void msa_converter_free(ma_data_converter* ma)
-{
-    if (ma != NULL) {
-        ma_data_converter_uninit(ma, NULL);
-        free(ma);
-    }
-}
 
 MSA_API int32_t msa_converter_init(int32_t in_channels, int32_t in_rate, int32_t out_channels, int32_t out_rate,
                                    msa_converter** converter)
 {
-    if (converter == NULL) {
-        return MA_INVALID_ARGS;
-    }
+    msa_converter* c;
+    int error = 0;
+    if (converter == NULL) return MA_INVALID_ARGS;
     *converter = NULL;
-    if (in_channels <= 0 || out_channels <= 0 || in_channels > MA_MAX_CHANNELS || out_channels > MA_MAX_CHANNELS ||
-        in_rate <= 0 || out_rate <= 0) {
-        return MA_INVALID_ARGS;
+    if (in_channels <= 0 || out_channels <= 0 || in_channels > MA_MAX_CHANNELS || out_channels > MA_MAX_CHANNELS
+        || in_rate <= 0 || out_rate <= 0 || (double)out_rate / in_rate > 256.0 || (double)in_rate / out_rate > 256.0) {
+        return MA_INVALID_ARGS; /* libsamplerate's ratio range */
     }
 
-    msa_converter* c = (msa_converter*)calloc(1, sizeof(msa_converter));
-    if (c == NULL) {
+    c = (msa_converter*)calloc(1, sizeof(*c));
+    if (c == NULL) return MA_OUT_OF_MEMORY;
+    c->in_channels = in_channels;
+    c->out_channels = out_channels;
+    c->in_rate = in_rate;
+    c->out_rate = out_rate;
+    c->staged = (float*)calloc((size_t)MSA_CONVERTER_CHUNK * (size_t)out_channels, sizeof(float));
+    if (c->staged == NULL) {
+        free(c);
         return MA_OUT_OF_MEMORY;
     }
 
-    c->config = ma_data_converter_config_init(ma_format_f32, ma_format_f32, (ma_uint32)in_channels,
-        (ma_uint32)out_channels, (ma_uint32)in_rate, (ma_uint32)out_rate);
-    c->config.resampling.algorithm = ma_resample_algorithm_linear;
-    c->config.resampling.linear.lpfOrder = MA_MAX_FILTER_ORDER; /* steepest anti-alias/anti-image filter it has */
-    c->config.ditherMode = ma_dither_mode_none;
-    ma_result result = msa_converter_new(&c->config, &c->ma);
-    if (result != MA_SUCCESS) {
-        free(c);
-        return result;
+    if (in_channels != out_channels) {
+        ma_channel_converter_config cc = ma_channel_converter_config_init(ma_format_f32, (ma_uint32)in_channels, NULL,
+            (ma_uint32)out_channels, NULL, ma_channel_mix_mode_default);
+        if (ma_channel_converter_init(&cc, NULL, &c->channels) != MA_SUCCESS) {
+            free(c->staged);
+            free(c);
+            return MA_INVALID_ARGS;
+        }
+        c->channel_convert = 1;
     }
+
+    if (in_rate != out_rate) {
+        c->src = src_new(SRC_SINC_BEST_QUALITY, out_channels, &error);
+        if (c->src == NULL) {
+            if (c->channel_convert) ma_channel_converter_uninit(&c->channels, NULL);
+            free(c->staged);
+            free(c);
+            return MA_OUT_OF_MEMORY;
+        }
+    }
+
     *converter = c;
     return MA_SUCCESS;
 }
 
 MSA_API void msa_converter_uninit(msa_converter* converter)
 {
-    if (converter != NULL) {
-        msa_converter_free(converter->ma);
-        free(converter);
+    if (converter == NULL) return;
+    if (converter->src != NULL) src_delete(converter->src);
+    if (converter->channel_convert) ma_channel_converter_uninit(&converter->channels, NULL);
+    free(converter->staged);
+    free(converter);
+}
+
+/* Moves up to n frames of input into out (out_channels wide). */
+static void msa_converter_channels(msa_converter* c, const float* input, float* out, uint64_t n)
+{
+    if (c->channel_convert) {
+        ma_channel_converter_process_pcm_frames(&c->channels, out, input, n);
+    } else {
+        memcpy(out, input, (size_t)n * (size_t)c->out_channels * sizeof(float));
     }
 }
 
 MSA_API int32_t msa_converter_process(msa_converter* converter, const float* input, uint64_t* in_frames, float* output,
-                                      uint64_t* out_frames)
+                                      uint64_t* out_frames, int32_t end_of_input)
 {
-    if (converter == NULL || in_frames == NULL || out_frames == NULL) {
+    msa_converter* c = converter;
+    uint64_t in_total, out_total, consumed = 0, produced = 0;
+    if (c == NULL || in_frames == NULL || out_frames == NULL || (*in_frames > 0 && input == NULL)
+        || (*out_frames > 0 && output == NULL)) {
         return MA_INVALID_ARGS;
     }
-    ma_uint64 in = *in_frames, out = *out_frames;
-    ma_result result = ma_data_converter_process_pcm_frames(converter->ma, input, &in, output, &out);
-    *in_frames = in;
-    *out_frames = out;
-    return result;
+
+    in_total = *in_frames;
+    out_total = *out_frames;
+    if (c->src == NULL) {
+        /* Same rate: channels only, frame for frame. */
+        uint64_t n = in_total < out_total ? in_total : out_total;
+        msa_converter_channels(c, input, output, n);
+        *in_frames = n;
+        *out_frames = n;
+        return MA_SUCCESS;
+    }
+
+    for (;;) {
+        SRC_DATA data;
+        int error;
+        if (c->staged_at == c->staged_frames && consumed < in_total) {
+            uint64_t n = in_total - consumed;
+            if (n > MSA_CONVERTER_CHUNK) n = MSA_CONVERTER_CHUNK;
+            msa_converter_channels(c, input + consumed * (uint64_t)c->in_channels, c->staged, n);
+            c->staged_frames = n;
+            c->staged_at = 0;
+            consumed += n;
+        }
+
+        if (produced == out_total) break;
+        memset(&data, 0, sizeof(data));
+        data.data_in = c->staged + c->staged_at * (uint64_t)c->out_channels;
+        data.input_frames = (long)(c->staged_frames - c->staged_at);
+        data.data_out = output + produced * (uint64_t)c->out_channels;
+        data.output_frames = (long)((out_total - produced) > 0x10000000u ? 0x10000000u : (out_total - produced));
+        data.src_ratio = (double)c->out_rate / (double)c->in_rate;
+        /* The end is only final once every input frame has gone into the filter. */
+        data.end_of_input = end_of_input && consumed == in_total && data.input_frames == 0 ? 1 : 0;
+        if (data.input_frames == 0 && !data.end_of_input) break; /* needs more input */
+        error = src_process(c->src, &data);
+        if (error != 0) return MA_ERROR;
+        c->staged_at += (uint64_t)data.input_frames_used;
+        produced += (uint64_t)data.output_frames_gen;
+        if (data.output_frames_gen == 0 && data.input_frames_used == 0) break; /* flushed, or output full */
+    }
+
+    /* Input staged but not yet in the filter is returned as unconsumed, so the caller's view is exact. */
+    consumed -= c->staged_frames - c->staged_at;
+    c->staged_frames = c->staged_at = 0;
+    *in_frames = consumed;
+    *out_frames = produced;
+    return MA_SUCCESS;
 }
 
 MSA_API int32_t msa_converter_reset(msa_converter* converter)
 {
-    if (converter == NULL) {
-        return MA_INVALID_ARGS;
-    }
-    /* Not ma_data_converter_reset: in miniaudio 0.11.25 its biquad cache clear zeroes only the first channel's history
-       (ma_biquad_clear_cache), so the other channels would carry the old position's filter state across a seek. */
-    ma_data_converter* fresh = NULL;
-    ma_result result = msa_converter_new(&converter->config, &fresh);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-    msa_converter_free(converter->ma);
-    converter->ma = fresh;
+    if (converter == NULL) return MA_INVALID_ARGS;
+    converter->staged_frames = converter->staged_at = 0;
+    if (converter->src != NULL && src_reset(converter->src) != 0) return MA_ERROR;
     return MA_SUCCESS;
 }

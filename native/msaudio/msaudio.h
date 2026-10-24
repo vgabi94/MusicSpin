@@ -14,7 +14,7 @@
 #define MSA_API __attribute__((visibility("default")))
 #endif
 
-#define MSA_ABI_VERSION 3
+#define MSA_ABI_VERSION 4
 #define MSA_ID_BYTES 256
 #define MSA_NAME_BYTES 256
 #define MSA_MAX_NATIVE_FORMATS 64
@@ -40,6 +40,8 @@ typedef struct msa_device_info {
     msa_native_format native_formats[MSA_MAX_NATIVE_FORMATS];
 } msa_device_info;
 
+/* sample_rate 0 (shared mode only): the device's own rate, so the OS mixer does not resample (WASAPI: the mix
+   format; CoreAudio: the nominal rate; PulseAudio/PipeWire: the sink's rate; ALSA: the hardware rate nearest 48 kHz). */
 typedef struct msa_open_params {
     int32_t format;                 /* the format our callback writes (MSA_FORMAT_*) */
     int32_t channels;
@@ -58,6 +60,7 @@ typedef struct msa_opened {
     int32_t exclusive;
     int32_t period_frames;
     char name[MSA_NAME_BYTES];
+    int32_t client_sample_rate;     /* the rate our callback writes at (the requested one, or the device's when 0) */
 } msa_opened;
 
 typedef void (*msa_data_callback)(void* user, void* output, uint32_t frames);
@@ -94,14 +97,17 @@ MSA_API int32_t msa_device_opened(msa_device* device, msa_opened* opened);
 /* Tests: runs miniaudio's full playback path (our callback plus its client-to-device conversion) into output. */
 MSA_API int32_t msa_device_render(msa_device* device, void* output, uint32_t frames);
 
-/* Interleaved float32 sample-rate and channel conversion (miniaudio's data converter), for a shared-mode device that
-   stays open at one format while tracks of another play. */
+/* Interleaved float32 sample-rate and channel conversion for a shared-mode device that stays open at the mixer's
+   format while tracks of other formats play: libsamplerate's best sinc converter (SRC_SINC_BEST_QUALITY) for the rate,
+   miniaudio's channel converter for the channel count. */
 MSA_API int32_t msa_converter_init(int32_t in_channels, int32_t in_rate, int32_t out_channels, int32_t out_rate,
                                    msa_converter** converter);
 MSA_API void msa_converter_uninit(msa_converter* converter);
-/* Consumes up to *in_frames from input and writes up to *out_frames to output; both are updated to what was used. */
+/* Consumes up to *in_frames from input and writes up to *out_frames to output; both are updated to what was used.
+   end_of_input: no more input follows (until a reset): the filter's last frames are flushed out; repeat until no
+   frames come out. */
 MSA_API int32_t msa_converter_process(msa_converter* converter, const float* input, uint64_t* in_frames, float* output,
-                                      uint64_t* out_frames);
+                                      uint64_t* out_frames, int32_t end_of_input);
 /* Forgets filter history, for a seek. */
 MSA_API int32_t msa_converter_reset(msa_converter* converter);
 

@@ -440,6 +440,38 @@ public sealed class TrackSwitchTests : IDisposable
     }
 
     [Fact]
+    public void Shared_mode_converts_tracks_to_the_streams_own_rate_once_and_passes_one_at_that_rate_untouched()
+    {
+        SharedMode();
+        var a = new RampSpec(1, 4000);
+        var b = new RampSpec(2, 8000); // the same rate as a, but not the mixer's
+        var c = new RampSpec(3, 8000, SampleRate: 2000); // the mixer's rate
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        player.Play();
+        Pull(64);
+        var mixer = new PcmFormat(2000, 2, 16);
+        Output.StreamFormat = mixer; // the device runs at its mixer's rate (the output converts a; tracks are converted to it)
+
+        player.Load(Add(b));
+        player.Play();
+
+        Assert.Equal(1, Output.OpenCount);
+        Assert.Equal(1, Output.RetargetCount);
+        var converter = Assert.IsType<StepConverter>(Assert.Single(Output.Converters));
+        Assert.Equal(b.Format, converter.From);
+        Assert.Equal(2000, converter.To.SampleRate); // to the mixer, not to a's rate
+        Assert.Equal(StepConverter.Expected(b, mixer)[..300], Pull(300));
+
+        player.Load(Add(c));
+        player.Play();
+
+        Assert.Equal(2, Output.RetargetCount);
+        Assert.Single(Output.Converters); // none for c
+        Assert.Equal(c.Pcm()[..300], Pull(300)); // bit for bit
+    }
+
+    [Fact]
     public void Shared_mode_seeks_a_converted_track_from_a_clean_converter()
     {
         SharedMode();

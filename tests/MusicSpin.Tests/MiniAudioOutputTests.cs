@@ -26,10 +26,11 @@ public class MiniAudioOutputTests
         => Assert.Equal(DeviceSample.F32, MiniAudioOutput.DeviceSampleFormat(bits, exclusive: false));
 
     [Fact]
-    public void The_request_carries_the_tracks_rate_channels_and_depth()
+    public void The_request_carries_the_tracks_channels_and_depth_and_in_exclusive_mode_its_rate()
     {
         Assert.Equal(new OpenRequest(DeviceSample.S16, 44_100, 2, true, 16), MiniAudioOutput.BuildRequest(new PcmFormat(44_100, 2, 16), new AudioOutputOptions(Exclusive: true)));
-        Assert.Equal(new OpenRequest(DeviceSample.F32, 96_000, 6, false, 24), MiniAudioOutput.BuildRequest(new PcmFormat(96_000, 6, 24), new AudioOutputOptions()));
+        // Shared: rate 0, the device's own (the OS mixer's); the track is converted to it.
+        Assert.Equal(new OpenRequest(DeviceSample.F32, 0, 6, false, 24), MiniAudioOutput.BuildRequest(new PcmFormat(96_000, 6, 24), new AudioOutputOptions()));
     }
 
     [Fact]
@@ -926,10 +927,8 @@ public class MiniAudioOutputTests
         Assert.Equal(["start", "pause"], backend.Streams[0].Calls);
     }
 
-    [Theory]
-    [InlineData(48_000, 2)] // another sample rate
-    [InlineData(44_100, 1)] // another channel count
-    public void A_source_that_needs_another_rate_or_channel_count_is_refused_and_nothing_changes(int rate, int channels)
+    [Fact]
+    public void A_source_that_needs_another_channel_count_is_refused_and_nothing_changes()
     {
         var backend = new FakeBackend();
         using var provider = new MiniAudioOutputProvider(() => backend);
@@ -938,11 +937,187 @@ public class MiniAudioOutputTests
         output.Open(first);
         output.Start();
 
-        Assert.False(output.Retarget(new Source(new PcmFormat(rate, channels, 16))));
+        Assert.False(output.Retarget(new Source(new PcmFormat(44_100, 1, 16))));
 
         Assert.Equal(["start"], backend.Streams[0].Calls); // still playing the old track until the caller reopens
         Assert.Same(first, backend.Opened[0].Data);
         Assert.True(output.IsOpen);
+    }
+
+    [Fact]
+    public void An_exclusive_output_refuses_a_source_of_another_rate()
+    {
+        var backend = new FakeBackend();
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions(Exclusive: true));
+        var first = new Source(new PcmFormat(44_100, 2, 16));
+        output.Open(first);
+        output.Start();
+
+        Assert.False(output.Retarget(new Source(new PcmFormat(48_000, 2, 16)))); // the DAC must switch rate: reopen
+        Assert.Equal(["start"], backend.Streams[0].Calls);
+        Assert.Same(first, backend.Opened[0].Data);
+        Assert.Null(output.StreamFormat); // exclusive plays each track at its own format
+    }
+
+    // ------------------------------------------------------------------- shared mode: the OS mixer's rate, converted once
+
+    /// <summary>Everything the stream reads of its source, a block at a time like device callbacks.</summary>
+    private static float[] ReadAll(IPcmSource stream, int samples)
+    {
+        var all = new float[samples];
+        var at = 0;
+        while (at < samples)
+        {
+            var n = stream.Read(all.AsSpan(at, Math.Min(480, samples - at)));
+            if (n <= 0)
+            {
+                break;
+            }
+
+            at += n;
+        }
+
+        return all[..at];
+    }
+
+    [Fact]
+    public void Shared_mode_opens_at_the_mixers_rate_and_converts_the_track_to_it()
+    {
+        var backend = new FakeBackend { MixRate = 48_000 };
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var source = new Source(new PcmFormat(44_100, 2, 16)) { Remaining = 4_410 * 2 }; // 100 ms
+
+        output.Open(source);
+
+        var open = Assert.Single(backend.Opened);
+        Assert.Equal(0, open.Request.SampleRate); // the device's own rate, asked for as such
+        Assert.Same(source, open.Data);
+        Assert.Equal(new PcmFormat(48_000, 2, 16), open.Stream.Format); // what the device reads
+        Assert.Equal(new PcmFormat(48_000, 2, 16), output.StreamFormat);
+        var read = ReadAll(open.Stream, 48_000);
+        Assert.InRange(read.Length / 2, 4_600, 4_800); // 100 ms at 48 kHz, less the ~3 ms the filter holds (a route never drains)
+        Assert.Equal(0, source.Remaining);
+    }
+
+    [Fact]
+    public void A_track_at_the_mixers_rate_passes_bit_for_bit()
+    {
+        var backend = new FakeBackend { MixRate = 48_000 };
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var source = new Source(new PcmFormat(48_000, 2, 24)) { Remaining = 1_000 };
+
+        output.Open(source);
+
+        var stream = backend.Opened[0].Stream;
+        Assert.False(((SwitchableSource)stream).Route.Converts);
+        Assert.Equal(Enumerable.Range(1, 1_000).Select(i => (float)i), ReadAll(stream, 1_000)); // untouched
+    }
+
+    [Fact]
+    public void Shared_mode_retargets_a_track_of_any_rate_converted_to_the_streams_rate()
+    {
+        var backend = new FakeBackend { MixRate = 48_000 };
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(48_000, 2, 16)));
+        output.Start();
+        var pump = (SwitchableSource)backend.Opened[0].Stream;
+        var first = pump.Route;
+
+        var next = new Source(new PcmFormat(96_000, 2, 24)) { Remaining = 9_600 * 2 };
+        Assert.True(output.Retarget(next));
+
+        Assert.Single(backend.Opened); // no reopen
+        Assert.Same(next, pump.Target);
+        Assert.True(pump.Route.Converts);
+        Assert.Equal(48_000, pump.Format.SampleRate);
+        Assert.NotSame(first, pump.Route);
+        Assert.InRange(ReadAll(pump, 48_000).Length / 2, 4_600, 4_800); // 100 ms at the stream's rate, less what the filter holds
+
+        var back = new Source(new PcmFormat(48_000, 2, 16)) { Remaining = 10 };
+        Assert.True(output.Retarget(back));
+        Assert.False(pump.Route.Converts); // at the stream's rate again: passed through
+        Assert.Equal(Enumerable.Range(1, 10).Select(i => (float)i), ReadAll(pump, 10));
+    }
+
+    [Fact]
+    public void A_reopen_on_a_device_at_another_rate_converts_the_same_source_to_the_new_rate()
+    {
+        var backend = new FakeBackend { MixRate = 48_000 };
+        var posted = new Posted();
+        using var provider = new MiniAudioOutputProvider(() => backend) { Post = posted.Post };
+        using var output = provider.Create(new AudioOutputOptions());
+        var source = new Source(new PcmFormat(48_000, 2, 16));
+        output.Open(source);
+        output.Start();
+        Assert.False(((SwitchableSource)backend.Opened[0].Stream).Route.Converts);
+
+        backend.MixRate = 44_100; // the new default's mixer runs at 44.1 kHz
+        backend.Streams[0].Lose("unplugged");
+        posted.RunAll();
+
+        var reopened = (SwitchableSource)backend.Opened[1].Stream;
+        Assert.Same(source, reopened.Target); // goes on from where it was
+        Assert.True(reopened.Route.Converts);
+        Assert.Equal(44_100, reopened.Format.SampleRate);
+        Assert.Equal(new PcmFormat(44_100, 2, 16), output.StreamFormat); // later tracks are converted to it
+        Assert.Equal(["start"], backend.Streams[1].Calls);
+    }
+
+    [Fact]
+    public void A_stream_that_cannot_say_its_rate_reads_the_source_as_it_is()
+    {
+        var backend = new FakeBackend
+        {
+            OpenedAs = (_, r) => new OpenedOutput(null, false, 0, r.Channels, "f32", 32, Verified: false), // rate unknown
+        };
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var source = new Source(new PcmFormat(44_100, 2, 16)) { Remaining = 4 };
+
+        output.Open(source);
+
+        var pump = (SwitchableSource)backend.Opened[0].Stream;
+        Assert.False(pump.Route.Converts);
+        Assert.Equal([1f, 2f, 3f, 4f], ReadAll(pump, 4));
+    }
+
+    [Fact]
+    public void A_broken_sample_becomes_silence_instead_of_poisoning_the_converted_stream()
+    {
+        var backend = new FakeBackend { MixRate = 48_000 };
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new NanSource(new PcmFormat(44_100, 2, 16)));
+
+        var read = ReadAll(backend.Opened[0].Stream, 9_600);
+
+        Assert.True(read.Length > 9_000);
+        Assert.All(read, x => Assert.True(float.IsFinite(x), $"non-finite {x}"));
+    }
+
+    /// <summary>A NaN and an infinity, then silence.</summary>
+    private sealed class NanSource(PcmFormat format) : IPcmSource
+    {
+        private bool _sent;
+
+        public PcmFormat Format => format;
+
+        public int Read(Span<float> buffer)
+        {
+            buffer.Clear();
+            if (!_sent && buffer.Length >= 2)
+            {
+                buffer[0] = float.NaN;
+                buffer[1] = float.PositiveInfinity;
+                _sent = true;
+            }
+
+            return buffer.Length;
+        }
     }
 
     [Fact]
@@ -1242,6 +1417,9 @@ public class MiniAudioOutputTests
         /// <summary>What the "device" reads back; default: exactly what was asked, verified.</summary>
         public Func<BackendDevice?, OpenRequest, OpenedOutput>? OpenedAs { get; set; }
 
+        /// <summary>The OS mixer's rate, what a shared request (rate 0) opens at; null: the source's own.</summary>
+        public int? MixRate { get; set; }
+
         public List<OpenCall> Opened { get; } = [];
 
         public List<FakeStream> Streams { get; } = [];
@@ -1260,12 +1438,18 @@ public class MiniAudioOutputTests
                 throw OpenError;
             }
 
+            var asked = request;
+            if (request.SampleRate == 0)
+            {
+                request = request with { SampleRate = MixRate ?? source.Format.SampleRate }; // what the device reads back
+            }
+
             var stream = new FakeStream(OpenedAs?.Invoke(device, request) ?? new OpenedOutput(
                 device?.Name, request.Exclusive, request.SampleRate, request.Channels,
                 DeviceSamples.Name(request.Format), DeviceSamples.ValidBits(request.Format), Verified: true), StartError);
             lock (Streams)
             {
-                Opened.Add(new OpenCall(device, request, source));
+                Opened.Add(new OpenCall(device, asked, source));
                 Streams.Add(stream);
             }
 

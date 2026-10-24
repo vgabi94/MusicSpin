@@ -836,7 +836,7 @@ public sealed class Player : IPlayer
 
     /// <summary>
     /// For a track switch: when the output is open (shared mode) at another rate or channel count than
-    /// <paramref name="decoder"/>, the decoder converted to it, so <see cref="RetargetOrReleaseOutput"/> keeps the device.
+    /// <paramref name="decoder"/>, the decoder converted to it (the stream's rate: the OS mixer's), so <see cref="RetargetOrReleaseOutput"/> keeps the device.
     /// Caller holds _sync.
     /// </summary>
     private IAudioDecoder ConvertForOutput(IAudioDecoder decoder)
@@ -846,7 +846,8 @@ public sealed class Player : IPlayer
             return decoder;
         }
 
-        var target = current.Format;
+        // Shared mode: the rate the device stream reads at (the OS mixer's), so the track is converted once, here.
+        var target = output.StreamFormat is { } stream ? new PcmFormat(stream.SampleRate, stream.Channels, current.Format.SourceBitsPerSample) : current.Format;
         return Converted(decoder, target, from => output.CreateConverter(from, target));
     }
 
