@@ -997,7 +997,7 @@ public class MiniAudioOutputTests
         Assert.Equal(new PcmFormat(48_000, 2, 16), open.Stream.Format); // what the device reads
         Assert.Equal(new PcmFormat(48_000, 2, 16), output.StreamFormat);
         var read = ReadAll(open.Stream, 48_000);
-        Assert.InRange(read.Length / 2, 4_600, 4_800); // 100 ms at 48 kHz, less the ~3 ms the filter holds (a route never drains)
+        Assert.InRange(read.Length / 2, 4_799, 4_801); // 100 ms at 48 kHz, the filter's last frames drained at the end
         Assert.Equal(0, source.Remaining);
     }
 
@@ -1035,7 +1035,7 @@ public class MiniAudioOutputTests
         Assert.True(pump.Route.Converts);
         Assert.Equal(48_000, pump.Format.SampleRate);
         Assert.NotSame(first, pump.Route);
-        Assert.InRange(ReadAll(pump, 48_000).Length / 2, 4_600, 4_800); // 100 ms at the stream's rate, less what the filter holds
+        Assert.InRange(ReadAll(pump, 48_000).Length / 2, 4_799, 4_801); // 100 ms at the stream's rate, drained to the end
 
         var back = new Source(new PcmFormat(48_000, 2, 16)) { Remaining = 10 };
         Assert.True(output.Retarget(back));
@@ -1083,6 +1083,44 @@ public class MiniAudioOutputTests
         var pump = (SwitchableSource)backend.Opened[0].Stream;
         Assert.False(pump.Route.Converts);
         Assert.Equal([1f, 2f, 3f, 4f], ReadAll(pump, 4));
+    }
+
+    [Fact]
+    public void A_converted_source_that_has_more_after_its_end_starts_the_filter_afresh()
+    {
+        var backend = new FakeBackend { MixRate = 48_000 };
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        var source = new Source(new PcmFormat(44_100, 2, 16)) { Remaining = 4_410 * 2 };
+        output.Open(source);
+        var stream = backend.Opened[0].Stream;
+        Assert.InRange(ReadAll(stream, 48_000).Length / 2, 4_799, 4_801);
+        Assert.Equal(0, stream.Read(new float[480])); // drained: the end, and it stays the end
+
+        source.Remaining = 4_410 * 2; // sought back after the end (a ring buffer flushed by a seek)
+
+        Assert.InRange(ReadAll(stream, 48_000).Length / 2, 4_799, 4_801); // all of it again: not cut by an ended filter
+    }
+
+    [Fact]
+    public void A_drained_tail_longer_than_one_read_comes_over_the_next_reads()
+    {
+        var backend = new FakeBackend { MixRate = 48_000 };
+        using var provider = new MiniAudioOutputProvider(() => backend);
+        using var output = provider.Create(new AudioOutputOptions());
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)) { Remaining = 441 * 2 }); // 10 ms
+        var stream = backend.Opened[0].Stream;
+
+        var total = 0;
+        int n;
+        var reads = 0;
+        while ((n = stream.Read(new float[16])) > 0 && reads++ < 10_000)
+        {
+            Assert.Equal(0, n % 2);
+            total += n;
+        }
+
+        Assert.InRange(total / 2, 479, 481); // tiny reads: the tail spans many, none lost
     }
 
     [Fact]

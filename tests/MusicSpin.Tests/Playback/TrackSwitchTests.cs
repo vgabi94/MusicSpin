@@ -554,6 +554,65 @@ public sealed class TrackSwitchTests : IDisposable
     }
 
     [Fact]
+    public void Shared_mode_started_with_the_device_closed_converts_each_track_once_to_the_mixers_rate()
+    {
+        SharedMode();
+        var mixer = new PcmFormat(2000, 2, 16);
+        Output.StreamFormat = mixer; // known only once the device is open
+        var a = new RampSpec(1, 1000); // 1 kHz: not the mixer's rate
+        var b = new RampSpec(2, 2000, SampleRate: 2000); // the mixer's rate
+        var (player, _) = CreateQueue(a, b);
+
+        Assert.Equal(StepConverter.Expected(a, mixer), Pull(4000)); // converted by the player, from its first sample
+        Assert.Equal(b.Pcm()[..1000], Pull(1000)); // gapless, bit for bit: not converted to a's rate and back
+
+        Assert.Equal(1, Output.OpenCount);
+        Assert.Equal(1, Output.RetargetCount); // the unstarted stream moved to the converted buffer
+        Assert.Equal(2000, Output.Source!.Format.SampleRate);
+        var converter = Assert.IsType<StepConverter>(Assert.Single(Output.Converters)); // a's only
+        Assert.Equal(a.Format, converter.From);
+        Assert.Equal(2000, player.Buffer!.Format.SampleRate);
+    }
+
+    [Fact]
+    public void A_device_that_will_not_move_to_the_converted_track_still_plays_it_converted_on_its_side()
+    {
+        SharedMode();
+        Output.StreamFormat = new PcmFormat(2000, 2, 16);
+        Output.RetargetError = new InvalidOperationException("device gone while moving");
+        var errors = new List<Exception>();
+        var a = new RampSpec(1, 1000);
+        var player = CreatePlayer();
+        player.Error += (_, e) => errors.Add(e.Exception);
+        player.Load(Add(a));
+
+        player.Play();
+
+        Assert.Equal(a.Pcm()[..400], Pull(400)); // the original buffer, its decoder untouched by the unused wrapper
+        Assert.Equal(a.Format, Output.Source!.Format);
+        Assert.Contains(errors, e => e.Message.Contains("device gone"));
+        Assert.Equal(PlayerState.Playing, player.State);
+    }
+
+    [Theory]
+    [InlineData(false, true)] // the stream cannot seek back to what is heard
+    [InlineData(true, false)] // no converter can be made
+    public void Without_a_way_to_convert_from_where_it_is_the_track_is_left_to_the_output(bool seekable, bool converter)
+    {
+        Output.Converter = converter ? (from, to) => new StepConverter(from, to) : (_, _) => null;
+        Output.StreamFormat = new PcmFormat(2000, 2, 16);
+        var a = new RampSpec(1, 1000) { Seekable = seekable };
+        var player = CreatePlayer();
+        player.Load(Add(a));
+
+        player.Play();
+
+        Assert.Equal(a.Pcm()[..400], Pull(400));
+        Assert.Equal(0, Output.RetargetCount);
+        Assert.Equal(a.Format, Output.Source!.Format);
+    }
+
+    [Fact]
     public async Task Without_a_converter_a_rate_change_ends_the_gapless_run_and_reopens()
     {
         var a = new RampSpec(1, 1000);
