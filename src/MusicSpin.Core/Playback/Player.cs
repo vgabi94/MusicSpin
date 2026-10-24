@@ -875,7 +875,8 @@ public sealed class Player : IPlayer
             return null;
         }
 
-        PlaybackBuffer adopted;
+        PlaybackBuffer? adopted;
+        Exception? failed = null; // raised once no lock of the decoder's is held
         lock (_ioLock) // no decoding until it is done: the new decoder reads through the same file decoder
         {
             ConvertingDecoder converted;
@@ -913,35 +914,47 @@ public sealed class Player : IPlayer
             }
             catch (Exception ex)
             {
-                Error?.Invoke(this, new PlayerErrorEventArgs(ex));
+                failed = ex;
                 moved = false;
             }
 
             if (!moved)
             {
-                _ = converted.Detach(); // the head keeps its decoder, untouched
-                return null; // the output converts, as before (or Start reports an output it closed)
+                _ = converted.Detach(); // the head keeps its decoder, untouched; the output converts, as before
+                adopted = null;
             }
+            else
+            {
+                _outputSource = adopted;
+                try
+                {
+                    converted.Seek(position); // back from what was decoded ahead to what is heard next
+                }
+                catch (Exception ex)
+                {
+                    // Plays on from where the decoder is (past the prefill): reported, as a failed seek is.
+                    failed = ex;
+                }
 
-            _outputSource = adopted;
-            try
-            {
-                converted.Seek(position); // back from what was decoded ahead to what is heard next
+                segment.Start = converted.Position;
+                lock (_decodeLock)
+                {
+                    var candidates = _candidates;
+                    _segments.RemoveAt(0); // its decoder lives on inside the new one: not retired
+                    ResetDecoding(segment, adopted);
+                    _candidates = candidates; // chained again, now at the mixer's rate
+                }
             }
-            catch (Exception ex)
-            {
-                // Plays on from where the decoder is (past the prefill): reported, as a failed seek is.
-                Error?.Invoke(this, new PlayerErrorEventArgs(ex));
-            }
+        }
 
-            segment.Start = converted.Position;
-            lock (_decodeLock)
-            {
-                var candidates = _candidates;
-                _segments.RemoveAt(0); // its decoder lives on inside the new one: not retired
-                ResetDecoding(segment, adopted);
-                _candidates = candidates; // chained again, now at the mixer's rate
-            }
+        if (failed is not null)
+        {
+            Error?.Invoke(this, new PlayerErrorEventArgs(failed));
+        }
+
+        if (adopted is not null)
+        {
+            _wake.Set();
         }
 
         _wake.Set();
