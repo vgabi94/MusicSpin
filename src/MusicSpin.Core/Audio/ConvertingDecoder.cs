@@ -19,6 +19,7 @@ public sealed class ConvertingDecoder : IAudioDecoder
     private int _stagedStart;
     private int _stagedEnd;
     private bool _innerEnded;
+    private bool _drained;
     private bool _disposed;
 
     /// <exception cref="ArgumentException">The converter does not take the decoder's rate and channels.</exception>
@@ -63,6 +64,7 @@ public sealed class ConvertingDecoder : IAudioDecoder
         _inner.Seek(position);
         _stagedStart = _stagedEnd = 0;
         _innerEnded = false;
+        _drained = false;
         _converter.Reset();
     }
 
@@ -77,7 +79,21 @@ public sealed class ConvertingDecoder : IAudioDecoder
             {
                 if (_innerEnded)
                 {
-                    break;
+                    if (_drained)
+                    {
+                        break;
+                    }
+
+                    // The filter's last frames (a few milliseconds, the end of the track) come out after the input.
+                    var tail = _converter.Drain(buffer[written..room]);
+                    if (tail < 0 || tail > room - written || tail % _outChannels != 0)
+                    {
+                        throw new InvalidOperationException($"Converter drained {tail} samples into {room - written}.");
+                    }
+
+                    _drained = tail == 0;
+                    written += tail;
+                    continue;
                 }
 
                 var read = _inner.Read(_staged);
@@ -86,8 +102,8 @@ public sealed class ConvertingDecoder : IAudioDecoder
                 _stagedEnd = Math.Max(read, 0);
                 if (read <= 0)
                 {
-                    _innerEnded = true; // the resampler's last few filtered frames are dropped: a fraction of a millisecond
-                    break;
+                    _innerEnded = true;
+                    continue;
                 }
 
                 Sanitize(_staged.AsSpan(0, read));

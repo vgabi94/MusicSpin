@@ -106,7 +106,7 @@ internal sealed unsafe class MiniAudioBackend : IAudioBackend
             }
             catch (ExclusiveUnavailableException ex)
             {
-                var shared = OpenDevice(device, request with { Format = DeviceSample.F32, Exclusive = false }, source, name);
+                var shared = OpenDevice(device, request with { Format = DeviceSample.F32, Exclusive = false, SampleRate = 0 }, source, name);
                 shared.Notice = $"Exclusive mode unavailable: {ex.Message}. Playing in shared mode through the Windows mixer.";
                 return shared;
             }
@@ -119,7 +119,7 @@ internal sealed unsafe class MiniAudioBackend : IAudioBackend
         catch (MiniAudioException ex) when (request.Exclusive && ex.Result != MsAudioNative.InvalidArgs)
         {
             // ALSA hw busy, CoreAudio hog refused...: play shared rather than not at all, and say so.
-            var shared = OpenDevice(device, request with { Format = DeviceSample.F32, Exclusive = false }, source, name);
+            var shared = OpenDevice(device, request with { Format = DeviceSample.F32, Exclusive = false, SampleRate = 0 }, source, name);
             shared.Notice = $"Exclusive mode unavailable: {ex.Message}. Playing in shared mode.";
             return shared;
         }
@@ -210,6 +210,8 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
 
     public OpenedOutput Opened { get; private set; } = null!;
 
+    public int ClientSampleRate { get; private set; }
+
     /// <summary>Set by the backend when this shared stream replaced a refused exclusive one.</summary>
     public string? Notice
     {
@@ -246,6 +248,7 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
             MsAudioNative.FormatName(opened.Format),
             sample is { } s ? DeviceSamples.ValidBits(s) : 8,
             Verified: true);
+        stream.ClientSampleRate = opened.ClientSampleRate > 0 ? opened.ClientSampleRate : opened.SampleRate;
         stream._scratch = new float[ScratchFrames(opened.PeriodFrames) * Math.Max(1, opened.Channels)];
         return stream;
     }

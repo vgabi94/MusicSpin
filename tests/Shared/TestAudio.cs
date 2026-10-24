@@ -255,6 +255,9 @@ internal sealed class ManualAudioOutput : IAudioOutput
         return converter;
     }
 
+    /// <summary>A shared-mode stream's own format (the mixer's rate): set, the player converts tracks to it.</summary>
+    public PcmFormat? StreamFormat { get; set; }
+
     /// <summary>Like a real device: kept open for the same rate and channels, left paused on the new source.</summary>
     public bool Retarget(IPcmSource next)
     {
@@ -270,7 +273,14 @@ internal sealed class ManualAudioOutput : IAudioOutput
             return false;
         }
 
-        if (_source is not { } current || current.Format.SampleRate != next.Format.SampleRate || current.Format.Channels != next.Format.Channels
+        if (StreamFormat is { } stream)
+        {
+            if (_source is null || stream.SampleRate != next.Format.SampleRate || stream.Channels != next.Format.Channels)
+            {
+                return false;
+            }
+        }
+        else if (_source is not { } current || current.Format.SampleRate != next.Format.SampleRate || current.Format.Channels != next.Format.Channels
             || (Exclusive && current.Format.SourceBitsPerSample != next.Format.SourceBitsPerSample))
         {
             return false;

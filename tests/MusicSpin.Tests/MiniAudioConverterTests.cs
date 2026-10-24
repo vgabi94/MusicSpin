@@ -7,7 +7,7 @@ using MusicSpin.Tests.Shared;
 namespace MusicSpin.Tests;
 
 /// <summary>
-/// The real native converter (miniaudio's data converter through native/msaudio) and when the miniaudio output hands one
+/// The real native converter (libsamplerate's best sinc and miniaudio's channel mixing, through native/msaudio) and when the miniaudio output hands one
 /// out: only in shared mode, never in exclusive (the DAC must get the track's own rate).
 /// </summary>
 public sealed class MiniAudioConverterTests : IDisposable
@@ -51,19 +51,28 @@ public sealed class MiniAudioConverterTests : IDisposable
         return [.. output];
     }
 
+    /// <summary>From the first to the last rising zero crossing (interpolated) after <paramref name="skipFrames"/>.</summary>
     private static double Frequency(float[] pcm, int rate, int channels, int skipFrames)
     {
         var crossings = 0;
+        double first = 0, last = 0;
         var frames = pcm.Length / channels;
         for (var f = skipFrames + 1; f < frames; f++)
         {
-            if (pcm[(f - 1) * channels] < 0 && pcm[f * channels] >= 0)
+            float a = pcm[(f - 1) * channels], b = pcm[f * channels];
+            if (a < 0 && b >= 0)
             {
-                crossings++;
+                var at = f - 1 + (a / (a - b));
+                if (crossings++ == 0)
+                {
+                    first = at;
+                }
+
+                last = at;
             }
         }
 
-        return crossings / ((double)(frames - skipFrames) / rate);
+        return (crossings - 1) / ((last - first) / rate);
     }
 
     [Theory]
@@ -78,7 +87,7 @@ public sealed class MiniAudioConverterTests : IDisposable
         var output = ConvertAll(converter, input);
 
         var frames = output.Length / 2;
-        Assert.InRange(frames, to - (to / 100), to); // a second, less the filter's few frames of delay
+        Assert.InRange(frames, to - (to / 100), to); // a second, less the filter's last frames (not drained here)
         Assert.InRange(Frequency(output, to, 2, to / 100), 990, 1010);
         Assert.All(output, s => Assert.True(float.IsFinite(s) && Math.Abs(s) <= 0.6f));
     }
@@ -143,8 +152,42 @@ public sealed class MiniAudioConverterTests : IDisposable
         Assert.Equal(written, other.Convert(silence, fresh, out _)); // and it starts like a new one
     }
 
+    [Fact]
+    public void Draining_twice_or_without_a_resampler_gives_nothing_more_and_reset_starts_over()
+    {
+        using var converter = new MiniAudioConverter(new PcmFormat(44_100, 2), new PcmFormat(48_000, 2));
+        var input = Sine(44_100, 2, 1000, 441);
+        var output = new float[4096];
+        var written = converter.Convert(input, output, out var consumed);
+        Assert.Equal(input.Length, consumed);
+
+        var tail = converter.Drain(output.AsSpan(written));
+        Assert.True(tail > 0, "the filter held the last frames");
+        Assert.Equal(0, converter.Drain(output));
+        Assert.InRange((written + tail) / 2, 479, 481); // 10 ms at 48 kHz
+
+        converter.Reset(); // takes input again after a drain, like a fresh converter
+        Assert.Equal(written, converter.Convert(input, output, out consumed));
+        Assert.Equal(input.Length, consumed);
+
+        using var same = new MiniAudioConverter(new PcmFormat(48_000, 1), new PcmFormat(48_000, 2));
+        Assert.Equal(0, same.Drain(output)); // channel mixing holds nothing back
+    }
+
+    [Fact]
+    public void The_same_rate_and_channels_pass_bit_for_bit()
+    {
+        using var converter = new MiniAudioConverter(new PcmFormat(48_000, 2), new PcmFormat(48_000, 2));
+        var input = Sine(48_000, 2, 997, 1000);
+        input[10] = 1e-30f; // denormal-ish and odd values too
+        input[11] = -0.999999f;
+
+        Assert.Equal(input, ConvertAll(converter, input));
+    }
+
     [Theory]
     [InlineData(0, 44_100, 2, 48_000)]
+    [InlineData(2, 1_000, 2, 300_000)] // a ratio beyond 256
     [InlineData(2, 0, 2, 48_000)]
     [InlineData(2, 44_100, 0, 48_000)]
     [InlineData(2, 44_100, 2, -1)]
