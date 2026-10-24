@@ -577,7 +577,9 @@ internal sealed class SwitchableSource(StreamRoute route) : IPcmSource
 /// A source as a shared-mode stream reads it: as it is, or converted to the stream's rate (the OS mixer's) a few
 /// hundred frames at a time, so the source's position stays within milliseconds of what is played. Read on the audio
 /// thread: no allocation, no lock. A seek of the source keeps the filter's last few milliseconds (like the device's own
-/// buffer does).
+/// buffer does). At the source's end (a read of 0) the filter's last frames, the track's last few milliseconds, are
+/// drained into the same callback before the route reports its own end; a source that has more again after its end (a
+/// seek back) starts the filter afresh.
 /// </summary>
 internal sealed class StreamRoute : IPcmSource, IDisposable
 {
@@ -588,6 +590,10 @@ internal sealed class StreamRoute : IPcmSource, IDisposable
     private readonly int _channels;
     private int _stagedStart;
     private int _stagedEnd;
+
+    // The source said it ended: the filter is being drained (and is empty once _drained).
+    private bool _ending;
+    private bool _drained;
 
     public StreamRoute(IPcmSource source, IPcmConverter? converter)
     {
@@ -632,7 +638,34 @@ internal sealed class StreamRoute : IPcmSource, IDisposable
                 _stagedEnd = Math.Max(read, 0);
                 if (read <= 0)
                 {
-                    break; // nothing now (an underrun, or the end): the filter keeps its history for what follows
+                    // The end (an underrun reads silence, not 0): what the filter still holds is the track's last frames.
+                    if (!_ending)
+                    {
+                        _ending = true;
+                        _drained = false;
+                    }
+
+                    if (!_drained)
+                    {
+                        var tail = _converter.Drain(buffer[written..room]);
+                        if (tail < 0 || tail > room - written || tail % outChannels != 0)
+                        {
+                            tail = 0; // a broken converter: never write past the buffer on the audio thread
+                        }
+
+                        _drained = tail == 0;
+                        written += tail;
+                    }
+
+                    break; // the rest (if any) in the next callback; the end once drained
+                }
+
+                if (_ending)
+                {
+                    // More after the end (the source was sought back): a fresh filter, not the drained one.
+                    _converter.Reset();
+                    _ending = false;
+                    _drained = false;
                 }
 
                 foreach (ref var x in _staged.AsSpan(0, read))

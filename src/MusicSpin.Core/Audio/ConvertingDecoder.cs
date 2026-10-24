@@ -142,6 +142,18 @@ public sealed class ConvertingDecoder : IAudioDecoder
         }
     }
 
+    /// <summary>
+    /// Gives the inner decoder back undisposed (its position untouched) and disposes only the converter: for a caller
+    /// that wrapped a decoder it still owns and then did not use the wrapper.
+    /// </summary>
+    internal IAudioDecoder Detach()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _disposed = true;
+        _converter.Dispose();
+        return _inner;
+    }
+
     public void Dispose()
     {
         if (_disposed)
