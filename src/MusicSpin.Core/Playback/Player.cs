@@ -202,6 +202,11 @@ public sealed class Player : IPlayer
                     _output.Open(buffer);
                     _outputSource = buffer;
                     openedNow = _output.Opened;
+                    if (AdoptStreamFormat(_output, buffer) is { } adopted)
+                    {
+                        buffer = adopted;
+                        WaitForPrefill(buffer);
+                    }
                 }
 
                 _output.Start();
@@ -852,6 +857,96 @@ public sealed class Player : IPlayer
     }
 
     // ------------------------------------------------------------------------------------------------ output side
+
+    /// <summary>
+    /// Shared mode, right after an open and before Start: the device reads at the OS mixer's rate, which is only known
+    /// now. When the loaded track is at another rate the output would convert it on its side, and every track appended
+    /// gaplessly to the buffer would be converted twice (to the buffer's rate, then to the mixer's). Instead the track is
+    /// converted here, once, from where it is: a new buffer at the mixer's format replaces the old one (nothing of it was
+    /// played) and the output is moved to it. The next tracks queued are kept and chained into it. Null when nothing
+    /// needs to change or it cannot be done (a stream that cannot seek, no converter, an output that refuses): the output
+    /// then converts, as before. Caller holds _sync; the output is open and not started.
+    /// </summary>
+    private PlaybackBuffer? AdoptStreamFormat(IAudioOutput output, PlaybackBuffer buffer)
+    {
+        if (output.StreamFormat is not { } stream
+            || (stream.SampleRate == buffer.Format.SampleRate && stream.Channels == buffer.Format.Channels))
+        {
+            return null;
+        }
+
+        PlaybackBuffer adopted;
+        lock (_ioLock) // no decoding until it is done: the new decoder reads through the same file decoder
+        {
+            ConvertingDecoder converted;
+            TrackSegment head;
+            TimeSpan position;
+            lock (_decodeLock)
+            {
+                if (!ReferenceEquals(_buffer, buffer) || _segments.Count == 0 || buffer.Crossed != 0)
+                {
+                    return null;
+                }
+
+                head = _segments[0];
+                if (head.Decoder is ConvertingDecoder || !head.Decoder.CanSeek)
+                {
+                    return null; // already converted (to a mixer since changed), or cannot go back to what is heard
+                }
+
+                position = buffer.Position;
+                var target = new PcmFormat(stream.SampleRate, stream.Channels, head.Decoder.Format.SourceBitsPerSample);
+                if (Converted(head.Decoder, target, from => output.CreateConverter(from, target)) is not ConvertingDecoder c)
+                {
+                    return null;
+                }
+
+                converted = c;
+            }
+
+            var segment = new TrackSegment(converted, head.Token, position, head.Entries, head.Skipped) { Gain = head.Gain };
+            adopted = NewBuffer(segment);
+            bool moved;
+            try
+            {
+                moved = output.Retarget(adopted); // reads nothing before Start
+            }
+            catch (Exception ex)
+            {
+                Error?.Invoke(this, new PlayerErrorEventArgs(ex));
+                moved = false;
+            }
+
+            if (!moved)
+            {
+                _ = converted.Detach(); // the head keeps its decoder, untouched
+                return null; // the output converts, as before (or Start reports an output it closed)
+            }
+
+            _outputSource = adopted;
+            try
+            {
+                converted.Seek(position); // back from what was decoded ahead to what is heard next
+            }
+            catch (Exception ex)
+            {
+                // Plays on from where the decoder is (past the prefill): reported, as a failed seek is.
+                Error?.Invoke(this, new PlayerErrorEventArgs(ex));
+            }
+
+            segment.Start = converted.Position;
+            lock (_decodeLock)
+            {
+                var candidates = _candidates;
+                _segments.RemoveAt(0); // its decoder lives on inside the new one: not retired
+                ResetDecoding(segment, adopted);
+                _candidates = candidates; // chained again, now at the mixer's rate
+            }
+        }
+
+        _wake.Set();
+        return adopted;
+    }
 
     private void WaitForPrefill(PlaybackBuffer buffer)
     {
