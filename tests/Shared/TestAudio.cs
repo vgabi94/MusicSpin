@@ -235,6 +235,26 @@ internal sealed class ManualAudioOutput : IAudioOutput
     /// </summary>
     public bool RetargetUnconfirmed { get; set; }
 
+    /// <summary>Makes converters, like a shared-mode device (null: an output that never converts, like exclusive).</summary>
+    public Func<PcmFormat, PcmFormat, IPcmConverter?>? Converter { get; set; }
+
+    /// <summary>Every converter handed out, in order.</summary>
+    public List<IPcmConverter> Converters { get; } = [];
+
+    public IPcmConverter? CreateConverter(PcmFormat from, PcmFormat to)
+    {
+        var converter = Converter?.Invoke(from, to);
+        if (converter is not null)
+        {
+            lock (Converters)
+            {
+                Converters.Add(converter);
+            }
+        }
+
+        return converter;
+    }
+
     /// <summary>Like a real device: kept open for the same rate and channels, left paused on the new source.</summary>
     public bool Retarget(IPcmSource next)
     {

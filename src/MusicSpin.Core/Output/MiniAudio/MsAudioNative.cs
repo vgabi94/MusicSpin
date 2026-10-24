@@ -10,7 +10,7 @@ namespace MusicSpin.Core.Output.MiniAudio;
 internal static unsafe partial class MsAudioNative
 {
     public const string Library = "msaudio";
-    public const int AbiVersion = 2;
+    public const int AbiVersion = 3;
     public const int IdBytes = 256;
     public const int NameBytes = 256;
     public const int MaxNativeFormats = 64;
@@ -124,6 +124,18 @@ internal static unsafe partial class MsAudioNative
 
     [LibraryImport(Library, EntryPoint = "msa_device_render")]
     public static partial int DeviceRender(nint device, void* output, uint frames);
+
+    [LibraryImport(Library, EntryPoint = "msa_converter_init")]
+    public static partial int ConverterInit(int inChannels, int inRate, int outChannels, int outRate, out nint converter);
+
+    [LibraryImport(Library, EntryPoint = "msa_converter_uninit")]
+    public static partial void ConverterUninit(nint converter);
+
+    [LibraryImport(Library, EntryPoint = "msa_converter_process")]
+    public static partial int ConverterProcess(nint converter, float* input, ref ulong inFrames, float* output, ref ulong outFrames);
+
+    [LibraryImport(Library, EntryPoint = "msa_converter_reset")]
+    public static partial int ConverterReset(nint converter);
 
     /// <summary>miniaudio's text for a result code, e.g. "Device type or share mode not supported".</summary>
     public static string Describe(int result) => Marshal.PtrToStringUTF8(ResultDescription(result)) ?? $"error {result}";

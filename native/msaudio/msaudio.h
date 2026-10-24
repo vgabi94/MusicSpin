@@ -14,7 +14,7 @@
 #define MSA_API __attribute__((visibility("default")))
 #endif
 
-#define MSA_ABI_VERSION 2
+#define MSA_ABI_VERSION 3
 #define MSA_ID_BYTES 256
 #define MSA_NAME_BYTES 256
 #define MSA_MAX_NATIVE_FORMATS 64
@@ -65,6 +65,7 @@ typedef void (*msa_notify_callback)(void* user, int32_t type);
 
 typedef struct msa_context msa_context;
 typedef struct msa_device msa_device;
+typedef struct msa_converter msa_converter;
 
 #ifdef __cplusplus
 extern "C" {
@@ -92,6 +93,17 @@ MSA_API void msa_device_close(msa_device* device);
 MSA_API int32_t msa_device_opened(msa_device* device, msa_opened* opened);
 /* Tests: runs miniaudio's full playback path (our callback plus its client-to-device conversion) into output. */
 MSA_API int32_t msa_device_render(msa_device* device, void* output, uint32_t frames);
+
+/* Interleaved float32 sample-rate and channel conversion (miniaudio's data converter), for a shared-mode device that
+   stays open at one format while tracks of another play. */
+MSA_API int32_t msa_converter_init(int32_t in_channels, int32_t in_rate, int32_t out_channels, int32_t out_rate,
+                                   msa_converter** converter);
+MSA_API void msa_converter_uninit(msa_converter* converter);
+/* Consumes up to *in_frames from input and writes up to *out_frames to output; both are updated to what was used. */
+MSA_API int32_t msa_converter_process(msa_converter* converter, const float* input, uint64_t* in_frames, float* output,
+                                      uint64_t* out_frames);
+/* Forgets filter history, for a seek. */
+MSA_API int32_t msa_converter_reset(msa_converter* converter);
 
 #ifdef __cplusplus
 }

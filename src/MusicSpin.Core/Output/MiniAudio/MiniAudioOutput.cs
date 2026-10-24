@@ -173,6 +173,25 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
         }
     }
 
+    /// <inheritdoc />
+    public IPcmConverter? CreateConverter(PcmFormat from, PcmFormat to)
+    {
+        if (options.Exclusive || from.Channels <= 0 || to.Channels <= 0 || from.SampleRate <= 0 || to.SampleRate <= 0)
+        {
+            return null; // exclusive: the DAC plays the track's own rate, bit for bit
+        }
+
+        try
+        {
+            _ = provider.Engine; // loads and checks the native layer
+            return new MiniAudioConverter(from, to);
+        }
+        catch (Exception ex) when (ex is MusicSpinException or DllNotFoundException or EntryPointNotFoundException or InvalidOperationException)
+        {
+            return null; // the caller reopens the device instead
+        }
+    }
+
     public void Stop()
     {
         lock (_gate)
