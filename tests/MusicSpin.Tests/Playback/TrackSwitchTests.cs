@@ -536,10 +536,16 @@ public sealed class TrackSwitchTests : IDisposable
             }
         };
 
+        var first = Output.Source!;
         Assert.Equal(a.Pcm(), Pull(2000));
-        Assert.Empty(Output.Pump(64, wait: false)); // the end of a: nothing of b in this stream
+        // Waits (failure-capped) for the decode thread to end a's stream rather than chain b, and reads that end.
+        Assert.Empty(Pull(64));
 
         await replaying.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken); // failure cap
+        // a's stream ended at a's end; b got a stream of its own at its own rate (not chained, nothing converted).
+        Assert.NotSame(first, Output.Source);
+        Assert.Equal(b.Format, Output.Source!.Format);
+        Assert.Empty(Output.Converters);
         Assert.Equal(b.Pcm()[..200], Pull(200));
         Assert.Equal(1, queue.Status().QueueIndex);
     }
