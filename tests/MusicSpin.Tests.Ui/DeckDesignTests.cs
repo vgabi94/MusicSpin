@@ -66,7 +66,6 @@ public sealed class DeckDesignTests
         [
             ("EdgeLight", 0.12, 0.5, (_, spinning) => spinning),
             ("Readout", 0, 1, (_, spinning) => spinning),
-            ("Ticks", 0.35, 1, (_, spinning) => spinning),
             ("Signal", 0.12, 1, (arm, _) => arm == ArmState.Lowered),
         ],
         ["piano"] = [],
@@ -79,7 +78,7 @@ public sealed class DeckDesignTests
     {
         ["walnut"] = [],
         ["aluminium"] = ["Lamp", "WeightRing"],
-        ["carbon"] = ["EdgeLight", "Readout", "Ticks", "Signal"],
+        ["carbon"] = ["EdgeLight", "Readout", "Signal"],
         ["piano"] = [],
         ["linear"] = ["Track"],
         ["acrylic"] = ["EdgeLight"],
@@ -124,11 +123,15 @@ public sealed class DeckDesignTests
         return (Math.Round(Math.Atan2(m.M12, m.M11) * 180 / Math.PI, 3), Math.Round(Math.Sqrt((m.M11 * m.M11) + (m.M12 * m.M12)), 4), Math.Round(m.M31, 3));
     }
 
-    /// <summary>Where the stylus is, as a share of the record's radius from its centre.</summary>
+    /// <summary>
+    /// Where the stylus is, as a share of the record's radius from its centre. Through the window and back: TranslatePoint
+    /// straight into the record gets its scale (its render transform) wrong.
+    /// </summary>
     private static double StylusOnRecord(KitDeckView deck)
     {
         var record = deck.Record!;
-        var at = deck.Stylus!.TranslatePoint(default, record)!.Value;
+        var top = TopLevel.GetTopLevel(deck)!;
+        var at = deck.Stylus!.TranslatePoint(default, top)!.Value.Transform(record.TransformToVisual(top)!.Value.Invert());
         var radius = record.Bounds.Width / 2;
         return Point.Distance(at, new Point(radius, radius)) / radius;
     }
@@ -169,6 +172,144 @@ public sealed class DeckDesignTests
         Set(deck, ArmState.Lowered, spinning: true);
 
         Assert.InRange(StylusOnRecord(deck), LeadInFrom, LeadInTo);
+        window.Close();
+    }
+
+    // ---- the record and the platter (#143) ---------------------------------------------------------------------
+
+    /// <summary>The Classic deck in a window of its own, parked, as <see cref="Show"/> shows a design.</summary>
+    private static (Window Window, ClassicDeckView Deck) ShowClassic()
+    {
+        var deck = new ClassicDeckView();
+        var window = new Window { Width = 700, Height = 600, Content = deck };
+        window.Show();
+        Gui.FinishAnimations(Settled);
+        return (window, deck);
+    }
+
+    /// <summary>Where the record is on screen, in the window's pixels.</summary>
+    private static Rect OnScreen(Window window, Control record)
+    {
+        var box = new Rect(record.Bounds.Size).TransformToAABB(record.TransformToVisual(window)!.Value);
+        return new Rect(Math.Round(box.X * window.RenderScaling, 3), Math.Round(box.Y * window.RenderScaling, 3),
+            Math.Round(box.Width * window.RenderScaling, 3), Math.Round(box.Height * window.RenderScaling, 3));
+    }
+
+    /// <summary>Everything the record is drawn with.</summary>
+    private static object RecordStyle(VinylView v)
+        => (v.DiscBrush, v.GrooveBrush, v.EdgeBrush, v.LabelFallbackBrush, v.LabelRimBrush, v.HoleBrush, v.HoleRimBrush,
+            (v.SheenColor, v.LabelScale, v.HoleScale, v.GroovePitch, v.Width, v.Height, v.Opacity, v.Effect));
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Designs))]
+    public void The_record_is_drawn_as_on_the_Classic_deck_same_style_size_and_grooves(string design)
+    {
+        var (classicWindow, classic) = ShowClassic();
+        var (window, deck) = Show(design);
+        using (classicWindow.CaptureRenderedFrame())
+        using (window.CaptureRenderedFrame())
+        {
+            // each record's images are drawn
+        }
+
+        var expected = Assert.IsType<VinylView>(classic.Record);
+        var record = Assert.IsType<VinylView>(deck.Record);
+        Assert.Equal(RecordStyle(expected), RecordStyle(record));
+        Assert.Equal(OnScreen(classicWindow, expected).Size, OnScreen(window, record).Size);
+        // Its grooves are as far apart on screen as the Classic deck's (2.4 px), not 2.4 deck units (0.96 px) and grey.
+        Assert.Equal(expected.GroovePitch * OnScreen(classicWindow, expected).Width / expected.Bounds.Width,
+            record.GroovePitch * OnScreen(window, record).Width / record.Bounds.Width, 6);
+        Assert.Equal(expected.GrooveImagePixels, record.GrooveImagePixels);
+        classicWindow.Close();
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Designs))]
+    public void The_record_is_drawn_as_on_the_Classic_deck_playing_too(string design)
+    {
+        var (classicWindow, classic) = ShowClassic();
+        var (window, deck) = Show(design);
+        foreach (var d in new DeckView[] { classic, deck })
+        {
+            d.Arm = ArmState.Lowered;
+            d.IsSpinning = true;
+            d.Angle = 77;
+        }
+
+        Gui.FinishAnimations(Settled);
+        using (classicWindow.CaptureRenderedFrame())
+        using (window.CaptureRenderedFrame())
+        {
+        }
+
+        var expected = Assert.IsType<VinylView>(classic.Record);
+        var record = Assert.IsType<VinylView>(deck.Record);
+        Assert.Equal(RecordStyle(expected), RecordStyle(record)); // no other sheen, fade or blur while it turns
+        Assert.Equal((77.0, 77.0), (expected.RenderedAngle, record.RenderedAngle));
+        Assert.Equal(expected.GrooveImagePixels, record.GrooveImagePixels);
+        classicWindow.Close();
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Designs))]
+    public void A_record_taken_off_the_platter_and_put_back_is_where_it_was_and_as_large(string design)
+    {
+        var (window, deck) = Show(design);
+        var record = Assert.IsType<VinylView>(deck.Record);
+        var before = OnScreen(window, record);
+
+        deck.IsEmpty = true;
+        Gui.Settle();
+        Assert.False(record.IsEffectivelyVisible);
+        Assert.Equal(before, OnScreen(window, record)); // where the scene lands its record, while this one is hidden
+        using (window.CaptureRenderedFrame())
+        {
+            // draws, and doesn't throw, with nothing on the platter
+        }
+
+        deck.IsEmpty = false;
+        Gui.Settle();
+        Assert.True(record.IsEffectivelyVisible);
+        Assert.Equal(before, OnScreen(window, record));
+        window.Close();
+    }
+
+    public static TheoryData<string> DesignsAndClassic { get; } = [.. Kit.Keys, "classic"];
+
+    /// <summary>
+    /// The rim round the record is plain (#143): going round it a degree at a time, the colour doesn't jump from one step to
+    /// the next (the stripes and strobe ticks did, 144 to 180 times round) but where something crosses it: the arm, or
+    /// Linear Tracking's rails and their shadows.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(DesignsAndClassic))]
+    public void The_platters_rim_has_no_stripes_or_ticks(string design)
+    {
+        (Window window, DeckView deck) = design == "classic" ? ShowClassic() : ((Window, DeckView))Show(design);
+        var platter = deck.GetVisualDescendants().OfType<Control>().First(c => c is PlatterView || (c is Panel && c.Classes.Contains("platter")));
+        deck.IsSpinning = true; // lit as it can be
+        deck.Angle = 33;
+        Gui.FinishAnimations(Settled);
+        using var frame = window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
+        using var png = new MemoryStream();
+        frame.Save(png, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        using var bitmap = SKBitmap.Decode(png.ToArray());
+        var scale = bitmap.Width / window.Bounds.Width;
+
+        // Half-way across the ring the record leaves showing (the record is 98% of the platter on every deck).
+        var r = platter.Bounds.Width / 2;
+        var middle = r * 0.99;
+        var colours = Enumerable.Range(0, 360).Select(degree =>
+        {
+            var a = degree * Math.PI / 180;
+            var at = platter.TranslatePoint(new Point(r + (middle * Math.Cos(a)), r + (middle * Math.Sin(a))), window)!.Value;
+            return bitmap.GetPixel((int)Math.Round(at.X * scale), (int)Math.Round(at.Y * scale));
+        }).ToList();
+        var jumps = colours.Zip(colours.Skip(1).Append(colours[0]))
+            .Count(p => Math.Max(Math.Abs(p.First.Red - p.Second.Red), Math.Max(Math.Abs(p.First.Green - p.Second.Green), Math.Abs(p.First.Blue - p.Second.Blue))) > 8);
+        Assert.True(jumps <= 10, $"{jumps} jumps in colour round the rim");
         window.Close();
     }
 
@@ -216,7 +357,6 @@ public sealed class DeckDesignTests
             Shape shape when shape.Stroke is not null => shape.Stroke,
             Shape shape => shape.Fill,
             DeckText text => text.Foreground,
-            TickRing ring => ring.Fill,
             Panel panel => panel.Children.OfType<Shape>().Select(s => s.Stroke ?? s.Fill).FirstOrDefault()
                            ?? panel.Children.OfType<Border>().First().Background,
             _ => null,
@@ -274,20 +414,6 @@ public sealed class DeckDesignTests
         Gui.Settle();
 
         Assert.All(deck.GetVisualDescendants().OfType<DeckText>().Where(t => t.Classes.Contains("rpm")), t => Assert.Equal(shown, t.Text));
-        window.Close();
-    }
-
-    [AvaloniaFact]
-    public void Carbons_strobe_ticks_turn_with_the_record()
-    {
-        var (window, deck) = Show("carbon");
-
-        deck.Angle = 123.5;
-        Gui.Settle();
-
-        var record = Assert.IsType<VinylView>(deck.Record);
-        Assert.All(deck.GetVisualDescendants().OfType<TickRing>(), ring => Assert.Equal(record.Angle, ring.Angle));
-        Assert.Equal(123.5, record.Angle);
         window.Close();
     }
 
@@ -418,7 +544,7 @@ public sealed class DeckDesignTests
         await Gui.UntilAsync(() => deck.IsSpinning, "spinning");
         Gui.FinishAnimations(Settled);
         Assert.Equal(1, readout.Opacity);
-        Assert.Equal(app.ViewModel.SpinClock.Angle, deck.GetVisualDescendants().OfType<TickRing>().First().Angle);
+        Assert.Equal(app.ViewModel.SpinClock.Angle, Assert.IsType<VinylView>(deck.Record).Angle);
     }
 
     [AvaloniaFact]
