@@ -1123,6 +1123,84 @@ public class MiniAudioOutputTests
         Assert.InRange(total / 2, 479, 481); // tiny reads: the tail spans many, none lost
     }
 
+    // ------------------------------------------------- exclusive refused: a shared stream at the mixer's rate
+
+    private static (MiniAudioOutputProvider Provider, IAudioOutput Output) Exclusive(FakeBackend backend)
+    {
+        var provider = new MiniAudioOutputProvider(() => backend);
+        return (provider, provider.Create(new AudioOutputOptions(Exclusive: true)));
+    }
+
+    [Fact]
+    public void A_refused_exclusive_open_converts_the_track_to_the_shared_streams_rate_instead_of_playing_it_fast()
+    {
+        var backend = new FakeBackend { MixRate = 48_000, RefuseExclusive = true };
+        var (provider, output) = Exclusive(backend);
+        using var _ = provider;
+        using var __ = output;
+        var source = new Source(new PcmFormat(44_100, 2, 24)) { Remaining = 4_410 * 2 }; // 100 ms
+
+        output.Open(source);
+
+        Assert.False(output.Opened!.Exclusive);
+        Assert.Contains("Exclusive mode unavailable", output.Opened.Notice);
+        Assert.Equal(new PcmFormat(48_000, 2, 24), output.StreamFormat); // so the player converts the next tracks to it
+        Assert.InRange(ReadAll(backend.Opened[0].Stream, 48_000).Length / 2, 4_799, 4_801); // 100 ms at 48 kHz, not 92 ms
+        Assert.NotNull(output.CreateConverter(source.Format, new PcmFormat(48_000, 2, 24)));
+    }
+
+    [Fact]
+    public void A_track_switch_on_a_refused_exclusive_stream_converts_the_next_track_too()
+    {
+        var backend = new FakeBackend { MixRate = 48_000, RefuseExclusive = true };
+        var (provider, output) = Exclusive(backend);
+        using var _ = provider;
+        using var __ = output;
+        output.Open(new Source(new PcmFormat(44_100, 2, 16)));
+        output.Start();
+
+        var next = new Source(new PcmFormat(44_100, 2, 16)) { Remaining = 4_410 * 2 };
+        Assert.True(output.Retarget(next)); // same request: kept open
+
+        var pump = (SwitchableSource)backend.Opened[0].Stream;
+        Assert.True(pump.Route.Converts);
+        Assert.InRange(ReadAll(pump, 48_000).Length / 2, 4_799, 4_801);
+    }
+
+    [Fact]
+    public void Exclusive_refused_only_at_a_resume_converts_then_and_plays_bit_for_bit_once_exclusive_again()
+    {
+        var backend = new FakeBackend { MixRate = 48_000 };
+        var (provider, output) = Exclusive(backend);
+        using var _ = provider;
+        using var __ = output;
+        var source = new Source(new PcmFormat(44_100, 2, 24));
+        output.Open(source);
+        output.Start();
+        Assert.True(output.Opened!.Exclusive);
+        Assert.Null(output.StreamFormat);
+        Assert.Null(output.CreateConverter(source.Format, new PcmFormat(48_000, 2, 24))); // exclusive: never converted
+        Assert.False(((SwitchableSource)backend.Opened[0].Stream).Route.Converts);
+
+        output.Pause(); // releases the device; another app takes it meanwhile
+        backend.RefuseExclusive = true;
+        output.Start();
+
+        Assert.False(output.Opened!.Exclusive);
+        Assert.Equal(48_000, output.StreamFormat!.Value.SampleRate);
+        Assert.True(((SwitchableSource)backend.Opened[1].Stream).Route.Converts); // the mixer's 48 kHz, converted
+
+        output.Pause(); // shared: not released, so release it the way a stop and play would
+        output.Stop();
+        backend.RefuseExclusive = false;
+        var again = new Source(new PcmFormat(44_100, 2, 24)) { Remaining = 10 };
+        output.Open(again);
+
+        Assert.True(output.Opened!.Exclusive);
+        Assert.Null(output.StreamFormat);
+        Assert.Equal(Enumerable.Range(1, 10).Select(i => (float)i), ReadAll(backend.Opened[2].Stream, 10)); // bit for bit
+    }
+
     [Fact]
     public void A_broken_sample_becomes_silence_instead_of_poisoning_the_converted_stream()
     {
@@ -1458,6 +1536,9 @@ public class MiniAudioOutputTests
         /// <summary>The OS mixer's rate, what a shared request (rate 0) opens at; null: the source's own.</summary>
         public int? MixRate { get; set; }
 
+        /// <summary>An exclusive open is refused (another app has the device) and, like the real backend, opens shared.</summary>
+        public bool RefuseExclusive { get; set; }
+
         public List<OpenCall> Opened { get; } = [];
 
         public List<FakeStream> Streams { get; } = [];
@@ -1477,6 +1558,13 @@ public class MiniAudioOutputTests
             }
 
             var asked = request;
+            string? notice = null;
+            if (request.Exclusive && RefuseExclusive)
+            {
+                request = request with { Format = DeviceSample.F32, Exclusive = false, SampleRate = 0 };
+                notice = "Exclusive mode unavailable: another app is using the device. Playing in shared mode.";
+            }
+
             if (request.SampleRate == 0)
             {
                 request = request with { SampleRate = MixRate ?? source.Format.SampleRate }; // what the device reads back
@@ -1484,7 +1572,7 @@ public class MiniAudioOutputTests
 
             var stream = new FakeStream(OpenedAs?.Invoke(device, request) ?? new OpenedOutput(
                 device?.Name, request.Exclusive, request.SampleRate, request.Channels,
-                DeviceSamples.Name(request.Format), DeviceSamples.ValidBits(request.Format), Verified: true), StartError);
+                DeviceSamples.Name(request.Format), DeviceSamples.ValidBits(request.Format), Verified: true) { Notice = notice }, StartError);
             lock (Streams)
             {
                 Opened.Add(new OpenCall(device, asked, source));

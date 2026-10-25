@@ -8,8 +8,8 @@ public class DeviceSamplesTests
 {
     [Theory]
     [InlineData(16, new[] { nameof(DeviceSample.S16), nameof(DeviceSample.S24), nameof(DeviceSample.S24In32), nameof(DeviceSample.S32) })]
-    [InlineData(24, new[] { nameof(DeviceSample.S24), nameof(DeviceSample.S24In32), nameof(DeviceSample.S32) })]
-    [InlineData(20, new[] { nameof(DeviceSample.S24), nameof(DeviceSample.S24In32), nameof(DeviceSample.S32) })]
+    [InlineData(24, new[] { nameof(DeviceSample.S24In32), nameof(DeviceSample.S32), nameof(DeviceSample.S24) })]
+    [InlineData(20, new[] { nameof(DeviceSample.S24In32), nameof(DeviceSample.S32), nameof(DeviceSample.S24) })]
     [InlineData(32, new[] { nameof(DeviceSample.F32), nameof(DeviceSample.S32), nameof(DeviceSample.S24In32), nameof(DeviceSample.S24) })]
     [InlineData(1, new[] { nameof(DeviceSample.F32), nameof(DeviceSample.S32), nameof(DeviceSample.S24In32), nameof(DeviceSample.S24) })] // DSD, decoded to float
     public void Exclusive_candidates_start_with_the_source_depth_and_never_offer_a_narrower_one(int bits, string[] expected)
@@ -99,5 +99,52 @@ public class DeviceSamplesTests
     {
         var format = Enum.Parse<DeviceSample>(sample);
         Assert.Equal((bytes, bits, name), (DeviceSamples.ContainerBytes(format), DeviceSamples.ValidBits(format), DeviceSamples.Name(format)));
+    }
+
+    private const int UnsupportedFormat = unchecked((int)0x88890008);
+    private const int DeviceInUse = unchecked((int)0x8889000A);
+
+    [Fact]
+    public void A_24bit_source_opens_24_in_32_on_a_usb_dac_that_refuses_packed_24()
+    {
+        var probed = new List<DeviceSample>();
+        var result = DeviceSamples.Negotiate(DeviceSamples.ExclusiveCandidates(24),
+            f => { probed.Add(f); return f == DeviceSample.S24 ? UnsupportedFormat : 0; }, _ => 0);
+
+        Assert.Equal(DeviceSample.S24In32, result.Chosen);
+        Assert.Equal([DeviceSample.S24In32], probed);
+    }
+
+    [Fact]
+    public void A_format_accepted_by_IsFormatSupported_but_refused_by_Initialize_moves_on_to_the_next_one()
+    {
+        var initialized = new List<DeviceSample>();
+        var result = DeviceSamples.Negotiate(DeviceSamples.ExclusiveCandidates(24), _ => 0,
+            f => { initialized.Add(f); return f == DeviceSample.S24In32 ? UnsupportedFormat : 0; });
+
+        Assert.Equal(DeviceSample.S32, result.Chosen);
+        Assert.Equal([DeviceSample.S24In32, DeviceSample.S32], initialized);
+        Assert.Equal(["s24in32 (refused at initialize)"], result.Refused);
+    }
+
+    [Fact]
+    public void Every_format_refused_reports_each_one_tried_and_no_failure_code()
+    {
+        var result = DeviceSamples.Negotiate(DeviceSamples.ExclusiveCandidates(24), f => f == DeviceSample.S24 ? 0 : UnsupportedFormat, _ => UnsupportedFormat);
+
+        Assert.Null(result.Chosen);
+        Assert.Equal(0, result.FailedHr);
+        Assert.Equal(["s24in32", "s32", "s24 (refused at initialize)"], result.Refused);
+    }
+
+    [Fact]
+    public void A_device_in_use_stops_the_search_instead_of_trying_other_formats()
+    {
+        var initialized = 0;
+        var result = DeviceSamples.Negotiate(DeviceSamples.ExclusiveCandidates(24), _ => 0, _ => { initialized++; return DeviceInUse; });
+
+        Assert.Null(result.Chosen);
+        Assert.Equal(DeviceInUse, result.FailedHr);
+        Assert.Equal(1, initialized);
     }
 }
