@@ -133,5 +133,108 @@ public sealed class SpinClockTests : IDisposable
         Assert.Equal(angle, _clock.Angle);
     }
 
+    // ---- while the window is hidden (#125) -------------------------------------------------------------------
+
+    /// <summary>Runs the clock's timer for <paramref name="by"/>, a frame at a time.</summary>
+    private void Run(TimeSpan by)
+    {
+        for (var left = by; left > TimeSpan.Zero; left -= SpinClock.FrameInterval)
+        {
+            _time.Advance(SpinClock.FrameInterval);
+            _ui.Run();
+        }
+    }
+
+    /// <summary>A clock that is never hidden, advanced by hand, to compare with.</summary>
+    private static SpinClock Continuous() => new(new FakeTimeProvider(), new QueueDispatcher()) { IsSpinning = true };
+
+    [Fact]
+    public void Hidden_its_timer_stops_and_shown_again_the_disc_is_where_it_would_have_been()
+    {
+        _clock.IsSpinning = true;
+        Run(TimeSpan.FromSeconds(2)); // ramping up
+
+        _clock.IsShown = false;
+        Assert.False(_clock.IsRunning);
+        var (angle, velocity) = (_clock.Angle, _clock.Velocity);
+        _time.Advance(TimeSpan.FromSeconds(10));
+        Assert.Equal(0, _ui.Pending); // no ticks queued while hidden
+        _ui.Run();
+        Assert.Equal((angle, velocity), (_clock.Angle, _clock.Velocity));
+
+        using var continuous = Continuous();
+        continuous.Advance(TimeSpan.FromSeconds(12));
+        _clock.IsShown = true;
+        Assert.True(_clock.IsRunning);
+        Assert.Equal(continuous.Velocity, _clock.Velocity, 3);
+        Assert.Equal(continuous.Angle, _clock.Angle, 1);
+
+        Run(SpinClock.FrameInterval * 60); // and it ticks on
+        continuous.Advance(SpinClock.FrameInterval * 60);
+        Assert.Equal(continuous.Angle, _clock.Angle, 1);
+    }
+
+    [Fact]
+    public void Hidden_while_spinning_down_it_has_stopped_when_shown_and_starts_no_timer()
+    {
+        _clock.IsSpinning = true;
+        Run(TimeSpan.FromSeconds(5));
+        _clock.IsSpinning = false;
+        Run(TimeSpan.FromSeconds(0.2));
+        Assert.True(_clock.Velocity > 0);
+
+        _clock.IsShown = false;
+        _time.Advance(TimeSpan.FromSeconds(30));
+        _ui.Run();
+        _clock.IsShown = true;
+
+        Assert.Equal(0, _clock.Velocity);
+        Assert.False(_clock.IsRunning);
+    }
+
+    [Fact]
+    public void Started_while_hidden_it_spins_up_from_then_once_shown()
+    {
+        _clock.IsShown = false;
+        _time.Advance(TimeSpan.FromSeconds(5)); // hidden and still
+        _clock.IsSpinning = true;
+        Assert.False(_clock.IsRunning);
+        _time.Advance(TimeSpan.FromSeconds(1));
+        _ui.Run();
+        Assert.Equal((0.0, 0.0), (_clock.Angle, _clock.Velocity));
+
+        _clock.IsShown = true;
+        using var continuous = Continuous();
+        continuous.Advance(TimeSpan.FromSeconds(1)); // from when it started, not from when it was hidden
+        Assert.True(_clock.IsRunning);
+        Assert.Equal(continuous.Velocity, _clock.Velocity, 3);
+        Assert.Equal(continuous.Angle, _clock.Angle, 1);
+    }
+
+    [Fact]
+    public void Hiding_and_showing_a_still_clock_starts_nothing()
+    {
+        _clock.IsShown = false;
+        _clock.IsShown = true;
+        _time.Advance(TimeSpan.FromSeconds(1));
+        _ui.Run();
+        Assert.False(_clock.IsRunning);
+        Assert.Equal((0.0, 0.0), (_clock.Angle, _clock.Velocity));
+    }
+
+    [Fact]
+    public void Hidden_and_stopped_while_hidden_it_doesnt_turn_on_once_shown()
+    {
+        _clock.IsSpinning = true;
+        Run(TimeSpan.FromSeconds(20)); // at speed
+        _clock.IsShown = false;
+        _clock.IsSpinning = false; // paused while minimized
+        _time.Advance(TimeSpan.FromSeconds(60));
+        _clock.IsShown = true;
+
+        Assert.Equal(0, _clock.Velocity);
+        Assert.False(_clock.IsRunning);
+    }
+
     public void Dispose() => _clock.Dispose();
 }

@@ -153,7 +153,11 @@ public sealed class ScrubBar : RangeBase
         set => SetValue(ValueTextProperty, value);
     }
 
-    /// <summary>The filled part's width: the shown value's share of the bar.</summary>
+    /// <summary>
+    /// The filled part's width: the shown value's share of the bar, in whole device pixels (#121). The position moves 30
+    /// times a second, the fill a pixel every second or two: it changes, and the bar is laid out again, only when it moves
+    /// on screen.
+    /// </summary>
     public double FillWidth
     {
         get;
@@ -216,7 +220,9 @@ public sealed class ScrubBar : RangeBase
             || change.Property == MaximumProperty || change.Property == BoundsProperty)
         {
             var range = Maximum - Minimum;
-            FillWidth = range > 0 ? Math.Clamp((Shown - Minimum) / range, 0, 1) * Bounds.Width : 0;
+            var share = range > 0 ? Math.Clamp((Shown - Minimum) / range, 0, 1) : 0;
+            var scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+            FillWidth = share >= 1 ? Bounds.Width : Math.Round(share * Bounds.Width * scale) / scale;
         }
     }
 

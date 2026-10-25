@@ -574,7 +574,7 @@ public sealed class PlayerBarTests
         await using var app = await OpenAsync(Status(volume: 0.8f));
         await SetAsync(app, Status(volume: 0.25f));
         Assert.Equal("25%", Find<TextBox>(app, "VolumeBox").Text);
-        Assert.Equal(90 * 0.25, Find<ScrubBar>(app, "VolumeBar").FillWidth, 3);
+        Assert.Equal(Math.Round(90 * 0.25), Find<ScrubBar>(app, "VolumeBar").FillWidth); // in whole pixels
         Assert.False(Find<Icon>(app, "WaveFar").IsVisible);
     }
 
@@ -625,12 +625,136 @@ public sealed class PlayerBarTests
             await Gui.UntilAsync(() => analyzer.Frame?.Bars[15] == 1, "the levels drawn");
             await SetAsync(app, Status(state: PlayerState.Paused));
             Tick(app, SpectrumViewModel.FrameInterval * 6);
-            Assert.Equal(1 - (SpectrumViewModel.FallRate * SpectrumViewModel.FrameInterval.TotalSeconds * 6), analyzer.Frame!.Bars[15], 3);
+            var fallen = 1 - (SpectrumViewModel.FallRate * SpectrumViewModel.FrameInterval.TotalSeconds * 6);
+            Assert.Equal(fallen, app.ViewModel.PlayerBar.Spectrum.Bars[15], 3);
+            Assert.Equal(SpectrumViewModel.Blocks(fallen), SpectrumViewModel.Blocks(analyzer.Frame!.Bars[15])); // drawn that low
         }
         finally
         {
             app.ViewModel.Settings.SetMotion(MotionMode.Smooth);
         }
+    }
+
+    // ---- what moves while playing costs only what it changes (#121, #125, #126) -------------------------------
+
+    private static SpectrumFrame Level(double value) => new([.. Enumerable.Repeat(value, SpectrumViewModel.Bands)], [.. Enumerable.Repeat(value, SpectrumViewModel.Bands)]);
+
+    private static SkiaSharp.SKColor PixelAt(Window window, int x, int y)
+    {
+        using var frame = window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
+        using var png = new MemoryStream();
+        frame.Save(png, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        using var bitmap = SkiaSharp.SKBitmap.Decode(png.ToArray());
+        return bitmap.GetPixel(x, y);
+    }
+
+    [AvaloniaFact]
+    public void The_analyzer_makes_its_rows_brushes_once_and_again_only_when_its_colour_or_fade_changes()
+    {
+        var view = new SpectrumView
+        {
+            Width = 79, Height = 32, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+            Foreground = new SolidColorBrush(Color.Parse("#FF8000")), Frame = Level(0.5),
+        };
+        var window = new Window { Width = 200, Height = 100, Content = view };
+        window.Show();
+        try
+        {
+            foreach (var level in new[] { 0.7, 0.2, 1 })
+            {
+                view.Frame = Level(level);
+                using var _ = window.CaptureRenderedFrame();
+            }
+
+            Assert.Equal(1, view.BrushBuilds);
+
+            view.Foreground = new SolidColorBrush(Color.Parse("#0060FF")); // a new accent
+            var bottom = PixelAt(window, 2, 31);
+            Assert.Equal(2, view.BrushBuilds);
+            Assert.True(bottom.Blue > bottom.Red, $"the bars are drawn in the new colour: {bottom}");
+
+            view.BottomOpacity = 0.6;
+            using (window.CaptureRenderedFrame())
+            {
+            }
+
+            Assert.Equal(3, view.BrushBuilds);
+
+            view.Foreground = new LinearGradientBrush(); // not a plain colour: its rows take the brush itself
+            using (window.CaptureRenderedFrame())
+            {
+            }
+
+            Assert.Equal(4, view.BrushBuilds);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void The_bars_fill_moves_by_whole_pixels_and_ends_exactly_at_the_end()
+    {
+        var bar = new ScrubBar { Width = 300, Height = 20, Maximum = 600, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var window = new Window { Width = 400, Height = 100, Content = bar };
+        window.Show();
+        try
+        {
+            var changes = new List<double>();
+            bar.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == ScrubBar.FillWidthProperty)
+                {
+                    changes.Add(bar.FillWidth);
+                }
+            };
+
+            // 4 s of a 10-minute track on a 300 px bar, 30 times a second: the fill moves 2 px, so it changes twice.
+            for (var tick = 0; tick <= 120; tick++)
+            {
+                bar.Value = tick / 30.0;
+            }
+
+            Assert.Equal([1.0, 2.0], changes);
+
+            bar.Value = 599.9;
+            Assert.Equal(300, bar.FillWidth);
+            bar.Value = 600;
+            Assert.Equal(bar.Bounds.Width, bar.FillWidth); // the end is the end, not a rounding of it
+            bar.Value = 700; // past the end (a duration that was wrong)
+            Assert.Equal(bar.Bounds.Width, bar.FillWidth);
+            bar.Value = -5;
+            Assert.Equal(0, bar.FillWidth);
+            bar.Value = 100;
+            bar.Maximum = 0; // nothing playing
+            Assert.Equal(0, bar.FillWidth);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Minimized_the_clocks_and_the_analyzer_stop_and_restored_they_run_again()
+    {
+        await using var app = await OpenAsync(Status(state: PlayerState.Playing));
+        var vm = app.ViewModel;
+        await app.Scripted!.PushAsync("spectrum", new { levels = SomeLevels });
+        await Gui.UntilAsync(() => vm.PlayerBar.Spectrum.IsRunning && vm.Player.IsTicking && vm.SpinClock.IsRunning, "playing");
+
+        app.Window.WindowState = WindowState.Minimized;
+        Assert.Equal((false, false, false, false), (vm.IsShown, vm.SpinClock.IsShown, vm.Player.IsShown, vm.PlayerBar.Spectrum.IsShown));
+        Assert.Equal((false, false, false), (vm.SpinClock.IsRunning, vm.Player.IsTicking, vm.PlayerBar.Spectrum.IsRunning));
+        var angle = vm.SpinClock.Angle;
+        Tick(app, TimeSpan.FromSeconds(1));
+        Assert.Equal(angle, vm.SpinClock.Angle);
+
+        app.Window.WindowState = WindowState.Normal;
+        Assert.True(vm.IsShown);
+        Assert.Equal((true, true), (vm.SpinClock.IsRunning, vm.Player.IsTicking));
+        Assert.NotEqual(angle, vm.SpinClock.Angle); // caught up on the second it missed
     }
 
     // ---- snapshots -------------------------------------------------------------------------------------------

@@ -8,6 +8,8 @@ namespace MusicSpin.App.ViewModels;
 /// <summary>
 /// The position bar and the elapsed time (mockup: "Position"). Dragging the bar moves <see cref="Scrub"/> (the elapsed
 /// time follows it) and seeks on release; the elapsed time is a box that takes the CLI's <c>seek</c> syntax.
+/// The position moves 30 times a second while playing, but the times show whole seconds: <see cref="Shown"/>,
+/// <see cref="ValueText"/> and <see cref="Elapsed"/> change only when the second shown does (#121).
 /// </summary>
 public sealed partial class PositionViewModel : ObservableObject
 {
@@ -19,10 +21,14 @@ public sealed partial class PositionViewModel : ObservableObject
 
     private readonly PlayerViewModel _player;
 
+    /// <summary>The whole second the times show.</summary>
+    private double _second;
+
     public PositionViewModel(PlayerViewModel player)
     {
         ArgumentNullException.ThrowIfNull(player);
         _player = player;
+        _second = Second(Shown);
         Elapsed = new TypedField(() => Formats.Time(Shown), ApplyTyped);
         player.PropertyChanged += OnPlayerChanged;
     }
@@ -69,17 +75,29 @@ public sealed partial class PositionViewModel : ObservableObject
         return true;
     }
 
-    partial void OnScrubChanged(double? value) => Elapsed.Refresh();
+    partial void OnScrubChanged(double? value)
+    {
+        _second = Second(Shown);
+        Elapsed.Refresh();
+    }
+
+    /// <summary>The whole second <paramref name="seconds"/> shows as (<see cref="Formats.Time"/> rounds down).</summary>
+    private static double Second(double seconds) => Math.Floor(Math.Max(0, seconds));
 
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
         {
             case nameof(PlayerViewModel.Position):
-                OnPropertyChanged(nameof(Position));
-                OnPropertyChanged(nameof(Shown));
-                OnPropertyChanged(nameof(ValueText));
-                Elapsed.Refresh();
+                OnPropertyChanged(nameof(Position)); // the bar (it moves only by whole pixels: ScrubBar.FillWidth)
+                if (Scrub is null && Second(_player.Position) != _second)
+                {
+                    _second = Second(_player.Position);
+                    OnPropertyChanged(nameof(Shown));
+                    OnPropertyChanged(nameof(ValueText));
+                    Elapsed.Refresh();
+                }
+
                 break;
             case nameof(PlayerViewModel.Duration):
                 OnPropertyChanged(nameof(Duration));

@@ -6,7 +6,8 @@ namespace MusicSpin.App.Services;
 /// One clock for every visible disc of the playing album (mockup: <c>tick</c> in app.js). It spins up and down like a
 /// real platter: the speed moves toward the target by <see cref="SpinUpRate"/> (or <see cref="SpinDownRate"/>) of the
 /// difference per second, divided by the Motion multiplier. The spin shows that music is playing, so it runs in every
-/// Motion mode; None (multiplier 0) only skips the ramp.
+/// Motion mode; None (multiplier 0) only skips the ramp. While the window is hidden (<see cref="IsShown"/>) its timer
+/// stops; shown again, it catches up on the time it missed, so the disc is where it would have been (#125).
 /// </summary>
 public sealed partial class SpinClock : ObservableObject, IDisposable
 {
@@ -20,6 +21,9 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
     private readonly IUiDispatcher _ui;
     private ITimer? _timer;
     private long _last;
+
+    /// <summary>The disc moved while the window was hidden: the time since <see cref="_last"/> is owed.</summary>
+    private bool _owed;
 
     public SpinClock(TimeProvider time, IUiDispatcher ui)
     {
@@ -49,7 +53,11 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
     [ObservableProperty]
     public partial bool IsSpinning { get; set; }
 
-    /// <summary>Whether the clock is still running (spinning, or spinning down).</summary>
+    /// <summary>Whether the window shows (not minimized): while it doesn't, the clock's timer stops.</summary>
+    [ObservableProperty]
+    public partial bool IsShown { get; set; } = true;
+
+    /// <summary>Whether the clock's timer is running (spinning, or spinning down, while the window shows).</summary>
     public bool IsRunning => _timer is not null;
 
     /// <summary>Moves the clock forward by <paramref name="elapsed"/> (in steps of at most one frame).</summary>
@@ -61,6 +69,12 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
         var frame = FrameInterval.TotalSeconds;
         while (left > 0)
         {
+            if (velocity == target)
+            {
+                angle = (angle + (velocity * left)) % 360; // at speed (or still): no ramp left to step through
+                break;
+            }
+
             var dt = Math.Min(frame, left);
             var rate = target > velocity ? SpinUpRate : SpinDownRate;
             velocity += (target - velocity) * Math.Min(1, dt * rate / Math.Max(MotionMultiplier, 0.001));
@@ -84,21 +98,54 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
 
     partial void OnIsSpinningChanged(bool value)
     {
-        if (value && _timer is null)
+        if (value && _timer is null && !_owed)
         {
             _last = _time.GetTimestamp();
-            _timer = _time.CreateTimer(_ => _ui.Post(Tick), null, FrameInterval, FrameInterval);
-            OnPropertyChanged(nameof(IsRunning));
+            if (IsShown)
+            {
+                Start();
+            }
+            else
+            {
+                _owed = true;
+            }
+        }
+    }
+
+    partial void OnIsShownChanged(bool value)
+    {
+        if (!value)
+        {
+            _owed = _timer is not null;
+            Stop();
+        }
+        else if (_owed)
+        {
+            _owed = false;
+            Tick(); // the time it missed
+            if (IsSpinning || Velocity != 0)
+            {
+                Start();
+            }
+        }
+    }
+
+    private void Start()
+    {
+        _timer = _time.CreateTimer(_ => _ui.Post(OnTimer), null, FrameInterval, FrameInterval);
+        OnPropertyChanged(nameof(IsRunning));
+    }
+
+    private void OnTimer()
+    {
+        if (_timer is not null)
+        {
+            Tick();
         }
     }
 
     private void Tick()
     {
-        if (_timer is null)
-        {
-            return;
-        }
-
         var now = _time.GetTimestamp();
         var elapsed = _time.GetElapsedTime(_last, now);
         _last = now;
