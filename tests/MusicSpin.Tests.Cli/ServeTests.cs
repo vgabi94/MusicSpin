@@ -147,4 +147,39 @@ public class ServeTests
         var lines = await RunAsync("""{"id":"abc","cmd":"status"}""");
         Assert.Contains(lines, l => l.TryGetProperty("id", out var i) && i.ValueKind == JsonValueKind.String && i.GetString() == "abc");
     }
+
+    [Fact]
+    public async Task The_serve_command_starts_with_the_saved_equalizer_and_eq_is_for_the_session_only()
+    {
+        await using var cli = new CliHarness
+        {
+            Input = string.Join('\n', """{"id":1,"cmd":"status"}""", """{"id":2,"cmd":"eq","preset":"rock","save":"mine"}""", """{"id":3,"cmd":"eq","band":"x","gain":1}""", """{"id":4,"cmd":"quit"}"""),
+        };
+        Directory.CreateDirectory(cli.DataDir);
+        var settings = Path.Combine(cli.DataDir, "settings.json");
+        await File.WriteAllTextAsync(settings, """{"equalizerEnabled":true,"equalizerPreset":"jazz","equalizerGains":[4,3,1,2,-2,-2,0,1,2,3]}""", TestContext.Current.CancellationToken);
+        var saved = await File.ReadAllTextAsync(settings, TestContext.Current.CancellationToken);
+
+        var result = await cli.RunAsync("serve", "--backend", "null");
+
+        Assert.Equal(0, result.ExitCode);
+        var lines = result.Lines().Select(l => JsonDocument.Parse(l).RootElement.Clone()).ToArray();
+        var first = Response(lines, 1).GetProperty("data").GetProperty("equalizer");
+        Assert.True(first.GetProperty("enabled").GetBoolean());
+        Assert.Equal(4, first.GetProperty("gains")[0].GetDouble());
+        var rock = Response(lines, 2).GetProperty("data").GetProperty("equalizer");
+        Assert.Equal("mine", rock.GetProperty("preset").GetString());
+        Assert.Equal("usage", Response(lines, 3).GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(saved, await File.ReadAllTextAsync(settings, TestContext.Current.CancellationToken)); // this session only
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_server_without_an_equalizer_says_so()
+    {
+        var lines = await RunAsync("""{"id":1,"cmd":"eq","enabled":true}""", """{"id":2,"cmd":"status"}""");
+
+        Assert.Equal("invalid_state", Response(lines, 1).GetProperty("error").GetProperty("code").GetString());
+        Assert.True(Response(lines, 2).GetProperty("ok").GetBoolean());
+    }
 }

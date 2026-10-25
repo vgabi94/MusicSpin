@@ -81,6 +81,8 @@ internal sealed class CliHarness : IAsyncDisposable
             InitialRepeat = PlaybackModes.TryParseRepeat(settings.Repeat, out var repeat) ? repeat : RepeatMode.Off,
             InitialShuffle = settings.Shuffle,
             Normalization = NormalizationSettings.From(settings),
+            Equalizer = MusicSpin.Core.Equalization.EqualizerSettings.From(settings),
+            EqualizerPresets = MusicSpin.Core.Equalization.EqualizerSettings.UserPresets(settings, null),
         });
         if (host is not null)
         {

@@ -270,7 +270,7 @@ internal static class McpCommand
                     var status = await SendAsync("normalize", changes ? new { mode = mode?.Trim().ToLowerInvariant(), target, preamp } : null, ct).ConfigureAwait(false);
                     return changes ? WithWarning(status, PlayerSupport.SaveNormalization(runner, parseResult, status)) : status;
                 }));
-            yield return Tool("equalizer", "Show or change the 10-band graphic equalizer (bands 31, 62.5, 125, 250, 500 Hz, 1k, 2k, 4k, 8k, 16k; -12..+12 dB). " +
+            yield return Tool("equalizer", "Show or change the 10-band graphic equalizer (bands 31.25, 62.5, 125, 250, 500 Hz, 1k, 2k, 4k, 8k, 16k; -12..+12 dB). " +
                 "Presets: flat, rock, pop, jazz, classical, bass-boost, treble-boost, vocal, loudness, electronic, acoustic and the user's. The pre-amp is lowered " +
                 "automatically so boosts never clip; off or flat is bit-perfect. Changes are saved as the default for new players. With no arguments: the status.",
                 ([Description("true: on, false: off. Omit to keep.")] bool? enabled = null,

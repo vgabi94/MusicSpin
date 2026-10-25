@@ -283,8 +283,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
     }
 
     /// <summary>
-    /// The graphic equalizer (#141). Any of: <c>delete</c> (a saved preset's name), <c>preset</c> (apply one; turns the
-    /// equalizer on), <c>gains</c> (ten dB values), <c>band</c> (1..10 or a frequency like "1k") with <c>gain</c> (dB),
+    /// The graphic equalizer (#141). Any of: <c>delete</c> (a saved preset's name), <c>preset</c> (apply one), <c>gains</c> or <c>band</c> (these three turn the
+    /// equalizer on unless <c>enabled</c> is given): <c>gains</c> is ten dB values, <c>band</c> is (1..10 or a frequency like "1k") with <c>gain</c> (dB),
     /// <c>preamp</c> (dB), <c>enabled</c>, then <c>save</c> (save the resulting gains under a name). Everything is checked
     /// before anything changes; without any, just the status.
     /// </summary>
@@ -368,14 +368,14 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
 
         if (gains is not null)
         {
-            next = next with { Gains = gains, Preset = eq.Presets.FirstOrDefault(x => x.Gains.SequenceEqual(gains))?.Name };
+            next = next with { Enabled = true, Gains = gains, Preset = eq.Presets.FirstOrDefault(x => x.Gains.SequenceEqual(gains))?.Name };
         }
 
         if (band is { } b && gain is { } bandGain)
         {
             var edited = next.BandGains.ToArray();
             edited[b] = bandGain;
-            next = next with { Gains = edited, Preset = eq.Presets.FirstOrDefault(x => x.Gains.SequenceEqual(edited))?.Name };
+            next = next with { Enabled = true, Gains = edited, Preset = eq.Presets.FirstOrDefault(x => x.Gains.SequenceEqual(edited))?.Name };
         }
 
         if (preamp is { } pre)
