@@ -308,7 +308,7 @@ public sealed class DeckDesignTests
         // Half-way across the ring the record leaves showing (the record is 98% of the platter on every deck).
         var r = platter.Bounds.Width / 2;
         var middle = r * 0.99;
-        var degrees = design == "linear" ? Enumerable.Range(90, 181) : Enumerable.Range(0, 361); // 0° is to the right
+        var degrees = (design == "linear" ? Enumerable.Range(90, 181) : Enumerable.Range(0, 361)).ToList(); // 0° is to the right
         var colours = degrees.Select(degree =>
         {
             var a = degree * Math.PI / 180;
@@ -316,7 +316,7 @@ public sealed class DeckDesignTests
             return bitmap.GetPixel((int)Math.Round(at.X * scale), (int)Math.Round(at.Y * scale));
         }).ToList();
         var jumps = colours.Zip(colours.Skip(1))
-            .Select((p, i) => (Degree: degrees.ElementAt(i), Step: Math.Max(Math.Abs(p.First.Red - p.Second.Red),
+            .Select((p, i) => (Degree: degrees[i], Step: Math.Max(Math.Abs(p.First.Red - p.Second.Red),
                 Math.Max(Math.Abs(p.First.Green - p.Second.Green), Math.Abs(p.First.Blue - p.Second.Blue)))))
             .Where(j => j.Step > 8).ToList();
         Assert.True(jumps.Count == 0, $"the colour jumps round the rim at {string.Join(", ", jumps.Select(j => $"{j.Degree}° (by {j.Step})"))}");
