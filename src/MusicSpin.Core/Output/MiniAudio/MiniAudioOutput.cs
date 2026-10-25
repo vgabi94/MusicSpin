@@ -353,10 +353,10 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
         }
     }
 
-    /// <summary>Opens a stream (under the gate, none being open) and starts listening to it.</summary>
     // What the open (or pause-released) stream opened as: see Exclusive. Read off the gate by StreamFormat.
     private volatile bool _openedExclusive;
 
+    /// <summary>Opens a stream (under the gate, none being open) and starts listening to it.</summary>
     private void OpenCore(BackendDevice? device, IPcmSource source)
     {
         // The stream does not read before Start, so the route can be fitted to the rate it opened at first.

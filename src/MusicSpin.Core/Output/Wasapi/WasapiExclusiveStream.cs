@@ -150,11 +150,13 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
                 if (clientObj is not null)
                 {
                     Marshal.ReleaseComObject(clientObj);
+                    clientObj = null; // so a failing Activate below leaves nothing for the cleanup to release twice
                 }
 
                 if (formatPtr != IntPtr.Zero)
                 {
                     Marshal.FreeHGlobal(formatPtr);
+                    formatPtr = IntPtr.Zero;
                 }
 
                 clientObj = Activate(device);
@@ -172,6 +174,7 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
                     // The documented retry: align the period to the buffer size WASAPI wants, on a fresh client.
                     Check(client.GetBufferSize(out var aligned), "read the aligned buffer size");
                     Marshal.ReleaseComObject(clientObj!);
+                    clientObj = null;
                     period = (long)((10_000_000.0 * aligned / _source.SampleRate) + 0.5);
                     clientObj = Activate(device);
                     client = (IAudioClient)clientObj;
