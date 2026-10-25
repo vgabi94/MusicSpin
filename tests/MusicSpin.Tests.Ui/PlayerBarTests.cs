@@ -752,9 +752,41 @@ public sealed class PlayerBarTests
         Assert.Equal(angle, vm.SpinClock.Angle);
 
         app.Window.WindowState = WindowState.Normal;
-        Assert.True(vm.IsShown);
+        Assert.Equal((true, true, true, true), (vm.IsShown, vm.SpinClock.IsShown, vm.Player.IsShown, vm.PlayerBar.Spectrum.IsShown));
         Assert.Equal((true, true), (vm.SpinClock.IsRunning, vm.Player.IsTicking));
         Assert.NotEqual(angle, vm.SpinClock.Angle); // caught up on the second it missed
+
+        var analyzer = Find<SpectrumView>(app, "Analyzer");
+        var (frames, redraws) = (vm.PlayerBar.Spectrum.Frames, analyzer.Redraws);
+        await app.Scripted.PushAsync("spectrum", new { levels = SomeLevels }); // the next levels move it again
+        await Gui.UntilAsync(() => vm.PlayerBar.Spectrum.IsRunning && analyzer.Frame?.Bars[15] == 1, "the levels drawn after restoring");
+        Assert.True(vm.PlayerBar.Spectrum.Frames > frames);
+        Assert.True(analyzer.Redraws > redraws);
+    }
+
+    [AvaloniaFact]
+    public void Moved_to_a_screen_of_another_scale_the_fill_snaps_to_its_pixels()
+    {
+        var bar = new ScrubBar { Width = 300, Height = 20, Maximum = 600, Value = 1.3, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var window = new Window { Width = 400, Height = 100, Content = bar };
+        window.Show();
+        try
+        {
+            Assert.Equal(1, bar.FillWidth); // 0.65 px at scale 1
+
+            window.SetRenderScaling(2); // paused: no new value, only the screen
+            Assert.Equal(0.5, bar.FillWidth); // 1.3 device pixels: one, half a unit
+            window.SetRenderScaling(1.5);
+            Assert.Equal(1.0 / 1.5, bar.FillWidth, 9); // 0.975 device pixels: one
+
+            window.Content = null; // out of the window: a scaling change there no longer reaches it
+            window.SetRenderScaling(2);
+            Assert.Equal(1.0 / 1.5, bar.FillWidth, 9);
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     // ---- snapshots -------------------------------------------------------------------------------------------

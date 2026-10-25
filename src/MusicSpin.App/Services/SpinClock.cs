@@ -7,7 +7,8 @@ namespace MusicSpin.App.Services;
 /// real platter: the speed moves toward the target by <see cref="SpinUpRate"/> (or <see cref="SpinDownRate"/>) of the
 /// difference per second, divided by the Motion multiplier. The spin shows that music is playing, so it runs in every
 /// Motion mode; None (multiplier 0) only skips the ramp. While the window is hidden (<see cref="IsShown"/>) its timer
-/// stops; shown again, it catches up on the time it missed, so the disc is where it would have been (#125).
+/// stops; shown again, it catches up on the time it missed, so the disc is where it would have been (#125): the time
+/// until each pause or play while hidden is settled then, at the speed it was going.
 /// </summary>
 public sealed partial class SpinClock : ObservableObject, IDisposable
 {
@@ -95,6 +96,15 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
     }
 
     public void Dispose() => Stop();
+
+    /// <summary>Paused or played while hidden: the time owed so far is at the old target, so it is settled first.</summary>
+    partial void OnIsSpinningChanging(bool value)
+    {
+        if (_owed)
+        {
+            Tick();
+        }
+    }
 
     partial void OnIsSpinningChanged(bool value)
     {

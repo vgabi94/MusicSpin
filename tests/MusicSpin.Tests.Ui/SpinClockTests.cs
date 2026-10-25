@@ -175,6 +175,30 @@ public sealed class SpinClockTests : IDisposable
     }
 
     [Fact]
+    public void Paused_and_played_again_while_hidden_the_disc_is_where_it_would_really_have_been()
+    {
+        _clock.IsSpinning = true;
+        Run(TimeSpan.FromSeconds(20)); // at speed
+        _clock.IsShown = false;
+        _time.Advance(TimeSpan.FromSeconds(2));
+        _clock.IsSpinning = false; // paused while minimized: it spins down
+        _time.Advance(TimeSpan.FromSeconds(5));
+        _clock.IsSpinning = true; // and played again: it spins up
+        _time.Advance(TimeSpan.FromSeconds(1));
+        _clock.IsShown = true;
+
+        using var continuous = Continuous();
+        continuous.Advance(TimeSpan.FromSeconds(22));
+        continuous.IsSpinning = false;
+        continuous.Advance(TimeSpan.FromSeconds(5));
+        continuous.IsSpinning = true;
+        continuous.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(continuous.Velocity, _clock.Velocity, 3); // ramping up from still, not still at speed
+        Assert.Equal(continuous.Angle, _clock.Angle, 1);
+        Assert.True(_clock.IsRunning);
+    }
+
+    [Fact]
     public void Hidden_while_spinning_down_it_has_stopped_when_shown_and_starts_no_timer()
     {
         _clock.IsSpinning = true;
