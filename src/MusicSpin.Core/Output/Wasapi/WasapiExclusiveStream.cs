@@ -143,48 +143,51 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
             Check(found, "find the device");
             deviceObj = device;
 
-            clientObj = Activate(device);
-            var client = (IAudioClient)clientObj;
-
-            DeviceSample? chosen = null;
-            var refused = new List<string>();
-            foreach (var candidate in DeviceSamples.ExclusiveCandidates(_source.SourceBitsPerSample))
+            IAudioClient client = null!;
+            int Probe(DeviceSample candidate)
             {
-                var ptr = AllocFormat(candidate);
-                var hr = client.IsFormatSupported(ShareModeExclusive, ptr, IntPtr.Zero);
-                if (hr == 0)
+                // Initialize can only be tried once per client, so every probe after a refused one starts fresh.
+                if (clientObj is not null)
                 {
-                    chosen = candidate;
-                    formatPtr = ptr;
-                    break;
+                    Marshal.ReleaseComObject(clientObj);
                 }
 
-                Marshal.FreeHGlobal(ptr);
-                refused.Add(DeviceSamples.Name(candidate));
-            }
+                if (formatPtr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(formatPtr);
+                }
 
-            if (chosen is not { } format)
-            {
-                throw new ExclusiveUnavailableException(string.Create(CultureInfo.InvariantCulture,
-                    $"the device does not accept {_source.SampleRate / 1000.0:0.###} kHz, {_source.Channels} ch in exclusive mode (tried {string.Join(", ", refused)})"));
-            }
-
-            Check(client.GetDevicePeriod(out var period, out _), "read the device period");
-            var init = client.Initialize(ShareModeExclusive, StreamFlagsEventCallback, period, period, formatPtr, IntPtr.Zero);
-            if (init == SBufferSizeNotAligned)
-            {
-                // The documented retry: align the period to the buffer size WASAPI wants, on a fresh client.
-                Check(client.GetBufferSize(out var aligned), "read the aligned buffer size");
-                Marshal.ReleaseComObject(clientObj);
-                period = (long)((10_000_000.0 * aligned / _source.SampleRate) + 0.5);
                 clientObj = Activate(device);
                 client = (IAudioClient)clientObj;
-                init = client.Initialize(ShareModeExclusive, StreamFlagsEventCallback, period, period, formatPtr, IntPtr.Zero);
+                formatPtr = AllocFormat(candidate);
+                return client.IsFormatSupported(ShareModeExclusive, formatPtr, IntPtr.Zero);
             }
 
-            if (init != 0)
+            int Init(DeviceSample candidate)
             {
-                throw new ExclusiveUnavailableException(Describe(init));
+                Check(client.GetDevicePeriod(out var period, out _), "read the device period");
+                var init = client.Initialize(ShareModeExclusive, StreamFlagsEventCallback, period, period, formatPtr, IntPtr.Zero);
+                if (init == SBufferSizeNotAligned)
+                {
+                    // The documented retry: align the period to the buffer size WASAPI wants, on a fresh client.
+                    Check(client.GetBufferSize(out var aligned), "read the aligned buffer size");
+                    Marshal.ReleaseComObject(clientObj!);
+                    period = (long)((10_000_000.0 * aligned / _source.SampleRate) + 0.5);
+                    clientObj = Activate(device);
+                    client = (IAudioClient)clientObj;
+                    init = client.Initialize(ShareModeExclusive, StreamFlagsEventCallback, period, period, formatPtr, IntPtr.Zero);
+                }
+
+                return init;
+            }
+
+            var negotiation = DeviceSamples.Negotiate(DeviceSamples.ExclusiveCandidates(_source.SourceBitsPerSample), Probe, Init);
+            if (negotiation.Chosen is not { } format)
+            {
+                throw new ExclusiveUnavailableException(negotiation.FailedHr != 0
+                    ? Describe(negotiation.FailedHr)
+                    : string.Create(CultureInfo.InvariantCulture,
+                        $"the device does not accept {_source.SampleRate / 1000.0:0.###} kHz, {_source.Channels} ch in exclusive mode (tried {string.Join(", ", negotiation.Refused)})"));
             }
 
             Check(client.SetEventHandle(_audioEvent.SafeWaitHandle.DangerousGetHandle()), "set the event handle");

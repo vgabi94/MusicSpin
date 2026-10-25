@@ -29,9 +29,47 @@ internal static class DeviceSamples
     public static IReadOnlyList<DeviceSample> ExclusiveCandidates(int sourceBits) => sourceBits switch
     {
         > 0 and <= 16 when sourceBits != 1 => [DeviceSample.S16, DeviceSample.S24, DeviceSample.S24In32, DeviceSample.S32],
-        > 16 and <= 24 => [DeviceSample.S24, DeviceSample.S24In32, DeviceSample.S32],
+        // 24-in-32 first: it is what USB Audio Class 2 DACs (and most drivers) take for 24-bit; packed 24 is rarer.
+        > 16 and <= 24 => [DeviceSample.S24In32, DeviceSample.S32, DeviceSample.S24],
         _ => [DeviceSample.F32, DeviceSample.S32, DeviceSample.S24In32, DeviceSample.S24],
     };
+
+    /// <summary>AUDCLNT_E_UNSUPPORTED_FORMAT and E_INVALIDARG: this format is refused, the next one may not be.</summary>
+    private static bool IsFormatRefusal(int hr) => unchecked((uint)hr) is 0x88890008 or 0x80070057;
+
+    /// <summary>
+    /// Picks the first candidate the device both reports as supported and actually initializes with. Some drivers
+    /// accept a format in IsFormatSupported and then refuse it in Initialize, so a format refusal from either moves on
+    /// to the next candidate; any other failure (device in use, exclusive not allowed, unplugged) ends the search, as
+    /// no other format would help. Pure over the two probes, so the order and fallbacks are tested on every OS.
+    /// </summary>
+    public static ExclusiveNegotiation Negotiate(IReadOnlyList<DeviceSample> candidates, Func<DeviceSample, int> isSupported, Func<DeviceSample, int> initialize)
+    {
+        var refused = new List<string>();
+        foreach (var candidate in candidates)
+        {
+            if (isSupported(candidate) != 0)
+            {
+                refused.Add(Name(candidate));
+                continue;
+            }
+
+            var hr = initialize(candidate);
+            if (hr == 0)
+            {
+                return new ExclusiveNegotiation(candidate, 0, refused);
+            }
+
+            if (!IsFormatRefusal(hr))
+            {
+                return new ExclusiveNegotiation(null, hr, refused);
+            }
+
+            refused.Add(Name(candidate) + " (refused at initialize)");
+        }
+
+        return new ExclusiveNegotiation(null, 0, refused);
+    }
 
     public static int ContainerBytes(DeviceSample format) => format switch
     {
@@ -150,3 +188,6 @@ internal static class PcmReading
         return total;
     }
 }
+
+/// <summary>The outcome of <see cref="DeviceSamples.Negotiate"/>: the format opened, or the failure that stopped the search (0 when every candidate was refused).</summary>
+internal sealed record ExclusiveNegotiation(DeviceSample? Chosen, int FailedHr, IReadOnlyList<string> Refused);
