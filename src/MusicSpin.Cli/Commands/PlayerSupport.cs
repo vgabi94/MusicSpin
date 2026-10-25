@@ -152,6 +152,39 @@ internal static class PlayerSupport
     }
 
     /// <summary>
+    /// Remembers the player's equalizer (and, with <paramref name="presets"/>, the user's presets) as the defaults in
+    /// settings.json. Returns a warning instead of failing: the player already changed.
+    /// </summary>
+    public static string? SaveEqualizer(CommandRunner runner, ParseResult parseResult, JsonElement status, bool presets)
+    {
+        try
+        {
+            if (ProtocolJson.Deserialize<PlayerStatus>(status)?.Equalizer is not { } eq)
+            {
+                return null;
+            }
+
+            var store = new MusicSpin.Core.Settings.SettingsStore(runner.DataDirectory(parseResult));
+            var settings = store.Load();
+            if (store.LoadWarning is not null)
+            {
+                return $"Not saved as the default: {store.LoadWarning}";
+            }
+
+            var user = presets
+                ? eq.UserPresets.Select(p => new MusicSpin.Core.Equalization.EqualizerPreset(p.Key, p.Value, false)).ToList()
+                : null;
+            var next = new MusicSpin.Core.Equalization.EqualizerSettings(eq.Enabled, eq.Gains, eq.PreampDb, eq.Preset).ApplyTo(settings, user);
+            store.Save(next);
+            return null;
+        }
+        catch (Exception ex) when (ex is MusicSpinException or IOException or UnauthorizedAccessException or JsonException)
+        {
+            return $"Not saved as the default in settings.json: {ex.Message}";
+        }
+    }
+
+    /// <summary>
     /// Remembers the player's repeat/shuffle modes as the defaults in settings.json (used when a player starts).
     /// Returns a warning instead of failing: the player already changed.
     /// </summary>
@@ -281,6 +314,11 @@ internal static class PlayerSupport
         if (s.Normalization is { } levelling)
         {
             yield return Levelling(levelling);
+        }
+
+        if (s.Equalizer is { Enabled: true } equalizer)
+        {
+            yield return "  " + EqualizerCommand.Summary(equalizer);
         }
 
         if (s.Output is { } o)

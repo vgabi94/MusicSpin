@@ -96,6 +96,23 @@ public sealed class QueuePlayer : IDisposable
         _player.TrackAdvanced += OnTrackAdvanced;
     }
 
+    /// <summary>The graphic equalizer (#141) every track is filtered with; null for none. Set before playing.</summary>
+    /// <remarks>Filtering happens in <see cref="Player"/>; with another <see cref="IPlayer"/> this is only reported in the status.</remarks>
+    public Equalization.GraphicEqualizer? Equalizer
+    {
+        get => _equalizer;
+        set
+        {
+            _equalizer = value;
+            if (_player is Player player)
+            {
+                player.Equalizer = value;
+            }
+        }
+    }
+
+    private volatile Equalization.GraphicEqualizer? _equalizer;
+
     /// <summary>
     /// Volume levelling (#139): gives each track a gain from its ReplayGain / R128 tags or an analysis. Null: tracks play as
     /// they are. Set before playing.
@@ -1330,7 +1347,23 @@ public sealed class QueuePlayer : IDisposable
             _radio is null ? null : new RadioInfo(_radio.Filter, _radio.Filter.Describe(), _radio.PoolSize),
             has ? UpNextEnd() - _index - 1 : 0,
             _mutedLevel is not null,
-            NormalizationState());
+            NormalizationState(),
+            EqualizerState());
+    }
+
+    private EqualizerStatus? EqualizerState()
+    {
+        if (_equalizer is not { } eq)
+        {
+            return null;
+        }
+
+        var settings = eq.Settings;
+        var rate = _player.CurrentTrack?.SampleRate is > 0 and var r ? r : 48_000;
+        return new EqualizerStatus(
+            settings.Enabled, settings.Preset, settings.PreampDb, Math.Round(eq.HeadroomDb(rate), 2),
+            Equalization.EqualizerSettings.Bands, [.. settings.BandGains], [.. eq.Presets.Select(p => p.Name)],
+            eq.UserPresets.ToDictionary(p => p.Name, p => p.Gains));
     }
 
     private NormalizationStatus? NormalizationState()

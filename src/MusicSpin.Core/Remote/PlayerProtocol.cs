@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MusicSpin.Core.Audio;
+using MusicSpin.Core.Equalization;
 using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Playback;
 
@@ -51,7 +52,8 @@ public static class ProtocolMessages
 /// seek(seconds | delta), volume(value | delta; unmutes), mute(mode? = on|off|toggle), info(path), queue(offset?, limit?),
 /// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.play(items, start), queue.add(items, position? = end|next|upnext),
 /// queue.remove(index), queue.move(from, to), queue.clear(upNext?),
-/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?), radio(filter?, play?), radio.end, subscribe(spectrum?), quit.
+/// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?),
+/// normalize(mode?, target?, preamp?), eq(enabled?, preset?, gains?, band?, gain?, preamp?, save?, delete?), radio(filter?, play?), radio.end, subscribe(spectrum?), quit.
 /// <c>queue.play</c> plays entry <c>start</c> of the list <c>items</c> (an album, a playlist: what a user clicked in): when that
 /// list is what the queue is playing, the queue is kept and playback jumps to the entry (up-next entries follow it), otherwise it
 /// replaces the queue like <c>queue.set</c> (see <see cref="QueuePlayer.PlayFromContext"/>).
@@ -66,6 +68,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
         "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "mute", "info",
         "queue", "queue.set", "queue.play", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "radio.end", "subscribe", "quit",
         "normalize",
+        "eq",
     ];
 
     public QueuePlayer Player { get; } = player ?? throw new ArgumentNullException(nameof(player));
@@ -185,6 +188,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                 return (Shuffle(root), ProtocolAction.None);
             case "normalize":
                 return (Normalize(root), ProtocolAction.None);
+            case "eq":
+                return (Equalize(root), ProtocolAction.None);
             case "radio":
                 return (Player.StartRadio(RadioFilterOf(root), OptionalBool(root, "play") ?? true), ProtocolAction.None);
             case "radio.end":
@@ -275,6 +280,168 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
 
         normalizer.Configure(next);
         return Player.Status();
+    }
+
+    /// <summary>
+    /// The graphic equalizer (#141). Any of: <c>delete</c> (a saved preset's name), <c>preset</c> (apply one; turns the
+    /// equalizer on), <c>gains</c> (ten dB values), <c>band</c> (1..10 or a frequency like "1k") with <c>gain</c> (dB),
+    /// <c>preamp</c> (dB), <c>enabled</c>, then <c>save</c> (save the resulting gains under a name). Everything is checked
+    /// before anything changes; without any, just the status.
+    /// </summary>
+    private PlayerStatus Equalize(JsonElement root)
+    {
+        var enabled = OptionalBool(root, "enabled");
+        var preset = OptionalString(root, "preset");
+        var preamp = OptionalNumber(root, "preamp");
+        var gain = OptionalNumber(root, "gain");
+        var save = OptionalString(root, "save");
+        var delete = OptionalString(root, "delete");
+        var band = OptionalBand(root);
+        var gains = OptionalGains(root);
+        if (enabled is null && preset is null && preamp is null && gain is null && save is null && delete is null && band is null && gains is null)
+        {
+            return Player.Status();
+        }
+
+        var eq = Player.Equalizer
+            ?? throw new MusicSpinException(MusicSpinErrorCode.InvalidState, "This player has no equalizer.");
+        if ((band is null) != (gain is null))
+        {
+            throw new FormatException("\"band\" and \"gain\" go together.");
+        }
+
+        if (gain is { } g && g is < EqualizerSettings.MinGainDb or > EqualizerSettings.MaxGainDb)
+        {
+            throw new FormatException($"\"gain\" must be between {EqualizerSettings.MinGainDb} and {EqualizerSettings.MaxGainDb} dB.");
+        }
+
+        if (preamp is { } p && p is < EqualizerSettings.MinPreampDb or > EqualizerSettings.MaxPreampDb)
+        {
+            throw new FormatException($"\"preamp\" must be between {EqualizerSettings.MinPreampDb} and {EqualizerSettings.MaxPreampDb} dB.");
+        }
+
+        if (save is not null && EqualizerSettings.CheckPresetName(save) is { } badName)
+        {
+            throw new FormatException(badName);
+        }
+
+        if (delete is not null)
+        {
+            var name = EqualizerSettings.NormalizeName(delete);
+            if (EqualizerSettings.BuiltIn(name) is not null)
+            {
+                throw new FormatException($"'{name}' is a built-in preset and cannot be deleted.");
+            }
+
+            if (eq.Find(name) is null)
+            {
+                throw new FormatException($"There is no saved equalizer preset '{name}'.");
+            }
+        }
+
+        EqualizerPreset? chosen = null;
+        if (preset is not null)
+        {
+            chosen = eq.Find(preset);
+            if (chosen is null || (delete is not null && chosen.Name == EqualizerSettings.NormalizeName(delete)))
+            {
+                throw new FormatException($"Unknown equalizer preset '{preset}'. Presets: {string.Join(", ", eq.Presets.Select(x => x.Name))}.");
+            }
+        }
+
+        if (save is not null && eq.Find(save) is null && eq.UserPresets.Count >= EqualizerSettings.MaxUserPresets)
+        {
+            throw new FormatException($"At most {EqualizerSettings.MaxUserPresets} presets can be saved; delete one first.");
+        }
+
+        // All checked: apply.
+        if (delete is not null)
+        {
+            eq.DeletePreset(delete);
+        }
+
+        var next = eq.Settings;
+        if (chosen is not null)
+        {
+            next = next with { Enabled = true, Gains = [.. chosen.Gains], Preset = chosen.Name };
+        }
+
+        if (gains is not null)
+        {
+            next = next with { Gains = gains, Preset = eq.Presets.FirstOrDefault(x => x.Gains.SequenceEqual(gains))?.Name };
+        }
+
+        if (band is { } b && gain is { } bandGain)
+        {
+            var edited = next.BandGains.ToArray();
+            edited[b] = bandGain;
+            next = next with { Gains = edited, Preset = eq.Presets.FirstOrDefault(x => x.Gains.SequenceEqual(edited))?.Name };
+        }
+
+        if (preamp is { } pre)
+        {
+            next = next with { PreampDb = pre };
+        }
+
+        if (enabled is { } on)
+        {
+            next = next with { Enabled = on };
+        }
+
+        eq.Configure(next);
+        if (save is not null)
+        {
+            eq.SavePreset(save);
+        }
+
+        return Player.Status();
+    }
+
+    /// <summary><c>band</c>: 1..10 or a centre frequency ("31", "1k", "16000"); returned 0-based.</summary>
+    private static int? OptionalBand(JsonElement root)
+    {
+        if (!root.TryGetProperty("band", out var v) || v.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        var text = v.ValueKind switch
+        {
+            JsonValueKind.Number => v.GetRawText(),
+            JsonValueKind.String => v.GetString(),
+            _ => null,
+        };
+        return EqualizerSettings.TryParseBand(text, out var band)
+            ? band
+            : throw new FormatException($"Unknown equalizer band '{text ?? v.GetRawText()}'. Use 1..{EqualizerSettings.BandCount} or a centre frequency: {string.Join(", ", Enumerable.Range(0, EqualizerSettings.BandCount).Select(EqualizerSettings.BandName))}.");
+    }
+
+    /// <summary><c>gains</c>: exactly ten finite numbers, each -12..+12 dB.</summary>
+    private static double[]? OptionalGains(JsonElement root)
+    {
+        if (!root.TryGetProperty("gains", out var v) || v.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (v.ValueKind != JsonValueKind.Array || v.GetArrayLength() != EqualizerSettings.BandCount)
+        {
+            throw new FormatException($"\"gains\" must be an array of {EqualizerSettings.BandCount} numbers (dB).");
+        }
+
+        var gains = new double[EqualizerSettings.BandCount];
+        var i = 0;
+        foreach (var item in v.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Number || !item.TryGetDouble(out var d) || !double.IsFinite(d))
+            {
+                throw new FormatException($"\"gains\" must be an array of {EqualizerSettings.BandCount} numbers (dB).");
+            }
+
+            gains[i++] = d;
+        }
+
+        return EqualizerSettings.CheckGains(gains) is { } problem ? throw new FormatException(problem) : gains;
     }
 
     /// <summary><c>"filter": {artists, albums, genres, years: [{from, to}], formats, searches, hiRes}</c>; missing = whole library.</summary>
