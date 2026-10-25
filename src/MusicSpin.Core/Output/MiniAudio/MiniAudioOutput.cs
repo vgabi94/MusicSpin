@@ -153,7 +153,7 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
 
             // Shared mode: any rate plays on the open stream, converted to the rate it reads at.
             StreamRoute? route = null;
-            if (_pump is { } open && !TryRoute(next, open.Route.Format.SampleRate, out route))
+            if (_pump is { } open && !TryRoute(next, open.Route.Format.SampleRate, Exclusive, out route))
             {
                 return false; // no converter: the caller reopens at the track's format... and the mixer converts
             }
@@ -188,11 +188,13 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     }
 
     /// <inheritdoc />
-    public IPcmConverter? CreateConverter(PcmFormat from, PcmFormat to)
+    public IPcmConverter? CreateConverter(PcmFormat from, PcmFormat to) => Exclusive ? null : Converter(from, to);
+
+    private MiniAudioConverter? Converter(PcmFormat from, PcmFormat to)
     {
-        if (options.Exclusive || from.Channels <= 0 || to.Channels <= 0 || from.SampleRate <= 0 || to.SampleRate <= 0)
+        if (from.Channels <= 0 || to.Channels <= 0 || from.SampleRate <= 0 || to.SampleRate <= 0)
         {
-            return null; // exclusive: the DAC plays the track's own rate, bit for bit
+            return null; // nothing to convert from or to
         }
 
         try
@@ -207,7 +209,14 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     }
 
     /// <inheritdoc />
-    public PcmFormat? StreamFormat => options.Exclusive ? null : _pump?.Route.Format;
+    public PcmFormat? StreamFormat => Exclusive ? null : _pump?.Route.Format;
+
+    /// <summary>
+    /// Whether the device plays each track at its own rate: what it opened as, once open (an exclusive open the device
+    /// refused falls back to shared mode at the mixer's rate, and must then be converted to it like any shared stream),
+    /// else what was asked. Never the option alone: a shared stream read as exclusive plays every track at the wrong speed.
+    /// </summary>
+    private bool Exclusive => _stream is not null || _suspended ? _openedExclusive : options.Exclusive;
 
     public void Stop()
     {
@@ -256,17 +265,17 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
     /// How <paramref name="source"/> is read at <paramref name="rate"/>: as it is when it is at that rate (or the stream
     /// reads each source at its own, exclusive), else through a converter. False when no converter is available.
     /// </summary>
-    private bool TryRoute(IPcmSource source, int rate, out StreamRoute? route)
+    private bool TryRoute(IPcmSource source, int rate, bool exclusive, out StreamRoute? route)
     {
         route = null;
         var from = source.Format;
-        if (options.Exclusive || rate <= 0 || from.SampleRate == rate)
+        if (exclusive || rate <= 0 || from.SampleRate == rate)
         {
             route = new StreamRoute(source, null);
             return true;
         }
 
-        if (CreateConverter(from, new PcmFormat(rate, from.Channels, from.SourceBitsPerSample)) is not { } converter)
+        if (Converter(from, new PcmFormat(rate, from.Channels, from.SourceBitsPerSample)) is not { } converter)
         {
             return false;
         }
@@ -344,14 +353,20 @@ internal sealed class MiniAudioOutput(MiniAudioOutputProvider provider, AudioOut
         }
     }
 
+    // What the open (or pause-released) stream opened as: see Exclusive. Read off the gate by StreamFormat.
+    private volatile bool _openedExclusive;
+
     /// <summary>Opens a stream (under the gate, none being open) and starts listening to it.</summary>
     private void OpenCore(BackendDevice? device, IPcmSource source)
     {
         // The stream does not read before Start, so the route can be fitted to the rate it opened at first.
         var pump = new SwitchableSource(new StreamRoute(source, null));
         var stream = provider.Engine.Open(device, BuildRequest(source.Format, options), pump);
-        if (!TryRoute(source, stream.ClientSampleRate, out var route))
+        var wasExclusive = _openedExclusive;
+        _openedExclusive = stream.Opened.Exclusive; // a refused exclusive open comes back shared: converted like one
+        if (!TryRoute(source, stream.ClientSampleRate, _openedExclusive, out var route))
         {
+            _openedExclusive = wasExclusive;
             stream.Dispose();
             throw new MusicSpinException(MusicSpinErrorCode.AudioDeviceError,
                 string.Create(CultureInfo.InvariantCulture, $"Cannot convert {source.Format.SampleRate} Hz to the device's {stream.ClientSampleRate} Hz."));
