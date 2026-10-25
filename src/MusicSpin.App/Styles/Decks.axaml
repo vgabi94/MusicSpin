@@ -41,7 +41,7 @@
             </Style>
             <!--
               The record is the Classic deck's (#143): laid out at its size and scaled up into the 980 units it covers
-              (980 / 392), so its grooves, edge and label are drawn in the same pixels with the same style
+              (KitRecordScale), so its grooves, edge and label are drawn in the same pixels with the same style
               (Styles/Artwork.axaml). Laid out in deck units, its grooves would be 0.4 px a unit and blur into grey.
             -->
             <Style Selector="^ /template/ controls|VinylView#PART_Record">
@@ -50,7 +50,9 @@
                 <Setter Property="Canvas.Left" Value="50" />
                 <Setter Property="Canvas.Top" Value="50" />
                 <Setter Property="RenderTransformOrigin" Value="0,0" />
-                <Setter Property="RenderTransform" Value="scale(2.5)" />
+                <Setter Property="RenderTransform">
+                    <ScaleTransform ScaleX="{StaticResource KitRecordScale}" ScaleY="{StaticResource KitRecordScale}" />
+                </Setter>
             </Style>
             <Style Selector="^ /template/ Panel.platter">
                 <Setter Property="Width" Value="1000" />

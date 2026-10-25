@@ -216,6 +216,13 @@ public sealed class DeckDesignTests
         var record = Assert.IsType<VinylView>(deck.Record);
         Assert.Equal(RecordStyle(expected), RecordStyle(record));
         Assert.Equal(OnScreen(classicWindow, expected).Size, OnScreen(window, record).Size);
+        // It covers its platter as the studies' record does (980 of 1000 units), centred on it.
+        var platter = OnScreen(window, deck.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("platter")));
+        var box = OnScreen(window, record);
+        Assert.Equal(platter.Width * 0.98, box.Width, 3);
+        Assert.Equal(platter.Height * 0.98, box.Height, 3);
+        Assert.Equal(platter.Center.X, box.Center.X, 3);
+        Assert.Equal(platter.Center.Y, box.Center.Y, 3);
         // Its grooves are as far apart on screen as the Classic deck's (2.4 px), not 2.4 deck units (0.96 px) and grey.
         Assert.Equal(expected.GroovePitch * OnScreen(classicWindow, expected).Width / expected.Bounds.Width,
             record.GroovePitch * OnScreen(window, record).Width / record.Bounds.Width, 6);
@@ -279,9 +286,9 @@ public sealed class DeckDesignTests
     public static TheoryData<string> DesignsAndClassic { get; } = [.. Kit.Keys, "classic"];
 
     /// <summary>
-    /// The rim round the record is plain (#143): going round it a degree at a time, the colour doesn't jump from one step to
-    /// the next (the stripes and strobe ticks did, 144 to 180 times round) but where something crosses it: the arm, or
-    /// Linear Tracking's rails and their shadows.
+    /// The rim round the record is plain (#143): going round it a degree at a time, the colour never jumps from one step to
+    /// the next (the stripes and strobe ticks did, 144 to 180 times round; one stray stripe would twice). Parked and
+    /// spinning, nothing crosses the rim but Linear Tracking's rails, on its right: there only the left half is checked.
     /// </summary>
     [AvaloniaTheory]
     [MemberData(nameof(DesignsAndClassic))]
@@ -301,15 +308,18 @@ public sealed class DeckDesignTests
         // Half-way across the ring the record leaves showing (the record is 98% of the platter on every deck).
         var r = platter.Bounds.Width / 2;
         var middle = r * 0.99;
-        var colours = Enumerable.Range(0, 360).Select(degree =>
+        var degrees = design == "linear" ? Enumerable.Range(90, 181) : Enumerable.Range(0, 361); // 0° is to the right
+        var colours = degrees.Select(degree =>
         {
             var a = degree * Math.PI / 180;
             var at = platter.TranslatePoint(new Point(r + (middle * Math.Cos(a)), r + (middle * Math.Sin(a))), window)!.Value;
             return bitmap.GetPixel((int)Math.Round(at.X * scale), (int)Math.Round(at.Y * scale));
         }).ToList();
-        var jumps = colours.Zip(colours.Skip(1).Append(colours[0]))
-            .Count(p => Math.Max(Math.Abs(p.First.Red - p.Second.Red), Math.Max(Math.Abs(p.First.Green - p.Second.Green), Math.Abs(p.First.Blue - p.Second.Blue))) > 8);
-        Assert.True(jumps <= 10, $"{jumps} jumps in colour round the rim");
+        var jumps = colours.Zip(colours.Skip(1))
+            .Select((p, i) => (Degree: degrees.ElementAt(i), Step: Math.Max(Math.Abs(p.First.Red - p.Second.Red),
+                Math.Max(Math.Abs(p.First.Green - p.Second.Green), Math.Abs(p.First.Blue - p.Second.Blue)))))
+            .Where(j => j.Step > 8).ToList();
+        Assert.True(jumps.Count == 0, $"the colour jumps round the rim at {string.Join(", ", jumps.Select(j => $"{j.Degree}° (by {j.Step})"))}");
         window.Close();
     }
 

@@ -601,6 +601,8 @@
     <Thickness x:Key="DeckPlatterMargin">16,16,0,0</Thickness>
     <sys:Double x:Key="DeckPlatterRing">4</sys:Double>
     <sys:Double x:Key="DeckRecordSize">392</sys:Double>
+    <!-- A kit deck's record is laid out at DeckRecordSize and scaled up into the 980 units it covers: 980 / 392. -->
+    <sys:Double x:Key="KitRecordScale">2.5</sys:Double>
     <Thickness x:Key="DeckRecordMargin">20,20,0,0</Thickness>
     <sys:Double x:Key="DeckLedSize">7</sys:Double>
     <Thickness x:Key="DeckLedMargin">18,0,0,14</Thickness>
