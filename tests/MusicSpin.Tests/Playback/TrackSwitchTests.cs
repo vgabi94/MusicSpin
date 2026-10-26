@@ -9,8 +9,10 @@ namespace MusicSpin.Tests.Playback;
 
 /// <summary>
 /// Switching tracks must not tear the output device down when it can be kept: opening a new device stream is the slow part
-/// of a track change (up to seconds on PulseAudio), so a same-format switch retargets the open device and only a different
-/// rate or channel count reopens it. Driven deterministically through the manual output; no waiting on time.
+/// of a track change (up to seconds on PulseAudio), so a same-format switch retargets the open device. A different rate or
+/// channel count is converted to the open device's format when the player has a converter (shared mode); only without one
+/// (no converter, or one that cannot be made) or in exclusive mode does it reopen. Most tests here build the player
+/// without a converter, so they cover that fallback. Driven deterministically through the manual output; no waiting on time.
 /// </summary>
 public sealed class TrackSwitchTests : IDisposable
 {
@@ -86,7 +88,7 @@ public sealed class TrackSwitchTests : IDisposable
     [Theory]
     [InlineData(2000, 2)] // sample rate
     [InlineData(1000, 1)] // channels
-    public void A_different_rate_or_channel_count_reopens_the_device_once(int rate, int channels)
+    public void Without_a_converter_a_different_rate_or_channel_count_reopens_the_device_once(int rate, int channels)
     {
         var a = new RampSpec(1, 4000);
         var b = new RampSpec(2, 4000, rate, channels);
@@ -342,7 +344,7 @@ public sealed class TrackSwitchTests : IDisposable
     }
 
     [Fact]
-    public void A_format_change_reopens_once_per_switch_and_not_for_the_tracks_after_it()
+    public void Without_a_converter_a_format_change_reopens_once_per_switch_and_not_for_the_tracks_after_it()
     {
         var (_, queue) = CreateQueue(new RampSpec(1, 4000), new RampSpec(2, 4000, SampleRate: 2000), new RampSpec(3, 4000, SampleRate: 2000));
         Pull(64);
