@@ -188,6 +188,12 @@ src/MusicSpin.App/
   however it is grouped. The Albums view reports how many 176 px columns fit its width, and the view model cuts the card
   rows to that. A track row's type says which columns it has, so each grouping has its own template. An album's genre is
   the one most of its tracks have (`AlbumRecord.Genre`, set by the indexer).
+- **Scrolling the albums.** `RowsControl` recycles the page's containers by the kind of row (`RowHost`), and each keeps
+  the row control it built; a row of cards or a shelf board is a `SlotRow`, which keeps its cards or sleeves and only
+  hands each its next album. So scrolling builds and styles no cards or sleeves once a screenful's are built; a short
+  row hides the ones it has no album for and lets go of their albums (and covers), as a row out of the window does. The
+  compositor clips to separate dirty rectangles (`UseRegionDirtyRectClipping`), so the spinning record, the player bar
+  and a hovered card are redrawn on their own, not with everything in the box around them.
 - **Shelf and crates.** Avalonia's `Rotate3DTransform` keeps the eye at the element's centre; the mockup puts it at a
   sleeve's bottom edge (so sleeves stand flat on the board) and high above a crate. So `ShelfSleeve` and `CrateRecord`
   build the mockup's CSS transforms as 4×4 matrices (`Projection`) and draw with their 2D projective part. A sleeve's
