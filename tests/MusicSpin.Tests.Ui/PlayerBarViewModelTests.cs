@@ -257,6 +257,114 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
         Assert.Equal(200, (await SentAsync("seek")).GetProperty("seconds").GetDouble());
     }
 
+    /// <summary>Plays on for <paramref name="ticks"/> position ticks, the polls held (the position is interpolated only).</summary>
+    private void Tick(int ticks)
+    {
+        for (var i = 0; i < ticks; i++)
+        {
+            _time.Advance(PlayerViewModel.PositionInterval);
+            _ui.Run();
+        }
+    }
+
+    /// <summary>Counts the property changes <paramref name="source"/> raises.</summary>
+    private static Dictionary<string, int> Raised(System.ComponentModel.INotifyPropertyChanged source)
+    {
+        var raised = new Dictionary<string, int>();
+        source.PropertyChanged += (_, e) => raised[e.PropertyName!] = raised.GetValueOrDefault(e.PropertyName!) + 1;
+        return raised;
+    }
+
+    [Fact]
+    public async Task A_second_of_playback_moves_the_bar_every_tick_but_changes_the_times_shown_once()
+    {
+        await StartAsync(Playing(position: 10.2));
+        _player.Hold("status");
+        var position = Raised(_bar.Position);
+        var texts = new List<string>();
+        _bar.Position.Elapsed.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TypedField.Text))
+            {
+                texts.Add(_bar.Position.Elapsed.Text);
+            }
+        };
+
+        Tick(30); // 0.99 s: from 10.2 past 11
+        Assert.InRange(position.GetValueOrDefault(nameof(PositionViewModel.Position)), 29, 30); // the bar follows every tick
+        Assert.Equal(1, position.GetValueOrDefault(nameof(PositionViewModel.ValueText)));
+        Assert.Equal(1, position.GetValueOrDefault(nameof(PositionViewModel.Shown)));
+        Assert.Equal(["0:11"], texts);
+        Assert.Equal("0:11 of 6:46", _bar.Position.ValueText);
+    }
+
+    [Fact]
+    public async Task Scrubbing_still_changes_the_times_on_every_move_and_seeking_shows_the_new_time_at_once()
+    {
+        await StartAsync(Playing(position: 10.2));
+        _player.Hold("status");
+        var position = Raised(_bar.Position);
+
+        _bar.Position.Scrub = 100.2;
+        _bar.Position.Scrub = 100.6; // the same second: still a move
+        Assert.Equal(2, position.GetValueOrDefault(nameof(PositionViewModel.ValueText)));
+        Tick(60); // the track plays on under the scrub: the times keep showing the scrub
+        Assert.Equal(("1:40", "1:40 of 6:46"), (_bar.Position.Elapsed.Text, _bar.Position.ValueText));
+
+        _bar.Position.Scrub = null; // let go without seeking: back to where it plays
+        Assert.Equal(("0:12", "0:12 of 6:46"), (_bar.Position.Elapsed.Text, _bar.Position.ValueText));
+
+        _ = _bar.Position.SeekToCommand.ExecuteAsync(250.5);
+        Assert.Equal(("4:10", "4:10 of 6:46"), (_bar.Position.Elapsed.Text, _bar.Position.ValueText));
+    }
+
+    [Fact]
+    public async Task With_the_window_hidden_the_position_isnt_interpolated_and_catches_up_once_shown()
+    {
+        await StartAsync(Playing(position: 10));
+        _player.Hold("status");
+        Assert.True(_vm.IsTicking);
+
+        _vm.IsShown = false;
+        Assert.False(_vm.IsTicking);
+        var player = Raised(_vm);
+        _time.Advance(TimeSpan.FromSeconds(10));
+        Assert.Equal(0, _ui.Pending); // no ticks queued
+        _ui.Run();
+        Assert.Equal(0, player.GetValueOrDefault(nameof(PlayerViewModel.Position)));
+
+        _vm.IsShown = true;
+        Assert.True(_vm.IsTicking);
+        Assert.InRange(_vm.Position, 20, 20.1); // where it plays now, before the next tick
+        Assert.Equal("0:20", _bar.Position.Elapsed.Text);
+    }
+
+    [Fact]
+    public async Task Paused_while_hidden_the_position_doesnt_tick_once_shown()
+    {
+        await StartAsync(Playing(position: 10));
+        _vm.IsShown = false;
+        await ChangeAsync(Playing(position: 12) with { State = PlayerState.Paused });
+
+        _vm.IsShown = true;
+        Assert.False(_vm.IsTicking);
+        Assert.Equal(12, _vm.Position);
+        Tick(30);
+        Assert.Equal(12, _vm.Position);
+    }
+
+    [Fact]
+    public async Task Played_while_hidden_the_position_ticks_once_shown_not_before()
+    {
+        await StartAsync(Playing(position: 10) with { State = PlayerState.Paused });
+        _vm.IsShown = false;
+        await ChangeAsync(Playing(position: 10));
+        Assert.False(_vm.IsTicking);
+
+        _vm.IsShown = true;
+        Assert.True(_vm.IsTicking);
+    }
+
     // ---- volume (#18) ----------------------------------------------------------------------------------------
 
     [Fact]

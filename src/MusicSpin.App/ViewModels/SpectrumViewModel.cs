@@ -4,7 +4,9 @@ using MusicSpin.Core.Playback;
 
 namespace MusicSpin.App.ViewModels;
 
-/// <summary>What the analyzer draws: each bar's height and its peak dot, 0..1.</summary>
+/// <summary>
+/// What the analyzer draws: each bar's height and its peak dot, 0..1, drawn in <see cref="SpectrumViewModel.Rows"/> blocks.
+/// </summary>
 public sealed record SpectrumFrame(IReadOnlyList<double> Bars, IReadOnlyList<double> Peaks)
 {
     public static SpectrumFrame Empty { get; } = new(new double[SpectrumViewModel.Bands], new double[SpectrumViewModel.Bands]);
@@ -16,10 +18,18 @@ public sealed record SpectrumFrame(IReadOnlyList<double> Bars, IReadOnlyList<dou
 /// peak dot hangs on each bar for <see cref="PeakHold"/>, then falls faster and faster. When the music stops, everything
 /// falls to zero and the clock stops, so an idle analyzer costs nothing. It runs in every Motion mode: like the record,
 /// it shows that music is playing.
+/// <para>
+/// The bars move 60 times a second but are drawn in whole blocks: a new <see cref="Frame"/> (and a redraw) comes only when
+/// a bar or a peak gains or loses a block (#126). While the window is hidden (<see cref="IsShown"/>) it ignores the levels
+/// and its clock stops (#125).
+/// </para>
 /// </summary>
 public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
 {
     public const int Bands = SpectrumAnalyzer.Bands;
+
+    /// <summary>How many blocks a bar is drawn in, bottom to top.</summary>
+    public const int Rows = 16;
 
     /// <summary>How fast a bar falls, in bar-heights a second.</summary>
     public const double FallRate = 2.4;
@@ -40,6 +50,8 @@ public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
     private readonly double[] _peaks = new double[Bands];
     private readonly double[] _hold = new double[Bands];
     private readonly double[] _drop = new double[Bands];
+    private readonly int[] _shownBars = new int[Bands];
+    private readonly int[] _shownPeaks = new int[Bands];
     private ITimer? _timer;
     private long _last;
 
@@ -60,10 +72,28 @@ public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
     /// <summary>Whether the bars are moving (the clock runs).</summary>
     public bool IsRunning => _timer is not null;
 
+    /// <summary>Whether the window shows (not minimized). Hidden, the analyzer falls silent at once and ignores levels.</summary>
+    [ObservableProperty]
+    public partial bool IsShown { get; set; } = true;
+
+    /// <summary>Each bar's height now, 0..1 (tests follow its fall between frames).</summary>
+    internal IReadOnlyList<double> Bars => _bars;
+
+    /// <summary>Each peak's height now, 0..1.</summary>
+    internal IReadOnlyList<double> Peaks => _peaks;
+
+    /// <summary>The blocks <paramref name="value"/> (0..1) is drawn in.</summary>
+    public static int Blocks(double value) => (int)Math.Round(value * Rows);
+
     /// <summary>New levels from the player: bars below them jump up at once.</summary>
     public void SetLevels(IReadOnlyList<float> levels)
     {
         ArgumentNullException.ThrowIfNull(levels);
+        if (!IsShown)
+        {
+            return;
+        }
+
         for (var i = 0; i < Bands; i++)
         {
             _levels[i] = i < levels.Count ? Math.Clamp(levels[i], 0, 1) : 0;
@@ -99,13 +129,38 @@ public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
         }
 
         Publish();
-        if (_levels.All(l => l == 0) && _peaks.All(p => p == 0) && _bars.All(b => b == 0))
+        if (IsIdle())
         {
             Stop();
         }
     }
 
     public void Dispose() => Stop();
+
+    partial void OnIsShownChanged(bool value)
+    {
+        if (!value)
+        {
+            Array.Clear(_levels);
+            Array.Clear(_bars);
+            Array.Clear(_peaks);
+            Publish();
+            Stop();
+        }
+    }
+
+    private bool IsIdle()
+    {
+        for (var i = 0; i < Bands; i++)
+        {
+            if (_levels[i] != 0 || _bars[i] != 0 || _peaks[i] != 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>A bar at or above its peak lifts the peak and restarts its hold.</summary>
     private bool Catch(int i)
@@ -121,10 +176,26 @@ public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
         return true;
     }
 
+    /// <summary>
+    /// A new frame, when a bar or a peak gains or loses a block: what is drawn changed. At rest, the frame is
+    /// <see cref="SpectrumFrame.Empty"/> (a bar at 0.02 is drawn as no block, but it is still falling).
+    /// </summary>
     private void Publish()
     {
-        Frame = new SpectrumFrame([.. _bars], [.. _peaks]);
-        Frames++;
+        var changed = false;
+        for (var i = 0; i < Bands; i++)
+        {
+            var (bar, peak) = (Blocks(_bars[i]), Blocks(_peaks[i]));
+            changed |= bar != _shownBars[i] || peak != _shownPeaks[i];
+            (_shownBars[i], _shownPeaks[i]) = (bar, peak);
+        }
+
+        var resting = IsIdle();
+        if (resting ? !ReferenceEquals(Frame, SpectrumFrame.Empty) : changed)
+        {
+            Frame = resting ? SpectrumFrame.Empty : new SpectrumFrame([.. _bars], [.. _peaks]);
+            Frames++;
+        }
     }
 
     private void Run()
