@@ -79,20 +79,20 @@
     </Style>
 
     <!-- Nothing on the way clips: a turned sleeve comes forward over its neighbours and the board. -->
-    <Style Selector="StackPanel.shelfBoard, ItemsControl.shelfRow">
+    <Style Selector="StackPanel.shelfBoard, controls|SlotRow.shelfRow">
         <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="StackPanel.shelfBoard.last">
         <Setter Property="Margin" Value="{StaticResource ShelfGroupGapMargin}" />
     </Style>
-    <Style Selector="ItemsControl.shelfRow">
+    <Style Selector="controls|SlotRow.shelfRow">
         <!-- Over the board: the sleeves' contact shadows fall on it (mockup: .sleeve3d::after). -->
         <Setter Property="ZIndex" Value="1" />
         <Setter Property="Height" Value="{StaticResource ShelfRowHeight}" />
         <Setter Property="Padding" Value="{StaticResource ShelfRowPadding}" />
     </Style>
     <!-- A group's later boards stand 10 below the board above (mockup: .board + .shelf-row). -->
-    <Style Selector="ItemsControl.shelfRow.later">
+    <Style Selector="controls|SlotRow.shelfRow.later">
         <Setter Property="Margin" Value="{StaticResource ShelfBoardGapMargin}" />
     </Style>
     <Style Selector="StackPanel.shelfRow">

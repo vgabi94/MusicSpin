@@ -13,14 +13,14 @@
       padding in the first column), a hovered sleeve lifts above its row, and the Play button's shadow is round (mockup:
       .card has no overflow).
     -->
-    <Style Selector="ItemsControl.cards, ItemsControl.cardRow, Button.card, Button.playFab">
+    <Style Selector="ItemsControl.cards, controls|SlotRow.cardRow, Button.card, Button.playFab">
         <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <!-- A row of the grid: the cards share its width; rows are 30 apart, a group's first row sits under its header. -->
-    <Style Selector="ItemsControl.cardRow">
+    <Style Selector="controls|SlotRow.cardRow">
         <Setter Property="Margin" Value="{StaticResource CardRowGapMargin}" />
     </Style>
-    <Style Selector="ItemsControl.cardRow.first">
+    <Style Selector="controls|SlotRow.cardRow.first">
         <Setter Property="Margin" Value="0" />
     </Style>
     <Style Selector="UniformGrid.cardRow">

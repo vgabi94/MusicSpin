@@ -44,7 +44,8 @@ public sealed class ShelfTests
         await Gui.UntilAsync(() => app.ViewModel.PlayingAlbumId == SampleLibrary.AlbumId(album) && app.ViewModel.Player.State == state, "the album playing");
     }
 
-    private static List<ShelfSleeve> Sleeves(Visual root) => [.. Gui.All<ShelfSleeve>(root)];
+    /// <summary>The sleeves standing on the boards under <paramref name="root"/> (not those a board keeps hidden for later).</summary>
+    private static List<ShelfSleeve> Sleeves(Visual root) => [.. Gui.All<ShelfSleeve>(root).Where(s => s.IsVisible)];
 
     private static ShelfSleeve Sleeve(Window window, string title)
         => Sleeves(window).Single(s => s.DataContext is AlbumItemViewModel a && a.Title == title);
@@ -73,7 +74,7 @@ public sealed class ShelfTests
         Gui.Hover(window, Sleeves(Boards(window)[0])[0]);
         Gui.FinishAnimations(Settled);
 
-        var row = Gui.All<ItemsControl>(Boards(window)[0]).Single(c => c.Classes.Contains("shelfRow"));
+        var row = Gui.All<SlotRow>(Boards(window)[0]).Single(c => c.Classes.Contains("shelfRow"));
         var sleeves = Sleeves(Boards(window)[0]);
         Assert.True(Gui.BoundsIn(window, sleeves[^1]).Right <= Gui.BoundsIn(window, row).Right - 30 + 0.5,
             $"the last sleeve ends at {Gui.BoundsIn(window, sleeves[^1]).Right}, the row at {Gui.BoundsIn(window, row).Right}");
@@ -91,7 +92,7 @@ public sealed class ShelfTests
         var rows = app.ViewModel.AlbumsPage.Rows;
         var board = Boards(window)[0];
         var sleeves = Sleeves(board);
-        var row = Gui.All<ItemsControl>(board).Single(c => c.Classes.Contains("shelfRow"));
+        var row = Gui.All<SlotRow>(board).Single(c => c.Classes.Contains("shelfRow"));
         var top = sleeves.Select(s => Gui.BoundsIn(window, s).Top).ToList();
         var y = Gui.BoundsIn(window, sleeves[0]).Center.Y;
         var lastHovered = -1;
