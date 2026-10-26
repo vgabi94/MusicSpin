@@ -691,7 +691,10 @@ public sealed class Player : IPlayer
             var next = OpenNext(_decoders, buffer.Format, candidates, cursor, scratch.AsMemory(0, want), convert);
             lock (_decodeLock)
             {
-                if (generation != _generation || !ReferenceEquals(candidates, _candidates) || cursor != _cursor)
+                // The next-track list may have been replaced while the file was opening (e.g. the queue re-sends the
+                // order after a gapless advance). The open still holds when the new list has the very entries it
+                // went through at the current cursor; else it is stale and the next pass opens the right one.
+                if (generation != _generation || !StillValid(candidates, cursor, next, _candidates, _cursor))
                 {
                     next?.Segment.Decoder.Dispose();
                     return Step.Progress;
@@ -713,7 +716,7 @@ public sealed class Player : IPlayer
                 _segments.Add(next.Segment);
                 _writing = next.Segment;
                 _writingDone = false;
-                _cursor = next.NextCursor;
+                _cursor += next.NextCursor - cursor;
                 return Step.Progress;
             }
         }
@@ -1179,6 +1182,42 @@ public sealed class Player : IPlayer
 
         _state = state;
         StateChanged?.Invoke(this, new PlayerStateChangedEventArgs(old, state));
+    }
+
+    /// <summary>
+    /// Whether an open made from <paramref name="openedFrom"/> at <paramref name="openedAt"/> still applies to the
+    /// current list: the same list and cursor, or a new list whose entries from <paramref name="cursor"/> on are the
+    /// ones the open consumed (skipped entries and the opened one, same token and path).
+    /// </summary>
+    private static bool StillValid(IReadOnlyList<NextTrack> openedFrom, int openedAt, Opened? opened, IReadOnlyList<NextTrack> current, int cursor)
+    {
+        if (ReferenceEquals(openedFrom, current) && openedAt == cursor)
+        {
+            return true;
+        }
+
+        if (opened is null)
+        {
+            return false; // nothing opened: retry against the new list
+        }
+
+        var consumed = opened.NextCursor - openedAt;
+        if (cursor < 0 || cursor + consumed > current.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < consumed; i++)
+        {
+            var a = openedFrom[openedAt + i];
+            var b = current[cursor + i];
+            if (!ReferenceEquals(a.Token, b.Token) || !string.Equals(a.Path, b.Path, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool SameEntries(IReadOnlyList<NextTrack> a, IReadOnlyList<NextTrack> b)

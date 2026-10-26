@@ -553,6 +553,75 @@ public sealed class TrackSwitchTests : IDisposable
         Assert.Equal(2, Output.Converters.Count);
     }
 
+    /// <summary>
+    /// Holds the decode thread inside the converter factory while it opens the track of <paramref name="rate"/> Hz,
+    /// so the test can change the next-track list exactly while that open is in flight.
+    /// </summary>
+    private (ManualResetEventSlim Entered, ManualResetEventSlim Release) GateConverterFor(int rate)
+    {
+        var entered = new ManualResetEventSlim();
+        var release = new ManualResetEventSlim();
+        _owned.Add(entered);
+        _owned.Add(release);
+        Output.Converter = (from, to) =>
+        {
+            if (from.SampleRate == rate && !entered.IsSet)
+            {
+                entered.Set();
+                Assert.True(release.Wait(TimeSpan.FromSeconds(30)), "the test never released the open"); // failure cap only
+            }
+
+            return new StepConverter(from, to);
+        };
+        return (entered, release);
+    }
+
+    [Fact]
+    public void A_next_track_list_resent_with_the_same_entry_keeps_the_open_in_flight()
+    {
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var c = new RampSpec(3, 1000, SampleRate: 500, Channels: 1);
+        var (entered, release) = GateConverterFor(b.Format.SampleRate);
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        var nextB = new NextTrack(Add(b), "b");
+        player.SetNextTracks([nextB]);
+        player.Play();
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "the decode thread never opened b"); // failure cap only
+
+        player.SetNextTracks([nextB, new NextTrack(Add(c), "c")]); // a new list, same entry first (like after an advance)
+        release.Set();
+
+        Assert.Equal(a.Pcm(), Pull(2000));
+        Assert.Equal(StepConverter.Expected(b, a.Format), Pull(2000)); // gapless into b
+        Assert.Equal(StepConverter.Expected(c, a.Format)[..400], Pull(400)); // then c from the new list
+        Assert.Single(Output.Converters, x => x.From.SampleRate == b.Format.SampleRate); // b opened once, not redone
+        Assert.Equal(1, Output.OpenCount);
+    }
+
+    [Fact]
+    public void A_next_track_changed_during_its_open_discards_that_open()
+    {
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var c = new RampSpec(3, 1000, SampleRate: 500, Channels: 1);
+        var (entered, release) = GateConverterFor(b.Format.SampleRate);
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        player.SetNextTracks([new NextTrack(Add(b), "b")]);
+        player.Play();
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "the decode thread never opened b"); // failure cap only
+
+        player.SetNextTracks([new NextTrack(Add(c), "c")]); // the user changed what plays next
+        release.Set();
+
+        Assert.Equal(a.Pcm(), Pull(2000));
+        Assert.Equal(StepConverter.Expected(c, a.Format)[..400], Pull(400)); // c follows, nothing of b
+        var stale = Assert.Single(Output.Converters, x => x.From.SampleRate == b.Format.SampleRate);
+        Assert.True(((StepConverter)stale).Disposed); // the discarded open was released
+    }
+
     [Fact]
     public void Shared_mode_started_with_the_device_closed_converts_each_track_once_to_the_mixers_rate()
     {

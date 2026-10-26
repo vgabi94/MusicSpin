@@ -52,7 +52,7 @@ public sealed class LibraryWatcherTests : IDisposable
     [Fact]
     public void A_burst_of_events_is_reported_once_after_the_quiet_period_with_each_path_once()
     {
-        Directory.CreateDirectory(P("Album.2024")); // before watching: no real OS event for it
+        Directory.CreateDirectory(P("Album.2024")); // real folder so Directory.Exists sees it; the scripted watcher hears no OS events
         var (watcher, fs) = Create();
         using var _ = watcher;
 
@@ -157,13 +157,32 @@ public sealed class LibraryWatcherTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => new LibraryWatcher(null!, Debounce));
     }
 
-    private sealed class ScriptedWatcher(string folder) : FileSystemWatcher(folder)
+    /// <summary>
+    /// Raises only scripted events. The OS side watches a private empty folder, so real events from the test's own
+    /// file setup (FSEvents on macOS can deliver them late, after the fake clock moved) can never re-arm the debounce.
+    /// Scripted events still carry the folder the library watcher asked for.
+    /// </summary>
+    private sealed class ScriptedWatcher : FileSystemWatcher
     {
+        private readonly string _sandbox;
+
+        public ScriptedWatcher(string folder) : this(folder, TempDir.Create("watch-sandbox"))
+        {
+        }
+
+        private ScriptedWatcher(string folder, string sandbox) : base(sandbox)
+        {
+            Folder = folder;
+            _sandbox = sandbox;
+        }
+
+        public string Folder { get; }
+
         public bool WasDisposed { get; private set; }
 
         public void Raise(WatcherChangeTypes type, string name)
         {
-            var e = new FileSystemEventArgs(type, Path, name);
+            var e = new FileSystemEventArgs(type, Folder, name);
             switch (type)
             {
                 case WatcherChangeTypes.Created:
@@ -179,7 +198,7 @@ public sealed class LibraryWatcherTests : IDisposable
         }
 
         public void RaiseRenamed(string oldName, string newName)
-            => OnRenamed(new RenamedEventArgs(WatcherChangeTypes.Renamed, Path, newName, oldName));
+            => OnRenamed(new RenamedEventArgs(WatcherChangeTypes.Renamed, Folder, newName, oldName));
 
         public void RaiseOverflow() => OnError(new ErrorEventArgs(new InternalBufferOverflowException()));
 
@@ -187,6 +206,7 @@ public sealed class LibraryWatcherTests : IDisposable
         {
             WasDisposed = true;
             base.Dispose(disposing);
+            TempDir.TryDelete(_sandbox);
         }
     }
 }
