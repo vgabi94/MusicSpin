@@ -18,5 +18,6 @@ public static class TestAppBuilder
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false, ShouldRenderOnUIThread = true, UseSharedMouseDevice = false })
             .WithInterFont()
             .With(new Avalonia.Media.FontManagerOptions { DefaultFamilyName = "fonts:Inter#Inter" })
+            .With(MusicSpin.App.Program.Composition()) // as the app draws: separate dirty rectangles (#123)
             .AfterSetup(static _ => Harness.UiTime.FreezeAnimationClock());
 }

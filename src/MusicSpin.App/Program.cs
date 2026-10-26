@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Rendering.Composition;
 
 namespace MusicSpin.App;
 
@@ -31,5 +32,12 @@ internal static class Program
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
+            .With(Composition())
             .LogToTrace();
+
+    /// <summary>
+    /// How the compositor redraws (#123): it keeps up to 8 separate dirty rectangles, not their bounding box, so a spinning
+    /// record at the top and the player bar at the bottom redraw two small squares, not everything between them.
+    /// </summary>
+    internal static CompositionOptions Composition() => new() { UseRegionDirtyRectClipping = true };
 }

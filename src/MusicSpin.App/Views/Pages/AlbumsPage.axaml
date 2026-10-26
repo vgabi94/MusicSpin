@@ -64,7 +64,7 @@
 
     <Panel>
         <ScrollViewer Name="Scroller" Classes="view" IsVisible="{Binding !IsCrate}">
-            <ItemsControl Name="AlbumGrid" Classes="cards" Classes.shelf="{Binding IsShelf}" ItemsSource="{Binding Rows}">
+            <controls:RowsControl Name="AlbumGrid" Classes="cards" Classes.shelf="{Binding IsShelf}" ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <VirtualizingStackPanel />
@@ -79,13 +79,14 @@
                         </Grid>
                     </DataTemplate>
                     <DataTemplate DataType="vm:AlbumCardRowViewModel">
-                        <ItemsControl Classes="cardRow" Classes.first="{Binding IsFirst}" ItemsSource="{Binding Albums}">
-                            <ItemsControl.ItemsPanel>
+                        <!-- Recycled as the page scrolls, the row keeps its cards and gives them the new albums (controls:SlotRow). -->
+                        <controls:SlotRow Classes="cardRow" Classes.first="{Binding IsFirst}" Items="{Binding Albums}">
+                            <controls:SlotRow.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <UniformGrid Classes="cardRow" Rows="1" Columns="{Binding Columns}" />
                                 </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
+                            </controls:SlotRow.ItemsPanel>
+                            <controls:SlotRow.ItemTemplate>
                                 <DataTemplate DataType="vm:AlbumItemViewModel">
                                     <Button Classes="card"
                                             controls:QueueSource.Item="{Binding}"
@@ -128,19 +129,19 @@
                                         </StackPanel>
                                     </Button>
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                            </controls:SlotRow.ItemTemplate>
+                        </controls:SlotRow>
                     </DataTemplate>
                     <!-- A shelf board: the sleeves standing on it, then the board (mockup: .shelf-row, .board). -->
                     <DataTemplate DataType="vm:ShelfBoardViewModel">
                         <StackPanel Classes="shelfBoard" Classes.last="{Binding IsLast}">
-                            <ItemsControl Classes="shelfRow" Classes.later="{Binding !IsFirst}" ItemsSource="{Binding Albums}">
-                                <ItemsControl.ItemsPanel>
+                            <controls:SlotRow Classes="shelfRow" Classes.later="{Binding !IsFirst}" Items="{Binding Albums}">
+                                <controls:SlotRow.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Classes="shelfRow" />
                                     </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
+                                </controls:SlotRow.ItemsPanel>
+                                <controls:SlotRow.ItemTemplate>
                                     <DataTemplate DataType="vm:AlbumItemViewModel">
                                         <controls:ShelfSleeve controls:SceneSource.AlbumId="{Binding Album.Id}"
                                                               controls:QueueSource.Item="{Binding}"
@@ -156,13 +157,13 @@
                                                               CommandParameter="{Binding}"
                                                               AutomationProperties.Name="{Binding Name}" />
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </controls:SlotRow.ItemTemplate>
+                            </controls:SlotRow>
                             <Border Classes="board" />
                         </StackPanel>
                     </DataTemplate>
                 </ItemsControl.DataTemplates>
-            </ItemsControl>
+            </controls:RowsControl>
         </ScrollViewer>
 
         <Grid Name="CrateArea" Classes="crateWrap" Classes.grouped="{Binding IsGrouped}" ColumnDefinitions="*,Auto" IsVisible="{Binding IsCrate}">
