@@ -55,6 +55,26 @@
                 <controls:KitDeckView Theme="{StaticResource AcrylicDeck}" />
             </Viewbox>
         </DataTemplate>
+        <!-- An equalizer slider, upright: its gain over it, a tick at 0 dB behind it, its band (or "Pre") under it. -->
+        <DataTemplate DataType="vm:EqualizerSliderViewModel">
+            <StackPanel Classes="eqSlider">
+                <TextBlock Classes="eqGain" Text="{Binding GainText}" />
+                <Panel>
+                    <Border Classes="eqZero" />
+                    <LayoutTransformControl Classes="upright">
+                        <controls:ScrubBar Classes="eq"
+                                           Minimum="{x:Static vm:EqualizerViewModel.MinGain}"
+                                           Maximum="{x:Static vm:EqualizerViewModel.MaxGain}"
+                                           Value="{Binding Gain, Mode=OneWay}"
+                                           CommitCommand="{Binding SetGainCommand}"
+                                           Scrub="{Binding Scrub}"
+                                           ValueText="{Binding ValueText}"
+                                           AutomationProperties.Name="{Binding Name}" />
+                    </LayoutTransformControl>
+                </Panel>
+                <TextBlock Classes="eqBand" Text="{Binding Label}" />
+            </StackPanel>
+        </DataTemplate>
     </UserControl.DataTemplates>
 
     <Border Name="Dialog"
@@ -314,6 +334,92 @@
                                           Theme="{StaticResource Switch}"
                                           IsChecked="{Binding Audio.Levelling, FallbackValue=False}"
                                           AutomationProperties.Name="Volume levelling" />
+                        </Grid>
+                    </Border>
+
+                    <!--
+                      Equalizer (#141; not in the mockup, so in the dialog's own look): the switch (its note says how far
+                      boosts lower the pre-amp), the preset and Reset, the pre-amp and the ten bands upright, then saving
+                      the gains as a preset, and deleting a saved one. Applies at once, without a restart.
+                    -->
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Equalizer" />
+                                <TextBlock Name="EqualizerNote"
+                                           Classes="settingNote"
+                                           Text="{Binding Audio.Equalizer.HeadroomNote, FallbackValue={x:Null}, TargetNullValue={x:Static vm:EqualizerViewModel.Note}}" />
+                            </StackPanel>
+                            <ToggleButton Name="EqualizerSwitch"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Audio.Equalizer.Enabled, FallbackValue=False}"
+                                          AutomationProperties.Name="Equalizer" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid Classes="eqPreset" ColumnDefinitions="*,Auto,Auto">
+                            <TextBlock Text="Preset" />
+                            <Button Name="EqualizerPreset"
+                                    Grid.Column="1"
+                                    Classes="dropdown settingDropdown"
+                                    Command="{Binding Audio.Equalizer.OpenPresetMenuCommand, FallbackValue={x:Null}}"
+                                    AutomationProperties.Name="Equalizer preset">
+                                <StackPanel>
+                                    <TextBlock Classes="chosen" Text="{Binding Audio.Equalizer.PresetLabel, FallbackValue={x:Null}}" />
+                                    <controls:Icon Data="{StaticResource ChevronDown}" />
+                                </StackPanel>
+                            </Button>
+                            <Button Name="EqualizerReset"
+                                    Grid.Column="2"
+                                    Classes="settingButton"
+                                    Content="Reset"
+                                    Command="{Binding Audio.Equalizer.ResetCommand, FallbackValue={x:Null}}"
+                                    AutomationProperties.Name="Reset the equalizer" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow tall">
+                        <Grid Name="EqualizerSliders" Classes="eqSliders" ColumnDefinitions="Auto,*">
+                            <ContentControl Name="EqualizerPreamp" Content="{Binding Audio.Equalizer.Preamp, FallbackValue={x:Null}}" />
+                            <ItemsControl Name="EqualizerBands" Grid.Column="1" ItemsSource="{Binding Audio.Equalizer.Bands, FallbackValue={x:Null}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Rows="1" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid Classes="eqPreset" ColumnDefinitions="*,Auto,Auto">
+                            <StackPanel>
+                                <TextBox Name="EqualizerPresetName"
+                                         Classes="presetName"
+                                         Text="{Binding Audio.Equalizer.NewPresetName, FallbackValue={x:Null}}"
+                                         PlaceholderText="Name these settings"
+                                         MaxLength="{x:Static vm:EqualizerViewModel.MaxNameLength}"
+                                         AutomationProperties.Name="Preset name">
+                                    <TextBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding Audio.Equalizer.SavePresetCommand, FallbackValue={x:Null}}" />
+                                    </TextBox.KeyBindings>
+                                </TextBox>
+                                <TextBlock Name="EqualizerPresetProblem"
+                                           Classes="settingNote missing"
+                                           Text="{Binding Audio.Equalizer.PresetProblem, FallbackValue={x:Null}}"
+                                           IsVisible="{Binding Audio.Equalizer.PresetProblem, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
+                            </StackPanel>
+                            <Button Name="EqualizerSavePreset"
+                                    Grid.Column="1"
+                                    Classes="settingButton"
+                                    Content="Save preset"
+                                    Command="{Binding Audio.Equalizer.SavePresetCommand, FallbackValue={x:Null}}" />
+                            <Button Name="EqualizerDeletePreset"
+                                    Grid.Column="2"
+                                    Classes="settingButton"
+                                    Content="Delete"
+                                    Command="{Binding Audio.Equalizer.AskDeletePresetCommand, FallbackValue={x:Null}}"
+                                    IsVisible="{Binding Audio.Equalizer.IsUserPreset, FallbackValue=False}"
+                                    AutomationProperties.Name="{Binding Audio.Equalizer.PresetLabel, StringFormat='Delete the preset {0}', FallbackValue={x:Null}}" />
                         </Grid>
                     </Border>
                 </StackPanel>

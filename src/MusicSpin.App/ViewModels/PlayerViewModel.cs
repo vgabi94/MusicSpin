@@ -239,6 +239,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public Task SetNormalizationAsync(string mode) => IsConnected ? SendAsync("normalize", new { mode }) : Task.CompletedTask;
 
+    /// <summary>
+    /// Tells a running player an equalizer change (<c>eq</c>: enabled, preset, band and gain, preamp, save, delete). A player
+    /// that is not running is left alone: it takes the saved settings when it starts.
+    /// </summary>
+    public Task SetEqualizerAsync(object args) => IsConnected ? SendAsync("eq", args) : Task.CompletedTask;
+
     [RelayCommand]
     private Task SetShuffle(bool on) => SendAsync("shuffle", new { mode = on ? "on" : "off" });
 

@@ -502,6 +502,19 @@
     <sys:Double x:Key="SettingSliderWidth">170</sys:Double>
     <sys:Double x:Key="SettingSliderGap">10</sys:Double>
     <sys:Double x:Key="SettingOutputWidth">30</sys:Double>
+    <!--
+      Settings › Audio › Equalizer (#141; not in the mockup): eleven columns 32 wide fill the dialog's 396, the pre-amp
+      12 from the bands; each slider 120 long, its gain and band 4 above and below, a 14 px tick at 0 dB. The preset
+      dropdown, Reset, the name and its buttons 8 apart; the name box padded 10 5.
+    -->
+    <sys:Double x:Key="EqColumnWidth">32</sys:Double>
+    <sys:Double x:Key="EqPreampGap">12</sys:Double>
+    <sys:Double x:Key="EqSliderLength">120</sys:Double>
+    <sys:Double x:Key="EqLabelGap">4</sys:Double>
+    <sys:Double x:Key="EqZeroWidth">14</sys:Double>
+    <sys:Double x:Key="EqZeroHeight">1</sys:Double>
+    <sys:Double x:Key="EqButtonGap">8</sys:Double>
+    <Thickness x:Key="PresetNamePadding">10,5</Thickness>
     <Thickness x:Key="SegmentedBorderThickness">1</Thickness>
     <Thickness x:Key="SegmentedPadding">3</Thickness>
     <CornerRadius x:Key="SegmentedRadius">9</CornerRadius>

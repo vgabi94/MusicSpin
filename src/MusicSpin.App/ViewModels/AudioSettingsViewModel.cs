@@ -10,7 +10,8 @@ namespace MusicSpin.App.ViewModels;
 /// Settings › Audio (#32): the output device ("System default" first, then the devices <c>music-spin devices</c> lists;
 /// saved as <c>outputDevice</c>), exclusive mode (saved as <c>exclusiveMode</c>), and what the player plays through now.
 /// Output options apply only when the player starts, so a change restarts it: the queue and the position come back, and
-/// the music goes on if it was playing.
+/// the music goes on if it was playing. Volume levelling (#139) and the equalizer (#141, <see cref="Equalizer"/>) apply at
+/// once, without a restart.
 /// </summary>
 public sealed partial class AudioSettingsViewModel : ObservableObject
 {
@@ -48,6 +49,7 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
             _levellingMode = NormalizationMode.Auto; // what the switch turns on
         }
 
+        Equalizer = new EqualizerViewModel(settings, player, menu, notices);
         _player.StatusApplied += (_, _) => FollowPlayer(); // the CLI or an agent may change the mode while Settings is open
         _player.PropertyChanged += (_, e) =>
         {
@@ -77,6 +79,9 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial bool Levelling { get; set; }
+
+    /// <summary>The 10-band graphic equalizer (#141): applies at once, without a restart.</summary>
+    public EqualizerViewModel Equalizer { get; }
 
     /// <summary>A change is restarting the player: the controls wait.</summary>
     [ObservableProperty]
