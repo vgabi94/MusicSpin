@@ -238,7 +238,7 @@ public sealed class RadioQueueTests : IDisposable
         queue.QueueEnded += (_, _) => Interlocked.Increment(ref ended);
 
         queue.StartRadio(new RadioFilter());
-        await PlayerTestKit.WaitUntilAsync(() => Volatile.Read(ref loaded) > 3 * QueuePlayer.RadioLookahead, "radio past three lookaheads", 30_000);
+        await Eventually.UntilAsync(() => Volatile.Read(ref loaded) > 3 * QueuePlayer.RadioLookahead, "radio past three lookaheads", 30_000);
 
         var status = queue.Status();
         Assert.Equal(0, Volatile.Read(ref ended));
@@ -255,7 +255,7 @@ public sealed class RadioQueueTests : IDisposable
         queue.TrackLoaded += (_, e) => { lock (paths) { paths.Add(e.Track.Path); } };
 
         queue.StartRadio(new RadioFilter());
-        await PlayerTestKit.WaitUntilAsync(() => { lock (paths) { return paths.Count >= 5; } }, "five plays", 30_000);
+        await Eventually.UntilAsync(() => { lock (paths) { return paths.Count >= 5; } }, "five plays", 30_000);
 
         lock (paths)
         {
@@ -582,7 +582,7 @@ public sealed class RadioQueueTests : IDisposable
         var paths = new List<string>();
         queue.TrackLoaded += (_, e) => { lock (paths) { paths.Add(e.Track.Path); } };
         var first = queue.Resume().Item!.Path;
-        await PlayerTestKit.WaitUntilAsync(() => { lock (paths) { return paths.Count >= 3; } }, "three replays", 30_000);
+        await Eventually.UntilAsync(() => { lock (paths) { return paths.Count >= 3; } }, "three replays", 30_000);
         lock (paths)
         {
             Assert.All(paths, p => Assert.Equal(first, p));

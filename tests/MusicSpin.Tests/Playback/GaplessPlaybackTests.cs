@@ -189,7 +189,7 @@ public sealed class GaplessPlaybackTests : IDisposable
     [InlineData(2000, 2, 24)] // sample rate
     [InlineData(1000, 1, 24)] // channels
     [InlineData(1000, 2, 16)] // bit depth (device format)
-    public async Task A_different_format_reopens_the_device_between_tracks(int rate, int channels, int bits)
+    public async Task Without_a_converter_a_different_format_reopens_the_device_between_tracks(int rate, int channels, int bits)
     {
         var a = new RampSpec(1, 500);
         var b = new RampSpec(2, 400, rate, channels, bits);
@@ -199,7 +199,7 @@ public sealed class GaplessPlaybackTests : IDisposable
         queue.SetQueue(Items(Add(a), Add(b)));
 
         Assert.Equal(a.Pcm(), Drain());
-        await PlayerTestKit.WaitUntilAsync(() => Output.OpenCount == 2 && Output.Started, "device reopened for track 2");
+        await Eventually.UntilAsync(() => Output.OpenCount == 2 && Output.Started, "device reopened for track 2");
         Assert.Equal(b.Format, Output.Source!.Format);
         Assert.Equal(b.Pcm(), Drain());
         Assert.Equal(0, Volatile.Read(ref advanced));
@@ -213,7 +213,7 @@ public sealed class GaplessPlaybackTests : IDisposable
         var (_, queue) = Create(new PlayerOptions { Gapless = false });
         queue.SetQueue(Items(Add(a), Add(b)));
         Assert.Equal(a.Pcm(), Drain());
-        await PlayerTestKit.WaitUntilAsync(() => Output.OpenCount == 2 && Output.Started, "device reopened");
+        await Eventually.UntilAsync(() => Output.OpenCount == 2 && Output.Started, "device reopened");
         Assert.Equal(b.Pcm(), Drain());
         Assert.Equal(false, queue.Status().Gapless);
     }
@@ -247,7 +247,7 @@ public sealed class GaplessPlaybackTests : IDisposable
         Assert.True(player.Buffer!.WaitUntilReadable(2200, TimeSpan.FromSeconds(30)));
 
         queue.Next();
-        await PlayerTestKit.WaitUntilAsync(() => Output.Started && Output.Source is not null, "playing track 2");
+        await Eventually.UntilAsync(() => Output.Started && Output.Source is not null, "playing track 2");
         Assert.Equal(Concat(b.Pcm(), c.Pcm()), Drain());
     }
 
@@ -391,7 +391,7 @@ public sealed class GaplessPlaybackTests : IDisposable
         Assert.Equal(Concat(a.Pcm()[..1200], b.Pcm()), Drain()); // what decoded, then straight on
         var ex = Assert.IsType<MusicSpinException>(await Within2(error.Task));
         Assert.Equal(MusicSpinErrorCode.DecodeFailed, ex.Code);
-        await PlayerTestKit.WaitUntilAsync(() => queue.Status().QueueIndex == 1, "queue on track 2");
+        await Eventually.UntilAsync(() => queue.Status().QueueIndex == 1, "queue on track 2");
         Assert.Equal(1, Output.OpenCount);
     }
 
@@ -423,7 +423,7 @@ public sealed class GaplessPlaybackTests : IDisposable
         Assert.Equal(a.Pcm(), Drain());
 
         // The normal path loads B (device reopened); it fails at once and C follows it.
-        await PlayerTestKit.WaitUntilAsync(() => Output.OpenCount == 2 && Output.Started, "track 2 started");
+        await Eventually.UntilAsync(() => Output.OpenCount == 2 && Output.Started, "track 2 started");
         Assert.Equal(c.Pcm(), Drain());
         await Within(ended.Task);
         Assert.Equal(2, queue.Status().QueueIndex);
@@ -453,7 +453,7 @@ public sealed class GaplessPlaybackTests : IDisposable
         var ended = QueueEnded(queue);
         queue.SetQueue(Items(Add(a), Add(empty), Add(c)));
         Assert.Equal(a.Pcm(), Drain());
-        await PlayerTestKit.WaitUntilAsync(() => Output.OpenCount == 2 && Output.Started, "empty track started");
+        await Eventually.UntilAsync(() => Output.OpenCount == 2 && Output.Started, "empty track started");
         Assert.Equal(c.Pcm(), Drain());
         await Within(ended.Task);
         Assert.Equal(2, queue.Status().QueueIndex);
@@ -466,7 +466,7 @@ public sealed class GaplessPlaybackTests : IDisposable
         var ended = QueueEnded(queue);
         queue.SetRepeat(RepeatMode.One);
         queue.SetQueue(Items(Add(new RampSpec(1, 3))));
-        await PlayerTestKit.WaitUntilAsync(
+        await Eventually.UntilAsync(
             () =>
             {
                 Output.Pump(Block, wait: false); // a device keeps pulling

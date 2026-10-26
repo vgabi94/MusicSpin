@@ -281,7 +281,7 @@ public sealed class PlayerCliTests : IAsyncDisposable
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var run = _cli.RunAsync(cts.Token, "player", "run", "--backend", "null", "--idle-timeout", "60", "--json");
-        await PlayerTestKit.WaitUntilAsync(() => File.Exists(Path.Combine(_cli.DataDir, "player.json")), "player.json");
+        await Eventually.UntilAsync(() => File.Exists(Path.Combine(_cli.DataDir, "player.json")), "player.json");
 
         var other = new CliHarness { BaseDirectory = _cli.BaseDirectory };
         var second = await other.RunAsync("player", "run", "--backend", "null", "--json");

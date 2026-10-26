@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Output;
@@ -8,21 +7,6 @@ namespace MusicSpin.Tests.Shared;
 /// <summary>Helpers for player/queue/IPC tests.</summary>
 internal static class PlayerTestKit
 {
-    /// <summary>Polls <paramref name="condition"/> until true or the timeout elapses (then fails with <paramref name="what"/>).</summary>
-    public static async Task WaitUntilAsync(Func<bool> condition, string what, int timeoutMs = 5000)
-    {
-        var clock = Stopwatch.StartNew();
-        while (!condition())
-        {
-            if (clock.ElapsedMilliseconds > timeoutMs)
-            {
-                Assert.Fail($"Timed out after {timeoutMs} ms waiting for: {what}");
-            }
-
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
-    }
-
     /// <summary>A fake library of <paramref name="count"/> tracks, each <paramref name="seconds"/> long.</summary>
     public static (FakeDecoderFactory Decoders, string[] Paths) Tracks(int count, double seconds, string folder = "/music/q")
     {

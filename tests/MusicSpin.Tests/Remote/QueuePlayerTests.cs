@@ -61,7 +61,7 @@ public sealed class QueuePlayerTests : IDisposable
         var ended = 0;
         queue.QueueEnded += (_, _) => Interlocked.Increment(ref ended);
         queue.SetQueue(Items(paths));
-        await PlayerTestKit.WaitUntilAsync(() => Volatile.Read(ref ended) == 1, "queue end");
+        await Eventually.UntilAsync(() => Volatile.Read(ref ended) == 1, "queue end");
         var status = queue.Status();
         Assert.True(status.Ended);
         Assert.Equal(2, status.QueueIndex);
@@ -74,7 +74,7 @@ public sealed class QueuePlayerTests : IDisposable
         var (queue, paths, decoders) = Create(tracks: 1, seconds: 0.05, outputs: Outputs.Fast());
         decoders.With(TestAudio.Track("/music/q/extra.flac", sampleRate: 8000, seconds: 30));
         queue.SetQueue(Items(paths));
-        await PlayerTestKit.WaitUntilAsync(() => queue.Status().Ended, "queue end");
+        await Eventually.UntilAsync(() => queue.Status().Ended, "queue end");
 
         queue.Add([new QueueItem("/music/q/extra.flac")]);
         var status = queue.Resume();
@@ -389,7 +389,7 @@ public sealed class QueuePlayerUnhappyTests : IDisposable
         queue.SetQueue(Items(paths), play: false);
         decoders.Files.Remove(paths[1]); // "deleted" after queueing
         queue.Resume();
-        await PlayerTestKit.WaitUntilAsync(() => queue.Status().Ended, "queue end");
+        await Eventually.UntilAsync(() => queue.Status().Ended, "queue end");
         var status = queue.Status();
         Assert.Equal(2, status.QueueIndex);
         Assert.Equal(paths[1], Assert.Single(status.Skipped!).Path);
@@ -450,7 +450,7 @@ public sealed class QueuePlayerUnhappyTests : IDisposable
         queue.Error += (_, _) => Interlocked.Increment(ref errors);
         queue.SetQueue(Items(paths));
         faulty.FailStarts = 100;
-        await PlayerTestKit.WaitUntilAsync(() => queue.Status().LastError is not null, "device error on track 2");
+        await Eventually.UntilAsync(() => queue.Status().LastError is not null, "device error on track 2");
         var status = queue.Status();
         Assert.Equal(1, status.QueueIndex);
         Assert.Equal(PlayerState.Stopped, status.State);

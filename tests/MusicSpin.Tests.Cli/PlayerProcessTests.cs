@@ -230,7 +230,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         Assert.Contains($"pid {pid}", log, StringComparison.Ordinal);
 
         Assert.True((await Ok("quit")).GetProperty("stopped").GetBoolean());
-        await PlayerTestKit.WaitUntilAsync(() => !IsAlive(pid), "player process exit");
+        await Eventually.UntilAsync(() => !IsAlive(pid), "player process exit");
         Assert.Equal(ExitCodes.PlayerNotRunning, (await RunAsync("status", "--json")).ExitCode);
         Assert.False(File.Exists(Path.Combine(_data, "player.json")));
         Assert.False(File.Exists(Path.Combine(_data, "player.sock")));
@@ -277,7 +277,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         var pid = await PlayerPidAsync();
         if (OperatingSystem.IsLinux())
         {
-            await PlayerTestKit.WaitUntilAsync(() => PlayerProcesses().Length == 1, "a single player process");
+            await Eventually.UntilAsync(() => PlayerProcesses().Length == 1, "a single player process");
             Assert.Equal([pid], PlayerProcesses());
         }
 
@@ -295,7 +295,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
         Assert.Equal("stopped", added.GetProperty("state").GetString());
         var pid = await PlayerPidAsync();
         Assert.Equal(3, (await Ok("player", "status")).GetProperty("idleTimeoutSeconds").GetDouble());
-        await PlayerTestKit.WaitUntilAsync(() => !IsAlive(pid), "idle exit", timeoutMs: 15_000);
+        await Eventually.UntilAsync(() => !IsAlive(pid), "idle exit", timeoutMs: 15_000);
         Assert.Contains("stopped (idle)", await ReadLogAsync(), StringComparison.Ordinal);
         Assert.False((await Ok("player", "status")).GetProperty("running").GetBoolean());
     }
@@ -321,7 +321,7 @@ public sealed class PlayerProcessTests : IAsyncDisposable
             reason = "stopped (signal)";
         }
 
-        await PlayerTestKit.WaitUntilAsync(() => !IsAlive(pid), "clean exit");
+        await Eventually.UntilAsync(() => !IsAlive(pid), "clean exit");
         Assert.False(File.Exists(Path.Combine(_data, "player.json")));
         Assert.Contains(reason, await ReadLogAsync(), StringComparison.Ordinal);
     }

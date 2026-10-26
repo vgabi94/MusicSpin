@@ -102,7 +102,7 @@ public sealed class GlobalOptionsCliTests : IAsyncDisposable
         var run = _cli.RunAsync(cts.Token, ["player", "run", "--backend", "null", .. extra, "--json"]);
         try
         {
-            await PlayerTestKit.WaitUntilAsync(() => File.Exists(Path.Combine(_cli.DataDir, "player.json")) || run.IsCompleted, "player.json");
+            await Eventually.UntilAsync(() => File.Exists(Path.Combine(_cli.DataDir, "player.json")) || run.IsCompleted, "player.json");
             Assert.False(run.IsCompleted, "player run exited early");
             var status = await _cli.RunAsync("status", "--json");
             Assert.True(status.ExitCode == 0, status.Out + status.Err);

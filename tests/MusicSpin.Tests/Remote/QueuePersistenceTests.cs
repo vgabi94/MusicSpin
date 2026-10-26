@@ -71,11 +71,11 @@ public sealed class QueuePersistenceTests : PlayerHostTestBase
         StartHost(Fast());
         var client = await ConnectAsync();
         await client.SendAsync("queue.set", QueueSet(Paths[0]), Ct);
-        await PlayerTestKit.WaitUntilAsync(() => Saved()?.Items.Count == 1, "first save");
+        await Eventually.UntilAsync(() => Saved()?.Items.Count == 1, "first save");
         await client.SendAsync("queue.add", new { items = new[] { Paths[1], Paths[2] } }, Ct);
-        await PlayerTestKit.WaitUntilAsync(() => Saved()?.Items.Count == 3, "save after queue.add");
+        await Eventually.UntilAsync(() => Saved()?.Items.Count == 3, "save after queue.add");
         await client.SendAsync("repeat", new { mode = "one" }, Ct);
-        await PlayerTestKit.WaitUntilAsync(() => Saved()?.Repeat == RepeatMode.One, "save after a mode change");
+        await Eventually.UntilAsync(() => Saved()?.Repeat == RepeatMode.One, "save after a mode change");
         Assert.False(File.Exists(Endpoint.QueueFile + ".tmp"));
     }
 
@@ -196,11 +196,11 @@ public sealed class QueuePersistenceTests : PlayerHostTestBase
         var host = StartHost(Fast());
         var client = await ConnectAsync();
         await client.SendAsync("queue.set", QueueSet(Paths), Ct);
-        await PlayerTestKit.WaitUntilAsync(() => Log.ToString().Contains("could not save the queue", StringComparison.Ordinal), "save failure logged");
+        await Eventually.UntilAsync(() => Log.ToString().Contains("could not save the queue", StringComparison.Ordinal), "save failure logged");
         Assert.Equal(PlayerState.Playing, (await client.StatusAsync(Ct)).State);
         Assert.Single(Log.ToString().Split('\n'), l => l.Contains("could not save the queue", StringComparison.Ordinal)); // logged once, not every tick
         Directory.Delete(Endpoint.QueueFile + ".tmp");
-        await PlayerTestKit.WaitUntilAsync(() => Saved()?.Items.Count == 3, "save after the problem went away");
+        await Eventually.UntilAsync(() => Saved()?.Items.Count == 3, "save after the problem went away");
         await StopAsync(host);
     }
 }

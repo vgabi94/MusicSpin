@@ -52,7 +52,7 @@ public sealed class RadioHostTests : PlayerHostTestBase
         status = Status(await client.SendAsync("next", null, Ct));
         var index = status.QueueIndex;
         var path = status.Item!.Path;
-        await PlayerTestKit.WaitUntilAsync(() => Saved() is { Radio: not null } s && s.Index == index, "queue.json with the radio");
+        await Eventually.UntilAsync(() => Saved() is { Radio: not null } s && s.Index == index, "queue.json with the radio");
         Assert.Equal([new YearRange(2000, 2000)], Saved()!.Radio!.Filter.Years);
 
         await first.StopAsync("quit").WaitAsync(TimeSpan.FromSeconds(10), Ct);
@@ -76,7 +76,7 @@ public sealed class RadioHostTests : PlayerHostTestBase
             new { filter = new { genres = new[] { "jazz" }, excludeArtists = new[] { "Nobody" }, excludeYears = new[] { new { from = 1900, to = 1999 } } } }, Ct));
         const string Description = "genre jazz · excluding artist Nobody, year 1900-1999";
         Assert.Equal(Description, status.Radio!.Description);
-        await PlayerTestKit.WaitUntilAsync(() => Saved() is { Radio: not null }, "radio saved");
+        await Eventually.UntilAsync(() => Saved() is { Radio: not null }, "radio saved");
         var saved = Saved()!.Radio!.Filter;
         Assert.Equal(["Nobody"], saved.ExcludeArtists);
         Assert.Equal([new YearRange(1900, 1999)], saved.ExcludeYears);
@@ -96,12 +96,12 @@ public sealed class RadioHostTests : PlayerHostTestBase
         StartHost(Fast());
         var client = await ConnectAsync();
         await client.SendAsync("radio", null, Ct);
-        await PlayerTestKit.WaitUntilAsync(() => Saved() is { Radio: not null }, "radio saved");
+        await Eventually.UntilAsync(() => Saved() is { Radio: not null }, "radio saved");
 
         var status = Status(await client.SendAsync("queue.set", QueueSet(Paths[0]), Ct));
 
         Assert.Equal("queue", status.QueueMode);
-        await PlayerTestKit.WaitUntilAsync(() => Saved() is { Radio: null, Items.Count: 1 }, "plain queue saved");
+        await Eventually.UntilAsync(() => Saved() is { Radio: null, Items.Count: 1 }, "plain queue saved");
     }
 
     [Theory]

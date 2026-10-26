@@ -254,7 +254,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
         sub.Dispose();
 
         var client = await ConnectAsync();
-        await PlayerTestKit.WaitUntilAsync(() => host.Player.Status().Track?.Path == Paths[1], "request 2 applied");
+        await Eventually.UntilAsync(() => host.Player.Status().Track?.Path == Paths[1], "request 2 applied");
         await client.SendAsync("next", null, Ct).ContinueWith(_ => { }, Ct, TaskContinuationOptions.None, TaskScheduler.Default);
         var status = await client.StatusAsync(Ct);
         Assert.Equal(1, status.QueueLength); // the partial request was never executed
@@ -267,11 +267,11 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
         var host = StartHost(Options() with { MaxConnections = 2 });
         using var a = await RawConnectionAsync();
         using var b = await RawConnectionAsync();
-        await PlayerTestKit.WaitUntilAsync(() => host.ConnectionCount == 2, "both connections accepted");
+        await Eventually.UntilAsync(() => host.ConnectionCount == 2, "both connections accepted");
         using var c = await RawConnectionAsync();
         Assert.Null(await ReadLineAsync(c, 2000)); // closed by the player: no answer, EOF
         a.Dispose();
-        await PlayerTestKit.WaitUntilAsync(() => host.ConnectionCount < 2, "the first connection's session ended");
+        await Eventually.UntilAsync(() => host.ConnectionCount < 2, "the first connection's session ended");
         var client = await ConnectAsync();
         Assert.Equal(0, (await client.StatusAsync(Ct)).QueueLength);
     }
@@ -309,7 +309,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
             {
             }
         }, Ct);
-        await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 1, "subscription active");
+        await Eventually.UntilAsync(() => host.SubscriberCount == 1, "subscription active");
         await client.SendAsync("stop", null, Ct);
         AdvanceThroughIdleChecks(time);
         Assert.False(IdleExitStarted(host), "stopped but an app is attached");
@@ -317,7 +317,7 @@ public sealed class PlayerHostUnhappyTests : PlayerHostTestBase
         await cts.CancelAsync();
         await events.ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
         await subscriber.DisposeAsync();
-        await PlayerTestKit.WaitUntilAsync(() => host.SubscriberCount == 0, "subscription ended");
+        await Eventually.UntilAsync(() => host.SubscriberCount == 0, "subscription ended");
         AdvanceThroughIdleChecks(time);
         Assert.True(IdleExitStarted(host), "stopped with nobody attached");
         Assert.Equal("idle", await host.Completion.WaitAsync(TimeSpan.FromSeconds(5), Ct));

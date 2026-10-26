@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Library;
@@ -20,10 +21,10 @@ public sealed class RepeatShuffleTests : IDisposable
         }
     }
 
-    private (QueuePlayer Queue, string[] Paths, FakeDecoderFactory Decoders) Create(int tracks = 5, double seconds = 30, IAudioOutputProvider? outputs = null)
+    private (QueuePlayer Queue, string[] Paths, FakeDecoderFactory Decoders) Create(int tracks = 5, double seconds = 30, IAudioOutputProvider? outputs = null, TimeProvider? time = null)
     {
         var (decoders, paths) = PlayerTestKit.Tracks(tracks, seconds);
-        var player = new Player(decoders, outputs ?? Outputs.Realtime());
+        var player = new Player(decoders, outputs ?? Outputs.Realtime(), timeProvider: time);
         var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
         _owned.Add(player);
         _owned.Add(queue);
@@ -71,7 +72,7 @@ public sealed class RepeatShuffleTests : IDisposable
         queue.QueueEnded += (_, _) => Interlocked.Increment(ref queueEnded);
         queue.SetRepeat(RepeatMode.All);
         queue.SetQueue(Items(paths));
-        await PlayerTestKit.WaitUntilAsync(() => Volatile.Read(ref loads) >= 6, "three passes through a two-track queue");
+        await Eventually.UntilAsync(() => Volatile.Read(ref loads) >= 6, "three passes through a two-track queue");
         queue.Stop();
         Assert.Equal(0, Volatile.Read(ref queueEnded));
     }
@@ -84,7 +85,7 @@ public sealed class RepeatShuffleTests : IDisposable
         queue.TrackEnded += (_, _) => Interlocked.Increment(ref ended);
         queue.SetRepeat(RepeatMode.One);
         queue.SetQueue(Items(paths), startIndex: 1);
-        await PlayerTestKit.WaitUntilAsync(() => Volatile.Read(ref ended) >= 3, "three replays");
+        await Eventually.UntilAsync(() => Volatile.Read(ref ended) >= 3, "three replays");
         var status = queue.Status();
         Assert.Equal(1, status.QueueIndex);
         Assert.False(status.Ended);
@@ -323,13 +324,15 @@ public sealed class RepeatShuffleTests : IDisposable
     [Trait("Category", "Unhappy")]
     public async Task Repeat_all_gives_up_on_tracks_that_end_immediately_even_when_each_loop_is_slow()
     {
-        // A loaded machine: every loop takes longer than the rapid-loop threshold in wall-clock time. The detector counts
-        // audio played, so it must still give up instead of looping over a broken track forever.
-        var (queue, paths, decoders) = Create(tracks: 2, seconds: 0.001, outputs: Outputs.Fast());
-        decoders.OpenDelay = TimeSpan.FromMilliseconds(70);
+        // A loaded machine: every loop takes longer than the rapid-loop threshold on the player's clock. The detector counts
+        // audio played, so it must still give up instead of looping over a broken track forever. The clock is fake: each
+        // open moves it on 70 ms, so nothing really waits.
+        var time = new FakeTimeProvider();
+        var (queue, paths, decoders) = Create(tracks: 2, seconds: 0.001, outputs: Outputs.Fast(), time: time);
+        decoders.Opening = _ => time.Advance(TimeSpan.FromMilliseconds(70));
         var ended = QueueEnded(queue);
         queue.SetRepeat(RepeatMode.All);
-        queue.SetQueue(Items(paths)); // every track open takes 70 ms of wall-clock time
+        queue.SetQueue(Items(paths)); // every track open takes 70 ms on the player's clock
         await ended.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         Assert.Contains("Repeat stopped", queue.Status().LastError, StringComparison.Ordinal);
     }

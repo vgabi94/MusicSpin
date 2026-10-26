@@ -27,7 +27,7 @@ public sealed class PlayerProcessLauncherTests : IDisposable
             ["-c", "echo \"log=$MUSICSPIN_PLAYER_LOG\"; if read x; then echo stdin=data; else echo stdin=eof; fi; echo pid=$$; echo done >&2"],
             executable: "/bin/sh");
 
-        await PlayerTestKit.WaitUntilAsync(() => TestFiles.TryReadShared(Log)?.Contains("done") == true, "the stand-in player's output");
+        await Eventually.UntilAsync(() => TestFiles.TryReadShared(Log)?.Contains("done") == true, "the stand-in player's output");
         var lines = TestFiles.TryReadShared(Log)!.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal([$"log={Log}", "stdin=eof", $"pid={process.Id}", "done"], lines);
         if (!OperatingSystem.IsWindows())
@@ -35,7 +35,7 @@ public sealed class PlayerProcessLauncherTests : IDisposable
             Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Log));
         }
 
-        await PlayerTestKit.WaitUntilAsync(() => process.HasExited, "the stand-in player to exit");
+        await Eventually.UntilAsync(() => process.HasExited, "the stand-in player to exit");
         Assert.Null(process.ExitCode); // not our child: unknown
     }
 
@@ -46,9 +46,9 @@ public sealed class PlayerProcessLauncherTests : IDisposable
         File.WriteAllText(Log, new string('x', (int)PlayerProcessLauncher.MaxLogBytes + 1));
 
         var first = PlayerProcessLauncher.Start(Endpoint, ["-c", "echo one"], executable: "/bin/sh");
-        await PlayerTestKit.WaitUntilAsync(() => first.HasExited && TestFiles.TryReadShared(Log) == "one\n", "first run");
+        await Eventually.UntilAsync(() => first.HasExited && TestFiles.TryReadShared(Log) == "one\n", "first run");
         var second = PlayerProcessLauncher.Start(Endpoint, ["-c", "echo two"], executable: "/bin/sh");
-        await PlayerTestKit.WaitUntilAsync(() => second.HasExited && TestFiles.TryReadShared(Log) == "one\ntwo\n", "second run appends");
+        await Eventually.UntilAsync(() => second.HasExited && TestFiles.TryReadShared(Log) == "one\ntwo\n", "second run appends");
 
         Assert.Equal(PlayerProcessLauncher.MaxLogBytes + 1, new FileInfo(Log + ".1").Length);
     }
@@ -65,7 +65,7 @@ public sealed class PlayerProcessLauncherTests : IDisposable
 
         var process = PlayerProcessLauncher.Start(Endpoint, ["player", "run"], executable: host, entryAssembly: dll);
 
-        await PlayerTestKit.WaitUntilAsync(() => process.HasExited && TestFiles.TryReadShared(Log)?.Length > 0, "the script to run");
+        await Eventually.UntilAsync(() => process.HasExited && TestFiles.TryReadShared(Log)?.Length > 0, "the script to run");
         Assert.Equal($"ran {dll} with player run\n", TestFiles.TryReadShared(Log));
     }
 
@@ -90,7 +90,7 @@ public sealed class PlayerProcessLauncherTests : IDisposable
         var process = PlayerProcessLauncher.Start(Endpoint, ["-c", "exit 0"], executable: "/bin/sh");
 
         Assert.NotNull(process.Id);
-        await PlayerTestKit.WaitUntilAsync(() => process.HasExited, "the stand-in player to exit");
+        await Eventually.UntilAsync(() => process.HasExited, "the stand-in player to exit");
         Assert.True(Directory.Exists(Log));
     }
 
@@ -128,7 +128,7 @@ public sealed class PlayerProcessLauncherTests : IDisposable
             Assert.Equal(0, code);
             var pid = int.Parse(output.ToString().Trim(), System.Globalization.CultureInfo.InvariantCulture);
             Assert.True(pid > 0);
-            await PlayerTestKit.WaitUntilAsync(() => TestFiles.TryReadShared(Log)?.Contains("stdin-closed") == true, "the program's output");
+            await Eventually.UntilAsync(() => TestFiles.TryReadShared(Log)?.Contains("stdin-closed") == true, "the program's output");
             Assert.StartsWith($"log={Log}", TestFiles.TryReadShared(Log), StringComparison.Ordinal);
         }
         finally

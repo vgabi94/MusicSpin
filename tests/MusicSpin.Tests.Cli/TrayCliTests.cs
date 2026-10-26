@@ -22,7 +22,7 @@ public sealed class TrayCliTests : IAsyncDisposable
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var run = _cli.RunAsync(cts.Token, ["player", "run", "--backend", "null", "--idle-timeout", "0", .. extra]);
-        await PlayerTestKit.WaitUntilAsync(() => File.Exists(LogFile) && Read().Contains(expected, StringComparison.Ordinal), $"'{expected}' in the player log");
+        await Eventually.UntilAsync(() => File.Exists(LogFile) && Read().Contains(expected, StringComparison.Ordinal), $"'{expected}' in the player log");
         Assert.Equal(0, (await _cli.RunAsync("quit")).ExitCode);
         Assert.Equal(0, (await run.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken)).ExitCode);
         return Read();
@@ -59,7 +59,7 @@ public sealed class TrayCliTests : IAsyncDisposable
 
         var log = await RunPlayerUntilLogged("tray icon started");
 
-        await PlayerTestKit.WaitUntilAsync(() => File.Exists(seen), "the tray app to run");
+        await Eventually.UntilAsync(() => File.Exists(seen), "the tray app to run");
         Assert.Equal(["--tray", "--data-dir", _cli.DataDir], File.ReadAllLines(seen));
         Assert.Contains("tray icon started (pid ", log, StringComparison.Ordinal);
     }

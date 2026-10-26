@@ -65,25 +65,8 @@ internal sealed class QueueDispatcher : IUiDispatcher
     }
 
     /// <summary>Runs queued work until <paramref name="condition"/> holds (the player answers in real time).</summary>
-    public async Task UntilAsync(Func<bool> condition, string what, int timeoutMs = 10_000)
-    {
-        var deadline = Environment.TickCount64 + timeoutMs;
-        while (true)
-        {
-            Run();
-            if (condition())
-            {
-                return;
-            }
-
-            if (Environment.TickCount64 > deadline)
-            {
-                throw new TimeoutException($"Timed out waiting for {what}.");
-            }
-
-            await Task.Delay(5, TestContext.Current.CancellationToken);
-        }
-    }
+    public Task UntilAsync(Func<bool> condition, string what, int timeoutMs = 10_000)
+        => MusicSpin.Tests.Shared.Eventually.UntilAsync(condition, what, timeoutMs, Run);
 }
 
 /// <summary>A library in memory; <see cref="RaiseChanged"/> stands in for a change on disk.</summary>

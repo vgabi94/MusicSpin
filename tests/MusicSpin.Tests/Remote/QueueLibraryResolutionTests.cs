@@ -59,7 +59,7 @@ public sealed class QueueLibraryResolutionTests : PlayerHostTestBase
         Assert.True(status.Skipped is null or { Count: 0 });
         Assert.Equal([Paths[1], Paths[2]], (await ListAsync(client)).Items.Select(i => i.Item.Path));
         Assert.Contains("1 entry found at a new path", Log.ToString(), StringComparison.Ordinal);
-        await PlayerTestKit.WaitUntilAsync(() => Saved()?.Items[0].Path == Paths[1], "queue.json rewritten with the new path");
+        await Eventually.UntilAsync(() => Saved()?.Items[0].Path == Paths[1], "queue.json rewritten with the new path");
     }
 
     [Fact]

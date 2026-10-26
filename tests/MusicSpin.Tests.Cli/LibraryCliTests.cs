@@ -237,10 +237,10 @@ public sealed class LibraryCliTests : IAsyncDisposable
         await ScanAsync();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var run = _cli.RunAsync(cts.Token, "library", "watch", "--debounce-ms", "100", "--json");
-        await WaitForAsync(() => _cli.LiveOut?.Snapshot().Contains("\"watching\"", StringComparison.Ordinal) == true);
+        await Eventually.UntilAsync(() => _cli.LiveOut?.Snapshot().Contains("\"watching\"", StringComparison.Ordinal) == true, "watch started", 15_000);
 
         LibraryTestData.Write(Path.Combine(_music, "New", "fresh.flac"), LibraryTestData.Tiny16, "Fresh", "Newbie", "Debut");
-        await WaitForAsync(() => _cli.LiveOut!.Snapshot().Contains("\"scan\"", StringComparison.Ordinal));
+        await Eventually.UntilAsync(() => _cli.LiveOut!.Snapshot().Contains("\"scan\"", StringComparison.Ordinal), "a scan event", 15_000);
         await cts.CancelAsync();
         var result = await run;
 
@@ -251,16 +251,6 @@ public sealed class LibraryCliTests : IAsyncDisposable
         Assert.Equal(1, scan.GetProperty("data").GetProperty("result").GetProperty("added").GetInt32());
         Assert.Equal("stopped", events[^1].GetProperty("event").GetString());
         Assert.Equal(1, (await Ok("search", "fresh")).GetProperty("tracks").GetProperty("total").GetInt32());
-    }
-
-    private static async Task WaitForAsync(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, "timed out waiting for condition");
-            await Task.Delay(25, TestContext.Current.CancellationToken);
-        }
     }
 
     /// <summary>Lets the fake decoder "play" the scanned files.</summary>

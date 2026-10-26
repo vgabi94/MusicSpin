@@ -150,12 +150,12 @@ public sealed class LibraryCliTextTests : IAsyncDisposable
         await Run("library", "scan", "--quiet");
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var run = _cli.RunAsync(cts.Token, "library", "watch", "--debounce-ms", "100", "--json");
-        await WaitForAsync(() => _cli.LiveOut?.Snapshot().Contains("\"watching\"", StringComparison.Ordinal) == true);
+        await Eventually.UntilAsync(() => _cli.LiveOut?.Snapshot().Contains("\"watching\"", StringComparison.Ordinal) == true, "watch started", 15_000);
 
         using (MusicLibrary.OpenWritable(new DataDirectory(_cli.DataDir, DataDirectorySource.Portable), null, TimeSpan.FromSeconds(1)))
         {
             Song("b.flac", "B");
-            await WaitForAsync(() => _cli.LiveOut!.Snapshot().Contains("\"error\"", StringComparison.Ordinal));
+            await Eventually.UntilAsync(() => _cli.LiveOut!.Snapshot().Contains("\"error\"", StringComparison.Ordinal), "an error event", 15_000);
         }
 
         await cts.CancelAsync();
@@ -176,10 +176,10 @@ public sealed class LibraryCliTextTests : IAsyncDisposable
         await Run("library", "scan", "--quiet");
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var run = _cli.RunAsync(cts.Token, "library", "watch", "--debounce-ms", "100");
-        await WaitForAsync(() => _cli.LiveOut?.Snapshot().Contains("Watching 1 folder(s). Ctrl+C to stop.", StringComparison.Ordinal) == true);
+        await Eventually.UntilAsync(() => _cli.LiveOut?.Snapshot().Contains("Watching 1 folder(s). Ctrl+C to stop.", StringComparison.Ordinal) == true, "the watching line", 15_000);
 
         Song("b.flac", "B");
-        await WaitForAsync(() => _cli.LiveOut!.Snapshot().Contains("Scanned ", StringComparison.Ordinal));
+        await Eventually.UntilAsync(() => _cli.LiveOut!.Snapshot().Contains("Scanned ", StringComparison.Ordinal), "a scan line", 15_000);
         await cts.CancelAsync();
         var result = await run;
 
@@ -197,8 +197,4 @@ public sealed class LibraryCliTextTests : IAsyncDisposable
         Assert.Equal(ExitCodes.NotFound, result.ExitCode);
         Assert.StartsWith("music-spin library watch: No existing library folders to watch.", result.Err, StringComparison.Ordinal);
     }
-
-    /// <summary>Waits for the real file-system watcher (the OS decides when it fires).</summary>
-    private static async Task WaitForAsync(Func<bool> condition)
-        => await PlayerTestKit.WaitUntilAsync(condition, "watch output", 15_000);
 }

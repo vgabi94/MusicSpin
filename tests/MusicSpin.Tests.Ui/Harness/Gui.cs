@@ -44,25 +44,8 @@ internal static class Gui
     /// Waits (in real time: the player and the library work on their own threads) until <paramref name="condition"/>
     /// holds, running UI work meanwhile.
     /// </summary>
-    public static async Task UntilAsync(Func<bool> condition, string what, int timeoutMs = 10_000)
-    {
-        var deadline = Environment.TickCount64 + timeoutMs;
-        while (true)
-        {
-            Settle();
-            if (condition())
-            {
-                return;
-            }
-
-            if (Environment.TickCount64 > deadline)
-            {
-                throw new TimeoutException($"Timed out waiting for {what}.");
-            }
-
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
-    }
+    public static Task UntilAsync(Func<bool> condition, string what, int timeoutMs = 10_000)
+        => MusicSpin.Tests.Shared.Eventually.UntilAsync(condition, what, timeoutMs, Settle);
 
     /// <summary>The control named <paramref name="name"/> anywhere under <paramref name="root"/> (user controls have their own name scopes).</summary>
     public static T Find<T>(Visual root, string name)
