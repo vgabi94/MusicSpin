@@ -18,7 +18,7 @@ Every command accepts these, before or after the subcommand:
 | Area | Commands |
 |---|---|
 | Files and environment | [`info`](#info) · [`formats`](#formats) · [`devices`](#devices) · [`doctor`](#doctor) |
-| Playback | [`play`](#play) · [`radio`](#radio) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`normalize`](#normalize) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
+| Playback | [`play`](#play) · [`radio`](#radio) · [`pause`](#pause-resume-toggle-stop) · [`resume`](#pause-resume-toggle-stop) · [`toggle`](#pause-resume-toggle-stop) · [`stop`](#pause-resume-toggle-stop) · [`next` / `prev`](#next--prev) · [`seek`](#seek) · [`volume`](#volume) · [`repeat`](#repeat) · [`shuffle`](#shuffle) · [`normalize`](#normalize) · [`eq`](#eq) · [`status`](#status) · [`queue`](#queue) · [`quit`](#quit--player) · [`player`](#quit--player) |
 | Library | [`library add/remove/folders/scan/relocate/stats/check/watch`](#library) · [`artists`](#artists) · [`albums`](#albums) · [`tracks`](#tracks) · [`search`](#search) · [`filter`](#filter) · [`favorite add/remove`](#favorite--favorites) · [`favorites`](#favorite--favorites) |
 | Playlists | [`playlist list/show/create/rename/delete/add/remove/move/clear/import/export`](#playlist) · [`queue save`](#queue) |
 | Integration | [`serve`](#serve) · [`mcp`](#mcp) |
@@ -213,6 +213,20 @@ Volume levelling (ReplayGain / EBU R128, see [Playback → Volume levelling](pla
 
 Without arguments: show the status (`normalization`: mode, target, pre-amp, the current track's gain and where it came from). Case-insensitive. An unknown mode or a value out of range is exit 2 (checked before contacting the player). Needs a running player (exit 13). Saved as the default in `settings.json` (`normalization`, `normalizationTargetLufs`, `normalizationPreampDb`); a failure to save is a warning. Tracks without tags are measured in the background; until then they play unchanged. A gain is never more than +6 dB (or less than -40 dB).
 
+## eq
+
+`music-spin eq [show|on|off|set <band> <db>|preamp <db>|preset list|apply <name>|save <name>|delete <name>]`
+
+The 10-band graphic equalizer (see [Playback → Graphic equalizer](playback.md#graphic-equalizer)). Off by default.
+
+- `eq` / `eq show`: on/off, preset, pre-amp, automatic headroom and the ten gains.
+- `eq on`, `eq off`: off keeps the gains, so `on` brings them back.
+- `eq set <band> <db>`: one band, -12 to +12 dB. The band is 1..10 or its centre (`31.25`, `62.5`, `125`, `250`, `500`, `1k`, `2k`, `4k`, `8k`, `16k`; `Hz` optional). `eq set 1k -3` works (a negative gain is not an option). Turns the equalizer on.
+- `eq preamp <db>`: -12 to +12 dB, before the automatic headroom.
+- `eq preset list`: the built-in presets (`flat`, `rock`, `pop`, `jazz`, `classical`, `bass-boost`, `treble-boost`, `vocal`, `loudness`, `electronic`, `acoustic`) and yours; `apply <name>` (turns it on), `save <name>` (the current gains, replacing a preset of yours with that name; a built-in name is exit 2), `delete <name>`.
+
+Names are case-insensitive and stored lower-case with `-` for spaces. A bad band, gain, name or unknown preset is exit 2 and changes nothing. Needs a running player (exit 13). Saved as the default in `settings.json` (`equalizerEnabled`, `equalizerGains`, `equalizerPreampDb`, `equalizerPreset`, `equalizerPresets`); a failure to save is a warning. `status` shows an `Equalizer:` line while it is on.
+
 ## status
 
 State, track (codec, sample rate, bit depth, lossless/hi-res, tags), position, duration, volume, repeat mode, shuffle (and its seed), queue index/length, the queue item, output backend/device, exclusive mode, skipped files, and `queueMode` (`queue` or `radio`) with `radio` (filters, description, pool size) while a radio station plays.
@@ -239,7 +253,7 @@ The queue is persisted in `queue.json` in the data folder and restored (paused) 
 | `player quit`, `player stop` | Same as `quit` |
 | `player run` | Hidden. The background player process itself (started by `play`/`queue add`; not meant to be called by hand) |
 
-Control commands (`pause` … `quit`, `repeat`, `shuffle`, `normalize`, `queue save`) **never start** a player. Without one they exit **13 `player_not_running`**. The one exception is `resume` when a saved queue exists.
+Control commands (`pause` … `quit`, `repeat`, `shuffle`, `normalize`, `eq`, `queue save`) **never start** a player. Without one they exit **13 `player_not_running`**. The one exception is `resume` when a saved queue exists.
 
 ---
 
@@ -365,7 +379,7 @@ JSON results: `list` → `{total, items}`; `show` → `{playlist, entries: {tota
 
 ## serve
 
-`music-spin serve [--backend] [--device] [--exclusive]`: a long-running player in this process, controlled by JSON lines on stdin, with responses and events as JSON lines on stdout. It uses the same protocol as the background player, and levels volume the same way (the saved `settings.json` values at start; `normalize` in `serve` is for the session only). See [AI agents → serve](ai-agents.md#serve-json-lines-protocol-v1).
+`music-spin serve [--backend] [--device] [--exclusive]`: a long-running player in this process, controlled by JSON lines on stdin, with responses and events as JSON lines on stdout. It uses the same protocol as the background player, and levels volume the same way and equalizes (the saved `settings.json` values at start; `normalize` and `eq` in `serve` are for the session only). See [AI agents → serve](ai-agents.md#serve-json-lines-protocol-v1).
 
 ## mcp
 

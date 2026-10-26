@@ -4,6 +4,7 @@ using System.Text.Json;
 using MusicSpin.Cli.Output;
 using MusicSpin.Core;
 using MusicSpin.Core.Audio;
+using MusicSpin.Core.Equalization;
 using MusicSpin.Core.Normalization;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Settings;
@@ -510,6 +511,8 @@ internal static class ControlCommands
                 InitialRepeat = PlaybackModes.TryParseRepeat(settings.Repeat, out var repeatMode) ? repeatMode : RepeatMode.Off,
                 InitialShuffle = settings.Shuffle,
                 Normalization = NormalizationSettings.From(settings),
+                Equalizer = EqualizerSettings.From(settings),
+                EqualizerPresets = EqualizerSettings.UserPresets(settings, null),
                 BufferMilliseconds = settings.PlaybackBufferMs,
                 Gapless = settings.Gapless,
                 Log = log,

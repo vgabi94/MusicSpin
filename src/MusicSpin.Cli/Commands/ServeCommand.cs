@@ -31,7 +31,8 @@ internal static class ServeCommand
             using var player = new Player(env.Decoders, provider, options);
             var dir = runner.DataDirectory(parseResult);
             // The saved defaults (read only: serve does not write settings.json); the library keeps what the analysis finds.
-            using var levelling = new NormalizationService(env.Decoders, new LibraryLoudnessStore(dir), NormalizationSettings.From(new SettingsStore(dir).Load()),
+            var saved = new SettingsStore(dir).Load();
+            using var levelling = new NormalizationService(env.Decoders, new LibraryLoudnessStore(dir), NormalizationSettings.From(saved),
                 line => env.Error.WriteLine($"music-spin: {line}"));
             try
             {
@@ -40,6 +41,8 @@ internal static class ServeCommand
                 {
                     RadioPool = new MusicSpin.Core.Library.RadioPoolCache(dir, env.LibraryLockTimeout).Get,
                     Normalizer = levelling,
+                    Equalizer = new MusicSpin.Core.Equalization.GraphicEqualizer(
+                        MusicSpin.Core.Equalization.EqualizerSettings.From(saved), MusicSpin.Core.Equalization.EqualizerSettings.UserPresets(saved, null)),
                 };
                 await server.RunAsync(cancellationToken).ConfigureAwait(false);
                 return ExitCodes.Success;

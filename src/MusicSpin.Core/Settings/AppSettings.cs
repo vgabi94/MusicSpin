@@ -83,4 +83,19 @@ public sealed record AppSettings
 
     /// <summary>The album shelf's perspective depth (0 = flat .. 100).</summary>
     public double ShelfDepth { get; init; } = 40;
+
+    /// <summary>Whether the 10-band graphic equalizer (#141) filters playback.</summary>
+    public bool EqualizerEnabled { get; init; }
+
+    /// <summary>The equalizer's ten band gains in dB (31 Hz .. 16 kHz, each -12..+12); null or another length is flat.</summary>
+    public double[]? EqualizerGains { get; init; }
+
+    /// <summary>The equalizer's pre-amp in dB (-12..+12); automatic headroom keeps boosts from clipping on top of it.</summary>
+    public double EqualizerPreampDb { get; init; }
+
+    /// <summary>The preset the gains came from, or null once a band was changed by hand.</summary>
+    public string? EqualizerPreset { get; init; } = "flat";
+
+    /// <summary>The user's saved equalizer presets: name to ten band gains in dB.</summary>
+    public Dictionary<string, double[]>? EqualizerPresets { get; init; }
 }

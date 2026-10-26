@@ -270,6 +270,43 @@ internal static class McpCommand
                     var status = await SendAsync("normalize", changes ? new { mode = mode?.Trim().ToLowerInvariant(), target, preamp } : null, ct).ConfigureAwait(false);
                     return changes ? WithWarning(status, PlayerSupport.SaveNormalization(runner, parseResult, status)) : status;
                 }));
+            yield return Tool("equalizer", "Show or change the 10-band graphic equalizer (bands 31.25, 62.5, 125, 250, 500 Hz, 1k, 2k, 4k, 8k, 16k; -12..+12 dB). " +
+                "Presets: flat, rock, pop, jazz, classical, bass-boost, treble-boost, vocal, loudness, electronic, acoustic and the user's. The pre-amp is lowered " +
+                "automatically so boosts never clip; off or flat is bit-perfect. Changes are saved as the default for new players. With no arguments: the status.",
+                ([Description("true: on, false: off. Omit to keep.")] bool? enabled = null,
+                 [Description("Apply this preset (turns the equalizer on).")] string? preset = null,
+                 [Description("All ten band gains in dB, lowest band first.")] double[]? gains = null,
+                 [Description("A band to set: 1..10 or a centre frequency like \"1k\". Needs gain.")] string? band = null,
+                 [Description("The band's gain in dB, -12 to 12.")] double? gain = null,
+                 [Description("Pre-amp in dB, -12 to 12.")] double? preamp = null,
+                 [Description("Save the resulting gains as a user preset with this name.")] string? save = null,
+                 [Description("Delete this user preset.")] string? delete = null,
+                 CancellationToken ct = default) => Guard(async () =>
+                {
+                    if ((band is null) != (gain is null))
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, "band and gain go together.");
+                    }
+
+                    if (band is not null && !MusicSpin.Core.Equalization.EqualizerSettings.TryParseBand(band, out _))
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, $"Unknown equalizer band '{band}'. Use 1..10 or a centre frequency.");
+                    }
+
+                    if (gains is not null && MusicSpin.Core.Equalization.EqualizerSettings.CheckGains(gains) is { } badGains)
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, badGains);
+                    }
+
+                    if (save is not null && MusicSpin.Core.Equalization.EqualizerSettings.CheckPresetName(save) is { } badName)
+                    {
+                        throw new MusicSpinException(MusicSpinErrorCode.InvalidArgument, badName);
+                    }
+
+                    var changes = enabled is not null || preset is not null || gains is not null || band is not null || preamp is not null || save is not null || delete is not null;
+                    var status = await SendAsync("eq", changes ? new { enabled, preset, gains, band, gain, preamp, save, delete } : null, ct).ConfigureAwait(false);
+                    return changes ? WithWarning(status, PlayerSupport.SaveEqualizer(runner, parseResult, status, save is not null || delete is not null)) : status;
+                }));
             yield return Tool("quit_player", "Shut the background player down.", (CancellationToken ct = default) => Guard(async () =>
             {
                 await using var client = await PlayerSupport.ConnectAsync(runner, parseResult, ct).ConfigureAwait(false);

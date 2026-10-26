@@ -71,7 +71,7 @@ public sealed class McpServerTests : IAsyncDisposable
         foreach (var name in new[] { "play", "pause", "resume", "toggle", "stop", "next", "previous", "seek", "volume", "status", "queue",
                      "queue_add", "queue_remove", "queue_move", "queue_clear", "quit_player", "search", "albums", "artists", "library_stats", "repeat", "shuffle", "queue_save", "tracks", "playlists", "playlist_show", "playlist_create", "playlist_rename",
                      "playlist_add", "playlist_remove", "playlist_move", "playlist_clear", "playlist_delete", "playlist_import", "playlist_export", "library_relocate", "radio", "radio_end", "radio_stations", "radio_save", "radio_delete",
-                     "favorites", "favorite_add", "favorite_remove", "normalize" })
+                     "favorites", "favorite_add", "favorite_remove", "normalize", "equalizer" })
         {
             Assert.Contains(name, names);
         }
@@ -534,6 +534,41 @@ public sealed class McpServerTests : IAsyncDisposable
         Assert.StartsWith("usage:", await CallError("normalize", args), StringComparison.Ordinal);
 
         Assert.Equal("auto", (await Call("normalize")).GetProperty("normalization").GetProperty("mode").GetString());
+    }
+
+    [Fact]
+    public async Task The_equalizer_tool_shows_changes_and_saves_presets()
+    {
+        await StartAsync();
+        await Call("play", new() { ["files"] = new[] { Long[0] } });
+
+        Assert.False((await Call("equalizer")).GetProperty("equalizer").GetProperty("enabled").GetBoolean());
+        var pop = (await Call("equalizer", new() { ["preset"] = "pop" })).GetProperty("equalizer");
+        Assert.Equal(("pop", true), (pop.GetProperty("preset").GetString(), pop.GetProperty("enabled").GetBoolean()));
+        var band = (await Call("equalizer", new() { ["band"] = "16k", ["gain"] = -6.0, ["save"] = "bright-cut" })).GetProperty("equalizer");
+        Assert.Equal(-6, band.GetProperty("gains")[9].GetDouble());
+        Assert.Equal("bright-cut", band.GetProperty("preset").GetString());
+        var off = (await Call("equalizer", new() { ["enabled"] = false })).GetProperty("equalizer");
+        Assert.False(off.GetProperty("enabled").GetBoolean());
+    }
+
+    [Theory]
+    [Trait("Category", "Unhappy")]
+    [InlineData("band", "1k")]
+    [InlineData("gain", 3.0)]
+    [InlineData("preset", "dubstep")]
+    [InlineData("preamp", 13.0)]
+    [InlineData("save", "rock")]
+    [InlineData("delete", "nothing")]
+    public async Task The_equalizer_tool_rejects_bad_values_and_changes_nothing(string key, object value)
+    {
+        await StartAsync();
+        await Call("play", new() { ["files"] = new[] { Long[0] } });
+
+        Assert.StartsWith("usage:", await CallError("equalizer", new() { [key] = value }), StringComparison.Ordinal);
+
+        var eq = (await Call("equalizer")).GetProperty("equalizer");
+        Assert.Equal(("flat", false), (eq.GetProperty("preset").GetString(), eq.GetProperty("enabled").GetBoolean()));
     }
 
     [Fact]
