@@ -352,41 +352,48 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         }
         else if (cmd == "eq")
         {
-            // As the player does (the app's requests are well formed): a preset or a band turns it on unless "enabled" says.
+            // A copy of PlayerProtocol.Equalize's apply step, in its order: delete, preset, band, preamp, enabled, save. A
+            // preset or a band turns it on unless "enabled" says otherwise; the pre-amp doesn't. The checks are left out
+            // (the app's requests are well formed). PlayerEqualizerProtocolTests pins these rules for the requests the app
+            // sends, so a change to the player's fails there.
             var was = Status.Equalizer;
             var eq = new GraphicEqualizer(
                 was is null ? null : new EqualizerSettings(was.Enabled, was.Gains, was.PreampDb, was.Preset),
                 was?.UserPresets.Select(p => new EqualizerPreset(p.Key, p.Value, false)));
-            var turnsOn = false;
-            if (request.TryGetProperty("preset", out var preset))
-            {
-                eq.ApplyPreset(preset.GetString()!);
-                turnsOn = true;
-            }
-
-            if (request.TryGetProperty("band", out var band) && request.TryGetProperty("gain", out var gain))
-            {
-                eq.SetBand(band.GetInt32() - 1, gain.GetDouble());
-                turnsOn = true;
-            }
-
-            if (request.TryGetProperty("preamp", out var preamp))
-            {
-                eq.Configure(eq.Settings with { PreampDb = preamp.GetDouble() });
-            }
-
-            if (request.TryGetProperty("save", out var save))
-            {
-                eq.SavePreset(save.GetString()!);
-            }
-
             if (request.TryGetProperty("delete", out var delete))
             {
                 eq.DeletePreset(delete.GetString()!);
             }
 
-            var enabled = request.TryGetProperty("enabled", out var on) ? on.GetBoolean() : turnsOn || eq.Settings.Enabled;
-            eq.Configure(eq.Settings with { Enabled = enabled });
+            var next = eq.Settings;
+            if (request.TryGetProperty("preset", out var preset) && eq.Find(preset.GetString()) is { } chosen)
+            {
+                next = next with { Enabled = true, Gains = [.. chosen.Gains], Preset = chosen.Name };
+            }
+
+            if (request.TryGetProperty("band", out var band) && request.TryGetProperty("gain", out var gain))
+            {
+                var edited = next.BandGains.ToArray();
+                edited[band.GetInt32() - 1] = gain.GetDouble();
+                next = next with { Enabled = true, Gains = edited, Preset = eq.Presets.FirstOrDefault(p => p.Gains.SequenceEqual(edited))?.Name };
+            }
+
+            if (request.TryGetProperty("preamp", out var preamp))
+            {
+                next = next with { PreampDb = preamp.GetDouble() };
+            }
+
+            if (request.TryGetProperty("enabled", out var on))
+            {
+                next = next with { Enabled = on.GetBoolean() };
+            }
+
+            eq.Configure(next);
+            if (request.TryGetProperty("save", out var save))
+            {
+                eq.SavePreset(save.GetString()!);
+            }
+
             Status = Status with { Equalizer = EqualizerOf(eq) };
         }
         else if (cmd == "normalize" && request.TryGetProperty("mode", out var levelling) && levelling.GetString() is { } named)

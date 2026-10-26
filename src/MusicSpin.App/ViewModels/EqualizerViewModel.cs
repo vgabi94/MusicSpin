@@ -310,7 +310,10 @@ public sealed partial class EqualizerViewModel : ObservableObject
     /// <summary>
     /// Nothing on its way and no drag: follows the status skipped meanwhile (the CLI may have changed the equalizer, and
     /// the player's answer to the last change is the newest status, so the order holds), then saves. The status is not
-    /// followed when the player didn't get the changes: none is running, or its input is held.
+    /// followed when the player didn't get the changes: none is running, or its input is held. Then what is shown is
+    /// saved, presets included, so a preset the CLI saved or deleted while input was held isn't kept in settings.json
+    /// (the player and, once it is followed, the display still have it) until the next change here. Taking only the
+    /// status's presets would drop a preset saved here and still held.
     /// </summary>
     private void Settle()
     {

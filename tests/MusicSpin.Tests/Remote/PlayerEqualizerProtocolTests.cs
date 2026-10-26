@@ -54,6 +54,30 @@ public sealed class PlayerEqualizerProtocolTests : PlayerHostTestBase
         Assert.Equal((false, 1.0), (quiet.Enabled, quiet.Gains[1])); // unless enabled says otherwise
     }
 
+    /// <summary>
+    /// The requests Settings › Audio › Equalizer sends, as it sends them. The App's tests answer them with a copy of these
+    /// rules (ScriptedPlayer), so a change here has to change that copy too.
+    /// </summary>
+    [Fact]
+    public async Task The_Apps_requests_a_pre_amp_alone_and_a_reset_of_preset_pre_amp_and_switch_together()
+    {
+        StartHost();
+        var client = await ConnectAsync();
+
+        var preamp = Eq(await client.SendAsync("eq", new { preamp = -2.0 }, Ct));
+        Assert.Equal((false, -2.0), (preamp.Enabled, preamp.PreampDb)); // the pre-amp doesn't turn it on
+
+        await client.SendAsync("eq", new { preset = "rock", preamp = -3.0 }, Ct);
+        var reset = Eq(await client.SendAsync("eq", new { preset = "flat", preamp = 0.0, enabled = false }, Ct));
+        Assert.Equal((false, "flat", 0.0), (reset.Enabled, reset.Preset, reset.PreampDb)); // "enabled" wins over the preset
+        Assert.All(reset.Gains, g => Assert.Equal(0, g));
+
+        var band = Eq(await client.SendAsync("eq", new { band = 6, gain = 0.5 }, Ct));
+        Assert.Equal((true, 0.5, null), (band.Enabled, band.Gains[5], band.Preset));
+        var back = Eq(await client.SendAsync("eq", new { band = 6, gain = 0.0 }, Ct));
+        Assert.Equal("flat", back.Preset); // gains matching a preset name it again
+    }
+
     [Fact]
     public async Task User_presets_save_and_delete()
     {
