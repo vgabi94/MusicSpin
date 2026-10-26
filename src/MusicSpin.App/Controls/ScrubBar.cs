@@ -70,6 +70,9 @@ public sealed class ScrubBar : RangeBase
     private double _dragValue;
     private double _dragX;
 
+    /// <summary>The window it is in: its scaling sets the pixels the fill snaps to.</summary>
+    private TopLevel? _top;
+
     static ScrubBar()
     {
         FocusableProperty.OverrideDefaultValue<ScrubBar>(true);
@@ -153,7 +156,11 @@ public sealed class ScrubBar : RangeBase
         set => SetValue(ValueTextProperty, value);
     }
 
-    /// <summary>The filled part's width: the shown value's share of the bar.</summary>
+    /// <summary>
+    /// The filled part's width: the shown value's share of the bar, in whole device pixels (#121). The position moves 30
+    /// times a second, the fill a pixel every second or two: it changes, and the bar is laid out again, only when it moves
+    /// on screen.
+    /// </summary>
     public double FillWidth
     {
         get;
@@ -215,9 +222,34 @@ public sealed class ScrubBar : RangeBase
         if (change.Property == ValueProperty || change.Property == ScrubProperty || change.Property == MinimumProperty
             || change.Property == MaximumProperty || change.Property == BoundsProperty)
         {
-            var range = Maximum - Minimum;
-            FillWidth = range > 0 ? Math.Clamp((Shown - Minimum) / range, 0, 1) * Bounds.Width : 0;
+            UpdateFill();
         }
+    }
+
+    /// <summary>On a screen of another scale, the fill snaps to its pixels (the window moved there while paused).</summary>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _top = TopLevel.GetTopLevel(this);
+        _top?.ScalingChanged += OnScalingChanged;
+        UpdateFill();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _top?.ScalingChanged -= OnScalingChanged;
+        _top = null;
+    }
+
+    private void OnScalingChanged(object? sender, EventArgs e) => UpdateFill();
+
+    private void UpdateFill()
+    {
+        var range = Maximum - Minimum;
+        var share = range > 0 ? Math.Clamp((Shown - Minimum) / range, 0, 1) : 0;
+        var scale = _top?.RenderScaling ?? 1;
+        FillWidth = share >= 1 ? Bounds.Width : Math.Round(share * Bounds.Width * scale) / scale;
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)

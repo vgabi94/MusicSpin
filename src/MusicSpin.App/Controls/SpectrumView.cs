@@ -8,9 +8,10 @@ using MusicSpin.App.ViewModels;
 namespace MusicSpin.App.Controls;
 
 /// <summary>
-/// Draws a <see cref="SpectrumFrame"/>: one bar per band, built from <see cref="Rows"/> blocks in
+/// Draws a <see cref="SpectrumFrame"/>: one bar per band, built from <see cref="SpectrumViewModel.Rows"/> blocks in
 /// <see cref="Foreground"/> that grow more opaque toward the top (from <see cref="BottomOpacity"/>), and a peak block in
-/// <see cref="PeakBrush"/>. It draws only when the frame changes, so an idle analyzer costs nothing.
+/// <see cref="PeakBrush"/>. It draws only when the frame changes, so an idle analyzer costs nothing. The rows' brushes
+/// are made once, and again only when the colour or the opacity changes (#126).
 /// </summary>
 public sealed class SpectrumView : Control
 {
@@ -20,8 +21,6 @@ public sealed class SpectrumView : Control
 
     public static readonly StyledProperty<IBrush?> PeakBrushProperty = AvaloniaProperty.Register<SpectrumView, IBrush?>(nameof(PeakBrush));
 
-    public static readonly StyledProperty<int> RowsProperty = AvaloniaProperty.Register<SpectrumView, int>(nameof(Rows), 16);
-
     public static readonly StyledProperty<double> BarWidthProperty = AvaloniaProperty.Register<SpectrumView, double>(nameof(BarWidth), 4);
 
     public static readonly StyledProperty<double> BarGapProperty = AvaloniaProperty.Register<SpectrumView, double>(nameof(BarGap), 1);
@@ -30,9 +29,13 @@ public sealed class SpectrumView : Control
 
     static SpectrumView()
     {
-        AffectsRender<SpectrumView>(FrameProperty, ForegroundProperty, PeakBrushProperty, RowsProperty, BarWidthProperty, BarGapProperty, BottomOpacityProperty);
+        AffectsRender<SpectrumView>(FrameProperty, ForegroundProperty, PeakBrushProperty, BarWidthProperty, BarGapProperty, BottomOpacityProperty);
         FrameProperty.Changed.AddClassHandler<SpectrumView>((v, _) => v.Redraws++);
+        ForegroundProperty.Changed.AddClassHandler<SpectrumView>((v, _) => v._rowBrushes = null);
+        BottomOpacityProperty.Changed.AddClassHandler<SpectrumView>((v, _) => v._rowBrushes = null);
     }
+
+    private IBrush[]? _rowBrushes;
 
     public SpectrumFrame? Frame
     {
@@ -51,12 +54,6 @@ public sealed class SpectrumView : Control
     {
         get => GetValue(PeakBrushProperty);
         set => SetValue(PeakBrushProperty, value);
-    }
-
-    public int Rows
-    {
-        get => GetValue(RowsProperty);
-        set => SetValue(RowsProperty, value);
     }
 
     public double BarWidth
@@ -80,37 +77,50 @@ public sealed class SpectrumView : Control
     /// <summary>How many times a new frame asked for a redraw.</summary>
     public int Redraws { get; private set; }
 
+    /// <summary>How many times the rows' brushes were made.</summary>
+    internal int BrushBuilds { get; private set; }
+
     public override void Render(DrawingContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        if (Frame is not { } frame || Rows <= 0 || Bounds.Height <= 0)
+        if (Frame is not { } frame || Bounds.Height <= 0)
         {
             return;
         }
 
-        var row = Bounds.Height / Rows;
-        var color = (Foreground as ISolidColorBrush)?.Color;
-        var rowBrushes = new IBrush[Rows];
-        for (var r = 0; r < Rows; r++)
-        {
-            var opacity = Rows == 1 ? 1 : BottomOpacity + ((1 - BottomOpacity) * r / (Rows - 1));
-            rowBrushes[r] = color is { } c ? new ImmutableSolidColorBrush(c, opacity) : Foreground ?? Brushes.Transparent;
-        }
-
+        const int rows = SpectrumViewModel.Rows;
+        var row = Bounds.Height / rows;
+        var rowBrushes = _rowBrushes ??= RowBrushes();
         for (var i = 0; i < frame.Bars.Count; i++)
         {
             var x = i * (BarWidth + BarGap);
-            var height = (int)Math.Round(frame.Bars[i] * Rows);
+            var height = Math.Clamp(SpectrumViewModel.Blocks(frame.Bars[i]), 0, rows);
             for (var r = 0; r < height; r++)
             {
                 context.FillRectangle(rowBrushes[r], new Rect(x, Bounds.Height - ((r + 1) * row), BarWidth, row));
             }
 
-            var peak = i < frame.Peaks.Count ? (int)Math.Round(frame.Peaks[i] * Rows) : 0;
+            var peak = i < frame.Peaks.Count ? SpectrumViewModel.Blocks(frame.Peaks[i]) : 0;
             if (peak > 0 && PeakBrush is { } peakBrush)
             {
                 context.FillRectangle(peakBrush, new Rect(x, Bounds.Height - (peak * row), BarWidth, row));
             }
         }
+    }
+
+    /// <summary>Each row's brush: the colour, more opaque toward the top.</summary>
+    private IBrush[] RowBrushes()
+    {
+        BrushBuilds++;
+        const int rows = SpectrumViewModel.Rows;
+        var color = (Foreground as ISolidColorBrush)?.Color;
+        var brushes = new IBrush[rows];
+        for (var r = 0; r < rows; r++)
+        {
+            var opacity = BottomOpacity + ((1 - BottomOpacity) * r / (rows - 1));
+            brushes[r] = color is { } c ? new ImmutableSolidColorBrush(c, opacity) : Foreground ?? Brushes.Transparent;
+        }
+
+        return brushes;
     }
 }

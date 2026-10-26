@@ -441,7 +441,6 @@
     <sys:Double x:Key="AnalyzerHeight">32</sys:Double>
     <sys:Double x:Key="AnalyzerBarWidth">4</sys:Double>
     <sys:Double x:Key="AnalyzerBarGap">1</sys:Double>
-    <sys:Int32 x:Key="AnalyzerRows">16</sys:Int32>
     <sys:Double x:Key="AnalyzerBottomOpacity">0.4</sys:Double>
 
     <!-- Covers and records -->

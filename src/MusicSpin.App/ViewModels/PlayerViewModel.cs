@@ -41,6 +41,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     private int _refreshing;
     private int _refreshAgain;
 
+    /// <summary>The position is being interpolated (its timer runs).</summary>
+    internal bool IsTicking => _tick is not null;
+
     /// <summary>A <c>status</c> request is on its way (a poll meanwhile is skipped).</summary>
     internal bool IsRefreshing => Volatile.Read(ref _refreshing) == 1;
 
@@ -122,9 +125,16 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial double Duration { get; private set; }
 
-    /// <summary>Seconds into the track, interpolated between polls while playing.</summary>
+    /// <summary>Seconds into the track, interpolated between polls while playing (and the window shows).</summary>
     [ObservableProperty]
     public partial double Position { get; private set; }
+
+    /// <summary>
+    /// Whether the window shows (not minimized). While it doesn't, <see cref="Position"/> isn't interpolated (#125): it
+    /// moves only with the polls, and catches up as soon as the window shows again.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsShown { get; set; } = true;
 
     /// <summary>The volume level, 0..1; while <see cref="Muted"/>, the level unmuting goes back to.</summary>
     [ObservableProperty]
@@ -677,12 +687,29 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         StatusApplied?.Invoke(this, EventArgs.Empty);
     }
 
+    partial void OnIsShownChanged(bool value)
+    {
+        if (value)
+        {
+            Interpolate();
+        }
+
+        UpdateTimers();
+    }
+
     private void UpdateTimers()
     {
         if (State == PlayerState.Playing && IsConnected)
         {
             _poll ??= _time.CreateTimer(_ => _ = RefreshAsync(), null, PollInterval, PollInterval);
-            _tick ??= _time.CreateTimer(_ => _ui.Post(Interpolate), null, PositionInterval, PositionInterval);
+            if (IsShown)
+            {
+                _tick ??= _time.CreateTimer(_ => _ui.Post(Interpolate), null, PositionInterval, PositionInterval);
+            }
+            else
+            {
+                StopTick();
+            }
         }
         else
         {
@@ -705,6 +732,11 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     {
         _poll?.Dispose();
         _poll = null;
+        StopTick();
+    }
+
+    private void StopTick()
+    {
         _tick?.Dispose();
         _tick = null;
     }
