@@ -35,9 +35,9 @@ public sealed class TrackSwitchTests : IDisposable
         return path;
     }
 
-    private Player CreatePlayer()
+    private Player CreatePlayer(PlayerOptions? options = null)
     {
-        var player = new Player(_decoders, _outputs, new PlayerOptions());
+        var player = new Player(_decoders, _outputs, options ?? new PlayerOptions());
         _owned.Add(player);
         return player;
     }
@@ -576,6 +576,20 @@ public sealed class TrackSwitchTests : IDisposable
         return (entered, release);
     }
 
+    /// <summary>Gates <paramref name="spec"/>'s reads until the returned event is set (set at test end at the latest).</summary>
+    private ManualResetEventSlim Hold(ref RampSpec spec)
+    {
+        var gate = new ManualResetEventSlim();
+        _owned.Add(new Releaser(gate)); // disposed before the player: never leaves the decode thread stuck
+        spec = spec with { Gate = gate };
+        return gate;
+    }
+
+    private sealed class Releaser(ManualResetEventSlim gate) : IDisposable
+    {
+        public void Dispose() => gate.Set();
+    }
+
     [Fact]
     public void A_next_track_list_resent_with_the_same_entry_keeps_the_open_in_flight()
     {
@@ -583,11 +597,13 @@ public sealed class TrackSwitchTests : IDisposable
         var b = new RampSpec(2, 2000, SampleRate: 2000);
         var c = new RampSpec(3, 1000, SampleRate: 500, Channels: 1);
         var (entered, release) = GateConverterFor(b.Format.SampleRate);
-        var player = CreatePlayer();
+        var player = CreatePlayer(new PlayerOptions { PrefillTimeout = TimeSpan.Zero }); // Play must not wait on the held a
+        var held = Hold(ref a); // a cannot decode to its end (and queue the stream end) before b is set as next
         player.Load(Add(a));
         var nextB = new NextTrack(Add(b), "b");
         player.SetNextTracks([nextB]);
-        player.Play();
+        player.Play(); // opens the device first: only then can b be converted to the stream's format
+        held.Set();
         Assert.True(entered.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "the decode thread never opened b"); // failure cap only
 
         player.SetNextTracks([nextB, new NextTrack(Add(c), "c")]); // a new list, same entry first (like after an advance)
@@ -607,10 +623,12 @@ public sealed class TrackSwitchTests : IDisposable
         var b = new RampSpec(2, 2000, SampleRate: 2000);
         var c = new RampSpec(3, 1000, SampleRate: 500, Channels: 1);
         var (entered, release) = GateConverterFor(b.Format.SampleRate);
-        var player = CreatePlayer();
+        var player = CreatePlayer(new PlayerOptions { PrefillTimeout = TimeSpan.Zero }); // Play must not wait on the held a
+        var held = Hold(ref a); // a cannot decode to its end (and queue the stream end) before b is set as next
         player.Load(Add(a));
         player.SetNextTracks([new NextTrack(Add(b), "b")]);
-        player.Play();
+        player.Play(); // opens the device first: only then can b be converted to the stream's format
+        held.Set();
         Assert.True(entered.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "the decode thread never opened b"); // failure cap only
 
         player.SetNextTracks([new NextTrack(Add(c), "c")]); // the user changed what plays next
