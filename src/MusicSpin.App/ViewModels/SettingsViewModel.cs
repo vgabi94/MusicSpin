@@ -222,9 +222,13 @@ public sealed partial class SettingsViewModel : LayerViewModel
     [ObservableProperty]
     public partial double? DepthScrub { get; set; }
 
-    /// <summary>Saves a slider value a drag left unsaved (the dialog or the window closing mid-drag). Nothing else is ever pending.</summary>
+    /// <summary>
+    /// Saves a slider value a drag left unsaved (the dialog or the window closing mid-drag): the shelf's or the
+    /// equalizer's. Nothing else is ever pending.
+    /// </summary>
     public void SavePending()
     {
+        Audio?.Equalizer.SavePending();
         if (_tiltPending || _depthPending)
         {
             var (tilt, depth, saveTilt, saveDepth) = (ShelfTilt, ShelfDepth, _tiltPending, _depthPending);

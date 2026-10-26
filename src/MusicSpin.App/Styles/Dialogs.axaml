@@ -248,6 +248,74 @@
         <Setter Property="Margin" Value="{StaticResource ScanIssuesMargin}" />
         <Setter Property="Spacing" Value="{StaticResource ScanIssuesGap}" />
     </Style>
+
+    <!--
+      Settings › Audio › Equalizer (#141): the preset row and the name row, their buttons closer together; the pre-amp
+      and the ten bands, each an upright slider in its own column, its gain over it and its band under it.
+    -->
+    <Style Selector="Border.settingRow > Grid.eqPreset">
+        <Setter Property="ColumnSpacing" Value="{StaticResource EqButtonGap}" />
+    </Style>
+    <Style Selector="TextBox.presetName">
+        <Setter Property="Theme" Value="{StaticResource TypedBox}" />
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ButtonRadius}" />
+        <Setter Property="Padding" Value="{StaticResource PresetNamePadding}" />
+        <Setter Property="FontSize" Value="{StaticResource ButtonFontSize}" />
+    </Style>
+    <Style Selector="TextBox.presetName:focus">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Grid.eqSliders">
+        <Setter Property="ColumnSpacing" Value="{StaticResource EqPreampGap}" />
+    </Style>
+    <Style Selector="StackPanel.eqSlider">
+        <Setter Property="Width" Value="{StaticResource EqColumnWidth}" />
+        <Setter Property="Spacing" Value="{StaticResource EqLabelGap}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.eqSlider > TextBlock">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{StaticResource SmallFontSize}" />
+        <Setter Property="FontFeatures" Value="+tnum" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="StackPanel.eqSlider > TextBlock.eqGain">
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <!-- A bar turned a quarter left: its minimum at the bottom; the pointer, the wheel and the keys work as on the bar. -->
+    <Style Selector="LayoutTransformControl.upright">
+        <Setter Property="LayoutTransform" Value="rotate(-90deg)" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="controls|ScrubBar.eq">
+        <Setter Property="Width" Value="{StaticResource EqSliderLength}" />
+        <Setter Property="CommitsWhileDragging" Value="True" />
+        <Setter Property="EndKey" Value="True" />
+        <Setter Property="StepsToMultiples" Value="True" />
+        <Setter Property="PointerStep" Value="{x:Static vm:EqualizerViewModel.Step}" />
+        <Setter Property="SmallChange" Value="{x:Static vm:EqualizerViewModel.Step}" />
+        <Setter Property="LargeChange" Value="{x:Static vm:EqualizerViewModel.LargeStep}" />
+        <Setter Property="WheelStep" Value="{x:Static vm:EqualizerViewModel.Step}" />
+        <Setter Property="LargeWheelStep" Value="{x:Static vm:EqualizerViewModel.LargeStep}" />
+    </Style>
+    <!-- No fill from the bottom: a gain is up or down from 0 dB, which the tick behind marks; the handle always shows. -->
+    <Style Selector="controls|ScrubBar.eq /template/ Border#PART_Fill">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="controls|ScrubBar.eq /template/ Border#PART_Handle">
+        <Setter Property="RenderTransform" Value="scale(1)" />
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Border.eqZero">
+        <Setter Property="Width" Value="{StaticResource EqZeroWidth}" />
+        <Setter Property="Height" Value="{StaticResource EqZeroHeight}" />
+        <Setter Property="Background" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <Style Selector="StackPanel.scanIssues > Button.link">
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="Padding" Value="0" />

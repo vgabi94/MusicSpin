@@ -133,21 +133,29 @@
                         BorderThickness="{TemplateBinding BorderThickness}"
                         CornerRadius="{TemplateBinding CornerRadius}"
                         Padding="{TemplateBinding Padding}">
-                    <ScrollViewer Name="PART_ScrollViewer"
-                                  HorizontalScrollBarVisibility="Hidden"
-                                  VerticalScrollBarVisibility="Disabled">
-                        <TextPresenter Name="PART_TextPresenter"
-                                       Text="{TemplateBinding Text, Mode=TwoWay}"
-                                       CaretBrush="{TemplateBinding CaretBrush}"
-                                       CaretIndex="{TemplateBinding CaretIndex}"
-                                       SelectionStart="{TemplateBinding SelectionStart}"
-                                       SelectionEnd="{TemplateBinding SelectionEnd}"
-                                       SelectionBrush="{TemplateBinding SelectionBrush}"
-                                       SelectionForegroundBrush="{TemplateBinding Foreground}"
-                                       TextAlignment="{TemplateBinding TextAlignment}"
-                                       TextWrapping="NoWrap"
-                                       VerticalAlignment="Center" />
-                    </ScrollViewer>
+                    <Panel>
+                        <!-- Only where a box sets PlaceholderText (the equalizer's preset name). -->
+                        <TextBlock Name="PART_Watermark"
+                                   Text="{TemplateBinding PlaceholderText}"
+                                   Foreground="{DynamicResource Fg2Brush}"
+                                   VerticalAlignment="Center"
+                                   IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                        <ScrollViewer Name="PART_ScrollViewer"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Disabled">
+                            <TextPresenter Name="PART_TextPresenter"
+                                           Text="{TemplateBinding Text, Mode=TwoWay}"
+                                           CaretBrush="{TemplateBinding CaretBrush}"
+                                           CaretIndex="{TemplateBinding CaretIndex}"
+                                           SelectionStart="{TemplateBinding SelectionStart}"
+                                           SelectionEnd="{TemplateBinding SelectionEnd}"
+                                           SelectionBrush="{TemplateBinding SelectionBrush}"
+                                           SelectionForegroundBrush="{TemplateBinding Foreground}"
+                                           TextAlignment="{TemplateBinding TextAlignment}"
+                                           TextWrapping="NoWrap"
+                                           VerticalAlignment="Center" />
+                        </ScrollViewer>
+                    </Panel>
                 </Border>
             </ControlTemplate>
         </Setter>

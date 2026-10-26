@@ -223,7 +223,7 @@ Limitations: the gain of a file that is changed while MusicSpin runs is used unt
 
 ## Graphic equalizer
 
-A 10-band graphic equalizer, **off by default** (`music-spin eq`, the MCP `equalizer` tool, protocol `eq`). The bands are the ISO octave centres 31.25, 62.5, 125, 250, 500 Hz, 1, 2, 4, 8 and 16 kHz, each -12 to +12 dB.
+A 10-band graphic equalizer, **off by default** (Settings › Audio › Equalizer in the App, `music-spin eq`, the MCP `equalizer` tool, protocol `eq`). The bands are the ISO octave centres 31.25, 62.5, 125, 250, 500 Hz, 1, 2, 4, 8 and 16 kHz, each -12 to +12 dB.
 
 - **Filters.** One RBJ peaking biquad per band (Q = √2, about one octave), transposed direct form II with double-precision state per channel. The filters are designed for the stream's sample rate, so a band means the same at 44.1, 48, 96 or 192 kHz; a band at or above 0.45 × the sample rate is left out (the 16 kHz band at 32 kHz and below). The bands are not shelves, so `bass-boost` lifts 31–125 Hz rather than everything below.
 - **Headroom.** Boosts would clip, so the pre-amp is lowered automatically by the response's peak: the overall response never goes above 0 dB (`headroomDb` in `status`). A boost therefore never makes the music louder than it was; it makes the rest quieter. This is also the ear-health limit: the equalizer never adds level. A positive manual pre-amp is used only as far as the headroom allows.
@@ -232,6 +232,8 @@ A 10-band graphic equalizer, **off by default** (`music-spin eq`, the MCP `equal
 - **Order.** Decode → equalizer → spectrum → levelling ([above](#volume-levelling-replaygain--r128)) → volume. All are linear, so levelling's clipping prevention and its +6 dB limit still hold with the equalizer's headroom on top. The filter state carries across gapless track boundaries.
 
 Presets: `flat`, `rock`, `pop`, `jazz`, `classical`, `bass-boost`, `treble-boost`, `vocal`, `loudness`, `electronic`, `acoustic`, plus up to 64 of your own (`eq preset save <name>`). Changing a band makes the preset "custom" (`preset: null`) unless the gains match one.
+
+In the App, Settings › Audio has the switch, a preset menu and Reset (every band and the pre-amp to 0 dB), the pre-amp and the ten bands as upright sliders (drag, the wheel, or the arrow keys in 0.5 dB steps; Page Up/Down in 3 dB), and a name box to save the gains as a preset (a saved one has Delete). Moving a band or choosing a preset turns the equalizer on, as `eq` does; the pre-amp doesn't. The switch's note says how far boosts lower the pre-amp. Every change applies at once without restarting the player and is saved as the default; while Settings is open it shows changes made with the CLI or an agent.
 
 Settings (`settings.json`): `equalizerEnabled` (false), `equalizerGains` (ten numbers, lowest band first), `equalizerPreampDb` (0), `equalizerPreset` (`flat`), `equalizerPresets` (name → ten gains). A damaged value is clamped or, for a user preset, left out. `serve` starts with these values and does not write them.
 

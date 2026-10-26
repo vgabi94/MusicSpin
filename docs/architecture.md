@@ -337,6 +337,17 @@ src/MusicSpin.App/
   player while the old one still holds the data folder). Closing the window during a restart waits for it, then shuts
   down the player it started. Who owns the player doesn't change: one the CLI started is still left
   playing when the window closes. "In use now" is `status.output`.
+- **Settings › Audio › Equalizer.** `EqualizerViewModel` keeps a `GraphicEqualizer` of its own as the model (from
+  settings.json at start): a change is made to it, shown and sent to a running player as the matching `eq`
+  (`PlayerViewModel.SetEqualizerAsync`), then saved (`EqualizerSettings.ApplyTo`, with the user's presets) so a player
+  started later reads the same. It follows `status.equalizer` (the CLI may change it), but not mid-drag or while its own
+  `eq` commands are on their way: the answer to an earlier one would undo a later one here. A status skipped then is
+  caught up once the drag ends and the last answer is applied (`PlayerViewModel.AfterAnswers`: the answers wait in the
+  same queue, so the last one is the newest), and only then is it saved, as the CLI saves the player's answer: a preset
+  the CLI saved meanwhile is kept. Without a running player, or while its input is held, the change is saved as shown.
+  A drag sends every step but saves when it ends (or when Settings or the window closes). A status the same as what
+  is shown changes nothing (one comes with every poll while playing). The sliders are `ScrubBar`s turned upright in a
+  `LayoutTransformControl`, so the pointer, wheel, keys and screen readers work as on the other bars.
 - **Now Playing.** `NowPlayingViewModel` is a layer: the player bar's cover opens and closes it, ✕ and Esc close it.
   It shows the playing track's album (title, "artist · year", the tracks; a click plays the album from that track) and
   holds the deck's state, which follows play/pause from anywhere: playing lowers the arm and turns the platter, a pause
