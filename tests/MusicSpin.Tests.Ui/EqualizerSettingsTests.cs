@@ -23,7 +23,8 @@ namespace MusicSpin.Tests.Ui;
 
 /// <summary>
 /// Settings › Audio › Equalizer (#141): the switch, the presets, the pre-amp and the ten bands. Each change is saved, so
-/// the next player starts with it, and the running player is told (<c>eq</c>) without a restart.
+/// the next player starts with it, and the running player is told (<c>eq</c>) without a restart. With a player running,
+/// the change is saved once it has answered (as the CLI saves the player's answer), so the tests wait for the file.
 /// </summary>
 public sealed class EqualizerSettingsTests
 {
@@ -46,6 +47,17 @@ public sealed class EqualizerSettingsTests
 
     private static AppSettings Saved(AppHarness app) => new SettingsStore(app.Data).Load();
 
+    /// <summary>The settings file once <paramref name="saved"/> holds for it.</summary>
+    private static async Task<AppSettings> SavedAsync(AppHarness app, Func<AppSettings, bool> saved, string what)
+    {
+        await Gui.UntilAsync(() => saved(Saved(app)), what);
+        return Saved(app);
+    }
+
+    /// <summary>The equalizer as a player started with <paramref name="settings"/> reports it.</summary>
+    private static EqualizerStatus Reported(AppSettings settings)
+        => ScriptedPlayer.EqualizerOf(new GraphicEqualizer(EqualizerSettings.From(settings), EqualizerSettings.UserPresets(settings)));
+
     private static async Task OpenSettingsAsync(AppHarness app)
     {
         var lists = app.Options.AudioDevices.Lists;
@@ -56,9 +68,11 @@ public sealed class EqualizerSettingsTests
         Gui.Settle();
     }
 
+    /// <summary>Playing, with the equalizer saved (as a player started now has it), applying <c>eq</c> as a player does.</summary>
     private static async Task PlayingAsync(AppHarness app)
     {
-        app.Scripted!.Status = ScriptedPlayer.Playing("Blue in Green") with { Output = app.Scripted.Status.Output };
+        app.Scripted!.FollowsCommands = true;
+        app.Scripted.Status = ScriptedPlayer.Playing("Blue in Green") with { Output = app.Scripted.Status.Output, Equalizer = Reported(Saved(app)) };
         await app.Scripted.PushAsync("stateChanged");
         await Gui.UntilAsync(() => app.ViewModel.Player.IsPlaying, "playing");
     }
@@ -165,11 +179,11 @@ public sealed class EqualizerSettingsTests
 
         Assert.True(Flip(app, "EqualizerSwitch"));
         Assert.True((await SentAsync(app, 1)).GetProperty("enabled").GetBoolean());
-        Assert.True(Saved(app).EqualizerEnabled);
+        await SavedAsync(app, s => s.EqualizerEnabled, "on, saved");
 
         Assert.False(Flip(app, "EqualizerSwitch"));
         Assert.False((await SentAsync(app, 2)).GetProperty("enabled").GetBoolean());
-        Assert.False(Saved(app).EqualizerEnabled);
+        await SavedAsync(app, s => !s.EqualizerEnabled, "off, saved");
         Assert.Equal(1, app.Scripted!.AppStarts); // no restart
     }
 
@@ -191,7 +205,7 @@ public sealed class EqualizerSettingsTests
         Assert.True(Find<ToggleButton>(app, "EqualizerSwitch").IsChecked);
         Assert.Equal("Custom", PresetShown(app));
         Assert.Equal("+0.5", Texts(app, "EqualizerBands", "eqGain")[5]);
-        var saved = Saved(app);
+        var saved = await SavedAsync(app, s => s.EqualizerGains?[5] == 0.5, "the band saved");
         Assert.Equal((true, 0.5, null), (saved.EqualizerEnabled, saved.EqualizerGains![5], saved.EqualizerPreset));
 
         Gui.Press(app.Window, Key.PageUp, PhysicalKey.PageUp);
@@ -237,7 +251,7 @@ public sealed class EqualizerSettingsTests
 
         await SentAsync(app, 7); // the press (0 dB, turning it on), then each step
         Assert.Equal([0, 1, 2, 3, 4, 5, 6], app.Scripted!.Sent("eq").Select(e => e.GetProperty("gain").GetDouble()));
-        Assert.Equal(6, Saved(app).EqualizerGains![0]);
+        await SavedAsync(app, s => s.EqualizerGains?[0] == 6, "where it was let go, saved");
         Assert.Equal("+6", Texts(app, "EqualizerBands", "eqGain")[0]);
     }
 
@@ -258,7 +272,8 @@ public sealed class EqualizerSettingsTests
         Assert.Equal(-0.5, sent.GetProperty("preamp").GetDouble());
         Assert.False(sent.TryGetProperty("enabled", out _));
         Assert.False(Find<ToggleButton>(app, "EqualizerSwitch").IsChecked);
-        Assert.Equal(-0.5, Saved(app).EqualizerPreampDb);
+        await SavedAsync(app, s => s.EqualizerPreampDb == -0.5, "the pre-amp saved");
+        Assert.False(Saved(app).EqualizerEnabled);
         Assert.Equal("Pre-amp: -0.5 dB", preamp.ValueText);
     }
 
@@ -285,7 +300,7 @@ public sealed class EqualizerSettingsTests
         Assert.Equal("Rock", PresetShown(app));
         Assert.True(Find<ToggleButton>(app, "EqualizerSwitch").IsChecked);
         Assert.Equal(["+5", "+4", "+2", "-1", "-2", "-1", "+1", "+3", "+4", "+5"], Texts(app, "EqualizerBands", "eqGain"));
-        var saved = Saved(app);
+        var saved = await SavedAsync(app, s => s.EqualizerPreset == "rock", "rock saved");
         Assert.Equal(("rock", true), (saved.EqualizerPreset, saved.EqualizerEnabled));
         Assert.Equal(Rock, saved.EqualizerGains);
         Assert.Equal([1, 1, 1, 1, 1, 0, 0, 0, 0, 0], saved.EqualizerPresets!["late-night"]); // the user's presets kept
@@ -307,7 +322,7 @@ public sealed class EqualizerSettingsTests
         Assert.Equal("Flat", PresetShown(app));
         Assert.True(Find<ToggleButton>(app, "EqualizerSwitch").IsChecked);
         Assert.Equal(EqualizerViewModel.Note, Find<TextBlock>(app, "EqualizerNote").Text); // nothing boosted now
-        var saved = Saved(app);
+        var saved = await SavedAsync(app, s => s.EqualizerPreset == "flat", "flat saved");
         Assert.Equal(("flat", 0.0, true), (saved.EqualizerPreset, saved.EqualizerPreampDb, saved.EqualizerEnabled));
     }
 
@@ -325,8 +340,9 @@ public sealed class EqualizerSettingsTests
         Assert.Equal("late-night", (await SentAsync(app, 1)).GetProperty("save").GetString());
         Assert.Equal("Late night", PresetShown(app));
         Assert.True(string.IsNullOrEmpty(Find<TextBox>(app, "EqualizerPresetName").Text)); // ready for the next
-        Assert.Equal([2, 2, 1, 0, 0, 0, 0, 1, 2, 2], Saved(app).EqualizerPresets!["late-night"]);
-        Assert.Equal("late-night", Saved(app).EqualizerPreset);
+        var saved = await SavedAsync(app, s => s.EqualizerPresets?.ContainsKey("late-night") == true, "the preset saved");
+        Assert.Equal([2, 2, 1, 0, 0, 0, 0, 1, 2, 2], saved.EqualizerPresets!["late-night"]);
+        Assert.Equal("late-night", saved.EqualizerPreset);
         var delete = Find<Button>(app, "EqualizerDeletePreset");
         Assert.True(delete.IsVisible);
 
@@ -340,8 +356,8 @@ public sealed class EqualizerSettingsTests
         Assert.Equal("late-night", (await SentAsync(app, 2)).GetProperty("delete").GetString());
         Assert.Equal("Custom", PresetShown(app)); // the gains stay
         Assert.False(delete.IsVisible);
-        Assert.Empty(Saved(app).EqualizerPresets!);
-        Assert.Equal([2, 2, 1, 0, 0, 0, 0, 1, 2, 2], Saved(app).EqualizerGains!);
+        saved = await SavedAsync(app, s => s.EqualizerPresets is { Count: 0 }, "the preset deleted");
+        Assert.Equal([2, 2, 1, 0, 0, 0, 0, 1, 2, 2], saved.EqualizerGains!);
     }
 
     // ---- unhappy paths ------------------------------------------------------------------------------------------
@@ -391,27 +407,130 @@ public sealed class EqualizerSettingsTests
 
     [AvaloniaFact]
     [Trait("Category", "Unhappy")]
-    public async Task A_status_read_before_a_change_reached_the_player_does_not_undo_it_here()
+    public async Task The_answer_to_an_earlier_change_does_not_undo_a_later_one_here()
     {
         await using var app = await OpenAsync();
-        app.Scripted!.Status = app.Scripted.Status with { Equalizer = Status(false, "flat", new double[10]) };
         await OpenSettingsAsync(app);
         await PlayingAsync(app);
-        app.Scripted.Status = app.Scripted.Status with { Equalizer = Status(false, "flat", new double[10]) };
-        var held = app.Scripted.Hold("eq");
+        var held = app.Scripted!.Hold("eq");
+        var band = Eq(app).Bands[0];
+        var shown = new List<double>();
+        band.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(EqualizerSliderViewModel.Gain))
+            {
+                shown.Add(band.Gain);
+            }
+        };
 
         Assert.True(Flip(app, "EqualizerSwitch"));
         await SentAsync(app, 1);
-        await app.Scripted.PushAsync("stateChanged"); // the player hasn't turned it on yet: a status that says off
-        await Gui.UntilAsync(() => app.Scripted.Count("status") > 0, "the status read");
-        Gui.Settle();
-        Assert.True(Find<ToggleButton>(app, "EqualizerSwitch").IsChecked);
-
-        app.Scripted.Status = app.Scripted.Status with { Equalizer = Status(true, "flat", new double[10]) };
+        band.SetGainCommand.Execute(1.0); // on its way behind the first: the first's answer says 0 dB
+        Assert.False(Saved(app).EqualizerEnabled); // saved once the player has answered
         held.SetResult();
-        await Gui.UntilAsync(() => app.ViewModel.Player.Status?.Equalizer?.Enabled == true, "the player's answer");
+
+        var saved = await SavedAsync(app, s => s.EqualizerGains?[0] == 1, "both saved once answered");
+        Assert.True(saved.EqualizerEnabled);
+        Assert.Equal(2, app.Scripted.Count("eq"));
+        Assert.Equal([1], shown); // never back to 0 dB in between
         Assert.True(Find<ToggleButton>(app, "EqualizerSwitch").IsChecked);
-        Assert.True(Saved(app).EqualizerEnabled);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_preset_the_CLI_saved_before_a_change_reached_the_player_is_kept_when_the_change_is_saved()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        // `music-spin eq save cli-one`, just before the app's change reached the player: the app hears of it in the answer
+        var cliOne = new double[] { 1, 2, 3, 0, 0, 0, 0, 0, 0, 0 };
+        app.Scripted!.Status = app.Scripted.Status with
+        {
+            Equalizer = app.Scripted.Status.Equalizer! with { UserPresets = new Dictionary<string, IReadOnlyList<double>> { ["cli-one"] = cliOne } },
+        };
+
+        Assert.True(Flip(app, "EqualizerSwitch"));
+
+        var saved = await SavedAsync(app, s => s.EqualizerEnabled, "on, saved once answered");
+        Assert.Equal(cliOne, saved.EqualizerPresets!["cli-one"]);
+        Click(app, Find<Button>(app, "EqualizerPreset"));
+        Assert.Contains("Cli one", app.ViewModel.Menu.Entries.Select(e => e.Label));
+        app.ViewModel.Menu.Close();
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_change_from_the_CLI_mid_drag_shows_and_is_kept_when_the_drag_is_saved()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        var band = Eq(app).Bands[2];
+        band.Scrub = 1; // mid-drag, as the slider reports it
+        band.SetGainCommand.Execute(1.0);
+        await Gui.UntilAsync(() => app.ViewModel.Player.Status?.Equalizer?.Gains[2] == 1, "the step answered");
+
+        // `music-spin eq preamp -3`
+        app.Scripted!.Status = app.Scripted.Status with { Equalizer = app.Scripted.Status.Equalizer! with { PreampDb = -3 } };
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.Player.Status?.Equalizer?.PreampDb == -3, "the CLI's status");
+        Gui.Settle();
+        Assert.Equal(0, Eq(app).Preamp.Gain); // not mid-drag
+        Assert.Null(Saved(app).EqualizerGains);
+
+        band.Scrub = null;
+
+        var saved = await SavedAsync(app, s => s.EqualizerGains?[2] == 1, "the drag saved");
+        Assert.Equal((-3.0, true), (saved.EqualizerPreampDb, saved.EqualizerEnabled));
+        Assert.Equal(-3, Eq(app).Preamp.Gain);
+        Assert.Equal(1, band.Gain);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task While_the_players_input_is_held_a_drag_is_saved_as_shown_not_as_the_player_said_before()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        app.ViewModel.Player.HoldInput(); // the turntable scene: commands wait
+        var band = Eq(app).Bands[2];
+        band.Scrub = 2;
+        band.SetGainCommand.Execute(2.0);
+        var reads = app.Scripted!.Count("status");
+        await app.Scripted.PushAsync("stateChanged"); // the player doesn't have it yet
+        await Gui.UntilAsync(() => app.Scripted.Count("status") > reads, "the status read");
+        Gui.Settle();
+
+        band.Scrub = null;
+
+        Assert.Equal(2, Saved(app).EqualizerGains![2]);
+        Assert.Equal(2, band.Gain);
+        Assert.Equal(0, app.Scripted.Count("eq"));
+    }
+
+    [AvaloniaFact]
+    public async Task A_status_the_same_as_what_is_shown_changes_nothing()
+    {
+        await using var app = await OpenAsync(new AppSettings { EqualizerEnabled = true, EqualizerGains = Rock, EqualizerPreset = "rock" });
+        await OpenSettingsAsync(app);
+        await PlayingAsync(app);
+        await Gui.UntilAsync(() => app.ViewModel.Player.Status?.Equalizer is not null, "the player's equalizer");
+        Gui.Settle();
+        var changed = new List<string?>();
+        Eq(app).PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        Eq(app).Bands[0].PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        var reads = app.Scripted!.Count("status");
+
+        for (var poll = 1; poll <= 3; poll++)
+        {
+            await app.Scripted.PushAsync("stateChanged");
+            await Gui.UntilAsync(() => app.Scripted.Count("status") >= reads + poll, $"status #{poll}");
+            Gui.Settle();
+        }
+
+        Assert.Empty(changed);
     }
 
     [AvaloniaFact]

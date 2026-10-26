@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Services;
 using MusicSpin.Core;
 using MusicSpin.Core.Equalization;
+using MusicSpin.Core.Remote;
 
 namespace MusicSpin.App.ViewModels;
 
@@ -41,6 +42,7 @@ public sealed partial class EqualizerViewModel : ObservableObject
     private bool _ready;
     private bool _pending;
     private int _sending;
+    private bool _missed; // a status came mid-drag or while changes were on their way: Settle follows it
 
     public EqualizerViewModel(ISettingsService settings, PlayerViewModel player, MenuViewModel menu, Notices notices)
     {
@@ -238,15 +240,11 @@ public sealed partial class EqualizerViewModel : ObservableObject
     }
 
     /// <summary>A drag started or ended: its last value is saved when it ends.</summary>
-    internal void OnScrubChanged()
-    {
-        if (!IsDragging)
-        {
-            SavePending();
-        }
-    }
+    internal void OnScrubChanged() => Settle();
 
-    /// <summary>Saves what a drag left unsaved (Settings or the window closing mid-drag).</summary>
+    /// <summary>
+    /// Saves what is shown and not saved yet: Settings or the window closing mid-drag, or before the player answered.
+    /// </summary>
     public void SavePending()
     {
         if (!_pending)
@@ -266,26 +264,32 @@ public sealed partial class EqualizerViewModel : ObservableObject
         }
     }
 
-    /// <summary>Applies a change here, shows it, saves it (unless dragging) and tells the running player.</summary>
+    /// <summary>
+    /// Applies a change here, shows it and tells the running player; it is saved once the player has answered and no drag
+    /// is under way (<see cref="Settle"/>). Without a running player that is at once.
+    /// </summary>
     private void Change(Action<GraphicEqualizer> change, object command)
     {
         change(_eq);
         Show();
         _pending = true;
-        if (!IsDragging)
-        {
-            SavePending();
-        }
-
         _ = TellAsync(command);
     }
 
     /// <summary>
-    /// Tells a running player (one that isn't takes the saved settings when it starts). Its answers are not followed
-    /// while changes are on their way: a status read before them would undo the ones after it here.
+    /// Tells a running player; one that isn't takes the saved settings when it starts, so the change is saved now. Its
+    /// answers are not followed while changes are on their way: a status read before them would undo the ones after it
+    /// here. Once the last one is answered and applied, <see cref="Settle"/> catches up. "Answered" isn't "applied" by
+    /// the audio, though: while the player's input is held (the turntable scene) the command waits and this returns at once.
     /// </summary>
     private async Task TellAsync(object command)
     {
+        if (!_player.IsConnected)
+        {
+            Settle();
+            return;
+        }
+
         Interlocked.Increment(ref _sending);
         try
         {
@@ -293,17 +297,59 @@ public sealed partial class EqualizerViewModel : ObservableObject
         }
         finally
         {
-            Interlocked.Decrement(ref _sending);
+            _player.AfterAnswers(() =>
+            {
+                if (Interlocked.Decrement(ref _sending) == 0)
+                {
+                    Settle();
+                }
+            });
         }
     }
 
     /// <summary>
-    /// Shows what the player has (its status): nothing is saved and nobody is told. Not mid-drag or while changes from
-    /// here are on their way; a player without an equalizer says nothing.
+    /// Nothing on its way and no drag: follows the status skipped meanwhile (the CLI may have changed the equalizer, and
+    /// the player's answer to the last change is the newest status, so the order holds), then saves. The status is not
+    /// followed when the player didn't get the changes: none is running, or its input is held.
+    /// </summary>
+    private void Settle()
+    {
+        if (IsDragging || Volatile.Read(ref _sending) > 0)
+        {
+            return;
+        }
+
+        if (_missed)
+        {
+            _missed = false;
+            if (_player.IsConnected && !_player.IsInputHeld)
+            {
+                FollowPlayer();
+            }
+        }
+
+        SavePending();
+    }
+
+    /// <summary>
+    /// Shows what the player has (its status): nothing is saved and nobody is told. Mid-drag or while changes from here
+    /// are on their way it waits for <see cref="Settle"/>; a player without an equalizer says nothing, and a status the
+    /// same as what is shown changes nothing (it comes with every poll while playing).
     /// </summary>
     private void FollowPlayer()
     {
-        if (_player.Status?.Equalizer is not { } status || IsDragging || Volatile.Read(ref _sending) > 0)
+        if (_player.Status?.Equalizer is not { } status)
+        {
+            return;
+        }
+
+        if (IsDragging || Volatile.Read(ref _sending) > 0)
+        {
+            _missed = true;
+            return;
+        }
+
+        if (Shows(status))
         {
             return;
         }
@@ -312,6 +358,18 @@ public sealed partial class EqualizerViewModel : ObservableObject
             new EqualizerSettings(status.Enabled, status.Gains, status.PreampDb, status.Preset),
             status.UserPresets.Select(p => new EqualizerPreset(p.Key, p.Value, false)));
         Show(status.HeadroomDb);
+    }
+
+    /// <summary>The status says what is shown already: the switch, gains, preset, headroom and the user's presets.</summary>
+    private bool Shows(EqualizerStatus status)
+    {
+        var settings = _eq.Settings;
+        var presets = _eq.UserPresets;
+        return settings.Enabled == status.Enabled && settings.PreampDb == status.PreampDb && Headroom == status.HeadroomDb
+            && string.Equals(settings.Preset, status.Preset, StringComparison.Ordinal)
+            && settings.BandGains.SequenceEqual(status.Gains)
+            && presets.Count == status.UserPresets.Count
+            && presets.All(p => status.UserPresets.TryGetValue(p.Name, out var gains) && p.Gains.SequenceEqual(gains));
     }
 
     /// <summary>Shows the model: the switch, sliders, preset and headroom (at the stream's rate unless the player said).</summary>

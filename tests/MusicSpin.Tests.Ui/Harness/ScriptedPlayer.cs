@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using MusicSpin.App.Services;
 using MusicSpin.Core;
+using MusicSpin.Core.Equalization;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
@@ -45,7 +46,7 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
     public bool AllowStart { get; set; } = true;
 
     /// <summary>
-    /// Seeks, volume changes and mutes update <see cref="Status"/> before the answer, as a real player's would, queue.add and
+    /// Seeks, volume changes, mutes and the equalizer update <see cref="Status"/> before the answer, as a real player's would, queue.add and
     /// queue.move edit <see cref="Queue"/>, queue.set and queue.play replace it (ending radio; queue.play's keep-the-queue jump is the player's, tested against the real one in PlayFromListTests), and radio puts the station on air.
     /// </summary>
     public bool FollowsCommands { get; set; }
@@ -73,6 +74,15 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _holds[cmd] = gate;
         return gate;
+    }
+
+    /// <summary>The equalizer's part of a status, as the player reports <paramref name="eq"/> (at 48 kHz).</summary>
+    public static EqualizerStatus EqualizerOf(GraphicEqualizer eq)
+    {
+        var settings = eq.Settings;
+        return new EqualizerStatus(
+            settings.Enabled, settings.Preset, settings.PreampDb, Math.Round(eq.HeadroomDb(), 2), EqualizerSettings.Bands,
+            [.. settings.BandGains], [.. eq.Presets.Select(p => p.Name)], eq.UserPresets.ToDictionary(p => p.Name, p => p.Gains));
     }
 
     /// <summary>A playing status for <paramref name="title"/> at <paramref name="position"/> seconds.</summary>
@@ -339,6 +349,45 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         else if (cmd == "volume" && request.TryGetProperty("value", out var value))
         {
             Status = Status with { Volume = value.GetSingle(), Muted = false }; // a volume unmutes
+        }
+        else if (cmd == "eq")
+        {
+            // As the player does (the app's requests are well formed): a preset or a band turns it on unless "enabled" says.
+            var was = Status.Equalizer;
+            var eq = new GraphicEqualizer(
+                was is null ? null : new EqualizerSettings(was.Enabled, was.Gains, was.PreampDb, was.Preset),
+                was?.UserPresets.Select(p => new EqualizerPreset(p.Key, p.Value, false)));
+            var turnsOn = false;
+            if (request.TryGetProperty("preset", out var preset))
+            {
+                eq.ApplyPreset(preset.GetString()!);
+                turnsOn = true;
+            }
+
+            if (request.TryGetProperty("band", out var band) && request.TryGetProperty("gain", out var gain))
+            {
+                eq.SetBand(band.GetInt32() - 1, gain.GetDouble());
+                turnsOn = true;
+            }
+
+            if (request.TryGetProperty("preamp", out var preamp))
+            {
+                eq.Configure(eq.Settings with { PreampDb = preamp.GetDouble() });
+            }
+
+            if (request.TryGetProperty("save", out var save))
+            {
+                eq.SavePreset(save.GetString()!);
+            }
+
+            if (request.TryGetProperty("delete", out var delete))
+            {
+                eq.DeletePreset(delete.GetString()!);
+            }
+
+            var enabled = request.TryGetProperty("enabled", out var on) ? on.GetBoolean() : turnsOn || eq.Settings.Enabled;
+            eq.Configure(eq.Settings with { Enabled = enabled });
+            Status = Status with { Equalizer = EqualizerOf(eq) };
         }
         else if (cmd == "normalize" && request.TryGetProperty("mode", out var levelling) && levelling.GetString() is { } named)
         {

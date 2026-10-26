@@ -245,6 +245,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public Task SetEqualizerAsync(object args) => IsConnected ? SendAsync("eq", args) : Task.CompletedTask;
 
+    /// <summary>
+    /// Runs <paramref name="action"/> on the UI thread after the answers received so far are applied: they wait in the same
+    /// queue. An awaited command's continuation can run before its own answer is applied; this one can't.
+    /// </summary>
+    public void AfterAnswers(Action action) => _ui.Post(action);
+
     [RelayCommand]
     private Task SetShuffle(bool on) => SendAsync("shuffle", new { mode = on ? "on" : "off" });
 
