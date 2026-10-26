@@ -6,7 +6,9 @@ namespace MusicSpin.Tests.Library;
 
 /// <summary>
 /// Debouncing and filtering of file-system events. A FileSystemWatcher subclass raises bursts, renames and buffer
-/// overflows on demand (the OS cannot be made to overflow deterministically); time is a FakeTimeProvider.
+/// overflows on demand (the OS cannot be made to overflow deterministically); time is a FakeTimeProvider. Its OS events
+/// are switched off once the watcher has started it: macOS (FSEvents) may report the test folder's own setup late, and
+/// a real event landing between two Advance calls would restart the quiet period.
 /// </summary>
 public sealed class LibraryWatcherTests : IDisposable
 {
@@ -18,7 +20,8 @@ public sealed class LibraryWatcherTests : IDisposable
 
     public void Dispose() => TempDir.TryDelete(_root);
 
-    private (LibraryWatcher Watcher, ScriptedWatcher Fs) Create()
+    /// <param name="live">Leaves the OS events on (to check how the watcher set it up).</param>
+    private (LibraryWatcher Watcher, ScriptedWatcher Fs) Create(bool live = false)
     {
         var watcher = new LibraryWatcher([_root, Path.Combine(_root, "missing")], Debounce, _time, folder =>
         {
@@ -27,7 +30,9 @@ public sealed class LibraryWatcherTests : IDisposable
             return w;
         });
         watcher.Changed += (_, paths) => _batches.Add(paths);
-        return (watcher, _created.Single());
+        var fs = _created.Single();
+        fs.EnableRaisingEvents = live; // only the events the test raises
+        return (watcher, fs);
     }
 
     private string P(string name) => Path.Combine(_root, name);
@@ -35,7 +40,7 @@ public sealed class LibraryWatcherTests : IDisposable
     [Fact]
     public void Only_existing_folders_are_watched_recursively_with_a_large_buffer()
     {
-        var (watcher, fs) = Create();
+        var (watcher, fs) = Create(live: true);
         using (watcher)
         {
             Assert.Equal(1, watcher.WatchedFolders);
@@ -52,7 +57,7 @@ public sealed class LibraryWatcherTests : IDisposable
     [Fact]
     public void A_burst_of_events_is_reported_once_after_the_quiet_period_with_each_path_once()
     {
-        Directory.CreateDirectory(P("Album.2024")); // before watching: no real OS event for it
+        Directory.CreateDirectory(P("Album.2024")); // a real folder: the watcher checks it is one
         var (watcher, fs) = Create();
         using var _ = watcher;
 

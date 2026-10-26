@@ -691,7 +691,10 @@ public sealed class Player : IPlayer
             var next = OpenNext(_decoders, buffer.Format, candidates, cursor, scratch.AsMemory(0, want), convert);
             lock (_decodeLock)
             {
-                if (generation != _generation || !ReferenceEquals(candidates, _candidates) || cursor != _cursor)
+                // The next tracks may have been sent again meanwhile. On a track change the caller sends them relative
+                // to the new track, so the one opened here is often still next: kept, not opened a second time.
+                var unchanged = ReferenceEquals(candidates, _candidates) && cursor == _cursor;
+                if (generation != _generation || !(unchanged || (next is not null && HasAt(_candidates, _cursor, next.Segment.Entries))))
                 {
                     next?.Segment.Decoder.Dispose();
                     return Step.Progress;
@@ -713,7 +716,7 @@ public sealed class Player : IPlayer
                 _segments.Add(next.Segment);
                 _writing = next.Segment;
                 _writingDone = false;
-                _cursor = next.NextCursor;
+                _cursor += next.Segment.Entries.Count; // the entry opened and the ones skipped before it
                 return Step.Progress;
             }
         }
@@ -1180,6 +1183,10 @@ public sealed class Player : IPlayer
         _state = state;
         StateChanged?.Invoke(this, new PlayerStateChangedEventArgs(old, state));
     }
+
+    /// <summary><paramref name="list"/> has <paramref name="entries"/>, in order, from <paramref name="at"/> on.</summary>
+    private static bool HasAt(IReadOnlyList<NextTrack> list, int at, IReadOnlyList<NextTrack> entries)
+        => at >= 0 && at <= list.Count && StartsWith(list.Skip(at).ToList(), entries);
 
     private static bool SameEntries(IReadOnlyList<NextTrack> a, IReadOnlyList<NextTrack> b)
         => a.Count == b.Count && StartsWith(a, b);

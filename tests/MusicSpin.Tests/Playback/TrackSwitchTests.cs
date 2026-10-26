@@ -553,6 +553,80 @@ public sealed class TrackSwitchTests : IDisposable
         Assert.Equal(2, Output.Converters.Count);
     }
 
+    /// <summary>
+    /// On a track change the queue sends the next tracks again, relative to the new one. When that lands while the decode
+    /// thread is opening the next track from the old order, the track it opened is still next: it is kept, not dropped and
+    /// opened (and converted) a second time. CI saw the second converter (#166's run on main, Windows).
+    /// </summary>
+    [Fact]
+    public void A_next_track_being_opened_when_the_order_is_sent_again_after_a_track_change_is_kept_not_opened_twice()
+    {
+        SharedMode();
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var c = new RampSpec(3, 1000, SampleRate: 500, Channels: 1);
+        var nextB = new NextTrack(Add(b), "b");
+        var nextC = new NextTrack(Add(c), "c");
+        using var decoders = new GatedDecoderFactory(_decoders, nextC.Path);
+        var player = new Player(decoders, _outputs, new PlayerOptions());
+        _owned.Add(player);
+        using var intoB = new ManualResetEventSlim();
+        player.TrackAdvanced += (_, _) => intoB.Set();
+        player.Load(Add(a));
+        player.SetNextTracks([nextB, nextC]);
+        player.Play();
+
+        Assert.Equal(a.Pcm(), Pull(2000));
+        var bPcm = StepConverter.Expected(b, a.Format);
+        Assert.Equal(bPcm[..400], Pull(400));
+        Assert.True(intoB.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "into b");
+        Assert.True(decoders.Opening.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "c being opened, from the order [b, c]");
+        player.SetNextTracks([nextC]); // what the queue sends now: relative to b
+        decoders.Proceed.Set();
+
+        Assert.Equal(bPcm[400..], Pull(bPcm.Length - 400));
+        Assert.Equal(StepConverter.Expected(c, a.Format)[..400], Pull(400));
+        Assert.Equal(1, decoders.Opens);
+        Assert.Equal(2, Output.Converters.Count); // b's and c's
+        Assert.Equal(1, Output.OpenCount);
+    }
+
+    /// <summary>Holds the first open of <paramref name="gated"/> until <see cref="Proceed"/> (<see cref="Opening"/> says it started).</summary>
+    private sealed class GatedDecoderFactory(RampDecoderFactory inner, string gated) : IAudioDecoderFactory, IDisposable
+    {
+        private int _opens;
+
+        public ManualResetEventSlim Opening { get; } = new();
+
+        public ManualResetEventSlim Proceed { get; } = new();
+
+        /// <summary>How many times <c>gated</c> was opened.</summary>
+        public int Opens => Volatile.Read(ref _opens);
+
+        public string Name => inner.Name;
+
+        public bool IsAvailable => inner.IsAvailable;
+
+        public MusicSpin.Core.Metadata.TrackInfo Probe(string path) => inner.Probe(path);
+
+        public IAudioDecoder Open(string path)
+        {
+            if (path == gated && Interlocked.Increment(ref _opens) == 1)
+            {
+                Opening.Set();
+                Proceed.Wait(TimeSpan.FromSeconds(30));
+            }
+
+            return inner.Open(path);
+        }
+
+        public IReadOnlyList<AudioFormatSupport> GetSupportedFormats() => inner.GetSupportedFormats();
+
+        /// <summary>Lets a held open go (a failed test must not leave the decode thread waiting). The events are left
+        /// undisposed: the decode thread may still be returning from the wait.</summary>
+        public void Dispose() => Proceed.Set();
+    }
+
     [Fact]
     public void Shared_mode_started_with_the_device_closed_converts_each_track_once_to_the_mixers_rate()
     {
