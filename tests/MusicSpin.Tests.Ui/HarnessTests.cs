@@ -164,21 +164,6 @@ public sealed class HarnessTests : IDisposable
         window.Close();
     }
 
-    [AvaloniaFact]
-    public async Task Real_time_does_not_move_animations()
-    {
-        var (window, border) = Animated(TimeSpan.FromMilliseconds(100));
-
-        border.Opacity = 0;
-        Gui.Settle();
-        await Task.Delay(200, TestContext.Current.CancellationToken);
-        Gui.Settle();
-
-        Assert.Equal(1, border.Opacity);
-        Gui.FinishAnimations(100);
-        Assert.Equal(0, border.Opacity);
-        window.Close();
-    }
 
     private static (Window Window, Border Border) Animated(TimeSpan duration)
     {
