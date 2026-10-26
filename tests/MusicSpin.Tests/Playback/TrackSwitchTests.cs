@@ -556,7 +556,7 @@ public sealed class TrackSwitchTests : IDisposable
     /// <summary>
     /// On a track change the queue sends the next tracks again, relative to the new one. When that lands while the decode
     /// thread is opening the next track from the old order, the track it opened is still next: it is kept, not dropped and
-    /// opened (and converted) a second time. CI saw the second converter (#166's run on main, Windows).
+    /// opened (and converted) a second time. CI saw the second converter (main after #165 merged, Windows).
     /// </summary>
     [Fact]
     public void A_next_track_being_opened_when_the_order_is_sent_again_after_a_track_change_is_kept_not_opened_twice()
@@ -588,6 +588,45 @@ public sealed class TrackSwitchTests : IDisposable
         Assert.Equal(StepConverter.Expected(c, a.Format)[..400], Pull(400));
         Assert.Equal(1, decoders.Opens);
         Assert.Equal(2, Output.Converters.Count); // b's and c's
+        Assert.Equal(1, Output.OpenCount);
+    }
+
+    /// <summary>
+    /// The other side of the one above: when the order sent meanwhile doesn't have the track being opened next, that track
+    /// is dropped (its decoder closed) and the one the new order names follows instead, gaplessly.
+    /// </summary>
+    [Fact]
+    public void A_next_track_being_opened_when_an_order_without_it_next_is_sent_is_dropped_and_the_new_next_follows()
+    {
+        SharedMode();
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var c = new RampSpec(3, 1000, SampleRate: 500, Channels: 1);
+        var d = new RampSpec(4, 1000); // a's format: no converter
+        var nextB = new NextTrack(Add(b), "b");
+        var nextC = new NextTrack(Add(c), "c");
+        var nextD = new NextTrack(Add(d), "d");
+        using var decoders = new GatedDecoderFactory(_decoders, nextC.Path);
+        var player = new Player(decoders, _outputs, new PlayerOptions());
+        _owned.Add(player);
+        using var intoB = new ManualResetEventSlim();
+        player.TrackAdvanced += (_, _) => intoB.Set();
+        player.Load(Add(a));
+        player.SetNextTracks([nextB, nextC]);
+        player.Play();
+
+        Assert.Equal(a.Pcm(), Pull(2000));
+        var bPcm = StepConverter.Expected(b, a.Format);
+        Assert.Equal(bPcm[..400], Pull(400));
+        Assert.True(intoB.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "into b");
+        Assert.True(decoders.Opening.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "c being opened, from the order [b, c]");
+        player.SetNextTracks([nextD]); // c taken out meanwhile
+        decoders.Proceed.Set();
+
+        Assert.Equal(bPcm[400..], Pull(bPcm.Length - 400));
+        Assert.Equal(d.Pcm()[..400], Pull(400)); // d, not c
+        Assert.Equal(1, decoders.Opens);
+        Assert.True(Assert.Single(_decoders.Opened, o => o.Spec.Id == c.Id).Disposed); // c's decoder closed, not leaked
         Assert.Equal(1, Output.OpenCount);
     }
 

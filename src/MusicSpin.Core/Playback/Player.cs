@@ -750,7 +750,9 @@ public sealed class Player : IPlayer
         }
     }
 
-    private sealed record Opened(TrackSegment Segment, int Read, int NextCursor);
+    /// <summary>The track opened, and how many samples of its first block are in the scratch buffer. The entries it
+    /// covers (those skipped before it, then it) are <c>Segment.Entries</c>: the cursor moves past that many.</summary>
+    private sealed record Opened(TrackSegment Segment, int Read);
 
     /// <summary>
     /// Opens the first playable entry from <paramref name="cursor"/> on and decodes its first block into the scratch buffer.
@@ -803,7 +805,7 @@ public sealed class Player : IPlayer
 
             var entries = new List<NextTrack>(skipped.Select(x => x.Entry)) { entry };
             var segment = new TrackSegment(decoder, entry.Token, TimeSpan.Zero, entries, skipped);
-            return new Opened(segment, read - (read % Math.Max(format.Channels, 1)), i + 1);
+            return new Opened(segment, read - (read % Math.Max(format.Channels, 1)));
         }
 
         return null;
