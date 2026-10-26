@@ -354,8 +354,9 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         {
             // A copy of PlayerProtocol.Equalize's apply step, in its order: delete, preset, band, preamp, enabled, save. A
             // preset or a band turns it on unless "enabled" says otherwise; the pre-amp doesn't. The checks are left out
-            // (the app's requests are well formed). PlayerEqualizerProtocolTests pins these rules for the requests the app
-            // sends, so a change to the player's fails there.
+            // (the app's requests are well formed), and so is "gains" (all ten at once): the app never sends it, so a
+            // request with it here would need it added. PlayerEqualizerProtocolTests pins these rules for the requests the
+            // app sends, so a change to the player's fails there.
             var was = Status.Equalizer;
             var eq = new GraphicEqualizer(
                 was is null ? null : new EqualizerSettings(was.Enabled, was.Gains, was.PreampDb, was.Preset),
