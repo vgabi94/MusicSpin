@@ -119,7 +119,7 @@ src/MusicSpin.App/
 │                          TrimFirstPanel (a text that trims before the badge after it), ShelfSleeve and CrateRecord
 │                          (the shelf's and the crates' 3D, drawn with Projection: CSS-style 4×4 transforms), DeckView
 │                          (a turntable design's deck; ClassicDeckView, PlatterView; KitDeckView for the studies'
-│                          designs, with DeckText, TickRing and BackdropView), DeckHost (builds and scales the chosen
+│                          designs, with DeckText and BackdropView), DeckHost (builds and scales the chosen
 │                          design's deck), SlidePanel (Now Playing's slide or fade, the queue drawer's
 │                          slide), QueueSource (what a right-click or a drag acts on),
 │                          SceneFlight and SceneSource (the scene's travelling sleeve and where it starts), RadioIcon

@@ -512,3 +512,7 @@ coverage-report/
 
 # Local planning notes and UI mockups
 .plan/
+
+# The native msaudio library's MSVC linker by-products (a local Windows build of native/msaudio)
+src/MusicSpin.Core/msaudio.exp
+src/MusicSpin.Core/msaudio.lib

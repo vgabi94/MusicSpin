@@ -181,9 +181,8 @@
     <!-- The Classic deck's platter, its rim and the arm (mockup: .platter, .arm-base, .arm, .headshell). -->
     <SolidColorBrush x:Key="DeckPlatterBrush" Color="#33363C" />
     <SolidColorBrush x:Key="DeckPlatterRingBrush" Color="#66000000" />
-    <!-- The big deck's platter: stripes 2° apart (mockup: repeating-conic-gradient(#3a3d43 0 2deg, #2c2e33 2deg 4deg)). -->
+    <!-- The big deck's platter: plain, without the mockup's stripes (#143). -->
     <SolidColorBrush x:Key="DeckPlatterBaseBrush" Color="#2C2E33" />
-    <SolidColorBrush x:Key="DeckPlatterStripeBrush" Color="#3A3D43" />
     <!-- The LED while the platter is still (lit, it takes the accent; mockup: .deck-led). -->
     <SolidColorBrush x:Key="DeckLedOffBrush" Color="#444444" />
     <SolidColorBrush x:Key="DeckArmShadowBrush" Color="#000000" />

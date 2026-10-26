@@ -589,19 +589,19 @@
     -->
     <sys:Double x:Key="DeckWidth">528</sys:Double>
     <!-- The designs on the studies' bench (Styles/Decks.axaml) draw in deck units, 1320 × 1080, scaled to DeckWidth:
-         0.4 px each, so their record's grooves are 2.4 / 0.4 units apart. -->
+         0.4 px each. Their record is laid out at DeckRecordSize and scaled up into those units, so it is the Classic deck's. -->
     <sys:Double x:Key="KitDeckUnits">1320</sys:Double>
     <!-- DeckWidth / KitDeckUnits: what a kit deck tells its host (controls:DeckView.UnitScale). -->
     <sys:Double x:Key="KitDeckUnitScale">0.4</sys:Double>
     <sys:Double x:Key="KitDeckUnitsHigh">1080</sys:Double>
-    <sys:Double x:Key="KitGroovePitch">6</sys:Double>
     <sys:Double x:Key="DeckHeight">432</sys:Double>
     <CornerRadius x:Key="DeckRadius">18</CornerRadius>
     <sys:Double x:Key="DeckPlatterSize">400</sys:Double>
     <Thickness x:Key="DeckPlatterMargin">16,16,0,0</Thickness>
     <sys:Double x:Key="DeckPlatterRing">4</sys:Double>
-    <sys:Double x:Key="DeckPlatterStripe">2</sys:Double>
     <sys:Double x:Key="DeckRecordSize">392</sys:Double>
+    <!-- A kit deck's record is laid out at DeckRecordSize and scaled up into the 980 units it covers: 980 / 392. -->
+    <sys:Double x:Key="KitRecordScale">2.5</sys:Double>
     <Thickness x:Key="DeckRecordMargin">20,20,0,0</Thickness>
     <sys:Double x:Key="DeckLedSize">7</sys:Double>
     <Thickness x:Key="DeckLedMargin">18,0,0,14</Thickness>

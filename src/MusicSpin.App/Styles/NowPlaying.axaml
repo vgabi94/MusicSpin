@@ -72,8 +72,6 @@
                 <Setter Property="Height" Value="{StaticResource DeckPlatterSize}" />
                 <Setter Property="Margin" Value="{StaticResource DeckPlatterMargin}" />
                 <Setter Property="Background" Value="{StaticResource DeckPlatterBaseBrush}" />
-                <Setter Property="StripeBrush" Value="{StaticResource DeckPlatterStripeBrush}" />
-                <Setter Property="StripeAngle" Value="{StaticResource DeckPlatterStripe}" />
                 <Setter Property="RingBrush" Value="{StaticResource DeckPlatterRingBrush}" />
                 <Setter Property="RingWidth" Value="{StaticResource DeckPlatterRing}" />
             </Style>
