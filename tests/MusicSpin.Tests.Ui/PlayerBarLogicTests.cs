@@ -268,19 +268,20 @@ public sealed class PlayerBarLogicTests
         spectrum.SetLevels(Levels(0.9f));
         spectrum.Silence();
         spectrum.Advance(TimeSpan.FromSeconds(0.29));
-        Assert.All(spectrum.Frame.Peaks, p => Assert.Equal(0.9, p, 6));
+        Assert.All(spectrum.Peaks, p => Assert.Equal(0.9, p, 6));
 
+        // Where the peaks are between frames (a frame comes only when one loses a block).
         spectrum.Advance(TimeSpan.FromSeconds(0.11));
-        var afterFirst = spectrum.Frame.Peaks[0];
+        var afterFirst = spectrum.Peaks[0];
         spectrum.Advance(TimeSpan.FromSeconds(0.1));
-        var afterSecond = spectrum.Frame.Peaks[0];
+        var afterSecond = spectrum.Peaks[0];
         spectrum.Advance(TimeSpan.FromSeconds(0.1));
-        var afterThird = spectrum.Frame.Peaks[0];
+        var afterThird = spectrum.Peaks[0];
 
         Assert.True(afterFirst < 0.9);
         Assert.True(0.9 - afterFirst < afterFirst - afterSecond && afterFirst - afterSecond < afterSecond - afterThird,
             $"peak drops: {0.9 - afterFirst}, {afterFirst - afterSecond}, {afterSecond - afterThird}");
-        Assert.True(spectrum.Frame.Peaks[0] >= spectrum.Frame.Bars[0]);
+        Assert.True(spectrum.Peaks[0] >= spectrum.Bars[0]);
     }
 
     [Fact]
@@ -321,5 +322,89 @@ public sealed class PlayerBarLogicTests
         time.Advance(TimeSpan.FromSeconds(5));
         ui.Run();
         Assert.Equal(frames, spectrum.Frames);
+    }
+
+    /// <summary>What the analyzer draws now: each bar's and peak's blocks.</summary>
+    private static string Drawn(SpectrumViewModel spectrum)
+        => string.Join(',', spectrum.Bars.Select(SpectrumViewModel.Blocks)) + '|' + string.Join(',', spectrum.Peaks.Select(SpectrumViewModel.Blocks));
+
+    [Fact]
+    public void A_new_frame_comes_only_when_a_bar_or_a_peak_gains_or_loses_a_block()
+    {
+        var time = new FakeTimeProvider();
+        var ui = new QueueDispatcher();
+        using var spectrum = new SpectrumViewModel(time, ui);
+        spectrum.SetLevels(Levels(0.5f));
+        var frames = spectrum.Frames;
+
+        spectrum.SetLevels(Levels(0.51f)); // 8.16 blocks: still 8
+        Assert.Equal(frames, spectrum.Frames);
+        spectrum.Advance(TimeSpan.FromSeconds(1)); // a steady tone: the bars stay up
+        Assert.Equal(frames, spectrum.Frames);
+
+        // Falling to zero: a frame for each change in the drawing, and none in between.
+        spectrum.Silence();
+        var drawn = Drawn(spectrum);
+        var (changes, ticks) = (0, 0);
+        frames = spectrum.Frames;
+        for (; ticks < 200 && spectrum.IsRunning; ticks++)
+        {
+            time.Advance(SpectrumViewModel.FrameInterval);
+            ui.Run();
+            if (Drawn(spectrum) != drawn)
+            {
+                (drawn, changes) = (Drawn(spectrum), changes + 1);
+            }
+
+            Assert.Equal(drawn, string.Join(',', spectrum.Frame.Bars.Select(SpectrumViewModel.Blocks)) + '|'
+                + string.Join(',', spectrum.Frame.Peaks.Select(SpectrumViewModel.Blocks))); // the frame is what's drawn
+            if (spectrum.IsRunning)
+            {
+                Assert.Equal(frames + changes, spectrum.Frames);
+            }
+        }
+
+        // At rest: the empty frame, at most one more (the last bar to fall was drawn as no block already).
+        Assert.False(spectrum.IsRunning);
+        Assert.Same(SpectrumFrame.Empty, spectrum.Frame);
+        Assert.InRange(spectrum.Frames - frames - changes, 0, 1);
+        Assert.InRange(changes, 8, ticks / 2); // the bar loses its 8 blocks one by one; most ticks change nothing drawn
+    }
+
+    [Fact]
+    public void Hidden_the_analyzer_falls_silent_at_once_ignores_levels_and_its_clock_stops()
+    {
+        var time = new FakeTimeProvider();
+        var ui = new QueueDispatcher();
+        using var spectrum = new SpectrumViewModel(time, ui);
+        spectrum.SetLevels(Levels(0.8f));
+        Assert.True(spectrum.IsRunning);
+
+        spectrum.IsShown = false;
+        Assert.False(spectrum.IsRunning);
+        Assert.All(spectrum.Frame.Bars, b => Assert.Equal(0, b));
+        Assert.All(spectrum.Frame.Peaks, p => Assert.Equal(0, p));
+        var frames = spectrum.Frames;
+        spectrum.SetLevels(Levels(1f));
+        time.Advance(TimeSpan.FromSeconds(10));
+        ui.Run();
+        Assert.Equal((frames, false), (spectrum.Frames, spectrum.IsRunning));
+        Assert.All(spectrum.Bars, b => Assert.Equal(0, b));
+
+        spectrum.IsShown = true; // nothing moves until the next levels
+        Assert.False(spectrum.IsRunning);
+        spectrum.SetLevels(Levels(0.5f));
+        Assert.True(spectrum.IsRunning);
+        Assert.All(spectrum.Frame.Bars, b => Assert.Equal(0.5, b, 3));
+    }
+
+    [Fact]
+    public void Hiding_an_idle_analyzer_changes_nothing()
+    {
+        using var spectrum = new SpectrumViewModel(new FakeTimeProvider(), new QueueDispatcher());
+        spectrum.IsShown = false;
+        spectrum.IsShown = true;
+        Assert.Equal((0, false), (spectrum.Frames, spectrum.IsRunning));
+        Assert.Same(SpectrumFrame.Empty, spectrum.Frame);
     }
 }

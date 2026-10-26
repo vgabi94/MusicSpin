@@ -97,9 +97,21 @@ public partial class MainWindow : Window, IScenePlaces
         _viewModel?.Menu.PropertyChanged -= OnMenuChanged;
         _viewModel?.Scene.Places = null;
         _viewModel = DataContext as MainWindowViewModel;
+        _viewModel?.IsShown = WindowState != WindowState.Minimized;
         _viewModel?.Menu.PropertyChanged += OnMenuChanged;
         _viewModel?.Scene.Places = this;
         _scene.DataContext = _viewModel;
+    }
+
+    /// <summary>Minimized, the window shows nothing: its clocks stop until it is restored (#125).</summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        base.OnPropertyChanged(change);
+        if (change.Property == WindowStateProperty)
+        {
+            _viewModel?.IsShown = WindowState != WindowState.Minimized;
+        }
     }
 
     /// <summary>The turntable scene draws over everything: in the window's overlay layer.</summary>

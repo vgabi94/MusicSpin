@@ -30,6 +30,9 @@ internal sealed class QueueDispatcher : IUiDispatcher
 
     public void Post(Action action) => _queue.Enqueue(action);
 
+    /// <summary>How much work is queued (a timer that ticks queues some each time).</summary>
+    public int Pending => _queue.Count;
+
     /// <summary>Runs what is queued, including what that queues (continuations of the awaits in it, too).</summary>
     public void Run()
     {
