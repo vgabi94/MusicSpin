@@ -117,6 +117,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     public PlayerBarViewModel PlayerBar { get; }
 
+    /// <summary>
+    /// Whether the window shows (the view sets it: false while minimized). While it doesn't, nothing animates for it (#125):
+    /// the spin clock, the analyzer and the position tick stop, and catch up when it shows again. The music plays on.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsShown { get; set; } = true;
+
+    partial void OnIsShownChanged(bool value)
+    {
+        SpinClock.IsShown = value;
+        PlayerBar.Spectrum.IsShown = value;
+        Player.IsShown = value;
+    }
+
     public NowPlayingViewModel NowPlaying { get; }
 
     /// <summary>The record carried from the albums page onto the turntable.</summary>

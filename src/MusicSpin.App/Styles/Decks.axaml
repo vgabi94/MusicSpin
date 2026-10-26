@@ -39,12 +39,20 @@
                 <Setter Property="Width" Value="{StaticResource KitDeckUnits}" />
                 <Setter Property="Height" Value="{StaticResource KitDeckUnitsHigh}" />
             </Style>
+            <!--
+              The record is the Classic deck's (#143): laid out at its size and scaled up into the 980 units it covers
+              (KitRecordScale), so its grooves, edge and label are drawn in the same pixels with the same style
+              (Styles/Artwork.axaml). Laid out in deck units, its grooves would be 0.4 px a unit and blur into grey.
+            -->
             <Style Selector="^ /template/ controls|VinylView#PART_Record">
-                <Setter Property="Width" Value="980" />
-                <Setter Property="Height" Value="980" />
+                <Setter Property="Width" Value="{StaticResource DeckRecordSize}" />
+                <Setter Property="Height" Value="{StaticResource DeckRecordSize}" />
                 <Setter Property="Canvas.Left" Value="50" />
                 <Setter Property="Canvas.Top" Value="50" />
-                <Setter Property="GroovePitch" Value="{StaticResource KitGroovePitch}" />
+                <Setter Property="RenderTransformOrigin" Value="0,0" />
+                <Setter Property="RenderTransform">
+                    <ScaleTransform ScaleX="{StaticResource KitRecordScale}" ScaleY="{StaticResource KitRecordScale}" />
+                </Setter>
             </Style>
             <Style Selector="^ /template/ Panel.platter">
                 <Setter Property="Width" Value="1000" />
@@ -307,12 +315,9 @@
                             <controls:DeckText Name="Readout" Classes="rpm lit" Text="{TemplateBinding SpeedText}" Foreground="{TemplateBinding Accent}" />
                             <controls:DeckText Classes="name lit" Text="MUSIC SPIN" />
                             <controls:DeckText Classes="name" Text="MUSIC SPIN" />
-                            <!-- The platter: strobe ticks round its rim, turning with the record. -->
                             <Panel Classes="platter">
                                 <Border Classes="rim" />
                                 <controls:DiscShadow Classes="rimShadow" />
-                                <controls:TickRing Classes="ticks off" Angle="{TemplateBinding Angle}" />
-                                <controls:TickRing Name="Ticks" Classes="ticks lit" Angle="{TemplateBinding Angle}" Fill="{TemplateBinding Accent}" />
                                 <Ellipse Classes="top" />
                             </Panel>
                             <controls:VinylView Name="PART_Record"
@@ -412,22 +417,6 @@
                 <Setter Property="PixelOffsetY" Value="10" />
                 <Setter Property="Blur" Value="24" />
                 <Setter Property="Color" Value="#CC000000" />
-            </Style>
-            <!-- repeating-conic-gradient(… 0 1.2deg, #0b0b0c 1.2deg 5deg): 72 ticks; the accent mixed 35% into #2a2c31 at rest. -->
-            <Style Selector="^ /template/ controls|TickRing.ticks">
-                <Setter Property="Count" Value="72" />
-                <Setter Property="TickAngle" Value="1.2" />
-                <Setter Property="InnerRatio" Value="0.964" />
-            </Style>
-            <Style Selector="^ /template/ controls|TickRing.ticks.off">
-                <Setter Property="Fill" Value="#2A2C31" />
-            </Style>
-            <Style Selector="^ /template/ controls|TickRing.ticks.lit">
-                <Setter Property="Opacity" Value="0.35" />
-                <Setter Property="theming:Animate.Transitions" Value="Opacity DeckLampDuration Ease" />
-            </Style>
-            <Style Selector="^:spinning /template/ controls|TickRing.ticks.lit">
-                <Setter Property="Opacity" Value="1" />
             </Style>
             <Style Selector="^ /template/ Ellipse.top">
                 <Setter Property="Width" Value="964" />
@@ -599,7 +588,6 @@
                             <Panel Classes="platter">
                                 <Border Classes="rim" />
                                 <controls:DiscShadow Classes="rimShadow" />
-                                <controls:TickRing Classes="stripes" Angle="{TemplateBinding Angle}" />
                                 <Ellipse Classes="top" />
                             </Panel>
                             <controls:VinylView Name="PART_Record"
@@ -637,7 +625,6 @@
             <Style Selector="^ /template/ controls|VinylView#PART_Record">
                 <Setter Property="Canvas.Left" Value="70" />
             </Style>
-            <!-- repeating-conic-gradient(#d6d0c4 0 2deg, #a39c8f 2deg 4deg): 90 stripes round the rim. -->
             <Style Selector="^ /template/ Border.rim">
                 <Setter Property="Background" Value="#A39C8F" />
                 <Setter Property="BoxShadow" Value="0 0 0 2 #FF8A8377" />
@@ -647,12 +634,6 @@
                 <Setter Property="PixelOffsetY" Value="8" />
                 <Setter Property="Blur" Value="20" />
                 <Setter Property="Color" Value="#66000000" />
-            </Style>
-            <Style Selector="^ /template/ controls|TickRing.stripes">
-                <Setter Property="Count" Value="90" />
-                <Setter Property="TickAngle" Value="2" />
-                <Setter Property="InnerRatio" Value="0.9" />
-                <Setter Property="Fill" Value="#D6D0C4" />
             </Style>
             <Style Selector="^ /template/ Ellipse.top">
                 <Setter Property="Fill" Value="#2B2A28" />

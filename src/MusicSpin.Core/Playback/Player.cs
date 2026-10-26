@@ -125,6 +125,12 @@ public sealed class Player : IPlayer
     /// <summary>What the output plays, for <see cref="SpectrumMeter"/> (copied only while enabled).</summary>
     internal SpectrumTap SpectrumTap { get; } = new();
 
+    /// <summary>
+    /// The graphic equalizer every stream filters with (#141); null for none. Changes take effect on the playing stream
+    /// without a gap (it fades to them); setting a different instance takes effect from the next stream.
+    /// </summary>
+    public Equalization.GraphicEqualizer? Equalizer { get; set; }
+
     public TrackInfo Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -443,7 +449,7 @@ public sealed class Player : IPlayer
         var format = first.Decoder.Format;
         var frames = Math.Max(1024L, (long)Math.Max(format.SampleRate, 1) * _options.EffectiveBufferMilliseconds / 1000);
         var channels = Math.Max(format.Channels, 1);
-        return new PlaybackBuffer(format, (int)Math.Min(frames * channels, int.MaxValue / 2), first, () => Volume, _notifier.Signal, SpectrumTap);
+        return new PlaybackBuffer(format, (int)Math.Min(frames * channels, int.MaxValue / 2), first, () => Volume, _notifier.Signal, SpectrumTap, Equalizer);
     }
 
     /// <summary>Makes <paramref name="first"/> (read through <paramref name="buffer"/>) the only track. Caller holds _decodeLock.</summary>

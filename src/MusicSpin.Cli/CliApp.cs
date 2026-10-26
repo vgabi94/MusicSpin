@@ -33,6 +33,7 @@ public static class CliApp
         root.Add(DevicesCommand.Create(runner));
         root.Add(PlayCommand.Create(runner));
         root.Add(RadioCommand.Create(runner));
+        root.Add(EqualizerCommand.Create(runner));
         root.Add(ServeCommand.Create(runner));
         root.Add(McpCommand.Create(runner));
         root.Add(DoctorCommand.Create(runner));

@@ -37,6 +37,12 @@ public sealed record PlayerHostOptions
     /// <summary>Volume levelling at start (settings.json "normalization*"). Off unless the starter passes the settings.</summary>
     public NormalizationSettings Normalization { get; init; } = NormalizationSettings.Disabled;
 
+    /// <summary>The graphic equalizer at start (settings.json "equalizer*"). Off unless the starter passes the settings.</summary>
+    public Equalization.EqualizerSettings Equalizer { get; init; } = Equalization.EqualizerSettings.Default;
+
+    /// <summary>The user's saved equalizer presets (settings.json "equalizerPresets").</summary>
+    public IReadOnlyList<Equalization.EqualizerPreset> EqualizerPresets { get; init; } = [];
+
     /// <summary>Decode-ahead buffer (settings.json "playbackBufferMs"); clamped by <see cref="PlayerOptions.ClampBuffer"/>.</summary>
     public int BufferMilliseconds { get; init; } = PlayerOptions.DefaultBufferMilliseconds;
 
@@ -122,7 +128,7 @@ public sealed class PlayerHost : IAsyncDisposable
         {
             Volume = Math.Clamp(options.InitialVolume, 0f, 1f),
         };
-        _queue = new QueuePlayer(_player, output);
+        _queue = new QueuePlayer(_player, output) { Equalizer = new Equalization.GraphicEqualizer(options.Equalizer, options.EqualizerPresets) };
         _normalization = new NormalizationService(options.Decoders,
             options.ResolveFromLibrary ? new LibraryLoudnessStore(options.DataDirectory) : new NoLoudnessStore(), options.Normalization, line => Log(line));
         _queue.Normalizer = _normalization;

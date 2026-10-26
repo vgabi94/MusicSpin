@@ -95,6 +95,7 @@ public sealed record OutputFormat(int SampleRate, int Channels, string SampleFor
 /// <param name="Volume">The volume level, 0..1; while <paramref name="Muted"/>, the level unmuting goes back to.</param>
 /// <param name="Muted">Muted: the player plays at 0 and keeps <paramref name="Volume"/> (the <c>mute</c> command; a volume unmutes).</param>
 /// <param name="Normalization">Volume levelling (ReplayGain / R128); null when the host has none.</param>
+/// <param name="Equalizer">The 10-band graphic equalizer; null when the host has none.</param>
 public sealed record PlayerStatus(
     PlayerState State,
     double PositionSeconds,
@@ -116,7 +117,8 @@ public sealed record PlayerStatus(
     RadioInfo? Radio = null,
     int UpNext = 0,
     bool Muted = false,
-    NormalizationStatus? Normalization = null)
+    NormalizationStatus? Normalization = null,
+    EqualizerStatus? Equalizer = null)
 {
     /// <summary>
     /// "radio" while a radio station plays (see <see cref="Radio"/>), else "queue". (Named so it does not clash with the
@@ -179,3 +181,22 @@ public sealed record QueueSnapshot(
     /// <summary>The only format read and written. No migrations before the first release: another version is treated like a corrupt file.</summary>
     public const int CurrentVersion = 1;
 }
+
+/// <summary>The graphic equalizer (#141) in a <see cref="PlayerStatus"/>.</summary>
+/// <param name="Enabled">Whether it filters playback (off, or on and flat, is bit-exact pass-through).</param>
+/// <param name="Preset">The preset the gains came from; null when a band was changed by hand.</param>
+/// <param name="PreampDb">The user's pre-amp in dB.</param>
+/// <param name="HeadroomDb">How far the pre-amp is lowered automatically so boosts cannot clip (0 when nothing is boosted), at the current track's rate.</param>
+/// <param name="Bands">The band centres in Hz (31.25 .. 16000).</param>
+/// <param name="Gains">The gain of each band in dB (-12..+12).</param>
+/// <param name="Presets">Every preset's name: the built-in ones, then the user's.</param>
+/// <param name="UserPresets">The user's saved presets: name to band gains.</param>
+public sealed record EqualizerStatus(
+    bool Enabled,
+    string? Preset,
+    double PreampDb,
+    double HeadroomDb,
+    IReadOnlyList<double> Bands,
+    IReadOnlyList<double> Gains,
+    IReadOnlyList<string> Presets,
+    IReadOnlyDictionary<string, IReadOnlyList<double>> UserPresets);

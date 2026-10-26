@@ -1,4 +1,5 @@
 using MusicSpin.Core.Audio;
+using MusicSpin.Core.Equalization;
 using MusicSpin.Core.Metadata;
 
 namespace MusicSpin.Core.Playback;
@@ -72,6 +73,7 @@ internal sealed class PlaybackBuffer : IPcmSource
     private readonly Func<float> _volume;
     private readonly Action _signal;
     private readonly SpectrumTap? _tap;
+    private readonly EqualizerProcessor? _equalizer;
 
     private long _write;      // producer
     private long _read;       // consumer (or a guarded structural change)
@@ -93,7 +95,7 @@ internal sealed class PlaybackBuffer : IPcmSource
     /// <summary>A change of the levelling gain (a new track's, or a late analysis) takes this long: too short to hear as a fade, too long to click.</summary>
     public const int LevelRampMilliseconds = 5;
 
-    public PlaybackBuffer(PcmFormat format, int capacitySamples, TrackSegment first, Func<float> volume, Action signal, SpectrumTap? tap = null)
+    public PlaybackBuffer(PcmFormat format, int capacitySamples, TrackSegment first, Func<float> volume, Action signal, SpectrumTap? tap = null, GraphicEqualizer? equalizer = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(capacitySamples, format.Channels);
         Format = format;
@@ -103,6 +105,7 @@ internal sealed class PlaybackBuffer : IPcmSource
         _levelFrames = Math.Max(1, (int)((long)Math.Max(format.SampleRate, 1) * LevelRampMilliseconds / 1000));
         _signal = signal;
         _tap = tap;
+        _equalizer = equalizer is null ? null : new EqualizerProcessor(equalizer, format);
     }
 
     public PcmFormat Format { get; }
@@ -200,6 +203,9 @@ internal sealed class PlaybackBuffer : IPcmSource
                 var target = buffer.Slice(done, count);
                 _ring.AsSpan(at, first).CopyTo(target);
                 _ring.AsSpan(0, count - first).CopyTo(target[first..]);
+                // The equalizer (#141) after levelling's gain is chosen and before volume; it is linear, so filtering before the
+                // gain is applied below is the same sound. Bit-exact when off or flat.
+                _equalizer?.Process(target, Format);
                 if (_tap is { Enabled: true } tap)
                 {
                     tap.Write(target, Format); // before volume: a muted player still shows the music

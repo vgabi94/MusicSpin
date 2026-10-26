@@ -30,6 +30,9 @@ public sealed class JsonLinesServer
     /// </summary>
     public MusicSpin.Core.Normalization.IGainResolver? Normalizer { get; init; }
 
+    /// <summary>The graphic equalizer (#141); null for none.</summary>
+    public MusicSpin.Core.Equalization.GraphicEqualizer? Equalizer { get; init; }
+
     public JsonLinesServer(IPlayer player, IAudioDecoderFactory decoders, TextReader input, TextWriter output, OutputInfo? outputInfo = null)
     {
         _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -41,7 +44,7 @@ public sealed class JsonLinesServer
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        using var queue = new QueuePlayer(_player, _outputInfo) { RadioPool = RadioPool, Normalizer = Normalizer };
+        using var queue = new QueuePlayer(_player, _outputInfo) { RadioPool = RadioPool, Normalizer = Normalizer, Equalizer = Equalizer };
         var protocol = new PlayerProtocol(queue, _decoders);
         using var events = PlayerEvents.Attach(queue, Emit);
         Emit(new ProtocolMessages.Event("ready", new { protocol = ProtocolVersion, decoder = _decoders.Name }).ToJson());

@@ -78,7 +78,6 @@
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="BarWidth" Value="{StaticResource AnalyzerBarWidth}" />
         <Setter Property="BarGap" Value="{StaticResource AnalyzerBarGap}" />
-        <Setter Property="Rows" Value="{StaticResource AnalyzerRows}" />
         <Setter Property="BottomOpacity" Value="{StaticResource AnalyzerBottomOpacity}" />
         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
         <Setter Property="PeakBrush" Value="{DynamicResource Fg2Brush}" />
