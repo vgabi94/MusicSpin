@@ -307,10 +307,19 @@
     <Style Selector="Button.npTrack Grid">
         <Setter Property="ColumnSpacing" Value="{StaticResource NowPlayingTrackGap}" />
     </Style>
-    <Style Selector="Button.npTrack TextBlock.number">
+    <!-- The number's column: the number on the right, ♪ at the left while the track plays (#138), so both show. -->
+    <Style Selector="Button.npTrack Panel.number">
         <Setter Property="Width" Value="{StaticResource NowPlayingTrackNumberWidth}" />
-        <Setter Property="TextAlignment" Value="Right" />
+    </Style>
+    <Style Selector="Button.npTrack TextBlock.number">
+        <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.npTrack controls|Icon.playingMark">
+        <Setter Property="Width" Value="{StaticResource NowPlayingMarkSize}" />
+        <Setter Property="Height" Value="{StaticResource NowPlayingMarkSize}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.npTrack.current TextBlock.number">
         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
