@@ -41,7 +41,7 @@ MusicSpin **aims for** bit-perfect output:
 
 Without `--exclusive` the OS mixer (Windows audio engine, PulseAudio/PipeWire, CoreAudio) may still resample or mix.
 
-On Windows the exclusive stream asks WASAPI for the track's own format: for a 24-bit track 24-in-32, then 32-bit, then packed 24. Some devices take **only 16-bit** in exclusive mode (a FiiO BTR13, for one). For a deeper track those get the track's own rate as **16-bit with TPDF dither** (a noise floor near -96 dBFS), and the output's notice says so ("The device takes only 16-bit in exclusive mode … dithered to 16-bit"). That is not bit-perfect, but it is better than the shared mixer, which would resample to its own rate and then hand the device 16 bits anyway. Only when the device refuses 16-bit too does playback fall back to shared mode, with a notice listing every format tried.
+On Windows the exclusive stream asks WASAPI for the track's own format: for a 24-bit track 24-in-32, then 32-bit, then packed 24. Some devices take **only 16-bit** in exclusive mode. For a deeper track those get the track's own rate as **16-bit with TPDF dither** (a noise floor near -96 dBFS), and the output's notice says so ("The device takes only 16-bit in exclusive mode … dithered to 16-bit"). That is not bit-perfect, but it is better than the shared mixer, which would resample to its own rate and then hand the device 16 bits anyway. Only when the device refuses 16-bit too does playback fall back to shared mode, with a notice listing every format tried.
 
 > **Status:** bit-perfect output has been verified in tests up to the output interface (decoded samples). It has **not** been verified on real hardware yet (WASAPI exclusive, ALSA `hw:`, CoreAudio rate switching). **Planned.**
 

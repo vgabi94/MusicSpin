@@ -522,7 +522,7 @@ public sealed class AudioSettingsTests
     [Trait("Category", "Unhappy")]
     public async Task A_long_notice_about_the_output_wraps_inside_the_dialog_instead_of_being_cut_off()
     {
-        // What a FiiO BTR13 said for a 24-bit track (#168): the end of it was cut off at the dialog's edge.
+        // What a 16-bit-only device said for a 24-bit track (#168): the end of it was cut off at the dialog's edge.
         const string notice = "Exclusive mode unavailable: the device does not accept 44.1 kHz, 2 ch in exclusive mode "
             + "(tried s24in32, s32, s24). Playing in shared mode through the Windows mixer. The device runs at 48 kHz, "
             + "not the track's 44.1 kHz: the audio is resampled.";

@@ -26,7 +26,7 @@ internal static class DeviceSamples
     /// The formats to try, best first, for a source of <paramref name="sourceBits"/> bits. Every candidate but s16 for a
     /// deeper source holds the source's samples exactly (a 16-bit sample padded into 24 or 32 bits is the same value;
     /// float/32-bit sources fall back to integer containers, which still hold every 24-bit value float32 can carry).
-    /// s16 comes last for a deeper source, for devices that take nothing wider in exclusive mode (a FiiO BTR13): the
+    /// s16 comes last for a deeper source, for devices that take nothing wider in exclusive mode: the
     /// samples are dithered to 16 bits (<see cref="Tpdf16Dither"/>), which still beats the shared mixer, which
     /// resamples and then hands such a device 16 bits anyway.
     /// </summary>

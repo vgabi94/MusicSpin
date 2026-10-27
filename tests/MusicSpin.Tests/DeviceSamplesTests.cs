@@ -155,7 +155,7 @@ public class DeviceSamplesTests
     [Trait("Category", "Unhappy")]
     public void A_24bit_source_on_a_device_that_takes_only_16bit_opens_s16_after_trying_every_wider_format()
     {
-        // A FiiO BTR13 (#168): IsFormatSupported refuses every 24- and 32-bit format and takes s16 at any rate.
+        // A 16-bit-only device (#168): IsFormatSupported refuses every 24- and 32-bit format and takes s16 at any rate.
         var probed = new List<DeviceSample>();
         var result = DeviceSamples.Negotiate(DeviceSamples.ExclusiveCandidates(24),
             f => { probed.Add(f); return f == DeviceSample.S16 ? 0 : UnsupportedFormat; }, _ => 0);
