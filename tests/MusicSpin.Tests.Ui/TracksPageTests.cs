@@ -144,9 +144,6 @@ public sealed class TracksPageTests
         await app.PlayerRoundTripAsync(); // the play command has its answer: its buttons are enabled again for the next click
         Assert.Equal(5, app.Scripted!.Sent("queue.play")[0].GetProperty("start").GetInt32());
 
-        // The player has the request, but the app's command runs (and its buttons are off) until the reply is handled: the
-        // round trip is the barrier, the next request's reply comes after the first's.
-        await app.PlayerRoundTripAsync();
         app.ViewModel.TracksPage.Grouping = TrackGrouping.None;
         Gui.Settle();
         Gui.Click(window, Child<Button>(Row(window, "Glass Window"), "thumb"));
