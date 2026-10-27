@@ -188,6 +188,9 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
 {
     private readonly IPcmSource _source;
     private readonly DeviceSample _format;
+
+    // s16 streams dither what volume, levelling or the equalizer changed (an untouched 16-bit track passes bit for bit).
+    private readonly Tpdf16Dither? _dither;
     private readonly int _channels;
     private readonly Lock _lock = new();
     private GCHandle _self;
@@ -201,6 +204,7 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
     {
         _source = source;
         _format = request.Format;
+        _dither = request.Format == DeviceSample.S16 ? new Tpdf16Dither() : null;
         _channels = request.Channels;
         _scratch = new float[ScratchFrames(0) * Math.Max(1, request.Channels)];
     }
@@ -414,7 +418,14 @@ internal sealed unsafe class MiniAudioStream : IPlaybackStream
 
             var floats = scratch.AsSpan(0, samples);
             PcmReading.Fill(_source, floats);
-            DeviceSamples.Convert(floats, bytes, _format);
+            if (_dither is { } dither)
+            {
+                dither.Convert(floats, bytes);
+            }
+            else
+            {
+                DeviceSamples.Convert(floats, bytes, _format);
+            }
         }
         catch (Exception)
         {

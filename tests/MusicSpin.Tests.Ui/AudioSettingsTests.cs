@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.Time.Testing;
 using MusicSpin.App.Services;
@@ -515,6 +516,28 @@ public sealed class AudioSettingsTests
         await app.Scripted.PushAsync("stateChanged");
 
         await Gui.UntilAsync(() => Audio(app).InUse == "In use now: no audio device (silent output)", "the silent output");
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_long_notice_about_the_output_wraps_inside_the_dialog_instead_of_being_cut_off()
+    {
+        // What a 16-bit-only device said for a 24-bit track (#168): the end of it was cut off at the dialog's edge.
+        const string notice = "Exclusive mode unavailable: the device does not accept 44.1 kHz, 2 ch in exclusive mode "
+            + "(tried s24in32, s32, s24). Playing in shared mode through the Windows mixer. The device runs at 48 kHz, "
+            + "not the track's 44.1 kHz: the audio is resampled.";
+        await using var app = await OpenAsync(settings: new AppSettings { OutputDevice = "USB DAC", ExclusiveMode = true });
+        await OpenSettingsAsync(app);
+        app.Scripted!.Status = app.Scripted.Status with { Output = new OutputInfo("scripted", "USB DAC", false, Notice: notice) };
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => Audio(app).InUse?.EndsWith(notice, StringComparison.Ordinal) == true, "the notice");
+        Gui.Settle();
+
+        var inUse = Gui.Find<TextBlock>(app.Window, "InUse");
+        var row = inUse.FindAncestorOfType<Border>()!;
+        Assert.Equal(TextWrapping.Wrap, inUse.TextWrapping);
+        Assert.True(inUse.Bounds.Width <= row.Bounds.Width, $"the note ({inUse.Bounds.Width}) is wider than its row ({row.Bounds.Width})");
+        Assert.True(inUse.TextLayout.TextLines.Count >= 3, "the status line and the notice, wrapped over at least two lines");
     }
 
     // ---- volume levelling (#139) --------------------------------------------------------------------------------

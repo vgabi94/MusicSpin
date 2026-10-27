@@ -238,6 +238,24 @@ public sealed unsafe class MsAudioNativeTests : IDisposable
     }
 
     [Fact]
+    public void An_s16_stream_dithers_samples_the_volume_or_equalizer_moved_off_the_16bit_steps()
+    {
+        // A quarter of a step above 16384 (what a gain does to a 16-bit track): rounding gives 16384 every time, dithered
+        // the quarter is kept on average. The exact 0.5f of the test above still comes out as 16384 exactly.
+        var value = (float)((16_384 + 0.25) / 32_768.0);
+        using var stream = (MiniAudioStream)_backend.Open(null, new OpenRequest(DeviceSample.S16, 48_000, 2, false, 16), new ConstantSource(new PcmFormat(48_000, 2, 16), value));
+        stream.ResumeForTest();
+        const int frames = 10_000;
+        var bytes = new byte[frames * 2 * 2];
+
+        Assert.Equal(MsAudioNative.Success, stream.RenderForTest(bytes, frames));
+
+        var s16 = MemoryMarshal.Cast<byte, short>(bytes).ToArray();
+        Assert.All(s16, v => Assert.InRange(v, (short)16_383, (short)16_386));
+        Assert.InRange(s16.Average(v => (double)v), 16_384.2, 16_384.3);
+    }
+
+    [Fact]
     public void A_throwing_source_renders_silence_instead_of_crashing_the_audio_thread()
     {
         using var stream = (MiniAudioStream)_backend.Open(null, new OpenRequest(DeviceSample.S16, 48_000, 2, false, 16), new ThrowingSource());
@@ -285,6 +303,18 @@ public sealed unsafe class MsAudioNativeTests : IDisposable
 
         // Exactly the source times our volume, converted once: no pan law, no mixer, no second gain stage.
         var scaled = floats.Select(x => x * volume).ToArray();
+        if (sample == DeviceSample.S16)
+        {
+            // Off the 16-bit steps now, so dithered rather than rounded: within the dither's 1.5 steps of the exact value.
+            var output = MemoryMarshal.Cast<byte, short>(rendered);
+            for (var i = 0; i < scaled.Length; i++)
+            {
+                Assert.InRange(output[i] - Math.Clamp(scaled[i] * 32_768.0, short.MinValue, short.MaxValue), -1.5, 1.5);
+            }
+
+            return;
+        }
+
         var expected = new byte[scaled.Length * DeviceSamples.ContainerBytes(sample)];
         DeviceSamples.Convert(scaled, expected, sample);
         Assert.Equal(expected, rendered);
