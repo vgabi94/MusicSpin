@@ -514,7 +514,7 @@ public class MiniAudioOutputTests
     public void A_24bit_track_on_a_16bit_only_device_stays_exclusive_at_its_rate_and_says_it_is_dithered()
     {
         // A 16-bit-only device (#168): the WASAPI stream opened s16 and says why; nothing falls back to the shared mixer.
-        var notice = DeviceSamples.DitherNotice(24, ["s24in32", "s32", "s24"]);
+        var notice = DeviceSamples.DitherNotice(["s24in32", "s32", "s24"]);
         var backend = new FakeBackend(Device("USB DAC", isDefault: true))
         {
             OpenedAs = (d, f) => new OpenedOutput(d?.Name, true, f.SampleRate, f.Channels, "s16", 16, Verified: true, notice),

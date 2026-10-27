@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Globalization;
 using MusicSpin.Core.Audio;
 
 namespace MusicSpin.Core.Output;
@@ -41,18 +40,21 @@ internal static class DeviceSamples
     /// <summary>Whether every sample of a source of <paramref name="sourceBits"/> bits fits s16 exactly (not DSD, decoded to float).</summary>
     public static bool FitsIn16(int sourceBits) => sourceBits is > 0 and <= 16 && sourceBits != 1;
 
-    /// <summary>Whether writing a source of <paramref name="sourceBits"/> bits as <paramref name="format"/> drops bits, so it is dithered.</summary>
-    public static bool Dithers(int sourceBits, DeviceSample format) => format == DeviceSample.S16 && !FitsIn16(sourceBits);
+    /// <summary>
+    /// Whether <paramref name="format"/> is narrower than the source itself: a deeper source written as s16 always loses
+    /// bits (so it is dithered, and the output says so), whatever the volume or effects do.
+    /// </summary>
+    public static bool NarrowsSource(int sourceBits, DeviceSample format) => format == DeviceSample.S16 && !FitsIn16(sourceBits);
 
     /// <summary>
-    /// Says the track is not bit-perfect: the device refused every wider format in exclusive mode
-    /// (<paramref name="refused"/>, from <see cref="Negotiate"/>), so a deeper source is dithered to s16.
+    /// Says why the output is not bit-perfect: the device refused every wider format in exclusive mode
+    /// (<paramref name="refused"/>, from <see cref="Negotiate"/>). It names no depth: the stream stays open for the next
+    /// tracks of the same kind (a 20-bit track after a 24-bit one), and the notice must stay true for them.
     /// </summary>
-    public static string DitherNotice(int sourceBits, IReadOnlyList<string> refused)
+    public static string DitherNotice(IReadOnlyList<string> refused)
     {
-        var what = sourceBits > 16 ? string.Create(CultureInfo.InvariantCulture, $"the track's {sourceBits}-bit samples are") : "the track is";
         var tried = refused.Count == 0 ? string.Empty : $" (refused {string.Join(", ", refused)})";
-        return $"The device takes only 16-bit in exclusive mode{tried}: {what} dithered to 16-bit.";
+        return $"The device takes only 16-bit in exclusive mode{tried}: tracks deeper than 16-bit are dithered to it.";
     }
 
     /// <summary>AUDCLNT_E_UNSUPPORTED_FORMAT and E_INVALIDARG: this format is refused, the next one may not be.</summary>
@@ -187,10 +189,12 @@ internal static class DeviceSamples
 }
 
 /// <summary>
-/// Reduces float samples to s16 with TPDF dither (two uniform random values of one LSB, subtracted), for a source deeper
-/// than the 16 bits a device takes. Plain rounding would turn the bits dropped into distortion that follows the music;
-/// dither turns them into a steady, signal-independent noise floor at about -96 dBFS. One per stream: it keeps the
-/// random generator's state between buffers (xorshift32, so the same seed gives the same output, for tests).
+/// Writes float samples as s16 for every device stream opened at s16. A buffer whose samples are all exact 16-bit values
+/// (a 16-bit track at volume 1.0, no levelling or equalizer; digital silence) is written as it is, bit for bit. Any other
+/// buffer (a deeper track, or a 16-bit one whose samples the volume, levelling or equalizer changed) gets TPDF dither (two
+/// uniform random values of one LSB, subtracted): plain rounding would turn the bits dropped into distortion that follows
+/// the music, dither turns them into a steady, signal-independent noise floor at about -96 dBFS. One per stream: it keeps
+/// the random generator's state between buffers (xorshift32, so the same seed gives the same output, for tests).
 /// </summary>
 internal sealed class Tpdf16Dither(uint seed = 0x9E3779B9u)
 {
@@ -207,6 +211,12 @@ internal sealed class Tpdf16Dither(uint seed = 0x9E3779B9u)
             throw new ArgumentException("Destination is too small.", nameof(destination));
         }
 
+        if (AllExact(source))
+        {
+            DeviceSamples.Convert(source, destination, DeviceSample.S16);
+            return;
+        }
+
         for (var i = 0; i < source.Length; i++)
         {
             var x = source[i];
@@ -214,6 +224,24 @@ internal sealed class Tpdf16Dither(uint seed = 0x9E3779B9u)
             var s16 = Math.Clamp((long)Math.Round(dithered, MidpointRounding.ToEven), short.MinValue, short.MaxValue);
             BinaryPrimitives.WriteInt16LittleEndian(destination[(i * 2)..], (short)s16);
         }
+    }
+
+    /// <summary>
+    /// Whether every sample is a whole number of 16-bit steps (or beyond full scale, which clips the same either way), so
+    /// rounding drops nothing. Decided per buffer, not per sample: dither that came and went within the music would follow it.
+    /// </summary>
+    private static bool AllExact(ReadOnlySpan<float> source)
+    {
+        foreach (var x in source)
+        {
+            var v = (double)x * Full;
+            if (v != Math.Floor(v))
+            {
+                return false; // also NaN
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Uniform in [0, 1).</summary>

@@ -26,8 +26,8 @@ public class DeviceSamplesTests
     [InlineData(0, nameof(DeviceSample.S16), true)]
     [InlineData(24, nameof(DeviceSample.S24In32), false)]
     [InlineData(32, nameof(DeviceSample.F32), false)]
-    public void Only_a_deeper_source_written_as_s16_is_dithered(int bits, string format, bool dithers)
-        => Assert.Equal(dithers, DeviceSamples.Dithers(bits, Enum.Parse<DeviceSample>(format)));
+    public void Only_a_deeper_source_written_as_s16_is_narrower_than_the_source(int bits, string format, bool narrows)
+        => Assert.Equal(narrows, DeviceSamples.NarrowsSource(bits, Enum.Parse<DeviceSample>(format)));
 
     [Fact]
     public void Every_24bit_value_survives_packed_s24_and_s24in32_bit_exact()
@@ -163,7 +163,7 @@ public class DeviceSamplesTests
         Assert.Equal(DeviceSample.S16, result.Chosen);
         Assert.Equal([DeviceSample.S24In32, DeviceSample.S32, DeviceSample.S24, DeviceSample.S16], probed);
         Assert.Equal(["s24in32", "s32", "s24"], result.Refused);
-        Assert.True(DeviceSamples.Dithers(24, result.Chosen!.Value));
+        Assert.True(DeviceSamples.NarrowsSource(24, result.Chosen!.Value));
     }
 
     [Fact]
@@ -178,11 +178,11 @@ public class DeviceSamplesTests
     }
 
     [Fact]
-    public void The_dither_notice_names_the_tracks_depth_and_the_formats_refused()
+    public void The_dither_notice_names_the_formats_refused_but_no_depth_so_it_stays_true_for_the_next_tracks()
     {
-        Assert.Equal("The device takes only 16-bit in exclusive mode (refused s24in32, s32, s24): the track's 24-bit samples are dithered to 16-bit.",
-            DeviceSamples.DitherNotice(24, ["s24in32", "s32", "s24"]));
-        Assert.Equal("The device takes only 16-bit in exclusive mode: the track is dithered to 16-bit.", DeviceSamples.DitherNotice(1, []));
+        Assert.Equal("The device takes only 16-bit in exclusive mode (refused s24in32, s32, s24): tracks deeper than 16-bit are dithered to it.",
+            DeviceSamples.DitherNotice(["s24in32", "s32", "s24"]));
+        Assert.Equal("The device takes only 16-bit in exclusive mode: tracks deeper than 16-bit are dithered to it.", DeviceSamples.DitherNotice([]));
     }
 
     // ---- TPDF dither to s16 (#168) --------------------------------------------------------------------------------
@@ -227,7 +227,7 @@ public class DeviceSamplesTests
     [Fact]
     public void Dither_is_noise_not_a_fixed_offset_and_repeats_for_the_same_seed()
     {
-        var floats = new float[4096];
+        var floats = Enumerable.Repeat((float)(0.5 / 32_768.0), 4096).ToArray(); // half a step: not an exact 16-bit value
 
         var a = Dither(floats, seed: 1);
         var b = Dither(floats, seed: 1);
@@ -235,8 +235,33 @@ public class DeviceSamplesTests
 
         Assert.Equal(a, b);
         Assert.NotEqual(a, c);
-        Assert.InRange(a.Average(v => (double)v), -0.1, 0.1);
-        Assert.Equal(1, a.Max(v => Math.Abs((int)v))); // triangular over (-1, 1) LSB: some steps, never more than one
+        Assert.InRange(a.Average(v => (double)v), 0.4, 0.6);
+        Assert.All(a, v => Assert.InRange(v, (short)0, (short)2)); // triangular over (-1, 1) LSB around 0.5
+    }
+
+    [Fact]
+    public void Exact_16bit_samples_pass_bit_for_bit_and_silence_stays_silent()
+    {
+        // A 16-bit track at volume 1.0 with no levelling or equalizer: dither would only add noise.
+        short[] values = [0, 1, -1, short.MaxValue, short.MinValue, 12_345, -23_456];
+        var floats = values.Select(v => v / 32_768f).ToArray();
+
+        Assert.Equal(values, Dither(floats));
+        Assert.All(Dither(new float[4096]), v => Assert.Equal(0, v));
+    }
+
+    [Fact]
+    public void A_16bit_track_the_volume_or_equalizer_changed_is_dithered_and_the_whole_buffer_with_it()
+    {
+        // Half volume on a 16-bit track: odd samples land between two steps. Not exact, so the buffer is dithered, its
+        // exact samples (here the silence around the one changed sample) too: dither that came and went would follow the music.
+        var floats = new float[4096];
+        floats[100] = (float)(0.5 * 12_345 / 32_768.0);
+
+        var s16 = Dither(floats);
+
+        Assert.InRange(s16[100], (short)6171, (short)6174);
+        Assert.Contains(s16.Where((_, i) => i != 100), v => v != 0);
     }
 
     [Fact]
@@ -264,7 +289,7 @@ public class DeviceSamplesTests
     [Fact]
     [Trait("Category", "Unhappy")]
     public void A_zero_seed_still_gives_noise()
-        => Assert.Contains(Dither(new float[256], seed: 0), v => v != 0); // xorshift's zero state would stay zero forever
+        => Assert.True(Dither(Enumerable.Repeat((float)(0.5 / 32_768.0), 256).ToArray(), seed: 0).Distinct().Count() > 1); // xorshift's zero state would stay zero forever
 
     [Fact]
     public void A_device_in_use_stops_the_search_instead_of_trying_other_formats()
