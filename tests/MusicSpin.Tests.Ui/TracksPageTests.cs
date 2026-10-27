@@ -143,11 +143,43 @@ public sealed class TracksPageTests
         await Gui.UntilAsync(() => app.Scripted!.Count("queue.play") == 1, "the track played");
         Assert.Equal(5, app.Scripted!.Sent("queue.play")[0].GetProperty("start").GetInt32());
 
+        // The player has the request, but the app's command runs (and its buttons are off) until the reply is handled: the
+        // round trip is the barrier, the next request's reply comes after the first's.
+        await app.PlayerRoundTripAsync();
         app.ViewModel.TracksPage.Grouping = TrackGrouping.None;
         Gui.Settle();
         Gui.Click(window, Child<Button>(Row(window, "Glass Window"), "thumb"));
         await Gui.UntilAsync(() => app.Scripted.Count("queue.play") == 2, "the track played");
         Assert.Equal(1, app.Scripted.Sent("queue.play")[1].GetProperty("start").GetInt32());
+    }
+
+    [AvaloniaFact]
+    public async Task A_row_cannot_be_played_again_until_the_player_has_answered_the_first_play()
+    {
+        await using var app = await OpenAsync();
+        var window = app.Window;
+        app.ViewModel.TracksPage.Grouping = TrackGrouping.None; // rows with a thumbnail play button
+        Gui.Settle();
+        var unanswered = app.Scripted!.Hold("queue.play");
+        Button other;
+        try
+        {
+            Gui.Click(window, Child<Button>(Row(window, "Ember Arc"), "thumb"));
+            await Gui.UntilAsync(() => app.Scripted.Count("queue.play") == 1, "the first play reached the player");
+            Gui.Settle();
+            other = Child<Button>(Row(window, "Glass Window"), "thumb");
+            Assert.False(other.IsEffectivelyEnabled); // one play at a time: no second queue.play for a double click
+        }
+        finally
+        {
+            unanswered.TrySetResult(); // a failed assert must not leave the app waiting for an answer at disposal
+        }
+
+        await app.PlayerRoundTripAsync();
+        Gui.Settle();
+        Assert.True(other.IsEffectivelyEnabled);
+        Gui.Click(window, other);
+        await Gui.UntilAsync(() => app.Scripted.Count("queue.play") == 2, "the second play, once the first was answered");
     }
 
     [AvaloniaFact]
