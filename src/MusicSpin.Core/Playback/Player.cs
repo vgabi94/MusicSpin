@@ -213,6 +213,8 @@ public sealed class Player : IPlayer
                         buffer = adopted;
                         WaitForPrefill(buffer);
                     }
+
+                    RechainAfterOpen(buffer);
                 }
 
                 _output.Start();
@@ -379,9 +381,12 @@ public sealed class Player : IPlayer
                     return;
                 }
             }
-            else if (_endQueued && buffer.TryRemoveTrailingEnd())
+            else if (_endQueued && next.Count > chain.Count && buffer.TryRemoveTrailingEnd())
             {
-                _endQueued = false; // more entries to try than when the end was written
+                // Entries to try after what is decoded ahead: the end comes off and the decode thread chains them (or
+                // writes it again). With none (the order sent again once the last track is current), the end stays: taking
+                // it off and writing it again would leave a moment in which a device reading at the end finds neither.
+                _endQueued = false;
                 _generation++;
             }
 
@@ -700,6 +705,13 @@ public sealed class Player : IPlayer
                     return Step.Progress;
                 }
 
+                if (next is null && output is null && Volatile.Read(ref _output) is not null)
+                {
+                    // The device opened while this step was opening the next track without a converter: try again with its
+                    // converter instead of ending the stream (RechainAfterOpen covers an end written before the open).
+                    return Step.Progress;
+                }
+
                 if (next is not null)
                 {
                     next.Segment.Gain = GainOf(next.Segment.Token); // before the output can reach the boundary
@@ -970,6 +982,29 @@ public sealed class Player : IPlayer
 
         _wake.Set();
         return adopted;
+    }
+
+    /// <summary>
+    /// Before the first open there is no output to convert with, so a decode thread that reached the end of a short first
+    /// track already may have ended the stream before a next track of another rate or channel count (which shared mode
+    /// converts). Now that the device is open, and before it starts reading, that end comes off and the next tracks are
+    /// tried again (an output that converts nothing ends the stream there again). Caller holds _sync.
+    /// </summary>
+    private void RechainAfterOpen(PlaybackBuffer buffer)
+    {
+        lock (_decodeLock)
+        {
+            if (!_options.Gapless || !ReferenceEquals(_buffer, buffer) || !_endQueued || _cursor >= _candidates.Count
+                || !buffer.TryRemoveTrailingEnd())
+            {
+                return;
+            }
+
+            _endQueued = false;
+            _generation++;
+        }
+
+        _wake.Set();
     }
 
     private void WaitForPrefill(PlaybackBuffer buffer)
