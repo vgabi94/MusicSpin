@@ -631,6 +631,42 @@ public sealed class TrackSwitchTests : IDisposable
     }
 
     /// <summary>
+    /// The window RechainAfterOpen alone leaves (#171 review): a chain step that started while the output existed but was
+    /// closed (here: after a stop) asks it for a converter while Play is opening it. An output asked for exclusive mode says
+    /// no until its open falls back to shared, and if the step then ends the stream after RechainAfterOpen ran, nothing
+    /// tries again. The step sees the open through the opens counter and tries again instead.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_next_track_refused_a_converter_while_play_opened_the_device_is_tried_again_not_ended_after()
+    {
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var nextB = new NextTrack(Add(b), "b");
+        var asked = 0;
+        // No converter the first time (exclusive asked, not open yet), one from then on (fell back to shared).
+        Output.Converter = (from, to) => Interlocked.Increment(ref asked) == 1 ? null : new StepConverter(from, to);
+        using var decoders = new GatedDecoderFactory(_decoders, nextB.Path);
+        var player = new Player(decoders, _outputs, new PlayerOptions());
+        _owned.Add(player);
+        player.Load(Add(a));
+        player.Play();
+        player.Stop(); // the output object stays, closed
+
+        player.Load(Add(a));
+        player.SetNextTracks([nextB]);
+        Assert.True(decoders.Opening.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "b being opened, the output closed");
+        player.Play(); // opens the device while the step is still opening b
+        decoders.Proceed.Set(); // the step now asks for a converter and is refused once
+
+        Assert.Equal(a.Pcm(), Pull(a.Pcm().Length));
+        var bPcm = StepConverter.Expected(b, a.Format);
+        Assert.Equal(bPcm, Pull(bPcm.Length)); // b follows gaplessly, converted
+        Assert.Equal(2, Volatile.Read(ref asked));
+        Assert.Equal(PlayerState.Playing, player.State);
+    }
+
+    /// <summary>
     /// Before the first Play there is no output to convert with: a decode thread that reached the end of a short first
     /// track then could not chain a next track of another rate, and ended the stream after it. Play must try again once
     /// the device is open, or playback stops after the first track (what made the two tests above flaky under load).
