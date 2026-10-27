@@ -141,6 +141,7 @@ public sealed class TracksPageTests
         Assert.True(Child<Icon>(row, "play").IsEffectivelyVisible); // ▶ instead of the number
         Gui.Click(window, Child<Button>(row, "number"));
         await Gui.UntilAsync(() => app.Scripted!.Count("queue.play") == 1, "the track played");
+        await app.PlayerRoundTripAsync(); // the play command has its answer: its buttons are enabled again for the next click
         Assert.Equal(5, app.Scripted!.Sent("queue.play")[0].GetProperty("start").GetInt32());
 
         app.ViewModel.TracksPage.Grouping = TrackGrouping.None;
