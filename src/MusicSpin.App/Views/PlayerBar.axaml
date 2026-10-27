@@ -122,15 +122,13 @@
                         <controls:Icon Data="{StaticResource Next}" />
                     </Button>
                     <Button Name="Repeat"
-                            Classes="mode"
+                            Classes="mode repeat"
                             Classes.on="{Binding PlayerBar.IsRepeatOn}"
+                            Classes.one="{Binding PlayerBar.IsRepeatOne}"
                             Command="{Binding PlayerBar.CycleRepeatCommand}"
                             ToolTip.Tip="{Binding PlayerBar.RepeatToolTip}"
                             AutomationProperties.Name="{Binding PlayerBar.RepeatToolTip}">
-                        <Panel>
-                            <controls:Icon Data="{StaticResource Repeat}" />
-                            <TextBlock Name="RepeatOne" Classes="repeatOne" Text="1" IsVisible="{Binding PlayerBar.IsRepeatOne}" />
-                        </Panel>
+                        <controls:Icon Name="RepeatIcon" />
                     </Button>
                 </StackPanel>
 

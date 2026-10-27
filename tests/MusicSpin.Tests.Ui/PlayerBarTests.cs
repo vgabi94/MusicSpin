@@ -134,14 +134,14 @@ public sealed class PlayerBarTests
         var repeat = Find<Button>(app, "Repeat");
         var accent = Assert.IsType<SolidColorBrush>(app.Window.FindResource("AccentInkBrush")).Color;
         Assert.DoesNotContain("on", shuffle.Classes);
-        Assert.False(Find<TextBlock>(app, "RepeatOne").IsVisible);
+        Assert.DoesNotContain("one", repeat.Classes);
 
         await SetAsync(app, Status() with { Shuffle = true, Repeat = RepeatMode.One });
         Assert.Contains("on", shuffle.Classes);
         Assert.Equal(accent, Assert.IsType<SolidColorBrush>(shuffle.Foreground).Color);
         Assert.Contains("on", repeat.Classes);
         Assert.Equal(accent, Assert.IsType<SolidColorBrush>(repeat.Foreground).Color);
-        Assert.True(Find<TextBlock>(app, "RepeatOne").IsVisible);
+        Assert.Contains("one", repeat.Classes);
         Assert.Equal(("Shuffle: on", "Repeat: one"), (ToolTip.GetTip(shuffle), ToolTip.GetTip(repeat)));
 
         Gui.Click(app.Window, repeat);
@@ -152,6 +152,32 @@ public sealed class PlayerBarTests
         Assert.False(shuffle.IsEffectivelyEnabled);
         Assert.Equal(PlayerBarViewModel.RadioShuffleTip, ToolTip.GetTip(shuffle));
         Assert.True(ToolTip.GetShowOnDisabled(shuffle));
+    }
+
+    [AvaloniaFact]
+    public async Task Each_repeat_mode_looks_and_reads_its_own_way_also_when_changed_from_outside()
+    {
+        await using var app = await OpenAsync();
+        var repeat = Find<Button>(app, "Repeat");
+        var icon = Find<Icon>(app, "RepeatIcon");
+        var looks = new Dictionary<RepeatMode, byte[]>();
+
+        // Off, all, one and off again, as `music-spin repeat` or the tray would set them.
+        foreach (var (mode, tip) in new[] { (RepeatMode.Off, "Repeat: off"), (RepeatMode.All, "Repeat: all"), (RepeatMode.One, "Repeat: one"), (RepeatMode.Off, "Repeat: off") })
+        {
+            await SetAsync(app, Status() with { Repeat = mode });
+            Gui.FinishAnimations();
+            Assert.Equal((mode != RepeatMode.Off, mode == RepeatMode.One), (repeat.Classes.Contains("on"), repeat.Classes.Contains("one")));
+            Assert.Same(app.Window.FindResource(mode == RepeatMode.One ? "RepeatOne" : "Repeat"), icon.Data);
+            Assert.Equal(tip, ToolTip.GetTip(repeat));
+            Assert.Equal(tip, ControlAutomationPeer.CreatePeerForElement(repeat).GetName());
+            using var drawn = Snapshots.Capture(app.Window, repeat);
+            Assert.Equal(looks.TryGetValue(mode, out var before) ? before : drawn.Bytes, drawn.Bytes); // off looks as it did
+            looks[mode] = drawn.Bytes;
+        }
+
+        Assert.NotEqual(looks[RepeatMode.Off], looks[RepeatMode.All]);
+        Assert.NotEqual(looks[RepeatMode.All], looks[RepeatMode.One]); // the "1" is drawn, inside the button
     }
 
     [AvaloniaFact]

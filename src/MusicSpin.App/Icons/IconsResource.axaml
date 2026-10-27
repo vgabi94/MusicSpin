@@ -46,6 +46,8 @@
     <StreamGeometry x:Key="Next">M16,5 H18 V19 H16 Z M5,5 L15,12 L5,19 Z</StreamGeometry>
     <StreamGeometry x:Key="Shuffle">M3,7 H7 C11,7 13,17 17,17 H21 M3,17 H7 C11,17 13,7 17,7 H21 M18,4 L21,7 L18,10 M18,14 L21,17 L18,20</StreamGeometry>
     <StreamGeometry x:Key="Repeat">M4,12 V10 A3,3 0 0 1 7,7 H20 M17,4 L20,7 L17,10 M20,12 V14 A3,3 0 0 1 17,17 H4 M7,14 L4,17 L7,20</StreamGeometry>
+    <!-- Repeat with a "1" inside the loop: the same bounds, so the loop draws exactly where Repeat's does. -->
+    <StreamGeometry x:Key="RepeatOne">M4,12 V10 A3,3 0 0 1 7,7 H20 M17,4 L20,7 L17,10 M20,12 V14 A3,3 0 0 1 17,17 H4 M7,14 L4,17 L7,20 M11,10.5 L12.5,9.5 V14.5</StreamGeometry>
     <!-- END Transport -->
 
     <!-- BEGIN Player bar. The volume icon is layers in one 24 x 24 box (Icon.ViewBox): a filled speaker, and stroked
