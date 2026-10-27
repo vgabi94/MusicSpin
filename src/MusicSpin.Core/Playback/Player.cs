@@ -54,6 +54,11 @@ public sealed class Player : IPlayer
     private long _underrunsBefore;
     private float[] _scratch = [];
     private long _generation;
+
+    // Device opens by Play (RechainAfterOpen): a chain step that started before one asked the output for a converter before
+    // it was open (none yet, or an exclusive open that then fell back to shared mode), so a "no" it got is tried again.
+    // Not _generation: bumping that would also throw away a plain read in flight, whose samples the decoder is past.
+    private long _opens;
     private readonly List<IAudioDecoder> _retired = [];
 
     public Player(
@@ -213,6 +218,8 @@ public sealed class Player : IPlayer
                         buffer = adopted;
                         WaitForPrefill(buffer);
                     }
+
+                    RechainAfterOpen(buffer);
                 }
 
                 _output.Start();
@@ -379,9 +386,12 @@ public sealed class Player : IPlayer
                     return;
                 }
             }
-            else if (_endQueued && buffer.TryRemoveTrailingEnd())
+            else if (_endQueued && next.Count > chain.Count && buffer.TryRemoveTrailingEnd())
             {
-                _endQueued = false; // more entries to try than when the end was written
+                // Entries to try after what is decoded ahead: the end comes off and the decode thread chains them (or
+                // writes it again). With none (the order sent again once the last track is current), the end stays: taking
+                // it off and writing it again would leave a moment in which a device reading at the end finds neither.
+                _endQueued = false;
                 _generation++;
             }
 
@@ -609,7 +619,7 @@ public sealed class Player : IPlayer
         IReadOnlyList<NextTrack> candidates;
         int cursor, want;
         float[] scratch;
-        long generation;
+        long generation, opens;
         bool chain;
         lock (_ioLock)
         {
@@ -647,6 +657,7 @@ public sealed class Player : IPlayer
                 candidates = _candidates;
                 cursor = _cursor;
                 generation = _generation;
+                opens = _opens;
             }
 
             // File I/O below runs without _decodeLock: status, next-track updates and Load never wait for it.
@@ -697,6 +708,14 @@ public sealed class Player : IPlayer
                 if (generation != _generation || !(unchanged || (next is not null && HasAt(_candidates, _cursor, next.Segment.Entries))))
                 {
                     next?.Segment.Decoder.Dispose();
+                    return Step.Progress;
+                }
+
+                if (next is null && opens != _opens)
+                {
+                    // Play opened the device while this step was opening the next track, so the output's answer about a
+                    // converter may be from before (no output, or exclusive not yet fallen back to shared): try again rather
+                    // than end the stream (RechainAfterOpen covers an end written before the open).
                     return Step.Progress;
                 }
 
@@ -970,6 +989,31 @@ public sealed class Player : IPlayer
 
         _wake.Set();
         return adopted;
+    }
+
+    /// <summary>
+    /// Before the first open there is no output to convert with, so a decode thread that reached the end of a short first
+    /// track already may have ended the stream before a next track of another rate or channel count (which shared mode
+    /// converts). Now that the device is open, and before it starts reading, that end comes off and the next tracks are
+    /// tried again (an output that converts nothing ends the stream there again). A chain step still opening one sees the
+    /// open through <c>_opens</c> and tries again too. Caller holds _sync.
+    /// </summary>
+    private void RechainAfterOpen(PlaybackBuffer buffer)
+    {
+        lock (_decodeLock)
+        {
+            _opens++; // a chain step in flight retries what the output refused before this open
+            if (!_options.Gapless || !ReferenceEquals(_buffer, buffer) || !_endQueued || _cursor >= _candidates.Count
+                || !buffer.TryRemoveTrailingEnd())
+            {
+                return;
+            }
+
+            _endQueued = false;
+            _generation++;
+        }
+
+        _wake.Set();
     }
 
     private void WaitForPrefill(PlaybackBuffer buffer)

@@ -293,7 +293,7 @@
                             <StackPanel>
                                 <TextBlock Text="Output" />
                                 <TextBlock Name="InUse"
-                                           Classes="settingNote"
+                                           Classes="settingNote wraps"
                                            Text="{Binding Audio.InUse, FallbackValue={x:Null}}"
                                            IsVisible="{Binding Audio.InUse, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
                             </StackPanel>

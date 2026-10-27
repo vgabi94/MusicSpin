@@ -8,7 +8,8 @@ namespace MusicSpin.Core.Output.MiniAudio;
 /// float32: a source of another rate is converted here (libsamplerate's best sinc, <see cref="StreamRoute"/>), once,
 /// instead of by the mixer, and one at the mixer's rate passes bit for bit. Exclusive mode opens the source's own rate
 /// and hands the device the source's own depth (s16/s24, f32 for 32-bit and float sources), so with
-/// volume 1.0 the original samples reach the DAC unchanged. When the device goes away mid-play, or the system
+/// volume 1.0 the original samples reach the DAC unchanged; a device that takes only 16-bit gets a deeper track dithered
+/// to s16, with a notice saying so (still the track's own rate, unlike the shared mixer). When the device goes away mid-play, or the system
 /// default changes under a stream that cannot follow it, the output reopens on the system default from the same source
 /// (<see cref="Rerouted"/>); only when that fails does <see cref="Failed"/> fire and the output close. An exclusive
 /// device is released while paused (a stopped exclusive stream still holds the device against every other app) and
