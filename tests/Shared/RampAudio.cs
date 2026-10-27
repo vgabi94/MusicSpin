@@ -18,6 +18,9 @@ internal sealed record RampSpec(int Id, long Frames, int SampleRate = 1000, int 
 
     public bool Seekable { get; init; } = true;
 
+    /// <summary>Seeking to a position this answers true for throws, leaving the decoder where it was (a damaged file).</summary>
+    public Func<TimeSpan, bool>? SeekFails { get; init; }
+
     public PcmFormat Format => new(SampleRate, Channels, Bits);
 
     public float Sample(long frame, int channel) => (Id * 1_000_000) + (frame * Channels) + channel;
@@ -84,7 +87,15 @@ internal sealed class RampDecoder(string path, RampSpec spec) : IAudioDecoder
         return Math.Max(frames, 0) * Spec.Channels;
     }
 
-    public void Seek(TimeSpan position) => _frame = Math.Clamp((long)Math.Round(position.TotalSeconds * Spec.SampleRate), 0, Spec.Frames);
+    public void Seek(TimeSpan position)
+    {
+        if (Spec.SeekFails?.Invoke(position) == true)
+        {
+            throw new MusicSpinException(MusicSpinErrorCode.DecodeFailed, $"Cannot seek to {position}.");
+        }
+
+        _frame = Math.Clamp((long)Math.Round(position.TotalSeconds * Spec.SampleRate), 0, Spec.Frames);
+    }
 
     public void Dispose() => Disposed = true;
 }
