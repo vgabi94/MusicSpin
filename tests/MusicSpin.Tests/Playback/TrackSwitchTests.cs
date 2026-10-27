@@ -630,6 +630,116 @@ public sealed class TrackSwitchTests : IDisposable
         Assert.Equal(1, Output.OpenCount);
     }
 
+    /// <summary>
+    /// The window RechainAfterOpen alone leaves (#171 review): a chain step that started while the output existed but was
+    /// closed (here: after a stop) asks it for a converter while Play is opening it. An output asked for exclusive mode says
+    /// no until its open falls back to shared, and if the step then ends the stream after RechainAfterOpen ran, nothing
+    /// tries again. The step sees the open through the opens counter and tries again instead.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_next_track_refused_a_converter_while_play_opened_the_device_is_tried_again_not_ended_after()
+    {
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var nextB = new NextTrack(Add(b), "b");
+        var asked = 0;
+        // No converter the first time (exclusive asked, not open yet), one from then on (fell back to shared).
+        Output.Converter = (from, to) => Interlocked.Increment(ref asked) == 1 ? null : new StepConverter(from, to);
+        using var decoders = new GatedDecoderFactory(_decoders, nextB.Path);
+        var player = new Player(decoders, _outputs, new PlayerOptions());
+        _owned.Add(player);
+        player.Load(Add(a));
+        player.Play();
+        player.Stop(); // the output object stays, closed
+
+        player.Load(Add(a));
+        player.SetNextTracks([nextB]);
+        Assert.True(decoders.Opening.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "b being opened, the output closed");
+        player.Play(); // opens the device while the step is still opening b
+        decoders.Proceed.Set(); // the step now asks for a converter and is refused once
+
+        Assert.Equal(a.Pcm(), Pull(a.Pcm().Length));
+        var bPcm = StepConverter.Expected(b, a.Format);
+        Assert.Equal(bPcm, Pull(bPcm.Length)); // b follows gaplessly, converted
+        Assert.Equal(2, Volatile.Read(ref asked));
+        Assert.Equal(PlayerState.Playing, player.State);
+    }
+
+    /// <summary>
+    /// Before the first Play there is no output to convert with: a decode thread that reached the end of a short first
+    /// track then could not chain a next track of another rate, and ended the stream after it. Play must try again once
+    /// the device is open, or playback stops after the first track (what made the two tests above flaky under load).
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_next_track_of_another_rate_given_up_on_before_the_first_play_is_chained_once_the_device_is_open()
+    {
+        SharedMode();
+        var a = new RampSpec(1, 1000);
+        var b = new RampSpec(2, 2000, SampleRate: 2000);
+        var player = CreatePlayer();
+        player.Load(Add(a));
+        player.SetNextTracks([new NextTrack(Add(b), "b")]);
+        Assert.True(player.Buffer!.WaitUntilReadable(a.Pcm().Length + 1, TimeSpan.FromSeconds(30)), "the end after a, written before any output");
+
+        player.Play();
+
+        Assert.Equal(a.Pcm(), Pull(a.Pcm().Length));
+        var bPcm = StepConverter.Expected(b, a.Format);
+        Assert.Equal(bPcm, Pull(bPcm.Length)); // b follows gaplessly, converted, on the same device
+        Assert.Equal(1, Output.OpenCount);
+        Assert.Equal(PlayerState.Playing, player.State);
+    }
+
+    /// <summary>
+    /// Once the last track is current, the queue sends the order again relative to it: nothing follows. The end already
+    /// written after that track must stay: taking it away (to "try more entries", of which there are none) and writing
+    /// it again left a moment in which a device reading at the end found neither audio nor the end, and played a block
+    /// of silence as an underrun (seen as 32 frames too many in QueueLevellingTests on a macOS runner).
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void An_order_sent_again_with_nothing_after_the_last_track_keeps_its_end_so_the_device_reads_no_gap()
+    {
+        var a = new RampSpec(1, 400);
+        var b = new RampSpec(2, 400);
+        var player = CreatePlayer();
+        using var intoB = new ManualResetEventSlim();
+        player.TrackAdvanced += (_, _) => intoB.Set();
+        player.Load(Add(a));
+        player.SetNextTracks([new NextTrack(Add(b), "b")]);
+        player.Play();
+
+        Assert.Equal([.. a.Pcm(), .. b.Pcm()], Pull(a.Pcm().Length + b.Pcm().Length));
+        Assert.True(intoB.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "into b");
+        var buffer = player.Buffer!;
+        Assert.True(buffer.WaitUntilReadable(64, TimeSpan.FromSeconds(30)), "the end written after b");
+        player.SetNextTracks([]); // what the queue sends once b is current: nothing after it
+
+        Assert.Empty(Output.Pump(64, wait: false)); // the end, at once: not a block of silence
+        Assert.Equal(0, buffer.Underruns);
+    }
+
+    [Fact]
+    public void An_order_sent_again_with_a_new_track_after_the_last_one_takes_the_end_away_and_plays_it_gaplessly()
+    {
+        var a = new RampSpec(1, 400);
+        var b = new RampSpec(2, 400);
+        var player = CreatePlayer();
+        using var intoB = new ManualResetEventSlim();
+        player.TrackAdvanced += (_, _) => intoB.Set();
+        player.Load(Add(a));
+        player.Play();
+
+        Assert.Equal(a.Pcm()[..400], Pull(400));
+        Assert.True(player.Buffer!.WaitUntilReadable(a.Pcm().Length, TimeSpan.FromSeconds(30)), "a decoded");
+        player.SetNextTracks([new NextTrack(Add(b), "b")]); // added to the queue once a's end was written
+
+        Assert.Equal([.. a.Pcm()[400..], .. b.Pcm()], Pull(a.Pcm().Length - 400 + b.Pcm().Length));
+        Assert.True(intoB.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "into b");
+    }
+
     /// <summary>Holds the first open of <paramref name="gated"/> until <see cref="Proceed"/> (<see cref="Opening"/> says it started).</summary>
     private sealed class GatedDecoderFactory(RampDecoderFactory inner, string gated) : IAudioDecoderFactory, IDisposable
     {
