@@ -104,6 +104,10 @@
         <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
     </Style>
+    <!-- A note that can run long (the output in use and why it is not what was asked): wraps instead of being cut off. -->
+    <Style Selector="Border.settingRow TextBlock.settingNote.wraps">
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
 
     <!-- A slider and its value (mockup: .range, input[type=range] in the accent, output). -->
     <Style Selector="StackPanel.range">
