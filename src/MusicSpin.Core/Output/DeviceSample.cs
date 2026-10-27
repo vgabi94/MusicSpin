@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using MusicSpin.Core.Audio;
 
 namespace MusicSpin.Core.Output;
@@ -22,17 +23,37 @@ internal enum DeviceSample
 internal static class DeviceSamples
 {
     /// <summary>
-    /// The formats to try, best first, for a source of <paramref name="sourceBits"/> bits. Every candidate holds the
-    /// source's samples exactly (a 16-bit sample padded into 24 or 32 bits is the same value); only float/32-bit
-    /// sources fall back to integer containers, which still hold every 24-bit value float32 can carry.
+    /// The formats to try, best first, for a source of <paramref name="sourceBits"/> bits. Every candidate but s16 for a
+    /// deeper source holds the source's samples exactly (a 16-bit sample padded into 24 or 32 bits is the same value;
+    /// float/32-bit sources fall back to integer containers, which still hold every 24-bit value float32 can carry).
+    /// s16 comes last for a deeper source, for devices that take nothing wider in exclusive mode (a FiiO BTR13): the
+    /// samples are dithered to 16 bits (<see cref="Tpdf16Dither"/>), which still beats the shared mixer, which
+    /// resamples and then hands such a device 16 bits anyway.
     /// </summary>
     public static IReadOnlyList<DeviceSample> ExclusiveCandidates(int sourceBits) => sourceBits switch
     {
-        > 0 and <= 16 when sourceBits != 1 => [DeviceSample.S16, DeviceSample.S24, DeviceSample.S24In32, DeviceSample.S32],
+        _ when FitsIn16(sourceBits) => [DeviceSample.S16, DeviceSample.S24, DeviceSample.S24In32, DeviceSample.S32],
         // 24-in-32 first: it is what USB Audio Class 2 DACs (and most drivers) take for 24-bit; packed 24 is rarer.
-        > 16 and <= 24 => [DeviceSample.S24In32, DeviceSample.S32, DeviceSample.S24],
-        _ => [DeviceSample.F32, DeviceSample.S32, DeviceSample.S24In32, DeviceSample.S24],
+        > 16 and <= 24 => [DeviceSample.S24In32, DeviceSample.S32, DeviceSample.S24, DeviceSample.S16],
+        _ => [DeviceSample.F32, DeviceSample.S32, DeviceSample.S24In32, DeviceSample.S24, DeviceSample.S16],
     };
+
+    /// <summary>Whether every sample of a source of <paramref name="sourceBits"/> bits fits s16 exactly (not DSD, decoded to float).</summary>
+    public static bool FitsIn16(int sourceBits) => sourceBits is > 0 and <= 16 && sourceBits != 1;
+
+    /// <summary>Whether writing a source of <paramref name="sourceBits"/> bits as <paramref name="format"/> drops bits, so it is dithered.</summary>
+    public static bool Dithers(int sourceBits, DeviceSample format) => format == DeviceSample.S16 && !FitsIn16(sourceBits);
+
+    /// <summary>
+    /// Says the track is not bit-perfect: the device refused every wider format in exclusive mode
+    /// (<paramref name="refused"/>, from <see cref="Negotiate"/>), so a deeper source is dithered to s16.
+    /// </summary>
+    public static string DitherNotice(int sourceBits, IReadOnlyList<string> refused)
+    {
+        var what = sourceBits > 16 ? string.Create(CultureInfo.InvariantCulture, $"the track's {sourceBits}-bit samples are") : "the track is";
+        var tried = refused.Count == 0 ? string.Empty : $" (refused {string.Join(", ", refused)})";
+        return $"The device takes only 16-bit in exclusive mode{tried}: {what} dithered to 16-bit.";
+    }
 
     /// <summary>AUDCLNT_E_UNSUPPORTED_FORMAT and E_INVALIDARG: this format is refused, the next one may not be.</summary>
     private static bool IsFormatRefusal(int hr) => unchecked((uint)hr) is 0x88890008 or 0x80070057;
@@ -162,6 +183,48 @@ internal static class DeviceSamples
 
         var v = (long)Math.Round((double)x * full, MidpointRounding.ToEven);
         return Math.Clamp(v, -full, full - 1);
+    }
+}
+
+/// <summary>
+/// Reduces float samples to s16 with TPDF dither (two uniform random values of one LSB, subtracted), for a source deeper
+/// than the 16 bits a device takes. Plain rounding would turn the bits dropped into distortion that follows the music;
+/// dither turns them into a steady, signal-independent noise floor at about -96 dBFS. One per stream: it keeps the
+/// random generator's state between buffers (xorshift32, so the same seed gives the same output, for tests).
+/// </summary>
+internal sealed class Tpdf16Dither(uint seed = 0x9E3779B9u)
+{
+    private const double Full = 32_768;
+    private const double Unit = 1.0 / (1 << 24);
+
+    private uint _state = seed == 0 ? 1u : seed;
+
+    /// <summary>Writes <paramref name="source"/> to <paramref name="destination"/> as little-endian s16; clips, NaN is silence.</summary>
+    public void Convert(ReadOnlySpan<float> source, Span<byte> destination)
+    {
+        if (destination.Length < source.Length * 2)
+        {
+            throw new ArgumentException("Destination is too small.", nameof(destination));
+        }
+
+        for (var i = 0; i < source.Length; i++)
+        {
+            var x = source[i];
+            var dithered = float.IsNaN(x) ? 0 : ((double)x * Full) + Next() - Next();
+            var s16 = Math.Clamp((long)Math.Round(dithered, MidpointRounding.ToEven), short.MinValue, short.MaxValue);
+            BinaryPrimitives.WriteInt16LittleEndian(destination[(i * 2)..], (short)s16);
+        }
+    }
+
+    /// <summary>Uniform in [0, 1).</summary>
+    private double Next()
+    {
+        var s = _state;
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
+        _state = s;
+        return (s >> 8) * Unit;
     }
 }
 

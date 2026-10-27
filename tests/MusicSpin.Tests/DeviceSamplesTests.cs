@@ -8,12 +8,26 @@ public class DeviceSamplesTests
 {
     [Theory]
     [InlineData(16, new[] { nameof(DeviceSample.S16), nameof(DeviceSample.S24), nameof(DeviceSample.S24In32), nameof(DeviceSample.S32) })]
-    [InlineData(24, new[] { nameof(DeviceSample.S24In32), nameof(DeviceSample.S32), nameof(DeviceSample.S24) })]
-    [InlineData(20, new[] { nameof(DeviceSample.S24In32), nameof(DeviceSample.S32), nameof(DeviceSample.S24) })]
-    [InlineData(32, new[] { nameof(DeviceSample.F32), nameof(DeviceSample.S32), nameof(DeviceSample.S24In32), nameof(DeviceSample.S24) })]
-    [InlineData(1, new[] { nameof(DeviceSample.F32), nameof(DeviceSample.S32), nameof(DeviceSample.S24In32), nameof(DeviceSample.S24) })] // DSD, decoded to float
-    public void Exclusive_candidates_start_with_the_source_depth_and_never_offer_a_narrower_one(int bits, string[] expected)
+    [InlineData(8, new[] { nameof(DeviceSample.S16), nameof(DeviceSample.S24), nameof(DeviceSample.S24In32), nameof(DeviceSample.S32) })]
+    [InlineData(24, new[] { nameof(DeviceSample.S24In32), nameof(DeviceSample.S32), nameof(DeviceSample.S24), nameof(DeviceSample.S16) })]
+    [InlineData(20, new[] { nameof(DeviceSample.S24In32), nameof(DeviceSample.S32), nameof(DeviceSample.S24), nameof(DeviceSample.S16) })]
+    [InlineData(32, new[] { nameof(DeviceSample.F32), nameof(DeviceSample.S32), nameof(DeviceSample.S24In32), nameof(DeviceSample.S24), nameof(DeviceSample.S16) })]
+    [InlineData(1, new[] { nameof(DeviceSample.F32), nameof(DeviceSample.S32), nameof(DeviceSample.S24In32), nameof(DeviceSample.S24), nameof(DeviceSample.S16) })] // DSD, decoded to float
+    [InlineData(0, new[] { nameof(DeviceSample.F32), nameof(DeviceSample.S32), nameof(DeviceSample.S24In32), nameof(DeviceSample.S24), nameof(DeviceSample.S16) })] // depth unknown
+    public void Exclusive_candidates_start_with_the_source_depth_and_offer_a_narrower_one_only_last_as_s16(int bits, string[] expected)
         => Assert.Equal(expected, DeviceSamples.ExclusiveCandidates(bits).Select(f => f.ToString()));
+
+    [Theory]
+    [InlineData(16, nameof(DeviceSample.S16), false)]
+    [InlineData(8, nameof(DeviceSample.S16), false)]
+    [InlineData(24, nameof(DeviceSample.S16), true)]
+    [InlineData(32, nameof(DeviceSample.S16), true)]
+    [InlineData(1, nameof(DeviceSample.S16), true)] // DSD: float samples
+    [InlineData(0, nameof(DeviceSample.S16), true)]
+    [InlineData(24, nameof(DeviceSample.S24In32), false)]
+    [InlineData(32, nameof(DeviceSample.F32), false)]
+    public void Only_a_deeper_source_written_as_s16_is_dithered(int bits, string format, bool dithers)
+        => Assert.Equal(dithers, DeviceSamples.Dithers(bits, Enum.Parse<DeviceSample>(format)));
 
     [Fact]
     public void Every_24bit_value_survives_packed_s24_and_s24in32_bit_exact()
@@ -134,8 +148,123 @@ public class DeviceSamplesTests
 
         Assert.Null(result.Chosen);
         Assert.Equal(0, result.FailedHr);
-        Assert.Equal(["s24in32", "s32", "s24 (refused at initialize)"], result.Refused);
+        Assert.Equal(["s24in32", "s32", "s24 (refused at initialize)", "s16"], result.Refused);
     }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_24bit_source_on_a_device_that_takes_only_16bit_opens_s16_after_trying_every_wider_format()
+    {
+        // A FiiO BTR13 (#168): IsFormatSupported refuses every 24- and 32-bit format and takes s16 at any rate.
+        var probed = new List<DeviceSample>();
+        var result = DeviceSamples.Negotiate(DeviceSamples.ExclusiveCandidates(24),
+            f => { probed.Add(f); return f == DeviceSample.S16 ? 0 : UnsupportedFormat; }, _ => 0);
+
+        Assert.Equal(DeviceSample.S16, result.Chosen);
+        Assert.Equal([DeviceSample.S24In32, DeviceSample.S32, DeviceSample.S24, DeviceSample.S16], probed);
+        Assert.Equal(["s24in32", "s32", "s24"], result.Refused);
+        Assert.True(DeviceSamples.Dithers(24, result.Chosen!.Value));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_device_that_refuses_s16_too_still_ends_in_no_format_naming_every_one_tried()
+    {
+        var result = DeviceSamples.Negotiate(DeviceSamples.ExclusiveCandidates(24), _ => UnsupportedFormat, _ => 0);
+
+        Assert.Null(result.Chosen);
+        Assert.Equal(0, result.FailedHr);
+        Assert.Equal(["s24in32", "s32", "s24", "s16"], result.Refused);
+    }
+
+    [Fact]
+    public void The_dither_notice_names_the_tracks_depth_and_the_formats_refused()
+    {
+        Assert.Equal("The device takes only 16-bit in exclusive mode (refused s24in32, s32, s24): the track's 24-bit samples are dithered to 16-bit.",
+            DeviceSamples.DitherNotice(24, ["s24in32", "s32", "s24"]));
+        Assert.Equal("The device takes only 16-bit in exclusive mode: the track is dithered to 16-bit.", DeviceSamples.DitherNotice(1, []));
+    }
+
+    // ---- TPDF dither to s16 (#168) --------------------------------------------------------------------------------
+
+    private static short[] Dither(float[] samples, uint seed = 12345)
+    {
+        var bytes = new byte[samples.Length * 2];
+        new Tpdf16Dither(seed).Convert(samples, bytes);
+        return [.. Enumerable.Range(0, samples.Length).Select(i => BinaryPrimitives.ReadInt16LittleEndian(bytes.AsSpan(i * 2)))];
+    }
+
+    [Fact]
+    public void Dither_stays_within_one_lsb_of_the_rounded_sample()
+    {
+        var random = new Random(7);
+        var floats = Enumerable.Range(0, 10_000).Select(_ => (float)((random.NextDouble() * 1.8) - 0.9)).ToArray();
+
+        var s16 = Dither(floats);
+
+        for (var i = 0; i < floats.Length; i++)
+        {
+            var exact = floats[i] * 32_768.0;
+            Assert.InRange(s16[i] - exact, -1.5, 1.5);
+        }
+    }
+
+    [Fact]
+    public void Dither_keeps_detail_below_one_lsb_that_rounding_would_drop()
+    {
+        // A quarter of a 16-bit step (a 24-bit sample of 64): rounding gives 0 every time; dithered, it averages to 0.25.
+        var floats = Enumerable.Repeat((float)(0.25 / 32_768.0), 100_000).ToArray();
+
+        var rounded = new byte[floats.Length * 2];
+        DeviceSamples.Convert(floats, rounded, DeviceSample.S16);
+        var s16 = Dither(floats);
+
+        Assert.All(rounded, b => Assert.Equal(0, b));
+        Assert.InRange(s16.Average(v => (double)v), 0.22, 0.28);
+        Assert.All(s16, v => Assert.InRange(v, (short)-1, (short)2));
+    }
+
+    [Fact]
+    public void Dither_is_noise_not_a_fixed_offset_and_repeats_for_the_same_seed()
+    {
+        var floats = new float[4096];
+
+        var a = Dither(floats, seed: 1);
+        var b = Dither(floats, seed: 1);
+        var c = Dither(floats, seed: 2);
+
+        Assert.Equal(a, b);
+        Assert.NotEqual(a, c);
+        Assert.InRange(a.Average(v => (double)v), -0.1, 0.1);
+        Assert.Equal(1, a.Max(v => Math.Abs((int)v))); // triangular over (-1, 1) LSB: some steps, never more than one
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Dither_clips_full_scale_and_beyond_and_makes_nan_silent()
+    {
+        float[] floats = [1f, 1.5f, -1f, -3f, float.NaN, float.PositiveInfinity, float.NegativeInfinity];
+
+        var s16 = Dither(floats);
+
+        Assert.Equal(short.MaxValue, s16[0]);
+        Assert.Equal(short.MaxValue, s16[1]);
+        Assert.InRange(s16[2], short.MinValue, (short)(short.MinValue + 1));
+        Assert.Equal(short.MinValue, s16[3]);
+        Assert.Equal(0, s16[4]);
+        Assert.Equal(short.MaxValue, s16[5]);
+        Assert.Equal(short.MinValue, s16[6]);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Dither_refuses_a_destination_too_small_for_s16()
+        => Assert.Throws<ArgumentException>(() => new Tpdf16Dither().Convert(new float[4], new byte[7]));
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_zero_seed_still_gives_noise()
+        => Assert.Contains(Dither(new float[256], seed: 0), v => v != 0); // xorshift's zero state would stay zero forever
 
     [Fact]
     public void A_device_in_use_stops_the_search_instead_of_trying_other_formats()

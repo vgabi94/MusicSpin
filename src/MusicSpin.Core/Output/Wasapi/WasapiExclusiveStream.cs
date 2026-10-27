@@ -48,6 +48,9 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
     private volatile bool _clientRunning;
     private Exception? _initError;
 
+    // Set when the device took only s16 for a deeper source; used on the render thread only.
+    private Tpdf16Dither? _dither;
+
     private WasapiExclusiveStream(string? endpointId, string? deviceName, PcmFormat source, IPcmSource data)
     {
         _endpointId = endpointId;
@@ -199,8 +202,10 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
             Check(client.GetService(ref renderIid, out renderObj), "get the render client");
             var render = (IAudioRenderClient)renderObj;
 
+            _dither = DeviceSamples.Dithers(_source.SourceBitsPerSample, format) ? new Tpdf16Dither() : null;
             Opened = new OpenedOutput(_deviceName, Exclusive: true, _source.SampleRate, _source.Channels,
-                DeviceSamples.Name(format), DeviceSamples.ValidBits(format), Verified: true);
+                DeviceSamples.Name(format), DeviceSamples.ValidBits(format), Verified: true,
+                _dither is null ? null : DeviceSamples.DitherNotice(_source.SourceBitsPerSample, negotiation.Refused));
 
             var floats = new float[bufferFrames * _source.Channels];
             Fill(render, format, bufferFrames, floats); // pre-roll, as WASAPI requires before Start
@@ -426,7 +431,14 @@ internal sealed class WasapiExclusiveStream : IPlaybackStream
         unsafe
         {
             var bytes = new Span<byte>((void*)buffer, floats.Length * DeviceSamples.ContainerBytes(format));
-            DeviceSamples.Convert(floats, bytes, format);
+            if (_dither is { } dither)
+            {
+                dither.Convert(floats, bytes);
+            }
+            else
+            {
+                DeviceSamples.Convert(floats, bytes, format);
+            }
         }
 
         return render.ReleaseBuffer(frames, 0);
