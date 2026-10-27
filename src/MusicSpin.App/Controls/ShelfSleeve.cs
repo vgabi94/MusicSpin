@@ -4,6 +4,7 @@ using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using MusicSpin.App.Theming;
 
 namespace MusicSpin.App.Controls;
@@ -28,9 +29,12 @@ namespace MusicSpin.App.Controls;
 /// face at the left edge) and PART_Shadow (the contact shadow on the board). The parts take no input.
 /// </para>
 /// <para>
-/// A hovered sleeve turns after a short delay (mockup: .slot:hover, transition-delay 60ms). Here the delay is
-/// the transition's, so it also holds a sleeve the pointer leaves a moment before it closes: the one you leave and the
-/// one you enter move in step, and the slots between them keep their places.
+/// Hover intent (#147, in place of the mockup's .slot:hover transition-delay 60ms): a closed sleeve turns only once the
+/// pointer has rested on it for <see cref="HoverIntent"/>, timed on <see cref="Clock"/>, so a pointer swept along the row
+/// turns none of the sleeves it crosses, and one left sooner never moves. A sleeve the pointer reaches from one it opened,
+/// while that one is still open or closing, turns at once: the one you leave and the one you enter move in step, and the
+/// slots between them keep their places. The wait is not the transition's delay: a transition left during its delay
+/// starts back from the value it was going to, so the sleeve would open all the way at once and then close.
 /// </para>
 /// <para>
 /// The control sets Turn, Pull and RecordOut itself, from <see cref="InputElement.IsPointerOver"/> and
@@ -46,6 +50,15 @@ namespace MusicSpin.App.Controls;
 [TemplatePart("PART_Shadow", typeof(Control))]
 public sealed class ShelfSleeve : Button
 {
+    /// <summary>The sleeve the pointer last turned: while it is open, or still closing, the next one turns without waiting.</summary>
+    private static readonly WeakReference<ShelfSleeve> s_hovered = new(null!);
+
+    /// <summary>The hover intent's wait, while the pointer rests on a closed sleeve.</summary>
+    private ITimer? _waiting;
+
+    /// <summary>Counts cancelled waits.</summary>
+    private int _waits;
+
     /// <summary>A facing sleeve keeps this share of the tilt (mockup: rotateY(tilt × .12)).</summary>
     private const double FacingTilt = 0.12;
 
@@ -93,6 +106,15 @@ public sealed class ShelfSleeve : Button
 
     /// <summary>The spine is in shadow: its colour times this (mockup: .edge filter: brightness(.55)).</summary>
     public static readonly StyledProperty<double> SpineShadeProperty = AvaloniaProperty.Register<ShelfSleeve, double>(nameof(SpineShade), 1);
+
+    /// <summary>
+    /// How long the pointer rests on a closed sleeve before it turns (Styles/Motion.axaml: ShelfHoverIntent, following the
+    /// Motion setting); zero turns it at once.
+    /// </summary>
+    public static readonly StyledProperty<TimeSpan> HoverIntentProperty = AvaloniaProperty.Register<ShelfSleeve, TimeSpan>(nameof(HoverIntent));
+
+    /// <summary>The app's clock, which <see cref="HoverIntent"/> is timed on (null: the system's).</summary>
+    public static readonly StyledProperty<TimeProvider?> ClockProperty = AvaloniaProperty.Register<ShelfSleeve, TimeProvider?>(nameof(Clock));
 
     /// <summary>The cache a sleeve at rest draws through (Styles/Shelf.axaml); null: always drawn live.</summary>
     public static readonly StyledProperty<CacheMode?> RestCacheProperty = AvaloniaProperty.Register<ShelfSleeve, CacheMode?>(nameof(RestCache));
@@ -221,6 +243,18 @@ public sealed class ShelfSleeve : Button
         set => SetValue(RestCacheProperty, value);
     }
 
+    public TimeSpan HoverIntent
+    {
+        get => GetValue(HoverIntentProperty);
+        set => SetValue(HoverIntentProperty, value);
+    }
+
+    public TimeProvider? Clock
+    {
+        get => GetValue(ClockProperty);
+        set => SetValue(ClockProperty, value);
+    }
+
     /// <summary>
     /// How near its end a turn or the record's slide counts as there: an animator that settles a hair short of its target
     /// (0.9999999999) doesn't leave the sleeve drawn live for good.
@@ -269,7 +303,16 @@ public sealed class ShelfSleeve : Button
         base.OnPropertyChanged(change);
         if (change.Property == IsPointerOverProperty || change.Property == IsPlayingProperty)
         {
-            Turn = IsPointerOver || IsPlaying ? 1 : 0;
+            StopWaiting();
+            if (IsPointerOver && !IsPlaying && Turn < RestTolerance && !FromAnOpenSleeve() && HoverIntent > TimeSpan.Zero)
+            {
+                Wait(); // closed and the row still: it turns once the pointer has rested on it
+            }
+            else
+            {
+                TurnTo(IsPointerOver || IsPlaying);
+            }
+
             Pull = RecordOut = IsPlaying ? 1 : 0;
         }
         else if (change.Property == TurnProperty || change.Property == RecordOutProperty || change.Property == RestCacheProperty)
@@ -283,6 +326,49 @@ public sealed class ShelfSleeve : Button
                 : SpineFallback;
         }
     }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        StopWaiting();
+    }
+
+    /// <summary>Turns once the pointer has rested on the sleeve for <see cref="HoverIntent"/>.</summary>
+    private void Wait()
+    {
+        var wait = _waits;
+        _waiting = (Clock ?? TimeProvider.System).CreateTimer(_ => Dispatcher.UIThread.Post(() =>
+        {
+            if (wait == _waits)
+            {
+                StopWaiting();
+                TurnTo(IsPointerOver || IsPlaying);
+            }
+        }), null, HoverIntent, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>Cancels a wait: a tick of its timer already queued does nothing.</summary>
+    private void StopWaiting()
+    {
+        _waits++;
+        _waiting?.Dispose();
+        _waiting = null;
+    }
+
+    private void TurnTo(bool open)
+    {
+        if (open && !IsPlaying)
+        {
+            s_hovered.SetTarget(this);
+        }
+
+        Turn = open ? 1 : 0;
+    }
+
+    /// <summary>The pointer comes from a sleeve it turned that is still open, or closing, in this window.</summary>
+    private bool FromAnOpenSleeve()
+        => s_hovered.TryGetTarget(out var open) && open != this && !open.IsPlaying && open.Turn >= RestTolerance
+           && open.VisualRoot is { } root && root == VisualRoot;
 
     protected override Size MeasureOverride(Size availableSize)
     {

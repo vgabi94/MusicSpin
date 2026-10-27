@@ -19,11 +19,13 @@ public sealed class ShelfTests
     private const int Settled = 1300;
 
     /// <param name="live">Sleeves drawn live even at rest (no <see cref="ShelfSleeve.RestCache"/>), to compare with.</param>
-    private static async Task<AppHarness> OpenAsync(AppTheme theme = AppTheme.Dark, AlbumGrouping grouping = AlbumGrouping.None, double width = 1440, bool live = false)
+    private static async Task<AppHarness> OpenAsync(AppTheme theme = AppTheme.Dark, AlbumGrouping grouping = AlbumGrouping.None, double width = 1440, bool live = false,
+        string? motion = null)
     {
         var app = await AppHarness.OpenAsync(new AppOptions
         {
             Scripted = true, Library = SampleLibrary.Create(), Covers = SampleLibrary.Covers(accents: true), Theme = theme, Width = width,
+            Settings = motion is null ? new() : new() { Motion = motion },
         });
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 10, "the albums");
         if (live)
@@ -57,6 +59,16 @@ public sealed class ShelfTests
         => [.. Boards(window).Select(b => string.Join(", ", Sleeves(b).Select(s => ((AlbumItemViewModel)s.DataContext!).Title)))];
 
     /// <summary>The sleeve whose slot is under <paramref name="point"/>, as the pointer finds it.</summary>
+    /// <summary>Styles/Motion.axaml: ShelfHoverIntent, how long the pointer rests on a closed sleeve before it turns.</summary>
+    private static readonly TimeSpan Intent = TimeSpan.FromMilliseconds(180);
+
+    /// <summary>The pointer onto <paramref name="sleeve"/>, resting there long enough for it to start turning.</summary>
+    private static void Rest(AppHarness app, ShelfSleeve sleeve)
+    {
+        Gui.Hover(app.Window, sleeve);
+        app.Advance(Intent);
+    }
+
     private static ShelfSleeve? Under(Window window, Point point)
         => (window.InputHitTest(point) as Visual)?.GetSelfAndVisualAncestors().OfType<ShelfSleeve>().FirstOrDefault();
 
@@ -71,7 +83,7 @@ public sealed class ShelfTests
         Assert.Equal(["Velvet Hours, Copper Sun, Cello Suites, Partitas, Northern Lines, Glass Garden, Night Transit, Blue Hour",
             "Untitled Tape, Field Notes"], Layout(window));
         await PlayingAsync(app, 4);
-        Gui.Hover(window, Sleeves(Boards(window)[0])[0]);
+        Rest(app, Sleeves(Boards(window)[0])[0]);
         Gui.FinishAnimations(Settled);
 
         var row = Gui.All<SlotRow>(Boards(window)[0]).Single(c => c.Classes.Contains("shelfRow"));
@@ -142,7 +154,7 @@ public sealed class ShelfTests
     }
 
     [AvaloniaFact]
-    public async Task A_hovered_sleeve_starts_turning_after_60_ms_and_turns_back_when_the_pointer_leaves()
+    public async Task A_hovered_sleeve_starts_turning_once_the_pointer_rests_on_it_180_ms_and_turns_back_when_it_leaves()
     {
         await using var app = await OpenAsync();
         var window = app.Window;
@@ -150,12 +162,12 @@ public sealed class ShelfTests
         var closed = sleeve.SleeveProjection;
 
         Gui.Hover(window, sleeve);
-        app.Advance(TimeSpan.FromMilliseconds(55));
+        app.Advance(TimeSpan.FromMilliseconds(175));
         Assert.True(sleeve.IsPointerOver);
         Assert.Equal(0, sleeve.Turn);
         Assert.Equal(closed, sleeve.SleeveProjection);
 
-        app.Advance(TimeSpan.FromMilliseconds(15)); // 10 ms into the turn
+        app.Advance(TimeSpan.FromMilliseconds(40)); // a frame or two into the turn
         Assert.InRange(sleeve.Turn, 0.001, 0.5);
         Gui.FinishAnimations(Settled);
         Assert.Equal(1, sleeve.Turn);
@@ -170,6 +182,92 @@ public sealed class ShelfTests
     }
 
     [AvaloniaFact]
+    public async Task A_sleeve_left_before_the_pointer_rested_on_it_never_moves_and_coming_back_waits_again()
+    {
+        await using var app = await OpenAsync();
+        var window = app.Window;
+        var sleeve = Sleeves(Boards(window)[0])[2];
+
+        Gui.Hover(window, sleeve);
+        app.Advance(TimeSpan.FromMilliseconds(150));
+        window.MouseMove(new Point(5, 5)); // gone before 180 ms
+        Gui.FinishAnimations(Settled);
+        Assert.Equal(0, sleeve.Turn);
+        Assert.True(Cached(sleeve), "never moved: still drawn from its image");
+
+        Gui.Hover(window, sleeve); // back: the wait starts again
+        app.Advance(TimeSpan.FromMilliseconds(150));
+        Assert.Equal(0, sleeve.Turn);
+        app.Advance(TimeSpan.FromMilliseconds(45));
+        Assert.True(sleeve.Turn > 0);
+    }
+
+    [AvaloniaFact]
+    public async Task A_pointer_swept_along_the_row_turns_none_of_the_sleeves_it_crosses_only_the_one_it_stops_on()
+    {
+        await using var app = await OpenAsync();
+        var window = app.Window;
+        var sleeves = Sleeves(Boards(window)[0]);
+        var y = Gui.BoundsIn(window, sleeves[0]).Center.Y;
+        var end = Gui.BoundsIn(window, sleeves[^1]).Center.X;
+        var crossed = new HashSet<ShelfSleeve>();
+        window.MouseMove(new Point(5, 5)); // from off the shelf, everything closed
+        Gui.FinishAnimations(Settled);
+
+        for (var x = Gui.BoundsIn(window, sleeves[0]).Left + 2; x < end; x += 24) // about 1400 px a second
+        {
+            window.MouseMove(new Point(x, y));
+            app.Advance(UiTime.Frame);
+            crossed.UnionWith(sleeves.Where(s => s.IsPointerOver));
+            Assert.All(sleeves, s => Assert.Equal(0, s.Turn));
+        }
+
+        window.MouseMove(new Point(end, y));
+        Assert.True(crossed.Count >= sleeves.Count - 1, $"the sweep crossed {crossed.Count} of {sleeves.Count} sleeves");
+        app.Advance(Intent + TimeSpan.FromMilliseconds(50));
+        Assert.True(sleeves[^1].Turn > 0, "the one it stopped on turns");
+        Assert.All(sleeves.SkipLast(1), s => Assert.Equal(0, s.Turn));
+    }
+
+    [AvaloniaFact]
+    public async Task From_an_open_sleeve_the_next_one_turns_in_step_with_it_closing()
+    {
+        await using var app = await OpenAsync();
+        var window = app.Window;
+        var sleeves = Sleeves(Boards(window)[0]);
+        Rest(app, sleeves[1]);
+        Gui.FinishAnimations(Settled);
+        Assert.Equal(1, sleeves[1].Turn);
+
+        Gui.Hover(window, sleeves[2]); // no wait: the two move together
+        app.Advance(TimeSpan.FromMilliseconds(100));
+        Assert.InRange(sleeves[2].Turn, 0.01, 0.99);
+        Assert.Equal(1 - sleeves[1].Turn, sleeves[2].Turn, 3);
+
+        // Once every sleeve has closed, the next hover waits the whole 180 ms again.
+        window.MouseMove(new Point(5, 5));
+        Gui.FinishAnimations(Settled);
+        Gui.Hover(window, sleeves[4]);
+        app.Advance(TimeSpan.FromMilliseconds(175));
+        Assert.Equal(0, sleeves[4].Turn);
+    }
+
+    [AvaloniaFact]
+    public async Task With_motion_off_a_hovered_sleeve_faces_you_at_once()
+    {
+        await using var app = await OpenAsync(motion: "none");
+        var window = app.Window;
+        var sleeve = Sleeves(Boards(window)[0])[1];
+
+        Gui.Hover(window, sleeve);
+        app.Advance(UiTime.Frame);
+        Assert.Equal(1, sleeve.Turn);
+        window.MouseMove(new Point(5, 5));
+        app.Advance(UiTime.Frame);
+        Assert.Equal(0, sleeve.Turn);
+    }
+
+    [AvaloniaFact]
     public async Task A_sleeve_left_while_it_turns_turns_back_from_where_it_is()
     {
         await using var app = await OpenAsync();
@@ -177,14 +275,12 @@ public sealed class ShelfTests
         var sleeve = Sleeves(Boards(window)[0])[1];
 
         Gui.Hover(window, sleeve);
-        app.Advance(TimeSpan.FromMilliseconds(200));
+        app.Advance(TimeSpan.FromMilliseconds(320));
         var turned = sleeve.Turn;
         Assert.InRange(turned, 0.2, 0.99);
 
         window.MouseMove(new Point(5, 5));
-        app.Advance(TimeSpan.FromMilliseconds(50)); // held for the delay …
-        Assert.Equal(turned, sleeve.Turn, 6);
-        app.Advance(TimeSpan.FromMilliseconds(60)); // … then back, not on to 1
+        app.Advance(TimeSpan.FromMilliseconds(50)); // back from where it is, not on to 1 first
         Assert.True(sleeve.Turn < turned, $"{sleeve.Turn} after {turned}");
         Gui.FinishAnimations(Settled);
         Assert.Equal(0, sleeve.Turn);
@@ -425,7 +521,7 @@ public sealed class ShelfTests
             app.ViewModel.Settings.SetShelfDepth(depth);
             app.ViewModel.Settings.SetShelfTilt(tilt);
             Gui.Settle();
-            Gui.Hover(window, Sleeves(Boards(window)[0])[1]);
+            Rest(app, Sleeves(Boards(window)[0])[1]);
             Gui.FinishAnimations(Settled);
             var sleeves = Sleeves(window);
             Assert.All(sleeves, s => Assert.True(s.IsAtRest && Cached(s) != live, $"{s.Title}"));
@@ -514,7 +610,7 @@ public sealed class ShelfTests
     {
         await using var app = await OpenAsync(theme, AlbumGrouping.Artist);
         await PlayingAsync(app, 8);
-        Gui.Hover(app.Window, Sleeve(app.Window, "Velvet Hours"));
+        Rest(app, Sleeve(app.Window, "Velvet Hours"));
         Gui.FinishAnimations(Settled);
 
         Snapshots.Match(app.Window, $"albums-shelf-{theme.ToString().ToLowerInvariant()}");
