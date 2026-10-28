@@ -237,8 +237,29 @@ public static class PlayerTransport
 
         public async Task<Stream> AcceptAsync(CancellationToken cancellationToken)
         {
-            var client = await _socket.AcceptAsync(cancellationToken).ConfigureAwait(false);
-            return new NetworkStream(client, ownsSocket: true);
+            // On Linux, cancelling or disposing a waiting AcceptAsync often surfaces as SocketException
+            // (OperationAborted / Interrupted) instead of OperationCanceledException. Callers (PlayerHost,
+            // ScriptedPlayer teardown) treat OCE as a clean stop — translate those cases so they do.
+            try
+            {
+                var client = await _socket.AcceptAsync(cancellationToken).ConfigureAwait(false);
+                return new NetworkStream(client, ownsSocket: true);
+            }
+            catch (Exception ex) when (IsAcceptCancellation(ex, cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new OperationCanceledException("The listener was closed.", ex);
+            }
+        }
+
+        private bool IsAcceptCancellation(Exception ex, CancellationToken cancellationToken)
+        {
+            if (cancellationToken.IsCancellationRequested || Volatile.Read(ref _disposed) != 0)
+            {
+                return ex is SocketException or ObjectDisposedException or OperationCanceledException;
+            }
+
+            return ex is SocketException { SocketErrorCode: SocketError.OperationAborted or SocketError.Interrupted };
         }
 
         public ValueTask DisposeAsync()

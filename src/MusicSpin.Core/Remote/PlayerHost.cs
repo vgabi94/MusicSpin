@@ -401,6 +401,10 @@ public sealed class PlayerHost : IAsyncDisposable
             {
                 stream = await _listener.AcceptAsync(token).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                return; // cancel or listener dispose (AcceptAsync translates those to OCE)
+            }
             catch (Exception) when (token.IsCancellationRequested)
             {
                 return;
