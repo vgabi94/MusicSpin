@@ -14,9 +14,6 @@ namespace MusicSpin.App.ViewModels;
 /// <summary>A track in Now Playing's list (mockup: .tracklist li).</summary>
 public sealed partial class NowPlayingTrackViewModel(TrackSummary track, int index) : ObservableObject
 {
-    /// <summary>"♪" in place of the number while the current track plays.</summary>
-    public const string PlayingMark = "♪";
-
     public TrackSummary Track { get; } = track;
 
     /// <summary>The track's place in the album's list.</summary>
@@ -28,11 +25,11 @@ public sealed partial class NowPlayingTrackViewModel(TrackSummary track, int ind
 
     /// <summary>The track the player has loaded (highlighted).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Marker))]
+    [NotifyPropertyChangedFor(nameof(ShowsPlayingMark))]
     public partial bool IsCurrent { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Marker))]
+    [NotifyPropertyChangedFor(nameof(ShowsPlayingMark))]
     public partial bool IsPlaying { get; set; }
 
     /// <summary>A favorite: its heart is filled and always shows (#48).</summary>
@@ -43,9 +40,11 @@ public sealed partial class NowPlayingTrackViewModel(TrackSummary track, int ind
     /// <summary>The heart's tooltip: Add to favorites, or Remove from favorites.</summary>
     public string FavoriteLabel => FavoritesViewModel.Label(IsFavorite);
 
-    /// <summary>The track number, or ♪ while it plays.</summary>
-    public string Marker => IsCurrent && IsPlaying ? PlayingMark
-        : (Track.TrackNumber ?? Index + 1).ToString(CultureInfo.InvariantCulture);
+    /// <summary>The track number (its place in the list when the file has none).</summary>
+    public string Number => (Track.TrackNumber ?? Index + 1).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>A note shows left of the number while this track plays (#138).</summary>
+    public bool ShowsPlayingMark => IsCurrent && IsPlaying;
 }
 
 /// <summary>

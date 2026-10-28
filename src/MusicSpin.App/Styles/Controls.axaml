@@ -45,6 +45,9 @@
          focus, and a focus outline. PART_Tip, the time over the pointer, shows only where a style turns it on. -->
     <ControlTheme x:Key="{x:Type controls:ScrubBar}" TargetType="controls:ScrubBar">
         <Setter Property="Height" Value="{StaticResource ScrubBarHeight}" />
+        <!-- A templated control clips to its bounds, which would cut off the half of the handle past either end at 0 and
+             at the maximum. Neighbours leave the handle's radius free (ProgressGap, VolumeGap). -->
+        <Setter Property="ClipToBounds" Value="False" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         <Setter Property="Cursor" Value="Hand" />

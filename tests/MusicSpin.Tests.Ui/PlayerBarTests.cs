@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Controls;
 using MusicSpin.App.Services;
@@ -152,6 +153,46 @@ public sealed class PlayerBarTests
         Assert.False(shuffle.IsEffectivelyEnabled);
         Assert.Equal(PlayerBarViewModel.RadioShuffleTip, ToolTip.GetTip(shuffle));
         Assert.True(ToolTip.GetShowOnDisabled(shuffle));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(0, 0f)]
+    [InlineData(Duration, 1f)]
+    public async Task The_knobs_show_whole_at_either_end_hovered_or_dragged_and_leave_the_boxes_beside_them_clear(double position, float volume)
+    {
+        await using var app = await OpenAsync(Status(position: position, volume: volume));
+        foreach (var (name, before, after) in new[] { ("PositionBar", "ElapsedBox", "DurationText"), ("VolumeBar", "MuteButton", "VolumeBox") })
+        {
+            var bar = Find<ScrubBar>(app, name);
+            var handle = Gui.All<Border>(bar).Single(b => b.Name == "PART_Handle");
+            var end = At(app, bar, position == 0 ? 1 : bar.Bounds.Width - 1);
+            foreach (var dragged in new[] { false, true })
+            {
+                app.Window.MouseMove(end);
+                if (dragged)
+                {
+                    app.Window.MouseDown(end, MouseButton.Left);
+                }
+
+                Gui.FinishAnimations();
+                var knob = Gui.BoundsIn(app.Window, handle);
+                var what = $"{name} at {(position == 0 ? "0" : "the end")}{(dragged ? ", dragged" : "")}";
+                Assert.Equal(1.0, handle.RenderTransform!.Value.M11); // shown, full size
+                for (var v = handle.GetVisualParent(); v is Control c and not Window; v = v.GetVisualParent())
+                {
+                    Assert.True(!c.ClipToBounds || Gui.BoundsIn(app.Window, c).Contains(knob), $"{what}: {c.GetType().Name} {c.Name} cuts the knob off");
+                }
+
+                Assert.False(knob.Intersects(Gui.BoundsIn(app.Window, Find<Control>(app, before))), $"{what}: over {before}");
+                Assert.False(knob.Intersects(Gui.BoundsIn(app.Window, Find<Control>(app, after))), $"{what}: over {after}");
+                if (dragged)
+                {
+                    app.Window.MouseUp(end, MouseButton.Left);
+                }
+            }
+
+            app.Window.MouseMove(new Point(1, 1));
+        }
     }
 
     [AvaloniaFact]

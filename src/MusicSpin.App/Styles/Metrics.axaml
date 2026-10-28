@@ -588,6 +588,8 @@
     <CornerRadius x:Key="NowPlayingTrackRadius">7</CornerRadius>
     <sys:Double x:Key="NowPlayingTrackFontSize">14</sys:Double>
     <sys:Double x:Key="NowPlayingTrackNumberWidth">28</sys:Double>
+    <!-- The note beside the playing track's number (mockup: ♪ at 13px): a fixed size, so the row keeps its height. -->
+    <sys:Double x:Key="NowPlayingMarkSize">11</sys:Double>
     <sys:Double x:Key="NowPlayingTrackGap">10</sys:Double>
 
     <!--

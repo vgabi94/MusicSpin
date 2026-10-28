@@ -206,6 +206,8 @@ internal sealed class ManualAudioOutput : IAudioOutput
     /// <summary>How many track changes kept the device open (<see cref="Retarget"/> returned true).</summary>
     public int RetargetCount { get; private set; }
 
+    private PcmFormat? _openedFor;
+
     public void Open(IPcmSource source)
     {
         if (OpenError is not null)
@@ -216,6 +218,7 @@ internal sealed class ManualAudioOutput : IAudioOutput
         }
 
         Source = source;
+        _openedFor = source.Format;
         Opened = OpenedAs?.Invoke(source);
         OpenCount++;
     }
@@ -275,7 +278,9 @@ internal sealed class ManualAudioOutput : IAudioOutput
 
         if (StreamFormat is { } stream)
         {
-            if (_source is null || stream.SampleRate != next.Format.SampleRate || stream.Channels != next.Format.Channels)
+            // The mixer's format, or the one it was opened for (which it converts on its side, as it did then).
+            if (_source is null
+                || ((stream.SampleRate != next.Format.SampleRate || stream.Channels != next.Format.Channels) && next.Format != _openedFor))
             {
                 return false;
             }
