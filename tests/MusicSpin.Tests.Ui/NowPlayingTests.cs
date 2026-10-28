@@ -212,11 +212,20 @@ public sealed class NowPlayingTests
         var tracks = SampleLibrary.Albums[Album - 1].Tracks;
         Assert.Equal(tracks, rows.Select(AutomationProperties.GetName));
         Assert.Equal([false, true, false], rows.Select(r => r.Classes.Contains("current")));
-        Assert.Equal(["1", NowPlayingTrackViewModel.PlayingMark, "3"], rows.Select(Number));
+        Assert.Equal(["1", "2", "3"], rows.Select(r => Number(r).Text));
+        Assert.Equal([false, true, false], rows.Select(r => Mark(r).IsVisible));
 
-        // Paused, the current track keeps its number.
+        // The note left of the playing track's number, both whole (#138); the numbers and the rows stay where they were.
+        var (mark, number) = (Gui.BoundsIn(app.Window, Mark(rows[1])), Gui.BoundsIn(app.Window, Number(rows[1])));
+        Assert.True(mark.Right <= number.X, $"♪ {mark} left of the number {number}");
+        Assert.True(mark.X >= Gui.BoundsIn(app.Window, rows[1]).X, "♪ inside the highlighted row");
+        Assert.Single(rows.Select(r => Gui.BoundsIn(app.Window, Number(r)).Right).Distinct());
+        Assert.Single(rows.Select(r => (Gui.BoundsIn(app.Window, r).X, r.Bounds.Width, r.Bounds.Height)).Distinct()); // the highlight too
+
+        // Paused, the current track keeps its number and loses the note.
         await SetStateAsync(app, PlayerState.Paused);
-        Assert.Equal("2", Number(rows[1]));
+        Assert.Equal("2", Number(rows[1]).Text);
+        Assert.False(Mark(rows[1]).IsVisible);
         Assert.Contains("current", rows[1].Classes);
 
         Gui.Click(app.Window, rows[2]);
@@ -229,7 +238,8 @@ public sealed class NowPlayingTests
             Enumerable.Range(1, tracks.Length).Select(t => SampleLibrary.TrackId(Album, t)),
             sent.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("trackId").GetString()));
 
-        static string? Number(Button row) => Gui.All<TextBlock>(row).First(t => t.Classes.Contains("number")).Text;
+        static TextBlock Number(Button row) => Gui.All<TextBlock>(row).First(t => t.Classes.Contains("number"));
+        static Icon Mark(Button row) => Gui.All<Icon>(row).First(t => t.Classes.Contains("playingMark"));
     }
 
     [AvaloniaFact]

@@ -85,7 +85,10 @@
                                             CommandParameter="{Binding}"
                                             AutomationProperties.Name="{Binding Title}">
                                         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                            <TextBlock Classes="number" Text="{Binding Marker}" />
+                                            <Panel Classes="number">
+                                                <controls:Icon Classes="playingMark" Data="{StaticResource Note}" IsVisible="{Binding ShowsPlayingMark}" />
+                                                <TextBlock Classes="number" Text="{Binding Number}" />
+                                            </Panel>
                                             <TextBlock Grid.Column="1" Classes="trim" Text="{Binding Title}" />
                                             <Button Grid.Column="2"
                                                     Classes="heart"
