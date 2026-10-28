@@ -912,6 +912,7 @@ public sealed class Player : IPlayer
             ConvertingDecoder converted;
             TrackSegment head;
             TimeSpan position;
+            TimeSpan decodedTo;
             lock (_decodeLock)
             {
                 if (!ReferenceEquals(_buffer, buffer) || _segments.Count == 0 || buffer.Crossed != 0)
@@ -926,6 +927,7 @@ public sealed class Player : IPlayer
                 }
 
                 position = buffer.Position;
+                decodedTo = head.Decoder.Position;
                 var target = new PcmFormat(stream.SampleRate, stream.Channels, head.Decoder.Format.SourceBitsPerSample);
                 if (Converted(head.Decoder, target, from => output.CreateConverter(from, target)) is not ConvertingDecoder c)
                 {
@@ -948,24 +950,28 @@ public sealed class Player : IPlayer
                 moved = false;
             }
 
-            if (!moved)
+            if (moved)
             {
-                _ = converted.Detach(); // the head keeps its decoder, untouched; the output converts, as before
-                adopted = null;
-            }
-            else
-            {
-                _outputSource = adopted;
                 try
                 {
                     converted.Seek(position); // back from what was decoded ahead to what is heard next
                 }
                 catch (Exception ex)
                 {
-                    // Plays on from where the decoder is (past the prefill): reported, as a failed seek is.
-                    failed = ex;
+                    // A damaged file: the output goes back to the buffer it had, to convert it as before, and the decoder
+                    // to where that buffer left it, so the track plays as it would have. Reported only if that fails too.
+                    moved = !MoveBack(output, buffer, head.Decoder, decodedTo, ex, out failed);
                 }
+            }
 
+            if (!moved)
+            {
+                _ = converted.Detach(); // the head keeps its decoder; the output converts, as before
+                adopted = null;
+            }
+            else
+            {
+                _outputSource = adopted;
                 segment.Start = converted.Position;
                 lock (_decodeLock)
                 {
@@ -989,6 +995,44 @@ public sealed class Player : IPlayer
 
         _wake.Set();
         return adopted;
+    }
+
+    /// <summary>
+    /// After the converted track's decoder failed to seek with <paramref name="seekError"/>: the output back to
+    /// <paramref name="buffer"/> and <paramref name="decoder"/> back to <paramref name="decodedTo"/>, where that buffer's
+    /// decoding stopped, if the failed seek moved it. False (and the errors in <paramref name="failed"/>) when the output stays on the converted buffer;
+    /// true, with <paramref name="failed"/> set only when the decoder could not go back. Caller holds _sync and _ioLock.
+    /// </summary>
+    private static bool MoveBack(IAudioOutput output, PlaybackBuffer buffer, IAudioDecoder decoder, TimeSpan decodedTo, Exception seekError, out Exception? failed)
+    {
+        failed = null;
+        try
+        {
+            if (!output.Retarget(buffer))
+            {
+                failed = seekError; // plays on converted, from where the decoder is
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            failed = new AggregateException(seekError, ex);
+            return false;
+        }
+
+        try
+        {
+            if (decoder.Position != decodedTo)
+            {
+                decoder.Seek(decodedTo); // the failed seek moved it; one that left it where it was (FFmpeg's) needs none
+            }
+        }
+        catch (Exception ex)
+        {
+            failed = new AggregateException(seekError, ex); // plays on from wherever the decoder is
+        }
+
+        return true;
     }
 
     /// <summary>
