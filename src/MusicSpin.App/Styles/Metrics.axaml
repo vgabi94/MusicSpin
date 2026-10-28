@@ -367,10 +367,8 @@
     <sys:Double x:Key="BannerIconSize">12</sys:Double>
     <!-- The song name, then the analyzer and the volume at this gap (mockup: .meta). -->
     <sys:Double x:Key="PlayerMetaGap">24</sys:Double>
-    <!-- Shuffle and Repeat (stroked), and Repeat one's small "1". -->
+    <!-- Shuffle and Repeat (stroked). -->
     <sys:Double x:Key="ModeIconSize">15</sys:Double>
-    <sys:Double x:Key="RepeatOneFontSize">8</sys:Double>
-    <Thickness x:Key="RepeatOneMargin">0,0,-5,-4</Thickness>
     <sys:Double x:Key="TransportDisabledOpacity">0.3</sys:Double>
     <!-- The buttons above the position (mockup: .transport, gap 6). -->
     <sys:Double x:Key="TransportRowGap">6</sys:Double>
@@ -590,6 +588,8 @@
     <CornerRadius x:Key="NowPlayingTrackRadius">7</CornerRadius>
     <sys:Double x:Key="NowPlayingTrackFontSize">14</sys:Double>
     <sys:Double x:Key="NowPlayingTrackNumberWidth">28</sys:Double>
+    <!-- The note beside the playing track's number (mockup: ♪ at 13px): a fixed size, so the row keeps its height. -->
+    <sys:Double x:Key="NowPlayingMarkSize">11</sys:Double>
     <sys:Double x:Key="NowPlayingTrackGap">10</sys:Double>
 
     <!--
