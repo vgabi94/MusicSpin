@@ -187,7 +187,7 @@
         <Setter Property="Width" Value="{StaticResource TransportIconSize}" />
         <Setter Property="Height" Value="{StaticResource TransportIconSize}" />
     </Style>
-    <!-- Shuffle and Repeat: lines; in the accent while on, Repeat one with a small "1". -->
+    <!-- Shuffle and Repeat: lines; in the accent while on, Repeat one with a "1" inside the loop. -->
     <Style Selector="StackPanel.transportButtons > Button.mode controls|Icon">
         <Setter Property="Width" Value="{StaticResource ModeIconSize}" />
         <Setter Property="Height" Value="{StaticResource ModeIconSize}" />
@@ -196,12 +196,11 @@
     <Style Selector="StackPanel.transportButtons > Button.mode.on">
         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
     </Style>
-    <Style Selector="TextBlock.repeatOne">
-        <Setter Property="FontSize" Value="{StaticResource RepeatOneFontSize}" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="HorizontalAlignment" Value="Right" />
-        <Setter Property="VerticalAlignment" Value="Bottom" />
-        <Setter Property="Margin" Value="{StaticResource RepeatOneMargin}" />
+    <Style Selector="StackPanel.transportButtons > Button.repeat controls|Icon">
+        <Setter Property="Data" Value="{StaticResource Repeat}" />
+    </Style>
+    <Style Selector="StackPanel.transportButtons > Button.repeat.one controls|Icon">
+        <Setter Property="Data" Value="{StaticResource RepeatOne}" />
     </Style>
     <Style Selector="StackPanel.transportButtons > Button.play">
         <Setter Property="Width" Value="{StaticResource PlayButtonSize}" />
