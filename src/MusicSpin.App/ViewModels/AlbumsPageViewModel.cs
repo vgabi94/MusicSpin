@@ -335,6 +335,9 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     private double _wheelSum;
     private long? _lastFlip;
 
+    /// <summary>The app's clock: a shelf sleeve's hover intent (#147) is timed on it.</summary>
+    public TimeProvider Time => _time;
+
     public AlbumsPageViewModel(ILibraryService library, ICoverService covers, PlayerViewModel player, RadioViewModel radio, SpinClock clock,
         LayerViewModel nowPlaying, TurntableSceneViewModel scene, MenuViewModel menu, PlaylistActions playlists, Notices notices,
         SettingsViewModel settings, TimeProvider time)

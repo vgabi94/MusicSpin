@@ -178,6 +178,33 @@ internal static class Snapshots
         }
     }
 
+    /// <summary>The rendered frame of <paramref name="top"/>, or the part of it under <paramref name="region"/>.</summary>
+    public static SKBitmap Capture(TopLevel top, Control? region = null)
+    {
+        using var frame = top.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
+        using var png = new MemoryStream();
+        frame.Save(png, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        var whole = SKBitmap.Decode(png.ToArray());
+        if (region is null)
+        {
+            return whole;
+        }
+
+        using (whole)
+        {
+            var (origin, scaling) = (region.TranslatePoint(default, top)!.Value, (float)top.RenderScaling);
+            var area = SKRectI.Round(new SKRect((float)origin.X * scaling, (float)origin.Y * scaling,
+                (float)(origin.X + region.Bounds.Width) * scaling, (float)(origin.Y + region.Bounds.Height) * scaling));
+            using var part = new SKBitmap();
+            if (!whole.ExtractSubset(part, area))
+            {
+                throw new InvalidOperationException($"{area} is outside the captured frame.");
+            }
+
+            return part.Copy();
+        }
+    }
+
     public static void Save(SKBitmap bitmap, string path)
     {
         using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);

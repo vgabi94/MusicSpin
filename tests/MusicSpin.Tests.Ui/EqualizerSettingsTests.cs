@@ -193,12 +193,9 @@ public sealed class EqualizerSettingsTests
         await using var app = await OpenAsync();
         await OpenSettingsAsync(app);
         await PlayingAsync(app);
-        var band = Slider(app, 5); // 1 kHz
-        band.BringIntoView();
-        band.Focus();
-        Gui.Settle();
+        var gains = Eq(app).Bands[5]; // 1 kHz
 
-        Gui.Press(app.Window, Key.Up, PhysicalKey.ArrowUp);
+        await KeyBandAsync(app, 5, Key.Up, PhysicalKey.ArrowUp, () => gains.Gain == 0.5, "0.5 dB");
 
         var sent = await SentAsync(app, 1);
         Assert.Equal((6, 0.5), (sent.GetProperty("band").GetInt32(), sent.GetProperty("gain").GetDouble()));
@@ -208,16 +205,33 @@ public sealed class EqualizerSettingsTests
         var saved = await SavedAsync(app, s => s.EqualizerGains?[5] == 0.5, "the band saved");
         Assert.Equal((true, 0.5, null), (saved.EqualizerEnabled, saved.EqualizerGains![5], saved.EqualizerPreset));
 
-        Gui.Press(app.Window, Key.PageUp, PhysicalKey.PageUp);
-        Assert.Equal(3, Eq(app).Bands[5].Gain); // to the next multiple of 3 dB
-        Gui.Press(app.Window, Key.End, PhysicalKey.End);
-        Assert.Equal(12, Eq(app).Bands[5].Gain);
-        Gui.Press(app.Window, Key.Home, PhysicalKey.Home);
-        Assert.Equal(-12, Eq(app).Bands[5].Gain);
-        Gui.Press(app.Window, Key.Down, PhysicalKey.ArrowDown); // already at the bottom
-        Assert.Equal(-12, Eq(app).Bands[5].Gain);
+        await KeyBandAsync(app, 5, Key.PageUp, PhysicalKey.PageUp, () => gains.Gain == 3, "3 dB"); // next multiple of 3
+        await KeyBandAsync(app, 5, Key.End, PhysicalKey.End, () => gains.Gain == 12, "12 dB");
+        await KeyBandAsync(app, 5, Key.Home, PhysicalKey.Home, () => gains.Gain == -12, "-12 dB");
+        await KeyBandAsync(app, 5, Key.Down, PhysicalKey.ArrowDown, () => gains.Gain == -12, "still -12 dB"); // already at the bottom
         await SentAsync(app, 4);
         Assert.Equal(4, app.Scripted!.Count("eq"));
+    }
+
+    /// <summary>
+    /// Focuses band <paramref name="band"/>, presses <paramref name="key"/>, waits until <paramref name="done"/>.
+    /// Keys only reach the bar while it is focused; after a change the player's answer and the save can move focus
+    /// (Windows CI: End after PageUp stayed at 3 dB), so each key focuses again and waits for the gain, not for time.
+    /// </summary>
+    private static async Task KeyBandAsync(AppHarness app, int band, Key key, PhysicalKey physical, Func<bool> done, string what)
+    {
+        var slider = Slider(app, band);
+        slider.BringIntoView();
+        Gui.Settle();
+        slider.Focus(NavigationMethod.Tab);
+        await Gui.UntilAsync(() => slider.IsFocused, $"band {band} focused before {what}");
+        if (key == Key.End)
+        {
+            Assert.True(slider.EndKey); // style must arm End; otherwise the key is ignored
+        }
+
+        Gui.Press(app.Window, key, physical);
+        await Gui.UntilAsync(done, what);
     }
 
     [AvaloniaFact]
