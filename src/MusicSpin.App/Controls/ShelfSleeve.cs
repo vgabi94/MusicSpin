@@ -31,10 +31,12 @@ namespace MusicSpin.App.Controls;
 /// <para>
 /// Hover intent (#147, in place of the mockup's .slot:hover transition-delay 60ms): a closed sleeve turns only once the
 /// pointer has rested on it for <see cref="HoverIntent"/>, timed on <see cref="Clock"/>, so a pointer swept along the row
-/// turns none of the sleeves it crosses, and one left sooner never moves. A sleeve the pointer reaches from one it opened,
-/// while that one is still open or closing, turns at once: the one you leave and the one you enter move in step, and the
-/// slots between them keep their places. The wait is not the transition's delay: a transition left during its delay
-/// starts back from the value it was going to, so the sleeve would open all the way at once and then close.
+/// turns none of the sleeves it crosses, and one left sooner never moves. A sleeve the pointer reaches from one it rested
+/// on, or left open all the way, while that one is still open or closing, turns at once: the one you leave and the one
+/// you enter move in step, and the slots between them keep their places. Only for one hop: a sleeve turned that way waits
+/// to be open all the way before it hands on, so a sweep from an open sleeve turns its neighbour and no more. The wait is
+/// not the transition's delay: a transition left during its delay starts back from the value it was going to, so the
+/// sleeve would open all the way at once and then close.
 /// </para>
 /// <para>
 /// The control sets Turn, Pull and RecordOut itself, from <see cref="InputElement.IsPointerOver"/> and
@@ -50,7 +52,11 @@ namespace MusicSpin.App.Controls;
 [TemplatePart("PART_Shadow", typeof(Control))]
 public sealed class ShelfSleeve : Button
 {
-    /// <summary>The sleeve the pointer last turned: while it is open, or still closing, the next one turns without waiting.</summary>
+    /// <summary>
+    /// The sleeve the pointer rested on, or left open all the way: while it is open, or still closing, the next one turns
+    /// without waiting, once. Shared by every shelf; the window check in <see cref="FromAnOpenSleeve"/> keeps two windows
+    /// apart, which is enough while a window shows one shelf at a time.
+    /// </summary>
     private static readonly WeakReference<ShelfSleeve> s_hovered = new(null!);
 
     /// <summary>The hover intent's wait, while the pointer rests on a closed sleeve.</summary>
@@ -304,19 +310,30 @@ public sealed class ShelfSleeve : Button
         if (change.Property == IsPointerOverProperty || change.Property == IsPlayingProperty)
         {
             StopWaiting();
-            if (IsPointerOver && !IsPlaying && Turn < RestTolerance && !FromAnOpenSleeve() && HoverIntent > TimeSpan.Zero)
+            var closed = IsPointerOver && !IsPlaying && Turn < RestTolerance;
+            if (closed && FromAnOpenSleeve())
+            {
+                s_hovered.SetTarget(null!); // one hop: this one hands on only once it is open all the way
+                Turn = 1;
+            }
+            else if (closed && HoverIntent > TimeSpan.Zero)
             {
                 Wait(); // closed and the row still: it turns once the pointer has rested on it
             }
             else
             {
-                TurnTo(IsPointerOver || IsPlaying);
+                Turn = IsPointerOver || IsPlaying ? 1 : 0;
             }
 
             Pull = RecordOut = IsPlaying ? 1 : 0;
         }
         else if (change.Property == TurnProperty || change.Property == RecordOutProperty || change.Property == RestCacheProperty)
         {
+            if (change.Property == TurnProperty && IsPointerOver && !IsPlaying && 1 - Turn < RestTolerance)
+            {
+                s_hovered.SetTarget(this); // open all the way under the pointer
+            }
+
             UpdateRest();
         }
         else if (change.Property == SpineColorProperty || change.Property == SpineFallbackProperty || change.Property == SpineShadeProperty)
@@ -342,7 +359,8 @@ public sealed class ShelfSleeve : Button
             if (wait == _waits)
             {
                 StopWaiting();
-                TurnTo(IsPointerOver || IsPlaying);
+                s_hovered.SetTarget(this); // rested on
+                Turn = 1;
             }
         }), null, HoverIntent, Timeout.InfiniteTimeSpan);
     }
@@ -355,17 +373,7 @@ public sealed class ShelfSleeve : Button
         _waiting = null;
     }
 
-    private void TurnTo(bool open)
-    {
-        if (open && !IsPlaying)
-        {
-            s_hovered.SetTarget(this);
-        }
-
-        Turn = open ? 1 : 0;
-    }
-
-    /// <summary>The pointer comes from a sleeve it turned that is still open, or closing, in this window.</summary>
+    /// <summary>The pointer comes from a sleeve it rested on, or left open all the way, still open or closing, in this window.</summary>
     private bool FromAnOpenSleeve()
         => s_hovered.TryGetTarget(out var open) && open != this && !open.IsPlaying && open.Turn >= RestTolerance
            && open.VisualRoot is { } root && root == VisualRoot;

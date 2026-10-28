@@ -253,6 +253,44 @@ public sealed class ShelfTests
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_sweep_from_an_open_sleeve_turns_its_neighbour_and_no_more_until_one_is_open_all_the_way()
+    {
+        await using var app = await OpenAsync();
+        var window = app.Window;
+        var sleeves = Sleeves(Boards(window)[0]);
+        var y = Gui.BoundsIn(window, sleeves[0]).Center.Y;
+        var end = Gui.BoundsIn(window, sleeves[^1]).Center.X;
+        Rest(app, sleeves[1]);
+        Gui.FinishAnimations(Settled);
+        Assert.Equal(1, sleeves[1].Turn);
+
+        var crossed = new HashSet<ShelfSleeve>();
+        for (var x = Gui.BoundsIn(window, sleeves[1]).Center.X; x < end; x += 24) // about 1400 px a second, as above
+        {
+            window.MouseMove(new Point(x, y));
+            app.Advance(UiTime.Frame);
+            crossed.UnionWith(sleeves.Where(s => s.IsPointerOver));
+            Assert.All(sleeves.Skip(3), s => Assert.Equal(0, s.Turn));
+        }
+
+        Assert.True(crossed.Count >= sleeves.Count - 2, $"the sweep crossed {crossed.Count} of {sleeves.Count} sleeves");
+        Assert.True(sleeves[2].Turn > 0, "the neighbour turned in step");
+
+        // One open all the way under the pointer, however it opened, hands on again.
+        window.MouseMove(new Point(5, 5));
+        Gui.FinishAnimations(Settled);
+        Rest(app, sleeves[1]);
+        Gui.FinishAnimations(Settled);
+        Gui.Hover(window, sleeves[2]);
+        Gui.FinishAnimations(Settled);
+        Assert.Equal(1, sleeves[2].Turn);
+        Gui.Hover(window, sleeves[3]);
+        app.Advance(TimeSpan.FromMilliseconds(100));
+        Assert.True(sleeves[3].Turn > 0, "turned without the wait");
+    }
+
+    [AvaloniaFact]
     public async Task With_motion_off_a_hovered_sleeve_faces_you_at_once()
     {
         await using var app = await OpenAsync(motion: "none");
@@ -609,8 +647,8 @@ public sealed class ShelfTests
     public async Task Snapshot_of_the_shelf_grouped_by_artist_with_a_hovered_and_a_playing_sleeve(AppTheme theme)
     {
         await using var app = await OpenAsync(theme, AlbumGrouping.Artist);
+        Rest(app, Sleeve(app.Window, "Velvet Hours")); // before the record starts spinning, so it spins as far as ever
         await PlayingAsync(app, 8);
-        Rest(app, Sleeve(app.Window, "Velvet Hours"));
         Gui.FinishAnimations(Settled);
 
         Snapshots.Match(app.Window, $"albums-shelf-{theme.ToString().ToLowerInvariant()}");
