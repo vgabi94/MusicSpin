@@ -100,6 +100,20 @@ internal static class LibraryTestData
         return path;
     }
 
+    /// <summary>
+    /// Like <see cref="Write"/>, but the file appears at <paramref name="path"/> whole, in one rename: a folder watcher
+    /// that scans on the first change never meets it half written or still open for tagging (which it would skip as unreadable).
+    /// </summary>
+    [SuppressMessage("Design", "CA1054", Justification = "test helper")]
+    public static string Arrive(string path, string source, string? title = null, string? artist = null, string? album = null,
+        string? albumArtist = null, uint track = 0, uint disc = 0, uint year = 0)
+    {
+        var staged = Write(Path.Combine(TempDir.Create("arriving"), Path.GetFileName(path)), source, title, artist, album, albumArtist, track, disc, year);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.Move(staged, path, overwrite: true);
+        return path;
+    }
+
     /// <summary>Replaces the pictures embedded in <paramref name="path"/> (none: removes them).</summary>
     public static void SetPictures(string path, params (byte[] Data, TagLib.PictureType Type)[] pictures)
     {

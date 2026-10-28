@@ -453,9 +453,19 @@ public sealed class GaplessPlaybackTests : IDisposable
         var ended = QueueEnded(queue);
         queue.SetQueue(Items(Add(a), Add(empty), Add(c)));
         Assert.Equal(a.Pcm(), Drain());
-        await PlayerTestKit.WaitUntilAsync(() => Output.OpenCount == 2 && Output.Started, "empty track started");
-        Assert.Equal(c.Pcm(), Drain());
-        await Within(ended.Task);
+        // The empty track ends at once, and whether the third track follows it in the same buffer or the queue moves on
+        // when the player stops (the device is paused in between, and a pull then reads nothing) depends on which thread
+        // gets there first. Either way a device that keeps pulling plays just the third track, then the queue ends.
+        var played = new List<float>();
+        await PlayerTestKit.WaitUntilAsync(
+            () =>
+            {
+                played.AddRange(Output.Pump(Block));
+                return ended.Task.IsCompleted;
+            },
+            "the queue to play through to its end",
+            30_000);
+        Assert.Equal(c.Pcm(), played);
         Assert.Equal(2, queue.Status().QueueIndex);
     }
 

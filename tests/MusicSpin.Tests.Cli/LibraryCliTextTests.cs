@@ -178,7 +178,7 @@ public sealed class LibraryCliTextTests : IAsyncDisposable
         var run = _cli.RunAsync(cts.Token, "library", "watch", "--debounce-ms", "100");
         await WaitForAsync(() => _cli.LiveOut?.Snapshot().Contains("Watching 1 folder(s). Ctrl+C to stop.", StringComparison.Ordinal) == true);
 
-        Song("b.flac", "B");
+        LibraryTestData.Arrive(Path.Combine(_music, "b.flac"), LibraryTestData.Tiny16, "B", "Artist", "Album", "Artist", 1, 1, 2001);
         await WaitForAsync(() => _cli.LiveOut!.Snapshot().Contains("Scanned ", StringComparison.Ordinal));
         await cts.CancelAsync();
         var result = await run;

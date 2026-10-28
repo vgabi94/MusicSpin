@@ -239,7 +239,7 @@ public sealed class LibraryCliTests : IAsyncDisposable
         var run = _cli.RunAsync(cts.Token, "library", "watch", "--debounce-ms", "100", "--json");
         await WaitForAsync(() => _cli.LiveOut?.Snapshot().Contains("\"watching\"", StringComparison.Ordinal) == true);
 
-        LibraryTestData.Write(Path.Combine(_music, "New", "fresh.flac"), LibraryTestData.Tiny16, "Fresh", "Newbie", "Debut");
+        LibraryTestData.Arrive(Path.Combine(_music, "fresh.flac"), LibraryTestData.Tiny16, "Fresh", "Newbie", "Debut");
         await WaitForAsync(() => _cli.LiveOut!.Snapshot().Contains("\"scan\"", StringComparison.Ordinal));
         await cts.CancelAsync();
         var result = await run;

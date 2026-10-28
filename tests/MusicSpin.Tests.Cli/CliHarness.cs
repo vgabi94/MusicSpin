@@ -81,6 +81,7 @@ internal sealed class CliHarness : IAsyncDisposable
             InitialRepeat = PlaybackModes.TryParseRepeat(settings.Repeat, out var repeat) ? repeat : RepeatMode.Off,
             InitialShuffle = settings.Shuffle,
             Normalization = NormalizationSettings.From(settings),
+            LoudnessStore = new NoLoudnessStore(), // the player's lookups and saves would hold library.lock while the commands run
             Equalizer = MusicSpin.Core.Equalization.EqualizerSettings.From(settings),
             EqualizerPresets = MusicSpin.Core.Equalization.EqualizerSettings.UserPresets(settings, null),
         });

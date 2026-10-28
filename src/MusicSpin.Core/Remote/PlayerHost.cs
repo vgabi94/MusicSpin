@@ -79,6 +79,13 @@ public sealed record PlayerHostOptions
     /// queued file is missing (renamed/moved since it was queued). Default true.
     /// </summary>
     public bool ResolveFromLibrary { get; init; } = true;
+
+    /// <summary>
+    /// Where measured loudness is kept. Default (null): the library when <see cref="ResolveFromLibrary"/> is on, else nowhere
+    /// (the results stay in memory). Each lookup and save opens the library, which holds its lock for that time; a test that
+    /// runs commands next to the player gives it a store that does not.
+    /// </summary>
+    public ILoudnessStore? LoudnessStore { get; init; }
 }
 
 /// <summary>
@@ -130,7 +137,7 @@ public sealed class PlayerHost : IAsyncDisposable
         };
         _queue = new QueuePlayer(_player, output) { Equalizer = new Equalization.GraphicEqualizer(options.Equalizer, options.EqualizerPresets) };
         _normalization = new NormalizationService(options.Decoders,
-            options.ResolveFromLibrary ? new LibraryLoudnessStore(options.DataDirectory) : new NoLoudnessStore(), options.Normalization, line => Log(line));
+            options.LoudnessStore ?? (options.ResolveFromLibrary ? new LibraryLoudnessStore(options.DataDirectory) : new NoLoudnessStore()), options.Normalization, line => Log(line));
         _queue.Normalizer = _normalization;
         _player.OutputOpened += (_, e) => OnOutputOpened(output, e.Opened);
         _spectrum = new SpectrumMeter(_player, options.Time);
