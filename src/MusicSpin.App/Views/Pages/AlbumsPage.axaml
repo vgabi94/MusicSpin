@@ -148,6 +148,7 @@
                                                               IsPlaying="{Binding IsPlaying}"
                                                               Tilt="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Settings.ShelfTilt}"
                                                               Depth="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Settings.ShelfDepth}"
+                                                              Clock="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).Time}"
                                                               Source="{Binding Art.Cover}"
                                                               SpineColor="{Binding Art.Accent}"
                                                               Title="{Binding Title}"

@@ -13,11 +13,13 @@
     <sys:TimeSpan x:Key="CardVinylDuration">0:0:0.55</sys:TimeSpan>
     <sys:TimeSpan x:Key="CardCoverDuration">0:0:0.45</sys:TimeSpan>
     <!--
-      A shelf sleeve turning to face you and its slot widening (mockup: .slot, .sleeve3d, .7s), after the pointer rests
-      on it for ShelfHoverDelay (60ms); the playing record sliding half out (.vinyl, 1s after .1s).
+      A shelf sleeve turning to face you and its slot widening (mockup: .slot, .sleeve3d, .7s); the playing record
+      sliding half out (.vinyl, 1s after .1s).
     -->
     <sys:TimeSpan x:Key="ShelfTurnDuration">0:0:0.7</sys:TimeSpan>
-    <sys:TimeSpan x:Key="ShelfHoverDelay">0:0:0.06</sys:TimeSpan>
+    <!-- Hover intent (#147, in place of the mockup's 60ms hover delay): the pointer rests this long on a closed sleeve
+         before it turns (unless it comes from an open one), so a pointer swept along the shelf turns none it crosses. -->
+    <sys:TimeSpan x:Key="ShelfHoverIntent">0:0:0.18</sys:TimeSpan>
     <sys:TimeSpan x:Key="ShelfRecordDuration">0:0:1</sys:TimeSpan>
     <sys:TimeSpan x:Key="ShelfRecordDelay">0:0:0.1</sys:TimeSpan>
     <!-- A crate record flipping (mockup: .crate .rec, transform .8s), its hover light (.35s), the group label (.3s). -->
