@@ -741,6 +741,9 @@ public sealed class AudioSettingsViewModelTests : IAsyncDisposable
     {
         // macOS CI flake: a status refresh carrying the old mode arrived after the second FlipLevelling and left the
         // switch off. While normalize is in flight, FollowPlayer must not overwrite the user's flip (as the equalizer).
+        // FollowsCommands: the Ok carries the mode after the command (as the real player), so Settle after a missed
+        // stale poll follows "off" — not the album status the hold captured before Follow ran.
+        _player.FollowsCommands = true;
         _player.Start();
         _player.Status = ScriptedPlayer.Playing("Blue in Green") with
         {
@@ -764,14 +767,11 @@ public sealed class AudioSettingsViewModelTests : IAsyncDisposable
         Assert.False(vm.Levelling);
 
         held.SetResult();
-        await _ui.UntilAsync(() => _ui.Pending == 0 && _player.Count("normalize") == 1, "normalize answered and UI drained");
-        // A few more pumps: AfterAnswers → Settle may have been queued behind the answer Apply.
-        for (var i = 0; i < 5; i++)
-        {
-            _ui.Run();
-        }
-
-        Assert.False(vm.Levelling);
+        // Wait for the answer's Apply (mode off) and AfterAnswers → Settle — not bare Pending==0, which can win the
+        // race before Settle is posted and leave a false green on a fast dispatcher.
+        await _ui.UntilAsync(
+            () => _playerVm.Status?.Normalization?.Mode == "off" && !vm.Levelling && _ui.Pending == 0,
+            "normalize answered off, switch still off, UI drained");
         Assert.Equal("off", settings.Current.Normalization);
     }
 
