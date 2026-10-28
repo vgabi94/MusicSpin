@@ -24,8 +24,10 @@
             <Setter Property="ClipToBounds" Value="False" />
             <Setter Property="VerticalAlignment" Value="Bottom" />
             <Setter Property="Cursor" Value="Hand" />
+            <!-- Hover intent (#147): how long the pointer rests on a closed sleeve before it turns. -->
+            <Setter Property="HoverIntent" Value="{theming:Motion ShelfHoverIntent}" />
             <Setter Property="theming:Animate.Transitions"
-                    Value="Turn ShelfTurnDuration EaseSoft ShelfHoverDelay; Pull ShelfTurnDuration EaseSoft; RecordOut ShelfRecordDuration EaseSoft ShelfRecordDelay" />
+                    Value="Turn ShelfTurnDuration EaseSoft; Pull ShelfTurnDuration EaseSoft; RecordOut ShelfRecordDuration EaseSoft ShelfRecordDelay" />
             <Setter Property="Template">
                 <ControlTemplate>
                     <Panel Background="{TemplateBinding Background}">

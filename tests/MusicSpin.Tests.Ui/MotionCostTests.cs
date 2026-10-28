@@ -90,28 +90,6 @@ public sealed class MotionCostTests
 
     private static bool FromImage(Visual visual) => visual.CacheMode is BitmapCache;
 
-    private static SKBitmap Capture(TopLevel top, Control? region = null)
-    {
-        using var frame = top.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
-        using var png = new MemoryStream();
-        frame.Save(png, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
-        var whole = SKBitmap.Decode(png.ToArray());
-        if (region is null)
-        {
-            return whole;
-        }
-
-        using (whole)
-        {
-            var (origin, scaling) = (region.TranslatePoint(default, top)!.Value, (float)top.RenderScaling);
-            var area = SKRectI.Round(new SKRect((float)origin.X * scaling, (float)origin.Y * scaling,
-                (float)(origin.X + region.Bounds.Width) * scaling, (float)(origin.Y + region.Bounds.Height) * scaling));
-            using var part = new SKBitmap();
-            Assert.True(whole.ExtractSubset(part, area));
-            return part.Copy();
-        }
-    }
-
     /// <summary>Drawn from images, the same, near enough, as drawn live.</summary>
     private static void AssertSame(SKBitmap fromImages, SKBitmap live, string name, int channelTolerance = 8, double pixelTolerance = 0.0005)
     {
@@ -296,7 +274,7 @@ public sealed class MotionCostTests
 
             Assert.Contains(Gui.All<SlidePanel>(app.Window), p => p.IsMoving);
             Assert.Equal(!live, Gui.All<SlidePanel>(app.Window).Where(p => p.IsMoving).All(p => FromImage(Content(p))));
-            return Capture(app.Window);
+            return Snapshots.Capture(app.Window);
         }
     }
 
@@ -407,7 +385,7 @@ public sealed class MotionCostTests
             window.Show();
             try
             {
-                return Capture(window);
+                return Snapshots.Capture(window);
             }
             finally
             {
@@ -507,7 +485,7 @@ public sealed class MotionCostTests
             await PlayAsync(app, PlayerState.Paused);
             Gui.FinishAnimations(Settled);
             Assert.Equal(!live, CardShadows(app, playing: true).All(s => FromImage(s.Cover) && FromImage(s.Fab)));
-            return Capture(app.Window);
+            return Snapshots.Capture(app.Window);
         }
     }
 
@@ -558,7 +536,7 @@ public sealed class MotionCostTests
         await PlayAsync(app, PlayerState.Paused); // the record still: both apps' records at the same angle
         app.ViewModel.NowPlaying.Open();
         Gui.FinishAnimations(Settled);
-        return Capture(app.Window, Gui.Find<DeckHost>(app.Window, "Deck"));
+        return Snapshots.Capture(app.Window, Gui.Find<DeckHost>(app.Window, "Deck"));
     }
 
     private static async Task<(AppHarness App, DeckHost Host)> NowPlayingDeckAsync(string design)
