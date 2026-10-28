@@ -1000,7 +1000,7 @@ public sealed class Player : IPlayer
     /// <summary>
     /// After the converted track's decoder failed to seek with <paramref name="seekError"/>: the output back to
     /// <paramref name="buffer"/> and <paramref name="decoder"/> back to <paramref name="decodedTo"/>, where that buffer's
-    /// decoding stopped. False (and the errors in <paramref name="failed"/>) when the output stays on the converted buffer;
+    /// decoding stopped, if the failed seek moved it. False (and the errors in <paramref name="failed"/>) when the output stays on the converted buffer;
     /// true, with <paramref name="failed"/> set only when the decoder could not go back. Caller holds _sync and _ioLock.
     /// </summary>
     private static bool MoveBack(IAudioOutput output, PlaybackBuffer buffer, IAudioDecoder decoder, TimeSpan decodedTo, Exception seekError, out Exception? failed)
@@ -1022,7 +1022,10 @@ public sealed class Player : IPlayer
 
         try
         {
-            decoder.Seek(decodedTo);
+            if (decoder.Position != decodedTo)
+            {
+                decoder.Seek(decodedTo); // the failed seek moved it; one that left it where it was (FFmpeg's) needs none
+            }
         }
         catch (Exception ex)
         {

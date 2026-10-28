@@ -855,19 +855,39 @@ public sealed class TrackSwitchTests : IDisposable
 
     [Fact]
     [Trait("Category", "Unhappy")]
-    public void A_converted_track_whose_decoder_cannot_seek_at_all_is_reported_and_plays_on()
+    public void A_converted_track_whose_decoder_cannot_seek_at_all_plays_through_the_output_converting_it()
     {
         SharedMode();
         Output.StreamFormat = new PcmFormat(2000, 2, 16);
         var errors = new List<Exception>();
-        var a = new RampSpec(1, 8000) { SeekFails = _ => true };
+        var a = new RampSpec(1, 8000) { SeekFails = _ => true }; // each failed seek leaves it where it was
         var player = CreatePlayer();
         player.Error += (_, e) => errors.Add(e.Exception);
         player.Load(Add(a));
 
         player.Play();
 
-        Assert.Equal(a.Pcm()[..400], Pull(400));
+        Assert.Equal(a.Pcm(), PullAll(16000)); // no seek back needed: still where the buffer's decoding stopped
+        Assert.Equal(a.Format, Output.Source!.Format);
+        Assert.Empty(errors);
+        Assert.Equal(PlayerState.Playing, player.State);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_converted_track_whose_failed_seek_moved_its_decoder_and_cannot_seek_back_is_reported_and_plays_on()
+    {
+        SharedMode();
+        Output.StreamFormat = new PcmFormat(2000, 2, 16);
+        var errors = new List<Exception>();
+        var a = new RampSpec(1, 8000) { SeekFails = _ => true, FailedSeekLeavesAt = TimeSpan.FromSeconds(5) };
+        var player = CreatePlayer();
+        player.Error += (_, e) => errors.Add(e.Exception);
+        player.Load(Add(a));
+
+        player.Play();
+
+        Assert.Equal(a.Pcm()[..400], Pull(400)); // the buffer it had, as decoded ahead
         Assert.Equal(a.Format, Output.Source!.Format);
         var error = Assert.IsType<AggregateException>(Assert.Single(errors)); // the seek, and the seek back
         Assert.All(error.InnerExceptions, e => Assert.Contains("Cannot seek", e.Message, StringComparison.Ordinal));
@@ -895,8 +915,11 @@ public sealed class TrackSwitchTests : IDisposable
 
         player.Play();
 
-        Assert.NotEmpty(Pull(400)); // from where the decoder is: past what was decoded ahead
+        var pulled = Pull(400);
         Assert.Equal(2000, Output.Source!.Format.SampleRate); // still on the converted buffer
+        var from = (int)((pulled[0] - a.Sample(0, 0)) / a.Channels); // from where the decoder is: past what was decoded ahead
+        Assert.True(from > 0, $"plays on from frame {from}");
+        Assert.Equal(StepConverter.Expected(a, Output.Source.Format).AsSpan(from * 2 * a.Channels, 400).ToArray(), pulled);
         var error = Assert.IsType<AggregateException>(Assert.Single(errors));
         Assert.Contains(error.InnerExceptions, e => e.Message.Contains("Cannot seek", StringComparison.Ordinal));
         Assert.Contains(error.InnerExceptions, e => e.Message.Contains("device gone", StringComparison.Ordinal));

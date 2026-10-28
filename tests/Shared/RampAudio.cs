@@ -18,8 +18,14 @@ internal sealed record RampSpec(int Id, long Frames, int SampleRate = 1000, int 
 
     public bool Seekable { get; init; } = true;
 
-    /// <summary>Seeking to a position this answers true for throws, leaving the decoder where it was (a damaged file).</summary>
+    /// <summary>
+    /// Seeking to a position this answers true for throws (a damaged file), leaving the decoder where it was, as FFmpeg's
+    /// av_seek_frame does, or at <see cref="FailedSeekLeavesAt"/>.
+    /// </summary>
     public Func<TimeSpan, bool>? SeekFails { get; init; }
+
+    /// <summary>Where a failed seek leaves the decoder, for a demuxer that moved before it failed.</summary>
+    public TimeSpan? FailedSeekLeavesAt { get; init; }
 
     public PcmFormat Format => new(SampleRate, Channels, Bits);
 
@@ -91,11 +97,18 @@ internal sealed class RampDecoder(string path, RampSpec spec) : IAudioDecoder
     {
         if (Spec.SeekFails?.Invoke(position) == true)
         {
+            if (Spec.FailedSeekLeavesAt is { } at)
+            {
+                _frame = FrameAt(at);
+            }
+
             throw new MusicSpinException(MusicSpinErrorCode.DecodeFailed, $"Cannot seek to {position}.");
         }
 
-        _frame = Math.Clamp((long)Math.Round(position.TotalSeconds * Spec.SampleRate), 0, Spec.Frames);
+        _frame = FrameAt(position);
     }
+
+    private long FrameAt(TimeSpan position) => Math.Clamp((long)Math.Round(position.TotalSeconds * Spec.SampleRate), 0, Spec.Frames);
 
     public void Dispose() => Disposed = true;
 }
