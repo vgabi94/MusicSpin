@@ -572,8 +572,8 @@ public sealed class AudioSettingsTests
         Assert.Equal("off", new SettingsStore(app.Data).Load().Normalization);
 
         Assert.True(FlipLevelling(app));
-        await Gui.UntilAsync(() => app.Scripted.Count("normalize") == 2, "the player told again");
-        Assert.Equal("auto", app.Scripted.Sent("normalize")[1].GetProperty("mode").GetString());
+        await Gui.UntilAsync(() => app.Scripted!.Count("normalize") == 2, "the player told again");
+        Assert.Equal("auto", app.Scripted!.Sent("normalize")[1].GetProperty("mode").GetString());
         Assert.Equal("auto", new SettingsStore(app.Data).Load().Normalization);
         Assert.Equal(1, app.Scripted.AppStarts); // no restart
     }
@@ -586,8 +586,9 @@ public sealed class AudioSettingsTests
         await PlayingAsync(app);
         Assert.True(Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked);
 
-        FlipLevelling(app);
-        FlipLevelling(app);
+        Assert.False(FlipLevelling(app));
+        await Gui.UntilAsync(() => app.Scripted!.Count("normalize") == 1, "the first normalize sent");
+        Assert.True(FlipLevelling(app));
 
         await Gui.UntilAsync(() => app.Scripted!.Count("normalize") == 2, "the player told twice");
         Assert.Equal("album", app.Scripted!.Sent("normalize")[1].GetProperty("mode").GetString());
@@ -632,11 +633,13 @@ public sealed class AudioSettingsTests
         await OpenSettingsAsync(app);
         await Gui.UntilAsync(() => Gui.Find<ToggleButton>(app.Window, "VolumeLevelling").IsChecked == true, "the switch following the player");
 
-        FlipLevelling(app); // off
-        FlipLevelling(app); // on again
+        Assert.False(FlipLevelling(app)); // off
+        await Gui.UntilAsync(() => app.Scripted.Count("normalize") == 1, "the first normalize sent");
+        Assert.Equal("off", app.Scripted.Sent("normalize")[0].GetProperty("mode").GetString());
+        Assert.True(FlipLevelling(app)); // on again — after the first is on its way/answered, not racing a stale status
 
-        await Gui.UntilAsync(() => app.Scripted.Count("normalize") == 2, "the player told twice");
-        Assert.Equal("album", app.Scripted.Sent("normalize")[1].GetProperty("mode").GetString());
+        await Gui.UntilAsync(() => app.Scripted!.Count("normalize") == 2, "the player told twice");
+        Assert.Equal("album", app.Scripted!.Sent("normalize")[1].GetProperty("mode").GetString());
     }
 
     // ---- snapshots ----------------------------------------------------------------------------------------------
@@ -661,13 +664,14 @@ public sealed class AudioSettingsViewModelTests : IAsyncDisposable
     private readonly string _root = TempDir.Create("audio");
     private readonly ScriptedPlayer _player;
     private readonly PlayerViewModel _playerVm;
+    private readonly QueueDispatcher _ui = new();
     private readonly Notices _notices = new();
     private readonly List<string> _posted = [];
 
     public AudioSettingsViewModelTests()
     {
         _player = new ScriptedPlayer(new DataDirectory(Path.Combine(_root, "data"), DataDirectorySource.Override));
-        _playerVm = new PlayerViewModel(_player, new FakeTimeProvider(), new QueueDispatcher());
+        _playerVm = new PlayerViewModel(_player, new FakeTimeProvider(), _ui);
         _notices.Posted += (_, message) => _posted.Add(message);
     }
 
@@ -731,6 +735,46 @@ public sealed class AudioSettingsViewModelTests : IAsyncDisposable
         Assert.Single(_posted);
     }
 
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_stale_player_status_does_not_undo_a_newer_levelling_flip()
+    {
+        // macOS CI flake: a status refresh carrying the old mode arrived after the second FlipLevelling and left the
+        // switch off. While normalize is in flight, FollowPlayer must not overwrite the user's flip (as the equalizer).
+        // FollowsCommands: the Ok carries the mode after the command (as the real player), so Settle after a missed
+        // stale poll follows "off" — not the album status the hold captured before Follow ran.
+        _player.FollowsCommands = true;
+        _player.Start();
+        _player.Status = ScriptedPlayer.Playing("Blue in Green") with
+        {
+            Normalization = new NormalizationStatus("album", -18, 0),
+        };
+        await _playerVm.StartAsync();
+        await _ui.UntilAsync(() => _playerVm.IsConnected && _player.Subscribers == 1, "connected");
+
+        var settings = new RecordingSettings(new AppSettings { Normalization = "album" });
+        var vm = Create(settings);
+        await vm.LoadAsync();
+        await _ui.UntilAsync(() => vm.Levelling, "switch following the player");
+
+        var held = _player.Hold("normalize");
+        vm.Levelling = false; // off: normalize held so StatusApplied can race
+        await _ui.UntilAsync(() => _player.Count("normalize") == 1, "normalize sent");
+        Assert.False(vm.Levelling);
+
+        // Stale "still album" status (as a poll that left before the command): must not flip the switch back on.
+        _playerVm.Apply(_playerVm.Status! with { Normalization = new NormalizationStatus("album", -18, 0) });
+        Assert.False(vm.Levelling);
+
+        held.SetResult();
+        // Wait for the answer's Apply (mode off) and AfterAnswers → Settle — not bare Pending==0, which can win the
+        // race before Settle is posted and leave a false green on a fast dispatcher.
+        await _ui.UntilAsync(
+            () => _playerVm.Status?.Normalization?.Mode == "off" && !vm.Levelling && _ui.Pending == 0,
+            "normalize answered off, switch still off, UI drained");
+        Assert.Equal("off", settings.Current.Normalization);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _playerVm.DisposeAsync();
@@ -738,9 +782,9 @@ public sealed class AudioSettingsViewModelTests : IAsyncDisposable
         TempDir.TryDelete(_root);
     }
 
-    private sealed class RecordingSettings : ISettingsService
+    private sealed class RecordingSettings(AppSettings? initial = null) : ISettingsService
     {
-        public AppSettings Current { get; private set; } = new();
+        public AppSettings Current { get; private set; } = initial ?? new();
 
         public void Update(Func<AppSettings, AppSettings> change) => Current = change(Current);
     }

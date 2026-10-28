@@ -45,3 +45,13 @@ or `Opus: `. Comments without a tag are Gabriel's.
 - Author: `Gabriel Vaduva <vgabriel12@outlook.com>`.
 - No force-pushes. Fix things with new commits.
 - Tests must cover unhappy paths, not just the happy path.
+
+## Tests and timing
+
+Tests must wait for state, not for time. Prefer:
+
+- awaiting a `TaskCompletionSource` (or other gate) the code under test signals,
+- polling with a shared helper such as `Eventually.UntilAsync` / `Gui.UntilAsync` until a condition holds,
+- a fake clock (`FakeTimeProvider`) when the product advances by time.
+
+Do not use `Task.Delay`, `Thread.Sleep`, or similar wall-clock pauses as the thing a test waits for. A timeout around a state wait is only a failure cap: a passing test returns as soon as the condition is true.

@@ -323,7 +323,18 @@ public sealed class MprisAdapterTests : IAsyncLifetime
         second.Update(Info()); // a disposed adapter ignores updates
         second.Clear();
 
-        Assert.False(await NameHasOwnerAsync(name));
+        // Name release is asynchronous on the bus: wait for the name to drop (timeout is a failure cap only).
+        var released = Stopwatch.StartNew();
+        while (await NameHasOwnerAsync(name))
+        {
+            if (released.Elapsed > Wait)
+            {
+                Assert.Fail($"Timed out after {Wait.TotalMilliseconds:0} ms waiting for: second instance name released");
+            }
+
+            await Task.Delay(5, TestContext.Current.CancellationToken);
+        }
+
         Assert.True(await NameHasOwnerAsync(MprisAdapter.BusName));
     }
 

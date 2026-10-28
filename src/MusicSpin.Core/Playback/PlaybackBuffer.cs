@@ -419,6 +419,17 @@ internal sealed class PlaybackBuffer : IPcmSource
         _markerCount = 0;
     }
 
+    /// <summary>
+    /// Test helper: runs <paramref name="action"/> while holding the consumer guard, so a concurrent <see cref="Read"/>
+    /// that loses <see cref="TryEnterAsConsumer"/> plays silence (as a real audio callback would).
+    /// </summary>
+    internal void HoldGuard(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        using var _ = Enter();
+        action();
+    }
+
     private GuardScope Enter()
     {
         var spin = new SpinWait();

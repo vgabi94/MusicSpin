@@ -510,6 +510,39 @@ public sealed class GaplessPlaybackTests : IDisposable
         Assert.Equal(2, queue.Status().Underruns);
     }
 
+    [Fact]
+    public async Task Waiting_pumps_retry_silence_from_a_busy_guard_instead_of_hearing_it()
+    {
+        // CI flake (PR #174 Ubuntu): RadioGaplessTests compared sample-exact output and got a full Pump block of zeros
+        // mid-stream. The ring plays silence when Read loses the guard to a structural change; wait:true must retry.
+        var a = new RampSpec(1, 4_000);
+        var (player, queue) = Create();
+        queue.SetQueue(Items(Add(a)));
+        Assert.True(player.Buffer!.WaitUntilReadable(Block, TimeSpan.FromSeconds(30)));
+
+        using var stop = new ManualResetEventSlim(false);
+        var held = new ManualResetEventSlim(false);
+        var buffer = player.Buffer!;
+        var ct = TestContext.Current.CancellationToken;
+        var blocker = Task.Run(() =>
+        {
+            while (!stop.IsSet)
+            {
+                buffer.HoldGuard(() =>
+                {
+                    held.Set();
+                    Thread.SpinWait(50_000); // long enough for Pump's TryEnterAsConsumer to give up
+                });
+            }
+        }, ct);
+
+        Assert.True(held.Wait(TimeSpan.FromSeconds(5), ct));
+        var heard = Output.Pump(200); // wait:true: must not return the contention silence
+        stop.Set();
+        await blocker.WaitAsync(TimeSpan.FromSeconds(5), ct);
+        Assert.Equal(a.Pcm()[..200], heard);
+    }
+
     // ---- lifecycle ----------------------------------------------------------------------------------------------
 
     [Fact]
