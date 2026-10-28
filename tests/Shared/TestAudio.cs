@@ -344,6 +344,11 @@ internal sealed class ManualAudioOutput : IAudioOutput
     /// decode thread to have them ready (deterministic content); <paramref name="wait"/> = false pulls whatever is there,
     /// like a real device that cannot wait (underruns play silence).
     /// </summary>
+    /// <remarks>
+    /// A real callback that loses the ring's guard plays one block of silence rather than waiting. Tests that wait for
+    /// content must not treat that as audio: with <paramref name="wait"/> true, a full silence underrun is retried until
+    /// a read that took the lock (or the stream ends).
+    /// </remarks>
     public float[] Pump(int samples, bool wait = true)
     {
         var buffer = new float[samples];
@@ -353,13 +358,39 @@ internal sealed class ManualAudioOutput : IAudioOutput
             return [];
         }
 
-        if (wait && source is MusicSpin.Core.Playback.PlaybackBuffer ring && !ring.WaitUntilReadable(samples, TimeSpan.FromSeconds(30)))
+        if (wait && source is MusicSpin.Core.Playback.PlaybackBuffer ring)
         {
-            throw new TimeoutException("The decode thread did not fill the buffer.");
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var spin = new SpinWait();
+            var budget = TimeSpan.FromSeconds(30);
+            while (true)
+            {
+                var left = budget - clock.Elapsed;
+                if (left <= TimeSpan.Zero || !ring.WaitUntilReadable(samples, left))
+                {
+                    throw new TimeoutException("The decode thread did not fill the buffer.");
+                }
+
+                var before = ring.Underruns;
+                var read = source.Read(buffer);
+                if (read == 0 || ring.Underruns == before)
+                {
+                    return buffer[..read];
+                }
+
+                // Underrun silence was injected. A partial pull that already copied real samples keeps them (rare after
+                // WaitUntilReadable); a full block of zeros is guard contention or an empty buffer — retry.
+                if (read < samples || buffer.AsSpan(0, read).ContainsAnyExcept(0f))
+                {
+                    return buffer[..read];
+                }
+
+                spin.SpinOnce();
+            }
         }
 
-        var read = source.Read(buffer);
-        return buffer[..read];
+        var n = source.Read(buffer);
+        return buffer[..n];
     }
 }
 
