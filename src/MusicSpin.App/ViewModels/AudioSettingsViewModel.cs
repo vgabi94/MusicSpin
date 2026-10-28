@@ -29,6 +29,8 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     private IReadOnlyList<string> _names = [];
     private bool _ready;
     private NormalizationMode _levellingMode;
+    private int _sending; // normalize commands on their way: FollowPlayer must not undo a newer switch flip
+    private bool _missed; // a status came while a change was in flight: Settle follows it once answered
 
     public AudioSettingsViewModel(IAudioDevices devices, ISettingsService settings, PlayerViewModel player, MenuViewModel menu, Notices notices)
     {
@@ -114,6 +116,8 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     /// <summary>
     /// The switch shows the mode the running player has (its status), not only the one read at start-up: nothing is saved
     /// and nobody is told, it is only what the player says. A player without levelling says nothing: the switch stays.
+    /// While a change from here is on its way, a status read before it would undo the flip: those are deferred to
+    /// <see cref="Settle"/> (same idea as <see cref="EqualizerViewModel"/>).
     /// </summary>
     private void FollowPlayer()
     {
@@ -122,6 +126,17 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
             return;
         }
 
+        if (Volatile.Read(ref _sending) > 0)
+        {
+            _missed = true;
+            return;
+        }
+
+        ApplyMode(mode);
+    }
+
+    private void ApplyMode(NormalizationMode mode)
+    {
         var wasReady = _ready;
         _ready = false;
         try
@@ -137,6 +152,26 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
         {
             _ready = wasReady;
         }
+    }
+
+    /// <summary>
+    /// Nothing on its way: follows a status skipped while a normalize was in flight (the CLI or a poll may have raced
+    /// the user's flip), then clears the miss flag.
+    /// </summary>
+    private void Settle()
+    {
+        if (Volatile.Read(ref _sending) > 0)
+        {
+            return;
+        }
+
+        if (!_missed)
+        {
+            return;
+        }
+
+        _missed = false;
+        FollowPlayer();
     }
 
     /// <summary>The device button: "System default", then the devices, the chosen one ticked.</summary>
@@ -203,7 +238,37 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
             return;
         }
 
-        _ = _player.SetNormalizationAsync(NormalizationSettings.Name(mode));
+        _ = TellNormalizationAsync(NormalizationSettings.Name(mode));
+    }
+
+    /// <summary>
+    /// Tells a running player the new mode. Status answers are not followed while the change is on its way: a poll
+    /// read before it would flip the switch back. Once the last one is answered and applied, <see cref="Settle"/>
+    /// catches up (mirrors <see cref="EqualizerViewModel"/>).
+    /// </summary>
+    private async Task TellNormalizationAsync(string mode)
+    {
+        if (!_player.IsConnected)
+        {
+            Settle();
+            return;
+        }
+
+        Interlocked.Increment(ref _sending);
+        try
+        {
+            await _player.SetNormalizationAsync(mode).ConfigureAwait(true);
+        }
+        finally
+        {
+            _player.AfterAnswers(() =>
+            {
+                if (Interlocked.Decrement(ref _sending) == 0)
+                {
+                    Settle();
+                }
+            });
+        }
     }
 
     /// <summary>A device's name in the menu and on the button; a saved one the list doesn't have now says so.</summary>
