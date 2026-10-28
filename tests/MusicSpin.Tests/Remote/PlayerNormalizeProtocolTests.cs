@@ -65,6 +65,31 @@ public sealed class PlayerNormalizeProtocolTests : PlayerHostTestBase
         Assert.Contains(status.Source, new[] { "unknown", "analysis" }); // the fake decoder's tracks may be analysed at any moment
     }
 
+    [Fact]
+    public async Task A_host_asks_the_store_it_was_given_for_the_loudness_of_the_tracks_it_plays()
+    {
+        var store = new AskedStore();
+        StartHost(Options() with { Normalization = NormalizationSettings.Default, LoudnessStore = store });
+        var client = await ConnectAsync();
+
+        await client.SendAsync("queue.set", QueueSet(Paths), Ct);
+
+        Assert.Contains(Paths[0], await store.Asked.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct), StringComparer.Ordinal); // failure cap only
+    }
+
+    private sealed class AskedStore : ILoudnessStore
+    {
+        public TaskCompletionSource<string[]> Asked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IReadOnlyDictionary<string, TrackLoudness>? Load(IReadOnlyCollection<string> paths)
+        {
+            Asked.TrySetResult([.. paths]);
+            return new Dictionary<string, TrackLoudness>();
+        }
+
+        public bool Save(IReadOnlyList<LoudnessUpdate> updates) => true;
+    }
+
     [Theory]
     [Trait("Category", "Unhappy")]
     [InlineData("""{"mode":"loud"}""")]
