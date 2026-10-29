@@ -194,6 +194,13 @@ src/MusicSpin.App/
   row hides the ones it has no album for and lets go of their albums (and covers), as a row out of the window does. The
   compositor clips to separate dirty rectangles (`UseRegionDirtyRectClipping`), so the spinning record, the player bar
   and a hovered card are redrawn on their own, not with everything in the box around them.
+- **Cards.** The loaded album's card has its record out but still: the player bar and Now Playing turn one, and a
+  record turning under a card's cover had the cover and the cards around it drawn again every frame (#149). Only the
+  shelf turns its playing record (`AlbumItemViewModel.DiscAngle` follows the spin clock in Shelf, and is 0 otherwise).
+  A card's art (`CardArt`, the `Viewbox` that scales it to the card) draws through a `BitmapCache` while neither the
+  sleeve nor the record is moving, so scrolling copies images. It watches its parts' render transforms and draws live
+  while one is between its styles' value and a transition's, then from its image again once the move ends. The cache
+  is on the `Viewbox`, not on what it scales, so the image has the pixels the card shows.
 - **Shelf and crates.** Avalonia's `Rotate3DTransform` keeps the eye at the element's centre; the mockup puts it at a
   sleeve's bottom edge (so sleeves stand flat on the board) and high above a crate. So `ShelfSleeve` and `CrateRecord`
   build the mockup's CSS transforms as 4×4 matrices (`Projection`) and draw with their 2D projective part. A sleeve's
@@ -363,9 +370,9 @@ src/MusicSpin.App/
 - **Shadows under a spinning record.** A blurred shadow (a `BoxShadow` or an effect) is blurred again every frame
   it is drawn, and anything under a spinning record is drawn every frame. So each soft shadow there is on its own
   element, drawn after the hard edge or ring it shared a border with (as Avalonia drew the pair): the decks' plinth
-  shadows, Carbon's slab, Classic's arm and the loaded album's card (its cover's and Play button's) draw through a
-  `BitmapCache` (in Now Playing's deck only; Settings' still previews don't), and round things draw `DiscShadow`, a
-  radial gradient as a Gaussian blurs a disc, with no blur at all: the platters' rims and the scene's record. A box
+  shadows, Carbon's slab and Classic's arm draw through a `BitmapCache` (in Now Playing's deck only; Settings' still
+  previews don't), and round things draw `DiscShadow`, a radial gradient as a Gaussian blurs a disc, with no blur at
+  all: the platters' rims and the scene's record. A box
   shadow's offset is in the window's pixels whatever the scale (Avalonia applies it after the transform), so
   `DiscShadow.PixelOffsetY` is too. A deck's images are drawn at the pixels the deck shows its drawing at
   (`DeckHost.SoftCache`, in eighths, from `DeckView.UnitScale` and the host's scale): Avalonia draws a cache at the

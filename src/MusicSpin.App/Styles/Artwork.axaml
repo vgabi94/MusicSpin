@@ -16,10 +16,7 @@
             <Setter Property="Foreground" Value="{DynamicResource PlaceholderInkBrush}" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <!--
-                      The shadow sits outside the clip, so it has its own border, under the sleeve (beside a spinning record it is
-                      drawn once: Styles/Cards.axaml).
-                    -->
+                    <!-- The shadow sits outside the clip, so it has its own border, under the sleeve. -->
                     <Panel>
                         <Border Name="PART_Shadow" CornerRadius="{TemplateBinding CornerRadius}" />
                         <Border Name="PART_Sleeve"

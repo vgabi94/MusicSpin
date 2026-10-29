@@ -1,8 +1,9 @@
 <!--
   Album cards (mockup: .grid, .card): the sleeve with its record behind it, the round Play button, the title and
   "artist · year". On hover the record slides out a little and the sleeve lifts; while the album is loaded the record is
-  further out and the sleeve shifts left. The art is laid out at CardArtSize and scaled to the card (a Viewbox), so the
-  moves below are the mockup's percentages of 200: 3% = 6, 10% = 20, 24% = 48, 8% = 16.
+  further out and the sleeve shifts left. The record doesn't turn: the player bar and Now Playing turn one (#149). The art
+  is laid out at CardArtSize and scaled to the card (controls:CardArt, a Viewbox), so the moves below are the mockup's
+  percentages of 200: 3% = 6, 10% = 20, 24% = 48, 8% = 16.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -13,8 +14,13 @@
       padding in the first column), a hovered sleeve lifts above its row, and the Play button's shadow is round (mockup:
       .card has no overflow).
     -->
-    <Style Selector="ItemsControl.cards, controls|SlotRow.cardRow, Button.card, Button.playFab">
+    <Style Selector="ItemsControl.cards, controls|SlotRow.cardRow, Button.card, controls|CardArt, Button.playFab">
         <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <!-- The art at rest draws from an image; while the sleeve or record moves, live. -->
+    <Style Selector="controls|CardArt">
+        <Setter Property="RestCache" Value="{StaticResource CardArtCache}" />
+        <Setter Property="Frame" Value="{StaticResource CardCacheFrame}" />
     </Style>
     <!-- A row of the grid: the cards share its width; rows are 30 apart, a group's first row sits under its header. -->
     <Style Selector="controls|SlotRow.cardRow">
@@ -88,13 +94,6 @@
     <!-- Its shadow on its own, under it. -->
     <Style Selector="Button.playFab Border.fabShadow">
         <Setter Property="BoxShadow" Value="0 6 16 0 #88000000" />
-    </Style>
-    <!--
-      The loaded album's card: its record spins by the cover and the Play button, so their shadows are drawn once into
-      an image, not blurred again each frame (#122).
-    -->
-    <Style Selector="Button.card.playing Button.playFab Border.fabShadow, Button.card.playing Panel.cardArt > controls|CoverView /template/ Border#PART_Shadow">
-        <Setter Property="CacheMode" Value="{StaticResource ShadowCache}" />
     </Style>
     <Style Selector="Button.playFab controls|Icon">
         <Setter Property="Width" Value="{StaticResource PlayFabIconSize}" />

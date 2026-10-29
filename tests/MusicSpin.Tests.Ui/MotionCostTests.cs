@@ -439,56 +439,6 @@ public sealed class MotionCostTests
         Assert.All(soft, c => Assert.Null(c.Effect is DropShadowEffect ? c : null));
     }
 
-    /// <summary>The loaded album's card and another: their cover's shadow and their Play button's.</summary>
-    private static (Control Cover, Control Fab)[] CardShadows(AppHarness app, bool playing)
-        => [.. Gui.All<Button>(app.Window).Where(b => b.Classes.Contains("card") && b.Classes.Contains("playing") == playing)
-            .Select(card => (Gui.Find<Control>(card.GetVisualDescendants().OfType<CoverView>().First(), "PART_Shadow"),
-                (Control)card.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("fabShadow"))))];
-
-    [AvaloniaFact]
-    public async Task The_loaded_albums_card_draws_its_shadows_by_the_spinning_record_from_images_and_the_others_dont()
-    {
-        await using var app = await OpenAsync();
-        Assert.All(CardShadows(app, playing: false), s => Assert.False(FromImage(s.Cover) || FromImage(s.Fab)));
-
-        await PlayAsync(app);
-        Gui.FinishAnimations(Settled);
-        var loaded = Assert.Single(CardShadows(app, playing: true));
-        Assert.True(FromImage(loaded.Cover) && FromImage(loaded.Fab));
-        Assert.All(CardShadows(app, playing: false), s => Assert.False(FromImage(s.Cover) || FromImage(s.Fab)));
-        var record = Gui.All<Button>(app.Window).Single(b => b.Classes.Contains("playing")).GetVisualDescendants().OfType<VinylView>().First();
-        Assert.DoesNotContain(record, loaded.Cover.GetVisualDescendants()); // nothing turning in them
-    }
-
-    [AvaloniaFact]
-    public async Task The_loaded_albums_card_looks_the_same_with_its_shadows_from_images_as_drawn_live()
-    {
-        using var fromImages = await CardsAsync(live: false);
-        using var live = await CardsAsync(live: true);
-        AssertSame(fromImages, live, "cards-cache");
-
-        async Task<SKBitmap> CardsAsync(bool live)
-        {
-            await using var app = await OpenAsync(live: live, theme: AppTheme.Light);
-            if (live)
-            {
-                app.Window.Styles.Add(new Style(x => x.OfType<Button>().Class("card").Class("playing").Descendant().Is<Control>().Class("fabShadow"))
-                {
-                    Setters = { new Setter(Visual.CacheModeProperty, null) },
-                });
-                app.Window.Styles.Add(new Style(x => x.OfType<Button>().Class("playing").Descendant().OfType<CoverView>().Template().Is<Control>().Name("PART_Shadow"))
-                {
-                    Setters = { new Setter(Visual.CacheModeProperty, null) },
-                });
-            }
-
-            await PlayAsync(app, PlayerState.Paused);
-            Gui.FinishAnimations(Settled);
-            Assert.Equal(!live, CardShadows(app, playing: true).All(s => FromImage(s.Cover) && FromImage(s.Fab)));
-            return Snapshots.Capture(app.Window);
-        }
-    }
-
     [AvaloniaFact]
     public async Task Settings_still_previews_of_the_designs_hold_no_images()
     {

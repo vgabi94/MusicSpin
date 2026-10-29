@@ -214,6 +214,12 @@
     <sys:Double x:Key="CardColumnGap">26</sys:Double>
     <Thickness x:Key="CardRowGapMargin">0,30,0,0</Thickness>
     <sys:Double x:Key="CardArtSize">200</sys:Double>
+    <!--
+      An invisible frame around a card's art, in its units, past anything it draws: the cover shifted left 16 and its
+      shadow 16 past it, lifted 3 with the shadow 6 above, the record out 42 past the right edge, the shadow 26 below.
+      Its image at rest then starts on a whole pixel, as the card does, so it looks the same as drawn live.
+    -->
+    <Thickness x:Key="CardCacheFrame">40,16,48,32</Thickness>
     <sys:Double x:Key="CardVinylSize">188</sys:Double>
     <Thickness x:Key="CardVinylMargin">6</Thickness>
     <sys:Double x:Key="PlayFabSize">40</sys:Double>
