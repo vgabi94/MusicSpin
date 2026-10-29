@@ -364,9 +364,9 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         ViewChoice = Views[0];
         _clock.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(SpinClock.Angle) && _playing is { } playing && IsShelf)
+            if (e.PropertyName == nameof(SpinClock.Angle) && _playing is { } playing)
             {
-                playing.DiscAngle = _clock.Angle;
+                playing.DiscAngle = ShownDiscAngle(); // unchanged at 0 off the shelf: nothing raised
             }
         };
         _player.PropertyChanged += OnPlayerChanged;
@@ -595,7 +595,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
 
     partial void OnViewChoiceChanged(Choice<AlbumsView> value)
     {
-        _playing?.DiscAngle = DiscAngle();
+        _playing?.DiscAngle = ShownDiscAngle();
         LayOut();
     }
 
@@ -778,12 +778,12 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         {
             now.IsPlaying = true;
             now.ShowsPause = _player.IsPlaying;
-            now.DiscAngle = DiscAngle();
+            now.DiscAngle = ShownDiscAngle();
         }
     }
 
     /// <summary>The loaded album's record angle: turning with the clock on the shelf only (<see cref="AlbumItemViewModel.DiscAngle"/>).</summary>
-    private double DiscAngle() => IsShelf ? _clock.Angle : 0;
+    private double ShownDiscAngle() => IsShelf ? _clock.Angle : 0;
 
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)
     {

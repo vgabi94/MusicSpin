@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Rendering;
 
 namespace MusicSpin.App.Controls;
 
@@ -17,7 +18,8 @@ namespace MusicSpin.App.Controls;
 /// </para>
 /// <para>
 /// It draws an invisible <see cref="Frame"/> around the art, past anything the art draws, starting on a whole pixel as
-/// the card does. Its image then starts there too, so the art in it sits on the pixels it sits on drawn live.
+/// the card does. Its image then starts there too, so the art in it sits on the pixels it sits on drawn live. The frame
+/// takes no pointer (<see cref="HitTest"/>): it reaches over the cards beside it, and only the art's parts take input.
 /// </para>
 /// <para>
 /// Its parts are the children of its child panel (or the child itself). A part is still when its render transform is
@@ -25,7 +27,7 @@ namespace MusicSpin.App.Controls;
 /// does its last, so the art is cached again as the move ends.
 /// </para>
 /// </remarks>
-public sealed class CardArt : Viewbox
+public sealed class CardArt : Viewbox, ICustomHitTest
 {
     public static readonly StyledProperty<CacheMode?> RestCacheProperty = AvaloniaProperty.Register<CardArt, CacheMode?>(nameof(RestCache));
 
@@ -55,6 +57,27 @@ public sealed class CardArt : Viewbox
 
     /// <summary>No part is moving: the art draws through <see cref="RestCache"/>.</summary>
     public bool IsAtRest => _parts.All(IsStill);
+
+    /// <summary>The frame as it was last drawn (tests read it).</summary>
+    internal Rect DrawnFrame { get; private set; }
+
+    /// <summary>The frame for the art's size and the screen's scaling now: <see cref="Frame"/> scaled, out to whole pixels.</summary>
+    internal Rect FrameRect
+    {
+        get
+        {
+            var size = Child?.Bounds.Size ?? default;
+            var scale = size.Width > 0 && size.Height > 0 ? Math.Min(Bounds.Width / size.Width, Bounds.Height / size.Height) : 1;
+            var pixels = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+            var (left, top, right, bottom) = (Out(Frame.Left), Out(Frame.Top), Out(Frame.Right), Out(Frame.Bottom));
+            return new Rect(-left, -top, Bounds.Width + left + right, Bounds.Height + top + bottom);
+
+            double Out(double units) => Math.Ceiling(units * scale * pixels) / pixels;
+        }
+    }
+
+    /// <summary>The art itself takes no pointer, its frame included; its parts do, each on its own.</summary>
+    public bool HitTest(Point point) => false;
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -87,17 +110,16 @@ public sealed class CardArt : Viewbox
         }
     }
 
-    /// <summary>The invisible frame, scaled with the art and out to whole pixels.</summary>
+    /// <summary>
+    /// The invisible frame (<see cref="FrameRect"/>). On a screen of another scaling it is drawn again: Avalonia lays
+    /// every control out and draws it again then.
+    /// </summary>
     public override void Render(DrawingContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         base.Render(context);
-        var size = Child?.Bounds.Size ?? default;
-        var scale = size.Width > 0 && size.Height > 0 ? Math.Min(Bounds.Width / size.Width, Bounds.Height / size.Height) : 1;
-        var pixels = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
-        double Out(double units) => Math.Ceiling(units * scale * pixels) / pixels;
-        context.FillRectangle(Brushes.Transparent, new Rect(
-            -Out(Frame.Left), -Out(Frame.Top), Bounds.Width + Out(Frame.Left) + Out(Frame.Right), Bounds.Height + Out(Frame.Top) + Out(Frame.Bottom)));
+        DrawnFrame = FrameRect;
+        context.FillRectangle(Brushes.Transparent, DrawnFrame);
     }
 
     private void Watch()

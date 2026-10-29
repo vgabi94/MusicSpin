@@ -22,6 +22,9 @@
         <Setter Property="RestCache" Value="{StaticResource CardArtCache}" />
         <Setter Property="Frame" Value="{StaticResource CardCacheFrame}" />
     </Style>
+    <Style Selector="Button.card.playing controls|CardArt">
+        <Setter Property="Frame" Value="{StaticResource CardPlayingCacheFrame}" />
+    </Style>
     <!-- A row of the grid: the cards share its width; rows are 30 apart, a group's first row sits under its header. -->
     <Style Selector="controls|SlotRow.cardRow">
         <Setter Property="Margin" Value="{StaticResource CardRowGapMargin}" />

@@ -215,11 +215,14 @@
     <Thickness x:Key="CardRowGapMargin">0,30,0,0</Thickness>
     <sys:Double x:Key="CardArtSize">200</sys:Double>
     <!--
-      An invisible frame around a card's art, in its units, past anything it draws: the cover shifted left 16 and its
-      shadow 16 past it, lifted 3 with the shadow 6 above, the record out 42 past the right edge, the shadow 26 below.
-      Its image at rest then starts on a whole pixel, as the card does, so it looks the same as drawn live.
+      An invisible frame around a card's art, in its units, past anything it draws, so its image at rest starts on a
+      whole pixel, as the card does, and looks the same as drawn live. The cover's shadow reaches 16 past its sides, 6
+      above it and 26 below (0 10 24 -8), and the cover lifts 3 on hover; the hovered record ends inside the shadow. The
+      loaded album's cover shifts 16 left and its record is 42 past the right edge. Only the loaded card's frame is that
+      wide: the frame is part of the image.
     -->
-    <Thickness x:Key="CardCacheFrame">40,16,48,32</Thickness>
+    <Thickness x:Key="CardCacheFrame">24,16,24,32</Thickness>
+    <Thickness x:Key="CardPlayingCacheFrame">40,16,48,32</Thickness>
     <sys:Double x:Key="CardVinylSize">188</sys:Double>
     <Thickness x:Key="CardVinylMargin">6</Thickness>
     <sys:Double x:Key="PlayFabSize">40</sys:Double>

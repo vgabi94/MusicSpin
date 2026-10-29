@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
@@ -332,6 +333,88 @@ public sealed class CardArtTests
         Assert.True(art.IsAtRest);
         Assert.Null(art.CacheMode);
         window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task The_arts_invisible_frame_takes_no_pointer_over_the_card_beside_it_and_its_parts_still_do()
+    {
+        await using var app = await OpenAsync();
+        await PlayAsync(app, state: PlayerState.Paused); // the loaded card's frame reaches furthest
+        Gui.FinishAnimations(Settled);
+        Spin(app, 1);
+        var window = app.Window;
+        var loaded = Card(window);
+        var y = Gui.BoundsIn(window, loaded).Top;
+        var row = Cards(window).Where(c => Gui.BoundsIn(window, c).Top == y).OrderBy(c => Gui.BoundsIn(window, c).Left).ToList();
+        var at = row.IndexOf(loaded);
+        Assert.True(at > 0, "the loaded card has one to its left");
+        row = [row[at - 1], loaded];
+        var (a, b) = (Gui.BoundsIn(window, Art(row[0])), Gui.BoundsIn(window, Art(row[1])));
+        Assert.True(b.Left + Art(row[1]).DrawnFrame.Left < a.Right - 4, "the frame reaches over the card beside it");
+
+        // Just inside the first card's art, under the second's frame: the first card's.
+        Assert.Same(row[0], CardAt(new Point(a.Right - 4, a.Center.Y)));
+        // Between them: the second's cover, shifted left over the gap.
+        Assert.Same(row[1], CardAt(new Point((a.Right + b.Left) / 2, b.Center.Y)));
+        // On the second's cover: the second's.
+        Assert.Same(row[1], CardAt(b.Center));
+
+        Button? CardAt(Point point) => (window.InputHitTest(point) as Visual)?.GetSelfAndVisualAncestors().OfType<Button>().FirstOrDefault(c => c.Classes.Contains("card"));
+    }
+
+    [AvaloniaFact]
+    public async Task Only_the_loaded_cards_frame_has_room_for_its_shifted_cover_and_record_out()
+    {
+        await using var app = await OpenAsync();
+        var window = app.Window;
+        var idle = Art(Card(window)).DrawnFrame;
+        await PlayAsync(app, state: PlayerState.Paused);
+        Gui.FinishAnimations(Settled);
+        Spin(app, 1);
+
+        var loaded = Art(Card(window)).DrawnFrame;
+        Assert.True(loaded.Left < idle.Left && loaded.Right > idle.Right, $"{loaded} around {idle}");
+        Assert.All(Cards(window).Where(c => c != Card(window)), c => Assert.Equal(idle.Size, Art(c).DrawnFrame.Size));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task On_a_screen_of_another_scaling_the_frame_is_drawn_again_on_whole_pixels()
+    {
+        await using var app = await OpenAsync();
+        Spin(app, 1);
+
+        foreach (var scaling in new[] { 2, 1.5, 1.25, 1 })
+        {
+            app.Window.SetRenderScaling(scaling); // the window moved to another screen
+            Spin(app, 1);
+            Assert.All(Cards(app.Window), c =>
+            {
+                var art = Art(c);
+                Assert.Equal(art.FrameRect, art.DrawnFrame);
+                var origin = Gui.BoundsIn(app.Window, art).TopLeft + art.DrawnFrame.TopLeft;
+                Assert.Equal(Math.Round(origin.X * scaling), origin.X * scaling, 6);
+                Assert.Equal(Math.Round(origin.Y * scaling), origin.Y * scaling, 6);
+            });
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task The_art_animates_nothing_but_its_parts_transforms_which_is_all_it_watches_to_know_its_moving()
+    {
+        await using var app = await OpenAsync();
+        await PlayAsync(app);
+        Gui.FinishAnimations(Settled);
+        foreach (var card in Cards(app.Window))
+        {
+            var art = Art(card);
+            var parts = ((Panel)art.Child!).Children;
+            foreach (var animated in art.GetVisualDescendants().OfType<Avalonia.Animation.Animatable>().Where(v => v.Transitions is { Count: > 0 }))
+            {
+                Assert.Contains((Control)animated, parts); // a part, not something in one
+                Assert.All(animated.Transitions!, t => Assert.Equal(Visual.RenderTransformProperty, Assert.IsAssignableFrom<Avalonia.Animation.TransitionBase>(t).Property));
+            }
+        }
     }
 
     [AvaloniaTheory]

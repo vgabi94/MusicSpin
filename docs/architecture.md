@@ -200,7 +200,10 @@ src/MusicSpin.App/
   A card's art (`CardArt`, the `Viewbox` that scales it to the card) draws through a `BitmapCache` while neither the
   sleeve nor the record is moving, so scrolling copies images. It watches its parts' render transforms and draws live
   while one is between its styles' value and a transition's, then from its image again once the move ends. The cache
-  is on the `Viewbox`, not on what it scales, so the image has the pixels the card shows.
+  is on the `Viewbox`, not on what it scales, so the image has the pixels the card shows. An invisible frame around the
+  art (wider on the loaded card, whose cover and record reach further) makes the image start on a whole pixel, so it
+  looks the same as drawn live; `CardArt` takes no pointer itself, so the frame never takes clicks meant for the card
+  beside it.
 - **Shelf and crates.** Avalonia's `Rotate3DTransform` keeps the eye at the element's centre; the mockup puts it at a
   sleeve's bottom edge (so sleeves stand flat on the board) and high above a crate. So `ShelfSleeve` and `CrateRecord`
   build the mockup's CSS transforms as 4×4 matrices (`Projection`) and draw with their 2D projective part. A sleeve's
