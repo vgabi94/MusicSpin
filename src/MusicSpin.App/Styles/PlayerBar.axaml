@@ -12,13 +12,18 @@
         <Setter Property="BorderThickness" Value="{StaticResource HairlineTop}" />
         <Setter Property="Padding" Value="{StaticResource PlayerBarPadding}" />
     </Style>
-    <Style Selector="Grid.playerColumns">
-        <Setter Property="ColumnSpacing" Value="{StaticResource PlayerBarGap}" />
+    <!--
+      The song, at least its width and up to the middle; the volume, the transport and the analyzer, as wide as the room
+      allows up to a limit, then centred; the format and the buttons (#133, #189).
+    -->
+    <Style Selector="controls|PlayerColumns.playerColumns">
+        <Setter Property="Spacing" Value="{StaticResource PlayerBarGap}" />
+        <Setter Property="StartWidth" Value="{StaticResource PlayerSongMinWidth}" />
+        <Setter Property="MiddleMaxWidth" Value="{StaticResource PlayerCentreMaxWidth}" />
+        <Setter Property="EndWidth" Value="{StaticResource PlayerRightWidth}" />
     </Style>
-    <!-- The volume, the transport and the analyzer: as wide as the room allows up to a limit, then centred. -->
     <Style Selector="Grid.centre">
         <Setter Property="ColumnSpacing" Value="{StaticResource PlayerBarGap}" />
-        <Setter Property="MaxWidth" Value="{StaticResource PlayerCentreMaxWidth}" />
     </Style>
 
     <!-- The playing album's sleeve; its record slides out while playing (Styles/Artwork.axaml, Panel.sleeve). -->
