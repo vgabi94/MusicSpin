@@ -107,24 +107,137 @@ public sealed class PlayerBarTests
         Gui.Settle();
     }
 
-    // ---- layout and transport (#16) --------------------------------------------------------------------------
+    // ---- layout and transport (#16, #133) --------------------------------------------------------------------
+
+    private static readonly string LongName = string.Concat(Enumerable.Repeat("A very long song name that goes on ", 8));
+
+    /// <summary>Every part of the bar that must stay where it is (#133), by name.</summary>
+    private static readonly string[] BarParts =
+    [
+        "MiniButton", "Meta", "TitleMarquee", "ArtistMarquee", "Volume", "MuteButton", "VolumeBar", "VolumeBox", "Shuffle", "Previous",
+        "PlayPause", "Next", "Repeat", "ElapsedBox", "PositionBar", "DurationText", "Analyzer", "Right", "QueueButton", "SettingsButton",
+    ];
+
+    private static Rect[] BarLayout(AppHarness app) => [.. BarParts.Select(n => Gui.BoundsIn(app.Window, Find<Control>(app, n)))];
+
+    private static void AssertSameLayout(Rect[] expected, Rect[] actual, string when)
+    {
+        for (var i = 0; i < BarParts.Length; i++)
+        {
+            Assert.True(expected[i] == actual[i], $"{BarParts[i]} moved {when}: {expected[i]} -> {actual[i]}");
+        }
+    }
 
     [AvaloniaFact]
-    public async Task The_transport_and_the_right_hand_controls_stay_put_for_any_song_name()
+    public async Task Nothing_in_the_bar_moves_for_a_long_name_a_new_track_or_the_time()
+    {
+        var tenMinutes = Status(title: "Short", position: 599) with
+        {
+            Item = new QueueItem("/music/short.flac", "Short", "Kodo Arai", "Night Transit", DurationSeconds: 754),
+            DurationSeconds = 754,
+        };
+        await using var app = await OpenAsync(tenMinutes);
+        var before = BarLayout(app);
+        Assert.Equal("9:59", Find<TextBox>(app, "ElapsedBox").Text);
+
+        await SetAsync(app, tenMinutes with { PositionSeconds = 600 });
+        Assert.Equal("10:00", Find<TextBox>(app, "ElapsedBox").Text);
+        AssertSameLayout(before, BarLayout(app), "from 9:59 to 10:00");
+
+        var hour = Status(title: LongName) with
+        {
+            Item = new QueueItem("/music/long.flac", LongName, LongName, LongName, DurationSeconds: 3723),
+            DurationSeconds = 3723,
+            PositionSeconds = 3599,
+        };
+        await SetAsync(app, hour);
+        Assert.Equal("1:02:03", Find<TextBlock>(app, "DurationText").Text);
+        AssertSameLayout(before, BarLayout(app), "for a long name, artist and album, and an hour-long track");
+
+        await SetAsync(app, hour with { PositionSeconds = 3600 });
+        Assert.Equal("1:00:00", Find<TextBox>(app, "ElapsedBox").Text);
+        AssertSameLayout(before, BarLayout(app), "from 59:59 to 1:00:00");
+
+        await SetAsync(app, Status(title: "Another"));
+        AssertSameLayout(before, BarLayout(app), "on the next track");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1280)] // the window's smallest
+    [InlineData(1440)]
+    [InlineData(2560)] // the transport at its widest, the rest of the room on either side
+    public async Task Song_then_volume_then_transport_then_analyzer_then_the_format_and_buttons(double width)
+    {
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Width = width });
+        await SetAsync(app, Status());
+        Rect Of(string name) => Gui.BoundsIn(app.Window, Find<Control>(app, name));
+        var gap = (double)app.Window.FindResource("PlayerBarGap")!;
+
+        Assert.True(Of("MiniButton").Right < Of("Meta").X);
+        Assert.True(Of("Song").Right + gap <= Of("Volume").X + 0.5, "the song keeps to its column");
+        Assert.Equal(Of("Transport").X, Of("Volume").Right + gap, 1); // the volume against the transport
+        Assert.Equal(Of("Transport").Right + gap, Of("Analyzer").X, 1); // the analyzer right after it
+        Assert.True(Of("Analyzer").Right + gap <= Of("Tech").X + 0.5, "the format keeps to its column");
+        Assert.True(Of("Tech").Right < Of("QueueButton").X);
+        Assert.True(Of("SettingsButton").Right <= app.Window.Bounds.Width);
+        Assert.True(Of("Shuffle").X >= Of("Transport").X && Of("Repeat").Right <= Of("Transport").Right, "the transport's buttons fit");
+        var middle = (Of("Song").Right + Of("Right").X) / 2;
+        Assert.Equal(middle, (Of("Volume").X + Of("Analyzer").Right) / 2, 0); // the three together, in the middle
+        var widest = (double)app.Window.FindResource("PlayerTransportMaxWidth")!;
+        Assert.True(Of("Transport").Width <= widest + 0.5);
+        if (width >= 2560)
+        {
+            Assert.Equal(widest, Of("Transport").Width, 1); // PlayerCentreMaxWidth adds up to it
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task A_long_title_and_artist_scroll_and_restart_on_the_next_track_and_their_tooltips_have_all_of_them()
     {
         await using var app = await OpenAsync(Status(title: "Short"));
-        string[] fixedParts = ["Shuffle", "Previous", "PlayPause", "Next", "Repeat", "PositionBar", "ElapsedBox", "QueueButton", "SettingsButton"];
-        var before = fixedParts.Select(n => Gui.BoundsIn(app.Window, Find<Control>(app, n))).ToArray();
-        var volumeBefore = Gui.BoundsIn(app.Window, Find<Control>(app, "Volume")).X;
+        var (title, artist) = (Find<Marquee>(app, "TitleMarquee"), Find<Marquee>(app, "ArtistMarquee"));
+        Assert.Equal((false, false), (title.IsRunning, artist.IsRunning));
+        Assert.Equal("Short", ToolTip.GetTip(Find<TextBlock>(app, "PlayerTitle")));
+        Assert.Equal("Kodo Arai · Night Transit", ToolTip.GetTip(Find<TextBlock>(app, "PlayerArtist")));
 
-        await SetAsync(app, Status(title: string.Concat(Enumerable.Repeat("A very long song name that goes on ", 8))));
-        var after = fixedParts.Select(n => Gui.BoundsIn(app.Window, Find<Control>(app, n))).ToArray();
+        const string longArtist = "Kodo Arai and the Very Long Name Orchestra of Somewhere";
+        const string longAlbum = "Night Transit (Deluxe Edition, Remastered)";
+        PlayerStatus Long(string path) => Status(title: LongName) with { Item = new QueueItem(path, LongName, longArtist, longAlbum, DurationSeconds: Duration) };
+        await SetAsync(app, Long("/music/one.flac"));
+        Assert.Equal((true, true), (title.IsRunning, artist.IsRunning));
+        Assert.Equal(LongName, ToolTip.GetTip(Find<TextBlock>(app, "PlayerTitle")));
+        Assert.Equal($"{longArtist} · {longAlbum}", ToolTip.GetTip(Find<TextBlock>(app, "PlayerArtist")));
+        Assert.False(Find<TextBlock>(app, "PlayerTitle").TextLayout.TextLines[0].HasCollapsed, "a scrolling title is drawn whole");
 
-        Assert.Equal(before, after);
-        var title = Find<TextBlock>(app, "PlayerTitle");
-        Assert.True(title.TextLayout.TextLines[0].HasCollapsed, "the long name ends in an ellipsis");
-        Assert.True(Gui.BoundsIn(app.Window, Find<Control>(app, "Volume")).X > volumeBefore, "the volume follows the name");
-        Assert.True(Gui.BoundsIn(app.Window, Find<Control>(app, "Volume")).Right <= Gui.BoundsIn(app.Window, Find<Control>(app, "Meta")).Right + 0.5);
+        var rest = (TimeSpan)app.Window.FindResource("MarqueeRest")!;
+        app.Advance(rest + TimeSpan.FromSeconds(1));
+        Assert.True(title.Offset > 0 && artist.Offset > 0, "both on their way");
+
+        await SetAsync(app, Long("/music/two.flac")); // the same texts, the next track
+        Assert.Equal((0.0, 0.0), (title.Offset, artist.Offset));
+        Assert.Equal((true, true), (title.IsRunning, artist.IsRunning));
+    }
+
+    [AvaloniaFact]
+    public async Task At_Motion_None_a_long_title_ends_in_an_ellipsis_and_keeps_its_tooltip()
+    {
+        await using var app = await OpenAsync(Status(title: LongName));
+        app.ViewModel.Settings.SetMotion(MotionMode.None);
+        try
+        {
+            Gui.Settle();
+            var title = Find<TextBlock>(app, "PlayerTitle");
+            var marquee = Find<Marquee>(app, "TitleMarquee");
+            Assert.True(title.TextLayout.TextLines[0].HasCollapsed, "the long name ends in an ellipsis");
+            Assert.False(marquee.IsRunning);
+            Assert.Equal(LongName, ToolTip.GetTip(title));
+            app.Advance(TimeSpan.FromSeconds(5));
+            Assert.Equal(0, marquee.Offset);
+        }
+        finally
+        {
+            app.ViewModel.Settings.SetMotion(MotionMode.Smooth);
+        }
     }
 
     [AvaloniaFact]
@@ -319,7 +432,7 @@ public sealed class PlayerBarTests
         app.Window.MouseMove(At(app, bar, width / 2));
         Gui.Settle();
         Assert.Equal(Formats.Time(Duration / 2), elapsed.Text);
-        Assert.Equal(Duration / 2, bar.FillWidth / width * Duration, 1);
+        Assert.InRange(bar.FillWidth, (width / 2) - 0.5, (width / 2) + 0.5); // to the pixel the fill ends on
         Assert.Equal(0, app.Scripted!.Count("seek"));
 
         app.Window.MouseUp(At(app, bar, width / 2), MouseButton.Left);
@@ -804,23 +917,24 @@ public sealed class PlayerBarTests
     }
 
     [AvaloniaFact]
-    public async Task Minimized_the_clocks_and_the_analyzer_stop_and_restored_they_run_again()
+    public async Task Minimized_the_clocks_the_analyzer_and_the_marquee_stop_and_restored_they_run_again()
     {
-        await using var app = await OpenAsync(Status(state: PlayerState.Playing));
+        await using var app = await OpenAsync(Status(state: PlayerState.Playing, title: LongName));
         var vm = app.ViewModel;
+        var marquee = Find<Marquee>(app, "TitleMarquee");
         await app.Scripted!.PushAsync("spectrum", new { levels = SomeLevels });
-        await Gui.UntilAsync(() => vm.PlayerBar.Spectrum.IsRunning && vm.Player.IsTicking && vm.SpinClock.IsRunning, "playing");
+        await Gui.UntilAsync(() => vm.PlayerBar.Spectrum.IsRunning && vm.Player.IsTicking && vm.SpinClock.IsRunning && marquee.IsRunning, "playing");
 
         app.Window.WindowState = WindowState.Minimized;
         Assert.Equal((false, false, false, false), (vm.IsShown, vm.SpinClock.IsShown, vm.Player.IsShown, vm.PlayerBar.Spectrum.IsShown));
-        Assert.Equal((false, false, false), (vm.SpinClock.IsRunning, vm.Player.IsTicking, vm.PlayerBar.Spectrum.IsRunning));
-        var angle = vm.SpinClock.Angle;
-        Tick(app, TimeSpan.FromSeconds(1));
-        Assert.Equal(angle, vm.SpinClock.Angle);
+        Assert.Equal((false, false, false, false), (vm.SpinClock.IsRunning, vm.Player.IsTicking, vm.PlayerBar.Spectrum.IsRunning, marquee.IsRunning));
+        var (angle, offset) = (vm.SpinClock.Angle, marquee.Offset);
+        Tick(app, TimeSpan.FromSeconds(3));
+        Assert.Equal((angle, offset), (vm.SpinClock.Angle, marquee.Offset));
 
         app.Window.WindowState = WindowState.Normal;
         Assert.Equal((true, true, true, true), (vm.IsShown, vm.SpinClock.IsShown, vm.Player.IsShown, vm.PlayerBar.Spectrum.IsShown));
-        Assert.Equal((true, true), (vm.SpinClock.IsRunning, vm.Player.IsTicking));
+        Assert.Equal((true, true, true), (vm.SpinClock.IsRunning, vm.Player.IsTicking, marquee.IsRunning));
         Assert.NotEqual(angle, vm.SpinClock.Angle); // caught up on the second it missed
 
         var analyzer = Find<SpectrumView>(app, "Analyzer");
@@ -883,6 +997,23 @@ public sealed class PlayerBarTests
         await using var app = await OpenAsync(Status(state: PlayerState.Playing, track: track), theme);
         app.Window.MouseMove(new Point(700, 300)); // away from the bar
         Snapshots.Match(app.Window, Find<PlayerBar>(app, "PlayerBarView"), $"player-bar-{format}-{theme.ToString().ToLowerInvariant()}");
+    }
+
+    /// <summary>A long title a second into its scroll, cut at its column's edges, with the analyzer beside the transport (#133).</summary>
+    [AvaloniaFact]
+    public async Task Snapshot_of_the_player_bar_scrolling_a_long_title()
+    {
+        var track = PlayerBarLogicTests.Track("/m/a.flac", "flac", 192_000, 24, 2, 6_431_000, true, hiRes: true);
+        await using var app = await OpenAsync(Status(state: PlayerState.Playing, title: LongName, track: track));
+        app.Window.MouseMove(new Point(700, 300));
+        var marquee = Find<Marquee>(app, "TitleMarquee");
+        app.Advance((TimeSpan)app.Window.FindResource("MarqueeRest")! + TimeSpan.FromSeconds(1));
+        Assert.Equal((double)app.Window.FindResource("MarqueeSpeed")!, marquee.Offset, 0);
+
+        await app.Scripted!.PushAsync("spectrum", new { levels = SomeLevels });
+        var analyzer = Find<SpectrumView>(app, "Analyzer");
+        await Gui.UntilAsync(() => analyzer.Frame?.Bars[15] == 1, "the levels drawn");
+        Snapshots.Match(app.Window, Find<PlayerBar>(app, "PlayerBarView"), "player-bar-long-title-dark");
     }
 
     [AvaloniaTheory]
