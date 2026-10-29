@@ -66,6 +66,8 @@
 
     <!-- A drag handle growing in on hover (mockup: scale .12s). -->
     <sys:TimeSpan x:Key="HandleDuration">0:0:0.12</sys:TimeSpan>
+    <!-- A scroll bar's thumb widening and its track showing under the pointer, and narrowing back. -->
+    <sys:TimeSpan x:Key="ScrollBarExpandDuration">0:0:0.15</sys:TimeSpan>
 
     <!-- Played by theming:Animate.Play; "<Key>.Duration" is the base duration (Motion scales it). -->
     <!-- A refused typed value (mockup: @keyframes vbad, .3s). -->

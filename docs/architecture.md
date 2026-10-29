@@ -128,7 +128,7 @@ src/MusicSpin.App/
 │                          (per-control transitions, animations played on a trigger), ShelfGeometry (slot widths,
 │                          sleeves per board, depth as perspective), converters
 └── Styles/                Tokens (colours per theme), Metrics, Motion, Fonts, Controls (control themes: plain
-                           button, ScrubBar, TypedBox, segmented control, cards), Window,
+                           button, ScrubBar, scroll bars, TypedBox, segmented control, cards), Window,
                            Base, TitleBar, Sidebar, Content (toolbar, group headers, the menu), Lists (track rows),
                            Cards, Shelf, Crate, PlayerBar, NowPlaying (and the Classic deck), Queue (the drawer and
                            the drag ghost), Dialogs (and Settings), Artwork, Radio (group buttons, on air, the Radio
@@ -139,6 +139,11 @@ src/MusicSpin.App/
   a theme switch applies to what is on screen. Sizes, spacing, radii and font sizes are in `Metrics.axaml`; durations
   in `Motion.axaml`. Views outside `Styles/` contain no literal colours, sizes, opacity or durations; a UI test
   (`CodeOrganisationTests`) enforces it, with its exceptions listed in the test.
+- **Scroll bars.** Every `ScrollViewer` keeps Fluent's template (its bars over the content's edge, hidden when there is
+  nothing to scroll) but gets the app's `ScrollBar` theme (`Controls.axaml`, #130): no arrow buttons, a rounded thumb
+  drawn half as wide at rest that widens under the pointer (after the bar's `ShowDelay`, until its `HideDelay`) with a
+  faint track behind it, lighter while hovered and in the accent while dragged. Clicking beside the thumb pages. Only
+  brushes, opacity and render transforms change, so it animates without layout.
 - **Symbols Inter lacks are icons.** Text is drawn in the bundled Inter; a character it lacks falls back to whatever
   the OS has, and Linux often has nothing for symbols like the mockup's "＋". Such symbols are path icons
   (`Icons/IconsResource.axaml`). `FontCoverageTests` checks every non-ASCII character in the views and the app's
