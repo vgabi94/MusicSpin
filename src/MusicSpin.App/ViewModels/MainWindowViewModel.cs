@@ -36,6 +36,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     {
         ArgumentNullException.ThrowIfNull(services);
         _services = services;
+        Notices = new Notices(services.Log);
         Player = new PlayerViewModel(services.Player, services.Time, services.Ui, () => PlayerOutput.From(services.Settings.Current));
         Radio = new RadioViewModel(Player, services.Library, Notices, services.Time, services.Ui);
         SpinClock = new SpinClock(services.Time, services.Ui);
@@ -154,7 +155,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// <summary>What Esc closes, topmost first. Menus, Settings, the queue drawer and Now Playing register here.</summary>
     public LayerRegistry Layers { get; } = new();
 
-    public Notices Notices { get; } = new();
+    public Notices Notices { get; }
 
     public AlbumsPageViewModel AlbumsPage { get; }
 

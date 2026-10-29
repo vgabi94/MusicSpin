@@ -172,6 +172,28 @@ public sealed class SceneTests
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task An_album_whose_read_fails_with_a_bug_is_a_notice_with_the_log_and_the_app_goes_on()
+    {
+        await using var app = await OpenAsync();
+        var library = Assert.IsType<StubLibrary>(app.Services.Library);
+        library.Failures[nameof(StubLibrary.AlbumTracksAsync)] = new NotImplementedException("The method or operation is not implemented.");
+
+        Gui.Click(app.Window, Clickable(app, Album));
+        await Gui.UntilAsync(() => app.ViewModel.Banner is not null, "the notice");
+
+        // Before #185 this ended the app, with nothing in any log of ours.
+        var log = Path.Combine(app.Data.Path, AppLog.FileName);
+        Assert.Equal($"Something went wrong: The method or operation is not implemented. The details are in {log}.", app.ViewModel.Banner);
+        Assert.Contains("System.NotImplementedException", File.ReadAllText(log), StringComparison.Ordinal);
+        Assert.False(app.ViewModel.Scene.IsRunning);
+        Assert.Equal(0, app.Scripted!.Count("queue.set"));
+
+        library.Failures.Clear();
+        await StartAsync(app); // the next try plays
+    }
+
+    [AvaloniaFact]
     public async Task Playback_input_during_the_scene_waits_until_it_ends()
     {
         await using var app = await OpenAsync();

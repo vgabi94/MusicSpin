@@ -152,6 +152,7 @@ internal sealed class AppHarness : IAsyncDisposable
         {
             FolderPicker = Options.FolderPicker,
             AudioDevices = Options.AudioDevices,
+            Log = AppLog.For(Data, Time),
         };
         Window = AppComposition.CreateMainWindow(Services);
         Window.Width = Options.Width;
