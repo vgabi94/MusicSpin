@@ -12,12 +12,7 @@
              x:Class="MusicSpin.App.Views.PlayerBar"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="playerBar">
-        <Grid Classes="playerColumns">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{StaticResource PlayerSongColumn}" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="{StaticResource PlayerRightColumn}" />
-            </Grid.ColumnDefinitions>
+        <controls:PlayerColumns Classes="playerColumns">
 
             <Grid Name="Song" Classes="song" ColumnDefinitions="Auto,*">
                 <Button Name="MiniButton"
@@ -74,7 +69,7 @@
             </Grid>
 
             <!-- The volume, the transport and the analyzer stay together, in the middle of what the song and the right leave. -->
-            <Grid Name="Centre" Grid.Column="1" Classes="centre">
+            <Grid Name="Centre" Classes="centre">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="{StaticResource PlayerVolumeColumn}" />
                     <ColumnDefinition Width="*" />
@@ -193,7 +188,7 @@
                 <controls:SpectrumView Name="Analyzer" Grid.Column="2" Frame="{Binding PlayerBar.Spectrum.Frame}" />
             </Grid>
 
-            <Grid Name="Right" Grid.Column="2" Classes="right" ColumnDefinitions="*,Auto">
+            <Grid Name="Right" Classes="right" ColumnDefinitions="*,Auto">
                 <DockPanel Name="Tech" Classes="tech">
                     <Border Name="HiRes" Classes="hiRes" DockPanel.Dock="Left" IsVisible="{Binding PlayerBar.IsHiRes}">
                         <TextBlock Text="HI-RES" />
@@ -233,6 +228,6 @@
                     </Button>
                 </StackPanel>
             </Grid>
-        </Grid>
+        </controls:PlayerColumns>
     </Border>
 </UserControl>

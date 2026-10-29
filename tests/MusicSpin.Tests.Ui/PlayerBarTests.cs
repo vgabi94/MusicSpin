@@ -172,22 +172,69 @@ public sealed class PlayerBarTests
         await SetAsync(app, Status());
         Rect Of(string name) => Gui.BoundsIn(app.Window, Find<Control>(app, name));
         var gap = (double)app.Window.FindResource("PlayerBarGap")!;
+        var songMin = (double)app.Window.FindResource("PlayerSongMinWidth")!;
 
         Assert.True(Of("MiniButton").Right < Of("Meta").X);
-        Assert.True(Of("Song").Right + gap <= Of("Volume").X + 0.5, "the song keeps to its column");
+        Assert.Equal(Of("Song").Right + gap, Of("Volume").X, 1); // the song up to the volume (#189)
         Assert.Equal(Of("Transport").X, Of("Volume").Right + gap, 1); // the volume against the transport
         Assert.Equal(Of("Transport").Right + gap, Of("Analyzer").X, 1); // the analyzer right after it
         Assert.True(Of("Analyzer").Right + gap <= Of("Tech").X + 0.5, "the format keeps to its column");
         Assert.True(Of("Tech").Right < Of("QueueButton").X);
         Assert.True(Of("SettingsButton").Right <= app.Window.Bounds.Width);
         Assert.True(Of("Shuffle").X >= Of("Transport").X && Of("Repeat").Right <= Of("Transport").Right, "the transport's buttons fit");
-        var middle = (Of("Song").Right + Of("Right").X) / 2;
+        var middle = (Of("Song").X + songMin + Of("Right").X) / 2; // between the song's narrowest and the right
         Assert.Equal(middle, (Of("Volume").X + Of("Analyzer").Right) / 2, 0); // the three together, in the middle
         var widest = (double)app.Window.FindResource("PlayerTransportMaxWidth")!;
         Assert.True(Of("Transport").Width <= widest + 0.5);
         if (width >= 2560)
         {
             Assert.Equal(widest, Of("Transport").Width, 1); // PlayerCentreMaxWidth adds up to it
+            Assert.True(Of("Song").Width > songMin + 200, $"the song takes the room before the volume: {Of("Song").Width}");
+        }
+        else
+        {
+            Assert.Equal(songMin, Of("Song").Width, 1); // no room to spare
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1440, true)]
+    [InlineData(2560, false)]
+    public async Task On_a_wide_window_a_title_too_long_for_the_narrowest_song_fits_and_does_not_scroll(double width, bool scrolls)
+    {
+        const string title = "Wolfgang Amadeus Mozart: Symphony No. 29";
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Width = width });
+        await SetAsync(app, Status(title: title));
+        var marquee = Find<Marquee>(app, "TitleMarquee");
+        await Gui.UntilAsync(() => Find<TextBlock>(app, "PlayerTitle").Text == title, "the title");
+        Gui.Settle();
+
+        Assert.Equal(scrolls, marquee.Overflow > 0);
+        Assert.Equal(title, Find<TextBlock>(app, "PlayerTitle").Text);
+    }
+
+    [AvaloniaTheory]
+    [Trait("Category", "Unhappy")]
+    [InlineData(0)] // not laid out yet
+    [InlineData(500)] // narrower than the song and the right together: nothing overlaps, the right runs past the end
+    [InlineData(1000)] // room for a middle narrower than its limit
+    [InlineData(3000)] // the middle at its limit, the spare room split around it
+    public void Player_columns_keep_the_middle_centred_and_give_the_song_the_room_before_it(double width)
+    {
+        var columns = new PlayerColumns { StartWidth = 280, MiddleMaxWidth = 855, EndWidth = 364, Spacing = 16 }.Columns(width);
+        var (song, middle, end) = (columns[0], columns[1], columns[2]);
+
+        var room = Math.Max(0, width - 280 - 364 - 32);
+        var spare = (room - Math.Min(room, 855)) / 2;
+        Assert.Equal(Math.Min(room, 855), middle.Width);
+        Assert.Equal(280 + 16 + spare, middle.X); // centred between the song's narrowest and the end
+        Assert.Equal(middle.X + middle.Width + 16 + spare, end.X);
+        Assert.Equal(364, end.Width);
+        Assert.Equal(280 + Math.Floor(spare), song.Width); // the room before the middle, in whole pixels
+        Assert.InRange(middle.X - (song.Width + 16), 0, 0.5); // so at least one gap before it
+        if (width >= 280 + 364 + 32)
+        {
+            Assert.Equal(width, end.X + end.Width);
         }
     }
 
