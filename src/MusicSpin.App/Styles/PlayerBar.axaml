@@ -12,8 +12,13 @@
         <Setter Property="BorderThickness" Value="{StaticResource HairlineTop}" />
         <Setter Property="Padding" Value="{StaticResource PlayerBarPadding}" />
     </Style>
-    <Style Selector="Border.playerBar > Grid">
+    <Style Selector="Grid.playerColumns">
         <Setter Property="ColumnSpacing" Value="{StaticResource PlayerBarGap}" />
+    </Style>
+    <!-- The volume, the transport and the analyzer: as wide as the room allows up to a limit, then centred. -->
+    <Style Selector="Grid.centre">
+        <Setter Property="ColumnSpacing" Value="{StaticResource PlayerBarGap}" />
+        <Setter Property="MaxWidth" Value="{StaticResource PlayerCentreMaxWidth}" />
     </Style>
 
     <!-- The playing album's sleeve; its record slides out while playing (Styles/Artwork.axaml, Panel.sleeve). -->
@@ -38,25 +43,26 @@
         <Setter Property="RenderTransform" Value="translateX(22px)" />
     </Style>
 
-    <!-- The song name; the analyzer and the volume follow it. -->
-    <Style Selector="controls|FollowPanel.meta">
-        <Setter Property="Spacing" Value="{StaticResource PlayerMetaGap}" />
-        <Setter Property="VerticalAlignment" Value="Center" />
+    <!-- The song: the sleeve, then the title over "artist · album", in the column's width. -->
+    <Style Selector="Grid.song">
+        <Setter Property="ColumnSpacing" Value="{StaticResource PlayerSongGap}" />
     </Style>
     <Style Selector="StackPanel.metaText">
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- A text too long for its place scrolls to its end and back (#133); at Motion None it ends in an ellipsis. -->
+    <Style Selector="Grid.song controls|Marquee">
+        <Setter Property="Speed" Value="{StaticResource MarqueeSpeed}" />
+        <Setter Property="Rest" Value="{StaticResource MarqueeRest}" />
     </Style>
     <Style Selector="TextBlock.playerTitle">
         <Setter Property="FontSize" Value="{StaticResource PlayerTitleFontSize}" />
         <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
     </Style>
-    <Style Selector="Grid.titleLine">
-        <Setter Property="HorizontalAlignment" Value="Left" />
-    </Style>
-    <Style Selector="Grid.titleLine TextBlock.playerTitle">
+    <Style Selector="Grid.titleLine controls|Marquee">
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <!-- The heart sits close after the title, as small as the title's line allows. -->
+    <!-- The heart sits at the end of the title's line, as small as the line allows. -->
     <Style Selector="Grid.titleLine Button.heart">
         <Setter Property="Width" Value="{StaticResource PlayerHeartSize}" />
         <Setter Property="Height" Value="{StaticResource PlayerHeartSize}" />
@@ -74,6 +80,7 @@
     <!-- The analyzer: the album's accent (darker on the light theme), peaks in fg-2. -->
     <Style Selector="controls|SpectrumView">
         <Setter Property="Width" Value="{StaticResource AnalyzerWidth}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="Height" Value="{StaticResource AnalyzerHeight}" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="BarWidth" Value="{StaticResource AnalyzerBarWidth}" />
@@ -101,9 +108,10 @@
         <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
     </Style>
 
-    <!-- The volume: speaker, bar, number. -->
+    <!-- The volume: speaker, bar, number, against the transport. -->
     <Style Selector="StackPanel.volume">
         <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="Spacing" Value="{StaticResource VolumeGap}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
@@ -221,7 +229,6 @@
     <!-- The position: the elapsed time (a box you can type into), the bar, the duration. -->
     <Style Selector="Grid.progress">
         <Setter Property="ColumnSpacing" Value="{StaticResource ProgressGap}" />
-        <Setter Property="MaxWidth" Value="{StaticResource ProgressMaxWidth}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
     <Style Selector="Grid.progress TextBlock">
@@ -235,7 +242,6 @@
     </Style>
     <Style Selector="TextBox.elapsed">
         <Setter Property="Theme" Value="{StaticResource TypedBox}" />
-        <Setter Property="Width" Value="{StaticResource TimeBoxWidth}" />
         <Setter Property="Padding" Value="{StaticResource TimeBoxPadding}" />
         <Setter Property="CornerRadius" Value="{StaticResource TimeBoxRadius}" />
         <Setter Property="FontSize" Value="{StaticResource ProgressFontSize}" />

@@ -33,6 +33,7 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(nowPlaying);
         ArgumentNullException.ThrowIfNull(queue);
         Player = player;
+        Time = time;
         _nowPlaying = nowPlaying;
         _queue = queue;
         Position = new PositionViewModel(player);
@@ -57,6 +58,9 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
     }
 
     public PlayerViewModel Player { get; }
+
+    /// <summary>The app's clock, for the bar's own timing in the view (the marquees of a long title or artist).</summary>
+    public TimeProvider Time { get; }
 
     public PositionViewModel Position { get; }
 

@@ -115,7 +115,8 @@ src/MusicSpin.App/
 │                          Pages/ — structure and bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
-│                          ScrubBar (the position, volume and Settings sliders), SpectrumView, FollowPanel, TypedBox,
+│                          ScrubBar (the position, volume and Settings sliders), SpectrumView, Marquee (a long text
+│                          scrolling to its end and back), TypedBox,
 │                          TrimFirstPanel (a text that trims before the badge after it), ShelfSleeve and CrateRecord
 │                          (the shelf's and the crates' 3D, drawn with Projection: CSS-style 4×4 transforms), DeckView
 │                          (a turntable design's deck; ClassicDeckView, PlatterView; KitDeckView for the studies'
@@ -325,6 +326,15 @@ src/MusicSpin.App/
   keys are its own key bindings, so on the focused bar they win over window shortcuts on the same keys. Mute is the
   player's (`mute`): it plays at 0 and keeps the level, which `status` still reports with `muted`, so a mute outlives
   the app and a volume set anywhere (the CLI) unmutes.
+- **The bar's layout (#133).** Each part has a column of its own width (`Metrics.axaml`), so a long name, a new track,
+  the time growing a digit or the analyzer lighting up moves nothing else: the song (sleeve, title and heart, "artist ·
+  album") on the left, the format and the queue and settings buttons on the right, and between them the volume, the
+  transport and the analyzer, kept together and centred once the transport reaches its widest. The times sit in
+  columns that hold "0:00:00" in tabular digits. A title or "artist · album" too long for its place is a `Marquee`: it
+  rests at the start, scrolls to the end, rests and scrolls back, moving only its text's render transform, by whole
+  device pixels, on the app's clock (its timer sleeps through each rest). It starts again at the beginning for a new
+  text or a new track, stops where it is while the window is minimized, and at Motion None doesn't move: the text
+  ends in an ellipsis. Each text's tooltip has all of it.
 - **Analyzer.** `SpectrumViewModel` moves 16 bars and their peak dots on the app's clock while anything shows, and
   stops the clock once everything has fallen, so an idle analyzer neither ticks nor draws.
 - **Settings.** `SettingsViewModel` is a layer: the cog opens it over a light dim, and ✕, Esc or a click on the dim

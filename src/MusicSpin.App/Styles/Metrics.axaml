@@ -356,6 +356,18 @@
     <!-- Player bar -->
     <Thickness x:Key="PlayerBarPadding">18,0</Thickness>
     <sys:Double x:Key="PlayerBarGap">16</sys:Double>
+    <!--
+      Its columns (#133): each part has its own width, whatever it shows, and the transport takes the rest. The song (the
+      sleeve, then its text); the volume (the speaker 30, the bar 90, the box 2 + 46, 8 apart); the analyzer; the format
+      and the two round buttons, wide enough for the longest format label beside HI-RES.
+    -->
+    <GridLength x:Key="PlayerSongColumn">280</GridLength>
+    <GridLength x:Key="PlayerVolumeColumn">184</GridLength>
+    <GridLength x:Key="PlayerAnalyzerColumn">79</GridLength>
+    <GridLength x:Key="PlayerRightColumn">364</GridLength>
+    <!-- The volume, the transport and the analyzer between them, 16 apart; the transport at most 560 (mockup: .progress). -->
+    <sys:Double x:Key="PlayerCentreMaxWidth">855</sys:Double>
+    <sys:Double x:Key="PlayerSongGap">16</sys:Double>
     <sys:Double x:Key="MiniWidth">84</sys:Double>
     <sys:Double x:Key="MiniHeight">58</sys:Double>
     <sys:Double x:Key="MiniCoverSize">58</sys:Double>
@@ -363,7 +375,7 @@
     <Thickness x:Key="MiniVinylMargin">4,3,0,0</Thickness>
     <sys:Double x:Key="PlayerTitleFontSize">14</sys:Double>
     <sys:Double x:Key="PlayerArtistFontSize">12.5</sys:Double>
-    <!-- The heart after the title: its button overhangs the title's line, so the line keeps its height. -->
+    <!-- The heart at the end of the title's line: its button overhangs the line, so the line keeps its height. -->
     <sys:Double x:Key="PlayerHeartSize">20</sys:Double>
     <Thickness x:Key="PlayerHeartMargin">4,-3,0,-3</Thickness>
     <Thickness x:Key="NowPlayingHeartMargin">0,-3</Thickness>
@@ -374,18 +386,18 @@
     <sys:Double x:Key="PlayIconSize">12</sys:Double>
     <CornerRadius x:Key="PlayButtonRadius">19</CornerRadius>
     <sys:Double x:Key="BannerIconSize">12</sys:Double>
-    <!-- The song name, then the analyzer and the volume at this gap (mockup: .meta). -->
-    <sys:Double x:Key="PlayerMetaGap">24</sys:Double>
     <!-- Shuffle and Repeat (stroked). -->
     <sys:Double x:Key="ModeIconSize">15</sys:Double>
     <sys:Double x:Key="TransportDisabledOpacity">0.3</sys:Double>
     <!-- The buttons above the position (mockup: .transport, gap 6). -->
     <sys:Double x:Key="TransportRowGap">6</sys:Double>
-    <sys:Double x:Key="ProgressMaxWidth">560</sys:Double>
     <sys:Double x:Key="ProgressGap">8</sys:Double>
     <sys:Double x:Key="ProgressFontSize">11.5</sys:Double>
-    <!-- The elapsed time box (mockup: .tnum) and the duration after the bar. -->
-    <sys:Double x:Key="TimeBoxWidth">46</sys:Double>
+    <!--
+      The elapsed time box (mockup: .tnum) and the duration after the bar, each in a column that holds "0:00:00" in
+      tabular digits, so neither the bar nor the times move as the time grows a digit (#133).
+    -->
+    <GridLength x:Key="TimeColumn">54</GridLength>
     <Thickness x:Key="TimeBoxPadding">4,2</Thickness>
     <CornerRadius x:Key="TimeBoxRadius">5</CornerRadius>
     <Thickness x:Key="DurationPadding">5,0,0,0</Thickness>

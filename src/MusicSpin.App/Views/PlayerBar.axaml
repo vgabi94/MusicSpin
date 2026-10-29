@@ -1,7 +1,8 @@
 <!--
-  The player bar (mockup: .player), left to right: the playing album's sleeve with its record (opens Now Playing); the
-  title (and its heart) and "artist · album", followed by the spectrum analyzer and the volume; the transport over the position; the
-  format, the queue button and the settings button.
+  The player bar (mockup: .player), left to right, each part in a column of its own width (#133), so nothing in it moves
+  for a long name, a new track or the time: the song (the playing album's sleeve with its record, which opens Now
+  Playing; the title and its heart; "artist · album", each scrolling to its end and back when too long); the volume; the
+  transport over the position; the spectrum analyzer; the format, the queue button and the settings button.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -11,23 +12,30 @@
              x:Class="MusicSpin.App.Views.PlayerBar"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="playerBar">
-        <Grid ColumnDefinitions="Auto,1.2*,0.85*,1.2*">
-            <Button Name="MiniButton"
-                    Classes="mini"
-                    Command="{Binding PlayerBar.OpenNowPlayingCommand}"
-                    ToolTip.Tip="Open Now Playing"
-                    AutomationProperties.Name="Open Now Playing">
-                <Panel Name="Mini" Classes="sleeve mini" Classes.playing="{Binding Player.IsPlaying}">
-                    <controls:VinylView Name="MiniVinyl" Label="{Binding PlayingCover}" Angle="{Binding SpinClock.Angle}" />
-                    <controls:CoverView Name="MiniCover" Source="{Binding PlayingCover}" Title="{Binding Player.Album}" Artist="{Binding Player.Artist}" />
-                </Panel>
-            </Button>
+        <Grid Classes="playerColumns">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{StaticResource PlayerSongColumn}" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="{StaticResource PlayerRightColumn}" />
+            </Grid.ColumnDefinitions>
 
-            <controls:FollowPanel Name="Meta" Grid.Column="1" Classes="meta">
-                <StackPanel Classes="metaText">
+            <Grid Name="Song" Classes="song" ColumnDefinitions="Auto,*">
+                <Button Name="MiniButton"
+                        Classes="mini"
+                        Command="{Binding PlayerBar.OpenNowPlayingCommand}"
+                        ToolTip.Tip="Open Now Playing"
+                        AutomationProperties.Name="Open Now Playing">
+                    <Panel Name="Mini" Classes="sleeve mini" Classes.playing="{Binding Player.IsPlaying}">
+                        <controls:VinylView Name="MiniVinyl" Label="{Binding PlayingCover}" Angle="{Binding SpinClock.Angle}" />
+                        <controls:CoverView Name="MiniCover" Source="{Binding PlayingCover}" Title="{Binding Player.Album}" Artist="{Binding Player.Artist}" />
+                    </Panel>
+                </Button>
+
+                <StackPanel Name="Meta" Grid.Column="1" Classes="metaText">
                     <!--
-                      While a station is on air, a RADIO pill before the title (#23; it opens the Radio page). Then the title
-                      and the playing track's heart (#48; a plain file has none).
+                      While a station is on air, a RADIO pill before the title (#23; it opens the Radio page). Then the title,
+                      and the playing track's heart at the end of the line (#48; a plain file has none). A text too long for
+                      its line scrolls to its end and back (#133); its tooltip has all of it.
                     -->
                     <Grid Classes="titleLine" ColumnDefinitions="Auto,*,Auto">
                         <Button Name="OnAirPill"
@@ -41,7 +49,13 @@
                                 <TextBlock Text="RADIO" />
                             </StackPanel>
                         </Button>
-                        <TextBlock Name="PlayerTitle" Grid.Column="1" Classes="playerTitle trim" Text="{Binding PlayerTitle}" />
+                        <controls:Marquee Name="TitleMarquee"
+                                          Grid.Column="1"
+                                          Clock="{Binding PlayerBar.Time}"
+                                          IsShown="{Binding IsShown}"
+                                          Restart="{Binding Player.Path}">
+                            <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" ToolTip.Tip="{Binding PlayerTitle}" />
+                        </controls:Marquee>
                         <Button Name="PlayingHeart"
                                 Grid.Column="2"
                                 Classes="heart"
@@ -53,9 +67,20 @@
                             <controls:Icon Data="{StaticResource Heart}" />
                         </Button>
                     </Grid>
-                    <TextBlock Name="PlayerArtist" Classes="playerArtist trim" Text="{Binding PlayerArtist}" />
+                    <controls:Marquee Name="ArtistMarquee" Clock="{Binding PlayerBar.Time}" IsShown="{Binding IsShown}" Restart="{Binding Player.Path}">
+                        <TextBlock Name="PlayerArtist" Classes="playerArtist trim" Text="{Binding PlayerArtist}" ToolTip.Tip="{Binding PlayerArtist}" />
+                    </controls:Marquee>
                 </StackPanel>
-                <controls:SpectrumView Name="Analyzer" Frame="{Binding PlayerBar.Spectrum.Frame}" />
+            </Grid>
+
+            <!-- The volume, the transport and the analyzer stay together, in the middle of what the song and the right leave. -->
+            <Grid Name="Centre" Grid.Column="1" Classes="centre">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="{StaticResource PlayerVolumeColumn}" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="{StaticResource PlayerAnalyzerColumn}" />
+                </Grid.ColumnDefinitions>
+
                 <StackPanel Name="Volume" Classes="volume" Classes.silent="{Binding PlayerBar.Volume.IsSilent}">
                     <Button Name="MuteButton"
                             Classes="round"
@@ -94,74 +119,81 @@
                         </TextBox.KeyBindings>
                     </TextBox>
                 </StackPanel>
-            </controls:FollowPanel>
 
-            <StackPanel Grid.Column="2" Classes="transport">
-                <StackPanel Classes="transportButtons">
-                    <Button Name="Shuffle"
-                            Classes="mode"
-                            Classes.on="{Binding Player.Shuffle}"
-                            Command="{Binding PlayerBar.ToggleShuffleCommand}"
-                            ToolTip.Tip="{Binding PlayerBar.ShuffleToolTip}"
-                            AutomationProperties.Name="Shuffle">
-                        <controls:Icon Data="{StaticResource Shuffle}" />
-                    </Button>
-                    <Button Name="Previous"
-                            Command="{Binding PlayerBar.PreviousCommand}"
-                            ToolTip.Tip="{Binding PlayerBar.PreviousToolTip}"
-                            AutomationProperties.Name="{Binding PlayerBar.PreviousToolTip}">
-                        <controls:Icon Data="{StaticResource Previous}" />
-                    </Button>
-                    <Button Name="PlayPause" Classes="play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play/pause (Space)" AutomationProperties.Name="Play or pause">
-                        <Panel>
-                            <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !Player.IsPlaying}" />
-                            <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
-                        </Panel>
-                    </Button>
-                    <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next track" AutomationProperties.Name="Next track">
-                        <controls:Icon Data="{StaticResource Next}" />
-                    </Button>
-                    <Button Name="Repeat"
-                            Classes="mode repeat"
-                            Classes.on="{Binding PlayerBar.IsRepeatOn}"
-                            Classes.one="{Binding PlayerBar.IsRepeatOne}"
-                            Command="{Binding PlayerBar.CycleRepeatCommand}"
-                            ToolTip.Tip="{Binding PlayerBar.RepeatToolTip}"
-                            AutomationProperties.Name="{Binding PlayerBar.RepeatToolTip}">
-                        <controls:Icon Name="RepeatIcon" />
-                    </Button>
+                <StackPanel Name="Transport" Grid.Column="1" Classes="transport">
+                    <StackPanel Classes="transportButtons">
+                        <Button Name="Shuffle"
+                                Classes="mode"
+                                Classes.on="{Binding Player.Shuffle}"
+                                Command="{Binding PlayerBar.ToggleShuffleCommand}"
+                                ToolTip.Tip="{Binding PlayerBar.ShuffleToolTip}"
+                                AutomationProperties.Name="Shuffle">
+                            <controls:Icon Data="{StaticResource Shuffle}" />
+                        </Button>
+                        <Button Name="Previous"
+                                Command="{Binding PlayerBar.PreviousCommand}"
+                                ToolTip.Tip="{Binding PlayerBar.PreviousToolTip}"
+                                AutomationProperties.Name="{Binding PlayerBar.PreviousToolTip}">
+                            <controls:Icon Data="{StaticResource Previous}" />
+                        </Button>
+                        <Button Name="PlayPause" Classes="play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play/pause (Space)" AutomationProperties.Name="Play or pause">
+                            <Panel>
+                                <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !Player.IsPlaying}" />
+                                <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
+                            </Panel>
+                        </Button>
+                        <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next track" AutomationProperties.Name="Next track">
+                            <controls:Icon Data="{StaticResource Next}" />
+                        </Button>
+                        <Button Name="Repeat"
+                                Classes="mode repeat"
+                                Classes.on="{Binding PlayerBar.IsRepeatOn}"
+                                Classes.one="{Binding PlayerBar.IsRepeatOne}"
+                                Command="{Binding PlayerBar.CycleRepeatCommand}"
+                                ToolTip.Tip="{Binding PlayerBar.RepeatToolTip}"
+                                AutomationProperties.Name="{Binding PlayerBar.RepeatToolTip}">
+                            <controls:Icon Name="RepeatIcon" />
+                        </Button>
+                    </StackPanel>
+
+                    <Grid Name="Progress" Classes="progress">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{StaticResource TimeColumn}" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="{StaticResource TimeColumn}" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Name="ElapsedBox"
+                                 Classes="elapsed"
+                                 Classes.invalid="{Binding PlayerBar.Position.Elapsed.IsInvalid}"
+                                 Text="{Binding PlayerBar.Position.Elapsed.Text}"
+                                 ToolTip.Tip="Type a time: 90, 1:30, +10, -0:30"
+                                 AutomationProperties.Name="Position, type a time"
+                                 controls:TypedBox.Field="{Binding PlayerBar.Position.Elapsed}"
+                                 theming:Animate.Play="ShakeAnimation"
+                                 theming:Animate.Trigger="{Binding PlayerBar.Position.Elapsed.Rejections}">
+                            <TextBox.KeyBindings>
+                                <KeyBinding Gesture="Enter" Command="{Binding PlayerBar.Position.Elapsed.CommitCommand}" />
+                                <KeyBinding Gesture="Escape" Command="{Binding PlayerBar.Position.Elapsed.CancelCommand}" />
+                            </TextBox.KeyBindings>
+                        </TextBox>
+                        <controls:ScrubBar Name="PositionBar"
+                                           Grid.Column="1"
+                                           Classes="position"
+                                           Maximum="{Binding PlayerBar.Position.Duration}"
+                                           Value="{Binding PlayerBar.Position.Position, Mode=OneWay}"
+                                           Scrub="{Binding PlayerBar.Position.Scrub}"
+                                           CommitCommand="{Binding PlayerBar.Position.SeekToCommand}"
+                                           ValueText="{Binding PlayerBar.Position.ValueText}"
+                                           IsEnabled="{Binding PlayerBar.Position.CanSeek}"
+                                           AutomationProperties.Name="Position" />
+                        <TextBlock Name="DurationText" Grid.Column="2" Classes="duration" Text="{Binding PlayerBar.Position.DurationText}" />
+                    </Grid>
                 </StackPanel>
 
-                <Grid Name="Progress" Classes="progress" ColumnDefinitions="Auto,*,Auto">
-                    <TextBox Name="ElapsedBox"
-                             Classes="elapsed"
-                             Classes.invalid="{Binding PlayerBar.Position.Elapsed.IsInvalid}"
-                             Text="{Binding PlayerBar.Position.Elapsed.Text}"
-                             ToolTip.Tip="Type a time: 90, 1:30, +10, -0:30"
-                             AutomationProperties.Name="Position, type a time"
-                             controls:TypedBox.Field="{Binding PlayerBar.Position.Elapsed}"
-                             theming:Animate.Play="ShakeAnimation"
-                             theming:Animate.Trigger="{Binding PlayerBar.Position.Elapsed.Rejections}">
-                        <TextBox.KeyBindings>
-                            <KeyBinding Gesture="Enter" Command="{Binding PlayerBar.Position.Elapsed.CommitCommand}" />
-                            <KeyBinding Gesture="Escape" Command="{Binding PlayerBar.Position.Elapsed.CancelCommand}" />
-                        </TextBox.KeyBindings>
-                    </TextBox>
-                    <controls:ScrubBar Name="PositionBar"
-                                       Grid.Column="1"
-                                       Classes="position"
-                                       Maximum="{Binding PlayerBar.Position.Duration}"
-                                       Value="{Binding PlayerBar.Position.Position, Mode=OneWay}"
-                                       Scrub="{Binding PlayerBar.Position.Scrub}"
-                                       CommitCommand="{Binding PlayerBar.Position.SeekToCommand}"
-                                       ValueText="{Binding PlayerBar.Position.ValueText}"
-                                       IsEnabled="{Binding PlayerBar.Position.CanSeek}"
-                                       AutomationProperties.Name="Position" />
-                    <TextBlock Name="DurationText" Grid.Column="2" Classes="duration" Text="{Binding PlayerBar.Position.DurationText}" />
-                </Grid>
-            </StackPanel>
+                <controls:SpectrumView Name="Analyzer" Grid.Column="2" Frame="{Binding PlayerBar.Spectrum.Frame}" />
+            </Grid>
 
-            <Grid Name="Right" Grid.Column="3" Classes="right" ColumnDefinitions="*,Auto">
+            <Grid Name="Right" Grid.Column="2" Classes="right" ColumnDefinitions="*,Auto">
                 <DockPanel Name="Tech" Classes="tech">
                     <Border Name="HiRes" Classes="hiRes" DockPanel.Dock="Left" IsVisible="{Binding PlayerBar.IsHiRes}">
                         <TextBlock Text="HI-RES" />
