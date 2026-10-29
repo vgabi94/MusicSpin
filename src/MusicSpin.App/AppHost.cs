@@ -1,3 +1,4 @@
+using MusicSpin.App.Services;
 using MusicSpin.Core;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Settings;
@@ -20,11 +21,27 @@ internal static class AppHost
     /// <summary>Tray-only mode (<c>--tray</c>, #83): the background player's tray icon, no window.</summary>
     public static bool IsTrayMode { get; private set; }
 
+    /// <summary><c>app.log</c> in the data folder (#185).</summary>
+    public static AppLog Log { get; private set; } = AppLog.None;
+
     public static void Initialize(string[] args)
     {
         IsTrayMode = args.Contains(MusicSpin.Core.Remote.TrayLauncher.TrayArgument);
         DataDirectory = AppPaths.Resolve(DataDirOverride(args));
+        Log = AppLog.For(DataDirectory);
+        LogUnhandledExceptions(Log);
         (Settings, StartupWarning) = Start(DataDirectory);
+    }
+
+    /// <summary>
+    /// Writes an exception nothing caught to <paramref name="log"/> before the process ends (#185): without it a crash
+    /// leaves only an entry in the OS's event log. A faulted task nobody awaited is logged as well; it doesn't end the app.
+    /// </summary>
+    private static void LogUnhandledExceptions(AppLog log)
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => log.Write(
+            e.IsTerminating ? "unhandled exception, the app exits" : "unhandled exception", e.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, e) => log.Write("unobserved task exception", e.Exception);
     }
 
     /// <summary>

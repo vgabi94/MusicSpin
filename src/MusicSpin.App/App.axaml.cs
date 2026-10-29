@@ -20,7 +20,7 @@ public partial class App : Application
         }
         else if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var services = AppComposition.CreateServices(this, AppHost.DataDirectory, AppHost.StartupWarning);
+            var services = AppComposition.CreateServices(this, AppHost.DataDirectory, AppHost.StartupWarning, AppHost.Log);
             var window = AppComposition.CreateMainWindow(services);
             desktop.MainWindow = window;
             _ = ((MainWindowViewModel)window.DataContext!).InitializeAsync();

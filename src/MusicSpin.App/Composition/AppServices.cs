@@ -23,4 +23,7 @@ public sealed record AppServices(
 
     /// <summary>The audio output devices (Settings › Audio).</summary>
     public IAudioDevices AudioDevices { get; init; } = new MiniAudioDevices();
+
+    /// <summary>Where unexpected failures are written (<c>app.log</c> in the data folder); tests log nothing by default.</summary>
+    public AppLog Log { get; init; } = AppLog.None;
 }

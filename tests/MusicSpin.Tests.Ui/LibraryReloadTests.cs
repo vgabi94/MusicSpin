@@ -250,7 +250,7 @@ public sealed class LibraryReloadTests
     }
 
     [AvaloniaFact]
-    public async Task A_reload_that_fails_unexpectedly_fails_the_edit_waiting_on_it_and_the_next_reload_still_runs()
+    public async Task A_reload_that_fails_unexpectedly_is_a_notice_the_edit_waiting_on_it_finishes_and_the_next_reload_still_runs()
     {
         var (app, library) = await OpenAsync();
         await using var _ = app;
@@ -266,7 +266,9 @@ public sealed class LibraryReloadTests
         library.PlaylistsGate = gate;
         var add = app.ViewModel.Playlists.AddAsync(mix, [StubLibrary.Track(1)]);
         await Gui.UntilAsync(() => add.IsCompleted, "the add to finish, not wait for a reload that won't come");
-        Assert.Equal("Unexpected.", Assert.IsType<InvalidOperationException>(add.Exception?.InnerException).Message);
+        await add; // the failure is a notice now, not the add's (#185)
+        Assert.Equal($"Something went wrong: Unexpected. The details are in {Path.Combine(app.Data.Path, AppLog.FileName)}.",
+            app.ViewModel.Banner);
 
         // and the reloads go on
         library.PlaylistsGate = null;

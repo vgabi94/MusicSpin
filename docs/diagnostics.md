@@ -76,6 +76,7 @@ On a desktop you would see your real outputs (speakers, HDMI, USB DAC), with one
 | File | Contents |
 |---|---|
 | `player.log` | background player log: start and stop, errors, and the player's stdout/stderr (e.g. ALSA messages). Rotated to `player.log.1` above 1 MiB |
+| `app.log` | desktop app log: failures the app did not plan for, with their stack traces. An error notice that says "Something went wrong" points here, and a crash writes its exception here before the app exits. Rotated to `app.log.1` above 1 MiB |
 | `player.json` | pid, endpoint, version, start time and output of the running player (0600) |
 | `player.lock` | held open by the running player. The OS releases it when the process dies. The file itself may stay behind; it is harmless |
 | `player.sock` | Unix socket of the running player (0600). A stale socket nobody listens on means "not running" and is replaced by the next `play` |

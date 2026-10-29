@@ -46,6 +46,7 @@ MusicSpin keeps everything it writes (settings, the library database, the backgr
 ├── player.json        running player info: pid, endpoint, version, output (0600)
 ├── player.lock        held by the running player (one player per data folder)
 ├── player.log         background player log (rotated to player.log.1 above 1 MiB)
+├── app.log            desktop app log: unexpected failures and crashes (rotated to app.log.1 above 1 MiB)
 ├── queue.json         the player's saved queue, restored paused by the next player (a corrupt one is moved to queue.json.bad)
 ├── stations.json      recent and saved radio stations (filters only, no paths; a corrupt one is moved to stations.json.bad on the next change)
 └── stations.json.lock cross-process lock for changes to stations.json

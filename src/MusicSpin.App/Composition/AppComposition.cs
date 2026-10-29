@@ -15,7 +15,7 @@ namespace MusicSpin.App.Composition;
 public static class AppComposition
 {
     /// <summary>The real services for <paramref name="directory"/>: the background player, the library on disk, the system clock.</summary>
-    public static AppServices CreateServices(Application application, DataDirectory directory, string? startupWarning)
+    public static AppServices CreateServices(Application application, DataDirectory directory, string? startupWarning, AppLog? log = null)
     {
         ArgumentNullException.ThrowIfNull(application);
         var time = TimeProvider.System;
@@ -31,7 +31,10 @@ public static class AppComposition
             time,
             ui,
             startupWarning,
-            MediaControlsFactory.Create(directory, library, resizer));
+            MediaControlsFactory.Create(directory, library, resizer))
+        {
+            Log = log ?? AppLog.For(directory),
+        };
     }
 
     /// <summary>
