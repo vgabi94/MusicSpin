@@ -373,6 +373,59 @@ public sealed class MusicLibraryTests : LibraryTestBase
         Assert.Equal(library.AlbumQueue(ids["Kind of Blue"]).Select(t => t.Id), library.AlbumsQueue([ids["Kind of Blue"]]).Select(t => t.Id));
     }
 
+    // A classical album artist names the whole cast; repeated until the SortKey is past 255 UTF-8 bytes (#185). The
+    // multi-byte one gets there in fewer than 255 characters.
+    [Theory]
+    [Trait("Category", "Unhappy")]
+    [InlineData("Scottish Chamber Orchestra, ", 10)]
+    [InlineData("Ševčík Šťastný Řezáč ", 9)]
+    [InlineData("Scottish Chamber Orchestra, ", 30)]
+    public void An_album_with_a_long_album_artist_queues_and_lists_in_disc_and_track_order(string part, int repeat)
+    {
+        var cast = string.Concat(Enumerable.Repeat(part, repeat)) + "Sir Charles Mackerras";
+        var dir = Path.Combine(Music, "Mozart");
+        // File names sort against disc/track order, so a missing sort shows.
+        LibraryTestData.Write(Path.Combine(dir, "a.flac"), LibraryTestData.Tiny16, "Requiem", "Mackerras", "Mozart", cast, 1, 2);
+        LibraryTestData.Write(Path.Combine(dir, "b.flac"), LibraryTestData.Tiny16, "Linz", "Mackerras", "Mozart", cast, 2, 1);
+        LibraryTestData.Write(Path.Combine(dir, "c.flac"), LibraryTestData.Tiny16, "Prague", "Mackerras", "Mozart", cast, 1, 1);
+        LibraryTestData.Write(Path.Combine(Music, "Other", "1.flac"), LibraryTestData.Tiny16, "Elsewhere", "Other", "Other", "Other", 1, 1);
+        AddAndScan();
+        using var library = OpenRead();
+        var id = library.Albums(new AlbumQuery()).Items.Single(a => a.Title == "Mozart").Id;
+        string[] order = ["Prague", "Linz", "Requiem"];
+
+        var queue = library.AlbumQueue("mozart");
+        Assert.All(queue, t => Assert.True(System.Text.Encoding.UTF8.GetByteCount(t.SortKey) > 255));
+        Assert.Equal(order, queue.Select(t => t.Title));
+        Assert.Equal(order, library.AlbumQueue(id).Select(t => t.Title));
+        Assert.Equal(order, library.AlbumsQueue([id]).Select(t => t.Title));
+        Assert.Equal(order, library.Tracks(new TrackQuery { Album = id }).Items.Select(t => t.Title));
+        Assert.Equal(order.Reverse(), library.Tracks(new TrackQuery { Album = id, Descending = true }).Items.Select(t => t.Title));
+        var page = library.Tracks(new TrackQuery { Album = id, Paging = new Paging(1, 1) });
+        Assert.Equal(3, page.Total);
+        Assert.Equal("Linz", Assert.Single(page.Items).Title);
+        Assert.Equal(order, library.Tracks(new TrackQuery { Artist = "mackerras" }).Items.Select(t => t.Title));
+    }
+
+    [Fact]
+    public void A_filtered_track_list_keeps_the_order_of_the_unfiltered_one()
+    {
+        LibraryTestData.CreateSmallLibrary(Music);
+        var cast = string.Concat(Enumerable.Repeat("Scottish Chamber Orchestra, ", 10)) + "Sir Charles Mackerras";
+        LibraryTestData.Write(Path.Combine(Music, "Mozart", "1.flac"), LibraryTestData.Tiny16, "Prague", "Mackerras", "Mozart", cast, 1, 1);
+        LibraryTestData.Write(Path.Combine(Music, "Mozart", "2.flac"), LibraryTestData.Tiny16, "Linz", "Mackerras", "Mozart", cast, 2, 1);
+        AddAndScan();
+        using var library = OpenRead();
+        var all = library.Tracks(new TrackQuery()).Items;
+
+        // Read from the SortKey index (unfiltered) and sorted in memory (filtered): the same comparison.
+        var flac = library.Tracks(new TrackQuery { Formats = ["flac"] }).Items;
+        Assert.Equal(all.Where(t => t.Format == "flac").Select(t => t.Id), flac.Select(t => t.Id));
+        Assert.True(flac.Count > 2);
+        var desc = library.Tracks(new TrackQuery { Formats = ["flac"], Descending = true }).Items;
+        Assert.Equal(flac.Select(t => t.Id).Reverse(), desc.Select(t => t.Id));
+    }
+
     [Fact]
     [Trait("Category", "Unhappy")]
     public void Several_albums_queue_skips_unknown_ids_and_repeats()

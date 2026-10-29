@@ -229,6 +229,10 @@ public sealed partial class MusicLibrary : IDisposable
                 return q;
             }
 
+            // Lists every filter Filtered() applies: only a query without any reads the SortKey index in order (#185).
+            var unfiltered = artistKeys is null && albumIds is null && query.MinBitDepth is null && query.MinSampleRate is null
+                && query.Formats is not { Count: > 0 } && query.YearFrom is null && query.YearTo is null && query.HiRes is null
+                && favorites is null;
             var (offset, limit) = (query.Paging.Offset, query.Paging.Limit);
             if (search is null)
             {
@@ -236,8 +240,10 @@ public sealed partial class MusicLibrary : IDisposable
                 List<TrackRecord> items;
                 if (sort is TrackSort.Default or TrackSort.Relevance)
                 {
-                    var ordered = Filtered().OrderBy(t => t.SortKey, query.Descending ? Query.Descending : Query.Ascending);
-                    items = ordered.Skip(offset).Limit(limit).ToList();
+                    items = unfiltered
+                        ? Filtered().OrderBy(t => t.SortKey, query.Descending ? Query.Descending : Query.Ascending)
+                            .Skip(offset).Limit(limit).ToList()
+                        : BySortKey(Filtered().ToEnumerable(), query.Descending).Skip(offset).Take(limit).ToList();
                 }
                 else
                 {
@@ -435,8 +441,19 @@ public sealed partial class MusicLibrary : IDisposable
         }
 
         var id = candidates[0].Id;
-        return _db.Tracks.Query().Where(t => t.AlbumId == id).OrderBy(t => t.SortKey).ToList();
+        return BySortKey(_db.Tracks.Find(t => t.AlbumId == id)).ToList();
     });
+
+    /// <summary>
+    /// <paramref name="tracks"/> in <see cref="TrackRecord.SortKey"/> order, compared as the SortKey index compares them.
+    /// Sorted here, not with LiteDB's OrderBy: when the rows come from another index, LiteDB sorts them itself and
+    /// misreads every key over 255 UTF-8 bytes (#185). A long album artist (a classical cast) gets there.
+    /// </summary>
+    private IOrderedEnumerable<TrackRecord> BySortKey(IEnumerable<TrackRecord> tracks, bool descending = false)
+    {
+        IComparer<string> collation = _db.Db.Collation;
+        return descending ? tracks.OrderByDescending(t => t.SortKey, collation) : tracks.OrderBy(t => t.SortKey, collation);
+    }
 
     /// <summary>
     /// The tracks of the albums <paramref name="albumIds"/>, read in one query: album after album in the order given, each
