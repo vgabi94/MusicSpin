@@ -419,6 +419,15 @@
     <CornerRadius x:Key="ScrubHandleRadius">7</CornerRadius>
     <!-- Centred on the end of the fill: half the handle left, (20 - 14) / 2 down. -->
     <Thickness x:Key="ScrubHandleMargin">-7,3,0,0</Thickness>
+    <!--
+      Scroll bars (#130): a 12 px bar over the content's edge, with an 8 px rounded thumb inside it (2 px from each side)
+      and no arrow buttons. At rest the thumb is drawn half as wide against the edge; under the pointer it widens to the
+      whole 8 px (a render transform, so nothing is laid out again).
+    -->
+    <sys:Double x:Key="ScrollBarSize">12</sys:Double>
+    <Thickness x:Key="ScrollThumbInset">2</Thickness>
+    <CornerRadius x:Key="ScrollThumbRadius">4</CornerRadius>
+    <sys:Double x:Key="ScrollThumbMinLength">32</sys:Double>
     <!-- The keyboard focus outline: 2 px, 4 px outside the bar. -->
     <Thickness x:Key="FocusRingThickness">2</Thickness>
     <Thickness x:Key="FocusRingMargin">-4</Thickness>

@@ -21,6 +21,10 @@
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#1AFFFFFF" />
             <!-- A radio tag's edge under the pointer: the text colour at 28% (mockup: .tag:hover). -->
             <SolidColorBrush x:Key="TagHoverEdgeBrush" Color="#47EEF0F4" />
+            <!-- A scroll bar (#130): the thumb in the text colour at 30%, at 50% under the pointer; the track at 5%. -->
+            <SolidColorBrush x:Key="ScrollThumbBrush" Color="#4DEEF0F4" />
+            <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#80EEF0F4" />
+            <SolidColorBrush x:Key="ScrollTrackBrush" Color="#0DEEF0F4" />
             <Color x:Key="CardShadowColor">#CC000000</Color>
             <!-- Smoked Acrylic's plinth (#30, 6-smoked-acrylic.html): the smoke tint and its light (linear-gradient(155deg, …)). -->
             <SolidColorBrush x:Key="AcrylicTintBrush" Color="#A81A1C22" />
@@ -65,6 +69,9 @@
             <SolidColorBrush x:Key="MenuHoverBrush" Color="#0D000000" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#14000000" />
             <SolidColorBrush x:Key="TagHoverEdgeBrush" Color="#471B1C1F" />
+            <SolidColorBrush x:Key="ScrollThumbBrush" Color="#4D1B1C1F" />
+            <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#801B1C1F" />
+            <SolidColorBrush x:Key="ScrollTrackBrush" Color="#0D1B1C1F" />
             <Color x:Key="CardShadowColor">#66000000</Color>
             <SolidColorBrush x:Key="AcrylicTintBrush" Color="#B82A2D35" />
             <LinearGradientBrush x:Key="AcrylicSheenBrush" StartPoint="25.4%,-14.5%" EndPoint="74.6%,114.5%">

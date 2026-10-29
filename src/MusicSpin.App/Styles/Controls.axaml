@@ -1,7 +1,7 @@
 <!--
   Control themes shared by every area: a plain button (no Fluent chrome; areas style it with classes), the bar you drag,
-  the box you type a value into, the search text box, a segmented control and a list of cards. Merged into the
-  application resources.
+  the scroll bars, the box you type a value into, the search text box, a segmented control and a list of cards. Merged
+  into the application resources.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -113,6 +113,135 @@
         </Style>
         <Style Selector="^:focus-visible /template/ Border#PART_FocusRing">
             <Setter Property="IsVisible" Value="True" />
+        </Style>
+    </ControlTheme>
+
+    <!--
+      Scroll bars (#130), in place of Fluent's: every ScrollViewer's bars, over the content's edge. A slim rounded thumb and
+      no arrow buttons; clicking beside the thumb pages. The thumb is lighter under the pointer and takes the accent while
+      dragged. Every change is a brush, an opacity or a render transform, so it animates without a layout pass.
+    -->
+    <ControlTheme x:Key="ScrollBarThumb" TargetType="Thumb">
+        <Setter Property="Background" Value="{DynamicResource ScrollThumbBrush}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <!-- The whole bar's width takes the pointer; the pill inside it is what shows. -->
+                <Panel Background="Transparent">
+                    <Border Name="PART_Pill"
+                            Margin="{StaticResource ScrollThumbInset}"
+                            CornerRadius="{StaticResource ScrollThumbRadius}"
+                            Background="{TemplateBinding Background}"
+                            theming:Animate.Transitions="Background HoverDuration" />
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ScrollThumbHoverBrush}" />
+        </Style>
+        <Style Selector="^:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </ControlTheme>
+
+    <!-- Either side of the thumb: invisible, a click there pages. -->
+    <ControlTheme x:Key="ScrollBarPage" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="Transparent" />
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+        <Setter Property="MinWidth" Value="{StaticResource ScrollBarSize}" />
+        <Setter Property="MinHeight" Value="{StaticResource ScrollBarSize}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Style Selector="^:vertical">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="{TemplateBinding Background}">
+                        <Border Name="PART_TrackFill"
+                                Margin="{StaticResource ScrollThumbInset}"
+                                CornerRadius="{StaticResource ScrollThumbRadius}"
+                                Background="{DynamicResource ScrollTrackBrush}"
+                                Opacity="0"
+                                theming:Animate.Transitions="Opacity ScrollBarExpandDuration" />
+                        <Track Name="PART_Track"
+                               Minimum="{TemplateBinding Minimum}"
+                               Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}"
+                               DeferThumbDrag="{TemplateBinding ScrollViewer.IsDeferredScrollingEnabled}"
+                               ViewportSize="{TemplateBinding ViewportSize}"
+                               Orientation="{TemplateBinding Orientation}"
+                               IsDirectionReversed="True">
+                            <Track.DecreaseButton>
+                                <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource ScrollBarPage}" />
+                            </Track.DecreaseButton>
+                            <Track.IncreaseButton>
+                                <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource ScrollBarPage}" />
+                            </Track.IncreaseButton>
+                            <Thumb Name="PART_Thumb"
+                                   Theme="{StaticResource ScrollBarThumb}"
+                                   Width="{StaticResource ScrollBarSize}"
+                                   MinHeight="{StaticResource ScrollThumbMinLength}"
+                                   RenderTransform="scaleX(0.5)"
+                                   RenderTransformOrigin="100%,50%"
+                                   AutomationProperties.Name="Position"
+                                   theming:Animate.Transitions="RenderTransform ScrollBarExpandDuration" />
+                        </Track>
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="^:horizontal">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="{TemplateBinding Background}">
+                        <Border Name="PART_TrackFill"
+                                Margin="{StaticResource ScrollThumbInset}"
+                                CornerRadius="{StaticResource ScrollThumbRadius}"
+                                Background="{DynamicResource ScrollTrackBrush}"
+                                Opacity="0"
+                                theming:Animate.Transitions="Opacity ScrollBarExpandDuration" />
+                        <Track Name="PART_Track"
+                               Minimum="{TemplateBinding Minimum}"
+                               Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}"
+                               DeferThumbDrag="{TemplateBinding ScrollViewer.IsDeferredScrollingEnabled}"
+                               ViewportSize="{TemplateBinding ViewportSize}"
+                               Orientation="{TemplateBinding Orientation}">
+                            <Track.DecreaseButton>
+                                <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource ScrollBarPage}" />
+                            </Track.DecreaseButton>
+                            <Track.IncreaseButton>
+                                <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource ScrollBarPage}" />
+                            </Track.IncreaseButton>
+                            <Thumb Name="PART_Thumb"
+                                   Theme="{StaticResource ScrollBarThumb}"
+                                   Height="{StaticResource ScrollBarSize}"
+                                   MinWidth="{StaticResource ScrollThumbMinLength}"
+                                   RenderTransform="scaleY(0.5)"
+                                   RenderTransformOrigin="50%,100%"
+                                   AutomationProperties.Name="Position"
+                                   theming:Animate.Transitions="RenderTransform ScrollBarExpandDuration" />
+                        </Track>
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <!-- Under the pointer (after the bar's ShowDelay, until its HideDelay after it leaves), and always when the
+             ScrollViewer doesn't auto-hide its bars: the whole thumb and the track. -->
+        <Style Selector="^[IsExpanded=true] /template/ Thumb#PART_Thumb">
+            <Setter Property="RenderTransform" Value="none" />
+        </Style>
+        <Style Selector="^[IsExpanded=true] /template/ Border#PART_TrackFill">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="^:disabled /template/ Thumb#PART_Thumb">
+            <Setter Property="Opacity" Value="0.45" />
         </Style>
     </ControlTheme>
 
