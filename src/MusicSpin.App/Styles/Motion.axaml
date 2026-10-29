@@ -49,10 +49,11 @@
     -->
     <BitmapCache x:Key="MotionCache" SnapsToDevicePixels="True" />
     <!--
-      A shadow beside a spinning record (a card's cover and Play button), drawn once into an image. A deck's soft shadows
-      have their own, the size the deck is shown at (controls:DeckHost.SoftCache).
+      An album card's art at rest (controls:CardArt), drawn once into an image at the window's scale, pixel-aligned so it
+      stays sharp, a placeholder's text smoothed as it is drawn live. A deck's soft shadows have their own, the size the
+      deck is shown at (controls:DeckHost.SoftCache).
     -->
-    <BitmapCache x:Key="ShadowCache" />
+    <BitmapCache x:Key="CardArtCache" SnapsToDevicePixels="True" EnableClearType="True" />
     <!-- A notice fading in. -->
     <sys:TimeSpan x:Key="BannerDuration">0:0:0.2</sys:TimeSpan>
 

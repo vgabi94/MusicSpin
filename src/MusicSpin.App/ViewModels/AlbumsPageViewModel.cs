@@ -238,7 +238,7 @@ public sealed partial class AlbumItemViewModel(AlbumSummary album, AlbumArt art)
     /// <summary>"Copper Sun — Delta Ruth": a shelf sleeve's name for screen readers (its title isn't readable sideways).</summary>
     public string Name => $"{Album.Title} — {Album.Artist}";
 
-    /// <summary>The album loaded in the player, playing or paused (mockup: .card.playing): its record is out and spins.</summary>
+    /// <summary>The album loaded in the player, playing or paused (mockup: .card.playing): its record is out.</summary>
     [ObservableProperty]
     public partial bool IsPlaying { get; set; }
 
@@ -246,7 +246,11 @@ public sealed partial class AlbumItemViewModel(AlbumSummary album, AlbumArt art)
     [ObservableProperty]
     public partial bool ShowsPause { get; set; }
 
-    /// <summary>The angle of this album's record (the shared spin clock's while it is loaded).</summary>
+    /// <summary>
+    /// The angle of this album's record: the shared spin clock's while it is loaded and the shelf shows it, otherwise 0.
+    /// A card's record stays still (#149): the player bar and Now Playing already turn one, and a record turning under a
+    /// card's cover had its cover and the cards around it drawn again every frame.
+    /// </summary>
     [ObservableProperty]
     public partial double DiscAngle { get; set; }
 
@@ -362,7 +366,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         {
             if (e.PropertyName == nameof(SpinClock.Angle) && _playing is { } playing)
             {
-                playing.DiscAngle = _clock.Angle;
+                playing.DiscAngle = ShownDiscAngle(); // unchanged at 0 off the shelf: nothing raised
             }
         };
         _player.PropertyChanged += OnPlayerChanged;
@@ -589,7 +593,11 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     /// <summary>The album from its first track, its record carried onto the turntable (the scene).</summary>
     private Task PlayAsync(AlbumItemViewModel album) => _scene.PlayAlbumAsync(album.Album.Id);
 
-    partial void OnViewChoiceChanged(Choice<AlbumsView> value) => LayOut();
+    partial void OnViewChoiceChanged(Choice<AlbumsView> value)
+    {
+        _playing?.DiscAngle = ShownDiscAngle();
+        LayOut();
+    }
 
     partial void OnSortChanged(LibrarySort value) => Filter();
 
@@ -770,9 +778,12 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         {
             now.IsPlaying = true;
             now.ShowsPause = _player.IsPlaying;
-            now.DiscAngle = _clock.Angle;
+            now.DiscAngle = ShownDiscAngle();
         }
     }
+
+    /// <summary>The loaded album's record angle: turning with the clock on the shelf only (<see cref="AlbumItemViewModel.DiscAngle"/>).</summary>
+    private double ShownDiscAngle() => IsShelf ? _clock.Angle : 0;
 
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)
     {

@@ -70,7 +70,7 @@ public sealed class RenderCostTests
         await PlayAsync(app);
         Spin(app, 2);
         var records = app.Window.GetVisualDescendants().OfType<VinylView>().Where(v => v.IsEffectivelyVisible && v.RenderedAngle != 0).ToList();
-        Assert.NotEmpty(records); // the playing album's card record and the player bar's
+        Assert.NotEmpty(records); // the player bar's (a card's record doesn't turn: CardArtTests)
         var renders = records.Select(r => r.DiscRenders).ToList();
         var angle = app.ViewModel.SpinClock.Angle;
 

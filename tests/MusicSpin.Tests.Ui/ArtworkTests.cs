@@ -17,7 +17,7 @@ namespace MusicSpin.Tests.Ui;
 public sealed class ArtworkTests
 {
     [AvaloniaFact]
-    public async Task The_discs_of_the_playing_album_turn_together()
+    public async Task The_playing_albums_record_turns_in_the_player_bar_and_stays_still_on_its_card()
     {
         await using var app = await AppHarness.OpenAsync(new AppOptions
         {
@@ -40,8 +40,8 @@ public sealed class ArtworkTests
         var otherDisc = AlbumCard(window, "Other").GetVisualDescendants().OfType<VinylView>().Single();
         var miniDisc = Gui.Find<VinylView>(window, "MiniVinyl");
         Assert.True(miniDisc.RenderedAngle > 10, $"angle {miniDisc.RenderedAngle}");
-        Assert.Equal(miniDisc.RenderedAngle, cardDisc.RenderedAngle);
         Assert.Equal(app.ViewModel.SpinClock.Angle, miniDisc.RenderedAngle);
+        Assert.Equal(0, cardDisc.RenderedAngle); // the card's record is out but still (#149)
         Assert.Equal(0, otherDisc.RenderedAngle);
         Assert.Contains("playing", card.Classes);
         Assert.NotNull(Gui.Find<CoverView>(window, "MiniCover").Source);

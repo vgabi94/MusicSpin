@@ -96,13 +96,13 @@
                                             AutomationProperties.Name="{Binding Title}">
                                         <StackPanel>
                                             <Panel>
-                                                <!-- No clip (Viewbox clips by default): the record slides out past the card, the sleeve shifts left of it. -->
-                                                <Viewbox ClipToBounds="False">
+                                                <!-- Drawn from an image while still (Styles/Cards.axaml). -->
+                                                <controls:CardArt>
                                                     <Panel Classes="cardArt" controls:SceneSource.AlbumId="{Binding Album.Id}">
                                                         <controls:VinylView Label="{Binding Art.Cover}" Angle="{Binding DiscAngle}" />
                                                         <controls:CoverView Source="{Binding Art.Cover}" Title="{Binding Title}" Artist="{Binding Artist}" />
                                                     </Panel>
-                                                </Viewbox>
+                                                </controls:CardArt>
                                                 <Button Classes="playFab"
                                                         Command="{Binding $parent[UserControl].((vm:AlbumsPageViewModel)DataContext).TogglePlayAlbumCommand}"
                                                         CommandParameter="{Binding}"
