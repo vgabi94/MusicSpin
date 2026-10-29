@@ -54,7 +54,7 @@
                                           Clock="{Binding PlayerBar.Time}"
                                           IsShown="{Binding IsShown}"
                                           Restart="{Binding Player.Path}">
-                            <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" ToolTip.Tip="{Binding PlayerTitle}" />
+                            <TextBlock Name="PlayerTitle" Classes="playerTitle trim" Text="{Binding PlayerTitle}" ToolTip.Tip="{Binding Player.Title}" />
                         </controls:Marquee>
                         <Button Name="PlayingHeart"
                                 Grid.Column="2"

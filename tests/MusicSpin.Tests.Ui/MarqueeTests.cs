@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.Time.Testing;
 using MusicSpin.App.Controls;
 using MusicSpin.App.Theming;
@@ -292,6 +293,68 @@ public sealed class MarqueeTests
         Settle();
         Assert.True(marquee.Overflow > 0);
         Assert.True(marquee.IsRunning);
+        Assert.Equal(0, marquee.Offset); // from the beginning, not from where it was before it fitted
+        Advance(Rest - TimeSpan.FromMilliseconds(100));
+        Assert.Equal(0, marquee.Offset); // resting at the start for the whole rest
+    }
+
+    [AvaloniaFact]
+    public void Narrower_mid_rest_the_rest_goes_on_rather_than_starting_over()
+    {
+        using var shown = new Shown(Make(Long), 200);
+        var marquee = shown.Marquee;
+        Advance(Rest - TimeSpan.FromMilliseconds(500));
+        Assert.Equal(0, marquee.Offset);
+
+        shown.Window.Width = 190; // still too narrow: the timer is set again for the new overflow
+        Settle();
+        Assert.True(marquee.IsRunning);
+        Advance(TimeSpan.FromSeconds(1.5));
+        Assert.Equal(Speed, marquee.Offset, 0); // a second on its way: the 1.5 s of rest before counted
+    }
+
+    [AvaloniaFact]
+    public void With_no_speed_it_stays_put_and_given_one_it_scrolls()
+    {
+        var marquee = Make(Long);
+        marquee.Speed = 0;
+        using var shown = new Shown(marquee, 200);
+        Assert.False(marquee.IsRunning);
+        Advance(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1));
+        Assert.Equal(0, marquee.Offset);
+
+        marquee.Speed = Speed;
+        Settle();
+        Assert.True(marquee.IsRunning);
+    }
+
+    [AvaloniaFact]
+    public void A_new_child_takes_the_shift_and_starts_from_the_beginning_and_the_old_one_lets_go()
+    {
+        using var shown = new Shown(Make(Long), 200);
+        var marquee = shown.Marquee;
+        var old = shown.Text;
+        Advance(Rest + TimeSpan.FromSeconds(1));
+        Assert.True(marquee.Offset > 0);
+
+        var next = new TextBlock { Text = Long + " again", TextWrapping = TextWrapping.NoWrap, FontSize = 14 };
+        marquee.Child = next;
+        Settle();
+        Assert.Null(old.RenderTransform);
+        Assert.Null(old.GetVisualParent());
+        Assert.Same(marquee, next.GetVisualParent());
+        Assert.IsType<TranslateTransform>(next.RenderTransform);
+        Assert.Equal(0, marquee.Offset);
+        Assert.True(marquee.IsRunning);
+
+        old.Text = "Changed"; // the old child no longer restarts it
+        Advance(Rest + TimeSpan.FromSeconds(1));
+        Assert.Equal(Speed, marquee.Offset, 0);
+
+        marquee.Child = null;
+        Settle();
+        Assert.False(marquee.IsRunning);
+        Assert.Equal(0, marquee.Overflow);
     }
 
     [AvaloniaFact]

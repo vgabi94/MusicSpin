@@ -365,7 +365,11 @@
     <GridLength x:Key="PlayerVolumeColumn">184</GridLength>
     <GridLength x:Key="PlayerAnalyzerColumn">79</GridLength>
     <GridLength x:Key="PlayerRightColumn">364</GridLength>
-    <!-- The volume, the transport and the analyzer between them, 16 apart; the transport at most 560 (mockup: .progress). -->
+    <!--
+      The transport at its widest (mockup: .progress), and so the volume, the transport and the analyzer between them, 16
+      apart: 184 + 16 + 560 + 16 + 79. XAML can't add, so PlayerBarTests checks the sum.
+    -->
+    <sys:Double x:Key="PlayerTransportMaxWidth">560</sys:Double>
     <sys:Double x:Key="PlayerCentreMaxWidth">855</sys:Double>
     <sys:Double x:Key="PlayerSongGap">16</sys:Double>
     <sys:Double x:Key="MiniWidth">84</sys:Double>

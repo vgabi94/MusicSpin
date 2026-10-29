@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Metadata;
 using Avalonia.Threading;
 using MusicSpin.App.Theming;
 
@@ -19,9 +20,12 @@ namespace MusicSpin.App.Controls;
 /// </para>
 /// </summary>
 #pragma warning disable CA1001 // controls aren't disposed: the timer is disposed when the marquee leaves the tree
-public sealed class Marquee : Decorator
+public sealed class Marquee : Control
 #pragma warning restore CA1001
 {
+    /// <summary>What scrolls: a text, given its whole width while it moves (a control of its own, not a Decorator: no padding).</summary>
+    public static readonly StyledProperty<Control?> ChildProperty = AvaloniaProperty.Register<Marquee, Control?>(nameof(Child));
+
     /// <summary>How fast the text scrolls, in pixels a second.</summary>
     public static readonly StyledProperty<double> SpeedProperty = AvaloniaProperty.Register<Marquee, double>(nameof(Speed), 30);
 
@@ -37,7 +41,7 @@ public sealed class Marquee : Decorator
     /// <summary>A change of this (the playing track) starts the marquee again at the beginning, as a new text does.</summary>
     public static readonly StyledProperty<object?> RestartProperty = AvaloniaProperty.Register<Marquee, object?>(nameof(Restart));
 
-    /// <summary>How long a step lasts while the text moves (about 60 a second, fewer when a pixel takes longer).</summary>
+    /// <summary>How long a step lasts while the text moves (about 60 a second; it is redrawn only when it reaches a new pixel).</summary>
     public static TimeSpan FrameInterval { get; } = TimeSpan.FromMilliseconds(16);
 
     private readonly TranslateTransform _shift = new();
@@ -50,7 +54,14 @@ public sealed class Marquee : Decorator
     static Marquee()
     {
         ClipToBoundsProperty.OverrideDefaultValue<Marquee>(true);
-        AffectsMeasure<Marquee>(SpeedProperty);
+        AffectsMeasure<Marquee>(ChildProperty);
+    }
+
+    [Content]
+    public Control? Child
+    {
+        get => GetValue(ChildProperty);
+        set => SetValue(ChildProperty, value);
     }
 
     public double Speed
@@ -153,12 +164,16 @@ public sealed class Marquee : Decorator
             {
                 old.RenderTransform = null;
                 old.PropertyChanged -= OnChildChanged;
+                LogicalChildren.Remove(old);
+                VisualChildren.Remove(old);
             }
 
             if (change.NewValue is Control child)
             {
                 child.RenderTransform = _shift;
                 child.PropertyChanged += OnChildChanged;
+                LogicalChildren.Add(child);
+                VisualChildren.Add(child);
             }
 
             Reset();
@@ -177,9 +192,13 @@ public sealed class Marquee : Decorator
             Stop();
             Update();
         }
-        else if (change.Property == ClockProperty || change.Property == RestProperty)
+        else if (change.Property == RestProperty || change.Property == SpeedProperty)
         {
-            Stop();
+            Replan();
+        }
+        else if (change.Property == ClockProperty)
+        {
+            Stop(); // the time so far was on the old clock: it goes on from where it is on the new one
             Update();
         }
     }
@@ -204,13 +223,13 @@ public sealed class Marquee : Decorator
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        if (Child is not { } child)
+        var overflow = Child is not null && Moves ? Math.Max(0, _natural - finalSize.Width) : 0;
+        Child?.Arrange(new Rect(0, 0, overflow > 0 ? _natural : finalSize.Width, finalSize.Height));
+        if (overflow * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1) < 0.5)
         {
-            return finalSize;
+            overflow = 0; // less than half a device pixel (layout rounding): it could never move, so it fits
         }
 
-        var overflow = Moves ? Math.Max(0, _natural - finalSize.Width) : 0;
-        child.Arrange(new Rect(0, 0, overflow > 0 ? _natural : finalSize.Width, finalSize.Height));
         if (overflow != Overflow)
         {
             Overflow = overflow;
@@ -248,9 +267,14 @@ public sealed class Marquee : Decorator
         Update();
     }
 
-    /// <summary>The text or the width changed: the timer is set again for the new overflow, from where it is.</summary>
+    /// <summary>The width, the speed or the rest changed: the timer is set again for them, from where it is now.</summary>
     private void Replan()
     {
+        if (_timer is not null)
+        {
+            Tick(); // count the time since the last step (a rest under way goes on, not over)
+        }
+
         Stop();
         Update();
     }
@@ -263,6 +287,7 @@ public sealed class Marquee : Decorator
             Stop();
             if (Overflow <= 0)
             {
+                _elapsed = TimeSpan.Zero; // it fits: once it doesn't again, it starts from the beginning
                 Show(0);
             }
 

@@ -183,6 +183,12 @@ public sealed class PlayerBarTests
         Assert.True(Of("Shuffle").X >= Of("Transport").X && Of("Repeat").Right <= Of("Transport").Right, "the transport's buttons fit");
         var middle = (Of("Song").Right + Of("Right").X) / 2;
         Assert.Equal(middle, (Of("Volume").X + Of("Analyzer").Right) / 2, 0); // the three together, in the middle
+        var widest = (double)app.Window.FindResource("PlayerTransportMaxWidth")!;
+        Assert.True(Of("Transport").Width <= widest + 0.5);
+        if (width >= 2560)
+        {
+            Assert.Equal(widest, Of("Transport").Width, 1); // PlayerCentreMaxWidth adds up to it
+        }
     }
 
     [AvaloniaFact]
