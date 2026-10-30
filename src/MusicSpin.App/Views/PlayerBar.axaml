@@ -2,8 +2,8 @@
   The player bar (mockup: .player), left to right, each part in a column of its own width (#133), so nothing in it moves
   for a long name, a new track or the time: the song (the playing album's sleeve with its record, which opens Now
   Playing; the title and its heart; "artist · album", each scrolling to its end and back when too long); the volume; the
-  transport over the position; the spectrum analyzer; the Exclusive mode pill; the format, the queue button and the
-  settings button.
+  transport over the position, with the Exclusive mode pill after Repeat; the spectrum analyzer; the format, the queue
+  button and the settings button.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -69,16 +69,12 @@
                 </StackPanel>
             </Grid>
 
-            <!--
-              The volume, the transport, the analyzer and the Exclusive pill stay together, in the middle of what the song and
-              the right leave.
-            -->
+            <!-- The volume, the transport and the analyzer stay together, in the middle of what the song and the right leave. -->
             <Grid Name="Centre" Classes="centre">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="{StaticResource PlayerVolumeColumn}" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="{StaticResource PlayerAnalyzerColumn}" />
-                    <ColumnDefinition Width="{StaticResource PlayerExclusiveColumn}" />
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Name="Volume" Classes="volume" Classes.silent="{Binding PlayerBar.Volume.IsSilent}">
@@ -121,40 +117,60 @@
                 </StackPanel>
 
                 <StackPanel Name="Transport" Grid.Column="1" Classes="transport">
-                    <StackPanel Classes="transportButtons">
-                        <Button Name="Shuffle"
-                                Classes="mode"
-                                Classes.on="{Binding Player.Shuffle}"
-                                Command="{Binding PlayerBar.ToggleShuffleCommand}"
-                                ToolTip.Tip="{Binding PlayerBar.ShuffleToolTip}"
-                                AutomationProperties.Name="Shuffle">
-                            <controls:Icon Data="{StaticResource Shuffle}" />
-                        </Button>
-                        <Button Name="Previous"
-                                Command="{Binding PlayerBar.PreviousCommand}"
-                                ToolTip.Tip="{Binding PlayerBar.PreviousToolTip}"
-                                AutomationProperties.Name="{Binding PlayerBar.PreviousToolTip}">
-                            <controls:Icon Data="{StaticResource Previous}" />
-                        </Button>
-                        <Button Name="PlayPause" Classes="play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play/pause (Space)" AutomationProperties.Name="Play or pause">
+                    <!-- The buttons centred over the position, the Exclusive pill after Repeat (#191). -->
+                    <controls:TrailedRow Classes="transportRow">
+                        <StackPanel Classes="transportButtons">
+                            <Button Name="Shuffle"
+                                    Classes="mode"
+                                    Classes.on="{Binding Player.Shuffle}"
+                                    Command="{Binding PlayerBar.ToggleShuffleCommand}"
+                                    ToolTip.Tip="{Binding PlayerBar.ShuffleToolTip}"
+                                    AutomationProperties.Name="Shuffle">
+                                <controls:Icon Data="{StaticResource Shuffle}" />
+                            </Button>
+                            <Button Name="Previous"
+                                    Command="{Binding PlayerBar.PreviousCommand}"
+                                    ToolTip.Tip="{Binding PlayerBar.PreviousToolTip}"
+                                    AutomationProperties.Name="{Binding PlayerBar.PreviousToolTip}">
+                                <controls:Icon Data="{StaticResource Previous}" />
+                            </Button>
+                            <Button Name="PlayPause" Classes="play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play/pause (Space)" AutomationProperties.Name="Play or pause">
+                                <Panel>
+                                    <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !Player.IsPlaying}" />
+                                    <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
+                                </Panel>
+                            </Button>
+                            <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next track" AutomationProperties.Name="Next track">
+                                <controls:Icon Data="{StaticResource Next}" />
+                            </Button>
+                            <Button Name="Repeat"
+                                    Classes="mode repeat"
+                                    Classes.on="{Binding PlayerBar.IsRepeatOn}"
+                                    Classes.one="{Binding PlayerBar.IsRepeatOne}"
+                                    Command="{Binding PlayerBar.CycleRepeatCommand}"
+                                    ToolTip.Tip="{Binding PlayerBar.RepeatToolTip}"
+                                    AutomationProperties.Name="{Binding PlayerBar.RepeatToolTip}">
+                                <controls:Icon Name="RepeatIcon" />
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Exclusive mode (#191): the same switch as Settings › Audio; a click saves it and restarts the player. -->
+                        <Button Name="ExclusiveButton"
+                                Classes="exclusive"
+                                Classes.on="{Binding Audio.Exclusive}"
+                                Classes.refused="{Binding Audio.IsExclusiveRefused}"
+                                Command="{Binding Audio.ToggleExclusiveCommand}"
+                                ToolTip.Tip="{Binding Audio.ExclusiveTip}"
+                                AutomationProperties.Name="{Binding Audio.ExclusiveTip}">
                             <Panel>
-                                <controls:Icon Data="{StaticResource Play}" IsVisible="{Binding !Player.IsPlaying}" />
-                                <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
+                                <Rectangle Classes="edge" />
+                                <StackPanel>
+                                    <TextBlock Text="EXCLUSIVE" />
+                                    <TextBlock Classes="warning" Text=" !" IsVisible="{Binding Audio.IsExclusiveRefused}" />
+                                </StackPanel>
                             </Panel>
                         </Button>
-                        <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next track" AutomationProperties.Name="Next track">
-                            <controls:Icon Data="{StaticResource Next}" />
-                        </Button>
-                        <Button Name="Repeat"
-                                Classes="mode repeat"
-                                Classes.on="{Binding PlayerBar.IsRepeatOn}"
-                                Classes.one="{Binding PlayerBar.IsRepeatOne}"
-                                Command="{Binding PlayerBar.CycleRepeatCommand}"
-                                ToolTip.Tip="{Binding PlayerBar.RepeatToolTip}"
-                                AutomationProperties.Name="{Binding PlayerBar.RepeatToolTip}">
-                            <controls:Icon Name="RepeatIcon" />
-                        </Button>
-                    </StackPanel>
+                    </controls:TrailedRow>
 
                     <Grid Name="Progress" Classes="progress">
                         <Grid.ColumnDefinitions>
@@ -191,24 +207,6 @@
                 </StackPanel>
 
                 <controls:SpectrumView Name="Analyzer" Grid.Column="2" Frame="{Binding PlayerBar.Spectrum.Frame}" />
-
-                <!-- Exclusive mode (#191): the same switch as Settings › Audio; a click saves it and restarts the player. -->
-                <Button Name="ExclusiveButton"
-                        Grid.Column="3"
-                        Classes="exclusive"
-                        Classes.on="{Binding Audio.Exclusive}"
-                        Classes.refused="{Binding Audio.IsExclusiveRefused}"
-                        Command="{Binding Audio.ToggleExclusiveCommand}"
-                        ToolTip.Tip="{Binding Audio.ExclusiveTip}"
-                        AutomationProperties.Name="{Binding Audio.ExclusiveTip}">
-                    <Panel>
-                        <Rectangle Classes="edge" />
-                        <StackPanel>
-                            <TextBlock Text="EXCLUSIVE" />
-                            <TextBlock Classes="warning" Text=" !" IsVisible="{Binding Audio.IsExclusiveRefused}" />
-                        </StackPanel>
-                    </Panel>
-                </Button>
             </Grid>
 
             <Grid Name="Right" Classes="right" ColumnDefinitions="*,Auto">

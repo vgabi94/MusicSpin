@@ -97,7 +97,7 @@
     </Style>
 
     <!--
-      Exclusive mode (#191; the same switch as Settings › Audio), after the analyzer: a red pill like HI-RES while
+      Exclusive mode (#191; the same switch as Settings › Audio), after Repeat: a red pill like HI-RES while
       exclusive, dim grey while shared, a dashed red edge and a "!" when exclusive was asked for but the player plays
       shared. Faded while the player restarts.
     -->
@@ -230,6 +230,11 @@
         <Setter Property="Spacing" Value="{StaticResource TransportRowGap}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- The transport's buttons centred over the position, the Exclusive pill after them (#191). -->
+    <Style Selector="controls|TrailedRow.transportRow">
+        <Setter Property="Spacing" Value="{StaticResource TransportGap}" />
+        <Setter Property="TrailerWidth" Value="{StaticResource ExclusiveSlotWidth}" />
     </Style>
     <Style Selector="StackPanel.transportButtons">
         <Setter Property="Orientation" Value="Horizontal" />
