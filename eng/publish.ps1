@@ -7,7 +7,8 @@
   ./eng/publish.ps1 -All -CliOnly
 .NOTES
   Layout of <Out>/<rid>/: music-spin(.exe), MusicSpin(.exe), TagLibSharp.dll (LGPL, kept replaceable),
-  ffmpeg/ (LGPL FFmpeg shared libraries, optional), LICENSE, THIRD-PARTY-NOTICES.md. Data goes to .usrdata/ on first run.
+  ffmpeg/ (LGPL FFmpeg shared libraries, optional), LICENSE, THIRD-PARTY-NOTICES.md; on Linux also MusicSpin.png (the
+  app icon, for a .desktop launcher). Data goes to .usrdata/ on first run.
   macOS .app bundles are produced by publish.sh on macOS (needs codesign).
 #>
 [CmdletBinding()]
@@ -76,6 +77,9 @@ foreach ($r in $Rid) {
     foreach ($p in $projects) {
         dotnet publish $p -c $Configuration -r $r -o $dest -nologo -v quiet
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $p ($r)" }
+    }
+    if ($r -like 'linux-*' -and (Test-Path (Join-Path $dest 'MusicSpin'))) {
+        Copy-Item (Join-Path $root 'src/MusicSpin.App/Assets/AppIcon/app-icon-512.png') (Join-Path $dest 'MusicSpin.png')
     }
     if ($FFmpegDir) { Copy-FFmpeg $FFmpegDir (Join-Path $dest 'ffmpeg') $r }
     elseif ($DownloadFFmpeg) { Get-FFmpeg $r (Join-Path $dest 'ffmpeg') }
