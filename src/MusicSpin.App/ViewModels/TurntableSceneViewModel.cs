@@ -25,8 +25,8 @@ public interface IScenePlaces
 /// The turntable scene (mockup: playOnTurntable): choosing an album on the albums page carries its record from the
 /// sleeve onto the deck, then the arm lowers and the music starts. See <see cref="SceneTimeline"/> for the steps; each
 /// time is multiplied by Motion. The album is loaded paused at the start and play is sent as the arm lands; other
-/// playback input waits until then, and another album chosen meanwhile plays after it. At Motion None, or when the
-/// sleeve isn't on screen, Now Playing opens and the album plays at once.
+/// playback input waits until then, and another album chosen meanwhile plays after it. With the vinyl transition off
+/// (#197), at Motion None, or when the sleeve isn't on screen, Now Playing opens and the album plays at once.
 /// </summary>
 /// <remarks>
 /// The scene runs on the app's clock (<see cref="TimeProvider"/>, a frame at a time like the spin clock): the view draws
@@ -142,7 +142,7 @@ public sealed partial class TurntableSceneViewModel : ObservableObject, IDisposa
 
         // Now Playing open covers the page: nothing to fly from.
         var multiplier = MotionModes.Multiplier(_settings.Motion);
-        if (multiplier <= 0 || _nowPlaying.IsOpen || Places?.Source(albumId) is not { } source)
+        if (multiplier <= 0 || !_settings.VinylTransition || _nowPlaying.IsOpen || Places?.Source(albumId) is not { } source)
         {
             await PlayAtOnceAsync(albumId, tracks).ConfigureAwait(true);
             return;

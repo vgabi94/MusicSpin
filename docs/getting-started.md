@@ -90,6 +90,7 @@ Created with defaults by `doctor` (or by the first command that writes):
 | `gapless` | `true` | play consecutive queue entries with the same sample rate, channels and bit depth without a gap (see [Playback](playback.md#gapless)) |
 | `outputDevice` | `null` | the device a player the App starts plays through (Settings › Audio; `null` is the system default). The CLI uses `--device` |
 | `exclusiveMode` | `false` | a player the App starts opens its device exclusively (Settings › Audio). The CLI uses `--exclusive` |
+| `vinylTransition` | `true` | choosing an album in the App carries its record onto the deck before it plays (Settings › Turntable). `false` plays it at once |
 | `watchLibrary` | `false` | the App scans after changes in the library folders while it runs (Settings › Library). The CLI uses `library watch` |
 
 ## FFmpeg

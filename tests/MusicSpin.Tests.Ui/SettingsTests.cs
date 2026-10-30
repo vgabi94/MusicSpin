@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -151,6 +152,13 @@ public sealed class SettingsTests
             Assert.IsType<ClassicDeck>(app.ViewModel.Settings.Design);
             Assert.Single(Gui.All<Panel>(classic), p => p.Classes.Contains("deckPreview"));
 
+            var vinyl = Find<ToggleButton>(app, "VinylTransition"); // #197: on by default
+            Assert.True(vinyl.IsChecked);
+            vinyl.BringIntoView();
+            Gui.Settle();
+            Gui.Click(app.Window, vinyl);
+            Assert.False(app.ViewModel.Settings.VinylTransition);
+
             var tilt = Find<ScrubBar>(app, "TiltBar");
             tilt.Focus();
             Key(app, Avalonia.Input.Key.Home, PhysicalKey.Home);
@@ -161,6 +169,8 @@ public sealed class SettingsTests
             Assert.Equal("70°", Find<TextBlock>(app, "TiltText").Text);
 
             var depth = Find<ScrubBar>(app, "DepthBar");
+            depth.BringIntoView(); // below the dialog's fold
+            Gui.Settle();
             var bounds = Gui.BoundsIn(app.Window, depth);
             PressAt(app, new Point(bounds.X + (bounds.Width / 4), bounds.Center.Y));
             Assert.InRange(app.ViewModel.Settings.ShelfDepth, 24, 26);
@@ -168,6 +178,7 @@ public sealed class SettingsTests
 
             var saved = new SettingsStore(app.Data).Load();
             Assert.Equal(("light", "fast", 45.0, "classic"), (saved.Theme, saved.Motion, saved.RecordSpeedRpm, saved.TurntableDesign));
+            Assert.False(saved.VinylTransition);
             Assert.Equal((70.0, app.ViewModel.Settings.ShelfDepth, 0.7), (saved.ShelfTilt, saved.ShelfDepth, saved.Volume));
         }
         finally
@@ -179,6 +190,8 @@ public sealed class SettingsTests
     /// <summary>The whole bar, left to right at its vertical middle, in steps of <paramref name="steps"/> moves.</summary>
     private static IReadOnlyList<Point> Across(AppHarness app, string bar, int steps)
     {
+        Find<ScrubBar>(app, bar).BringIntoView(); // the shelf's bars are below the dialog's fold
+        Gui.Settle();
         var bounds = Gui.BoundsIn(app.Window, Find<ScrubBar>(app, bar));
         return [.. Enumerable.Range(0, steps + 1).Select(i => new Point(bounds.X + 2 + ((bounds.Width - 4) * i / steps), bounds.Center.Y))];
     }

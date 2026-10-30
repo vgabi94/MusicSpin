@@ -112,6 +112,24 @@ public sealed class DataFolderTests : LibraryTestBase
     }
 
     [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_settings_file_from_before_the_vinyl_transition_switch_keeps_it_on_and_off_is_saved_as_vinylTransition()
+    {
+        var store = new SettingsStore(Data);
+        store.Save(new AppSettings { Volume = 0.5 });
+        var path = Path.Combine(Data.Path, "settings.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.True(json.Remove("vinylTransition")); // as an older app wrote it
+        File.WriteAllText(path, json.ToJsonString());
+
+        Assert.True(new SettingsStore(Data).Load().VinylTransition);
+
+        store.Save(new AppSettings { VinylTransition = false });
+        Assert.False(System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!["vinylTransition"]!.GetValue<bool>());
+        Assert.False(new SettingsStore(Data).Load().VinylTransition);
+    }
+
+    [Fact]
     public void Concurrent_first_starts_create_the_settings_file_once_and_never_fail()
     {
         // Racing `play` commands and players on a fresh data folder all try to write the default settings.

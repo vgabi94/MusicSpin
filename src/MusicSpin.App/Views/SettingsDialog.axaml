@@ -1,5 +1,5 @@
 <!--
-  Settings (mockup: #setBack .dlg): Appearance (theme, Motion), Turntable (speed, design), Shelf (tilt, depth). Every
+  Settings (mockup: #setBack .dlg): Appearance (theme, Motion), Turntable (speed, vinyl transition, design), Shelf (tilt, depth). Every
   change applies at once and is saved; there is no Save button. The window shows it over a dim (MainWindow.axaml).
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
@@ -133,6 +133,19 @@
                                  ItemsSource="{Binding Speeds}"
                                  SelectedItem="{Binding SpeedChoice}"
                                  AutomationProperties.Name="Record speed" />
+                    </Grid>
+                </Border>
+                <Border Classes="settingRow next">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock Text="Vinyl transition" />
+                            <TextBlock Classes="settingNote" Text="{x:Static vm:SettingsViewModel.VinylTransitionNote}" />
+                        </StackPanel>
+                        <ToggleButton Name="VinylTransition"
+                                      Grid.Column="1"
+                                      Theme="{StaticResource Switch}"
+                                      IsChecked="{Binding VinylTransition}"
+                                      AutomationProperties.Name="Vinyl transition" />
                     </Grid>
                 </Border>
                 <!-- Seven designs: they wrap under the label. -->
