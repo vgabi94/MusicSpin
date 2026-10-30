@@ -1,0 +1,78 @@
+<!--
+  The MusicSpin app icon (#187): a vinyl record on a graphite deck, with a metallic navy eighth note on the label.
+  This is the master. The .ico, .icns and PNGs next to it are made from it by eng/make-app-icon.cs (docs/building.md,
+  "App icon"). Edit this file, then run that script again.
+
+  Nothing is padded: the deck fills the square, the record touches the deck's edges, and the note is scaled so its
+  smallest enclosing circle sits just inside the label (93% of the label's radius).
+  Every gradient is in user space, because Svg.Skia draws objectBoundingBox gradients flat.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="deck" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="512" y2="512">
+      <stop offset="0" stop-color="#5a5e66"/><stop offset="0.5" stop-color="#44474e"/><stop offset="1" stop-color="#2f3237"/>
+    </linearGradient>
+    <radialGradient id="vinyl" gradientUnits="userSpaceOnUse" cx="256" cy="256" r="256">
+      <stop offset="0" stop-color="#1e1f23"/><stop offset="1" stop-color="#08090a"/>
+    </radialGradient>
+    <!-- light sweeping across the vinyl, top left to bottom right -->
+    <linearGradient id="sheen" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="512" y2="512">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.42" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.58" stop-color="#ffffff" stop-opacity="0.096"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="label" gradientUnits="userSpaceOnUse" cx="227.74" cy="213.61" r="176.64">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="0.55" stop-color="#eceae6"/><stop offset="1" stop-color="#cfccc6"/>
+    </radialGradient>
+    <!-- metallic navy and its highlight, in the note's own 100-unit box -->
+    <linearGradient id="navy" gradientUnits="userSpaceOnUse" x1="10" y1="4" x2="80" y2="97">
+      <stop offset="0" stop-color="#3c5a9a"/><stop offset="0.22" stop-color="#1c2f63"/><stop offset="0.48" stop-color="#0a1330"/>
+      <stop offset="0.66" stop-color="#2b4680"/><stop offset="0.82" stop-color="#0f1b42"/><stop offset="1" stop-color="#060b1f"/>
+    </linearGradient>
+    <linearGradient id="navyHighlight" gradientUnits="userSpaceOnUse" x1="10" y1="4" x2="70" y2="90">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.4"/><stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- deck, edge to edge, corners r48 -->
+  <rect width="512" height="512" rx="48" fill="url(#deck)"/>
+
+  <!-- record, as large as the deck allows -->
+  <circle cx="256" cy="256" r="256" fill="url(#vinyl)"/>
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.4">
+    <circle cx="256" cy="256" r="127.76"/>
+    <circle cx="256" cy="256" r="134.76"/>
+    <circle cx="256" cy="256" r="141.76"/>
+    <circle cx="256" cy="256" r="148.76"/>
+    <circle cx="256" cy="256" r="155.76"/>
+    <circle cx="256" cy="256" r="162.76"/>
+    <circle cx="256" cy="256" r="169.76"/>
+    <circle cx="256" cy="256" r="176.76"/>
+    <circle cx="256" cy="256" r="183.76"/>
+    <circle cx="256" cy="256" r="190.76"/>
+    <circle cx="256" cy="256" r="197.76"/>
+    <circle cx="256" cy="256" r="204.76"/>
+    <circle cx="256" cy="256" r="211.76"/>
+    <circle cx="256" cy="256" r="218.76"/>
+    <circle cx="256" cy="256" r="225.76"/>
+    <circle cx="256" cy="256" r="232.76"/>
+    <circle cx="256" cy="256" r="239.76"/>
+    <circle cx="256" cy="256" r="246.76"/>
+  </g>
+  <circle cx="256" cy="256" r="253" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="3"/>
+  <circle cx="256" cy="256" r="256" fill="url(#sheen)"/>
+  <!-- run-out ring round the label -->
+  <circle cx="256" cy="256" r="122.76" fill="#000000" fill-opacity="0.45"/>
+
+  <!-- label -->
+  <circle cx="256" cy="256" r="117.76" fill="url(#label)"/>
+  <circle cx="256" cy="256" r="116.26" fill="none" stroke="#a29e96" stroke-opacity="0.55" stroke-width="3"/>
+
+  <!-- eighth note, drawn in a 100-unit box (stem up, flag right): one path, every part clockwise, so no seams -->
+  <g transform="translate(180.55 142.07) scale(2.2539)">
+    <path fill="url(#navy)" d="M48.64 72.25 A21.5 15 -24 0 1 9.36 89.75 A21.5 15 -24 0 1 48.64 72.25 Z M44.6 79 V5 H50.4 C51.4 17 59 24 67.5 33.5 C77 44 80.5 57 74 72 C72.8 74.6 70.6 74.2 71.4 71.4 C75 58 70.5 47.5 61 41.5 C56.5 38.6 53 37.6 50.4 37.2 V79 Z"/>
+    <path fill="url(#navyHighlight)" d="M48.64 72.25 A21.5 15 -24 0 1 9.36 89.75 A21.5 15 -24 0 1 48.64 72.25 Z M44.6 79 V5 H50.4 C51.4 17 59 24 67.5 33.5 C77 44 80.5 57 74 72 C72.8 74.6 70.6 74.2 71.4 71.4 C75 58 70.5 47.5 61 41.5 C56.5 38.6 53 37.6 50.4 37.2 V79 Z"/>
+  </g>
+</svg>
