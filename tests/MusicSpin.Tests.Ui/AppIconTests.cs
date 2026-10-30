@@ -105,7 +105,8 @@ public sealed class AppIconTests
     public void The_executable_and_the_mac_bundle_get_the_icon()
     {
         var project = XDocument.Load(Path.Combine(AppDirectory(), "MusicSpin.App.csproj"));
-        var icon = project.Descendants("ApplicationIcon").Single().Value;
+        // MSBuild paths are written with '\' on every OS; MSBuild reads it as '/' on Linux and macOS, and so does this test.
+        var icon = project.Descendants("ApplicationIcon").Single().Value.Replace('\\', Path.DirectorySeparatorChar);
         Assert.Equal(Path.GetFullPath(IconFile("app-icon.ico")), Path.GetFullPath(Path.Combine(AppDirectory(), icon)));
 
         var publish = File.ReadAllText(Path.Combine(AppDirectory(), "..", "..", "eng", "publish.sh"));
