@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>#188 Settings: a sidebar of pages</title>
+<style>
+  /* App tokens (src/MusicSpin.App/Styles/Tokens.axaml, Metrics.axaml, Sidebar.axaml, Dialogs.axaml) */
+  .dark  { --bg:#0E0F12; --bg2:#15171C; --bg3:#1D2027; --line:rgba(255,255,255,.07); --fg:#EEF0F4; --fg2:#9AA1AD; --hover:rgba(255,255,255,.05); --miss:#FF5A6A; --shadow:#000a; --dim:#0009; }
+  .light { --bg:#F4F2EE; --bg2:#EBE8E2; --bg3:#DFDBD3; --line:rgba(0,0,0,.08);       --fg:#1B1C1F; --fg2:#6C6F76; --hover:rgba(0,0,0,.04);       --miss:#C8283E; --shadow:#0005; --dim:#0003; }
+  :root { --accent:#E86A3C; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px; background:#2a2b30; font-family:Inter, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; color:#e8e8ea; width:1620px; }
+  h1 { font-size:20px; margin:0 0 6px; }
+  h2 { font-size:15px; margin:34px 0 4px; font-weight:600; }
+  p.note { font-size:12.5px; color:#b4b6bc; margin:0 0 14px; line-height:1.5; max-width:1100px; }
+  p.note b { color:#fff; }
+  .row { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  .cap { font-size:11px; color:#b4b6bc; text-transform:uppercase; letter-spacing:.07em; margin:0 0 6px; }
+  .cap .rec { color:#7fd18b; font-weight:600; text-transform:none; letter-spacing:0; }
+
+  /* The window behind, dimmed (DialogBackdropBrush) */
+  .stage { padding:22px; border-radius:10px; background:var(--bg); position:relative; overflow:hidden; }
+  .stage::before { content:""; position:absolute; inset:0; background:var(--dim); }
+
+  /* The dialog: 720 x 600; sidebar 184 | the page */
+  .dlg { position:relative; width:720px; height:600px; display:grid; grid-template-columns:184px 1fr; border-radius:14px;
+         background:var(--bg2); border:1px solid var(--line); box-shadow:0 24px 60px var(--shadow); color:var(--fg); overflow:hidden; font-size:13.5px; }
+
+  /* Sidebar */
+  .side { border-right:1px solid var(--line); padding:8px 10px 12px; display:flex; flex-direction:column; }
+  .side.tint { background:var(--bg); }
+  .side h2 { font-size:18px; font-weight:600; margin:18px 10px 14px; color:var(--fg); }
+  .nav { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:7px; color:var(--fg2); margin-bottom:2px; position:relative; }
+  .nav svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  .nav.on { background:var(--bg3); color:var(--fg); }
+  .nav.hover { background:var(--hover); color:var(--fg); }
+  .nav.focus { outline:2px solid var(--accent); outline-offset:-2px; }
+  .bar .nav.on::before { content:""; position:absolute; left:0; top:7px; bottom:7px; width:3px; border-radius:2px; background:var(--accent); }
+  .nav .warn { margin-left:auto; color:var(--miss); font-weight:700; font-size:12px; }
+
+  /* The page */
+  .page { display:flex; flex-direction:column; min-width:0; }
+  .head { display:flex; align-items:center; justify-content:space-between; padding:8px 14px 0 24px; }
+  .head h3 { font-size:18px; font-weight:600; margin:18px 0 10px; }
+  .x { width:28px; height:28px; border-radius:14px; display:grid; place-items:center; color:var(--fg2); }
+  .x svg { width:14px; height:14px; stroke:currentColor; stroke-width:1.6; }
+  .body { flex:1; overflow:hidden; padding:0 24px 22px; position:relative; }
+  .scroll { position:absolute; right:4px; top:4px; width:4px; border-radius:2px; background:var(--fg); opacity:.3; }
+  .sub { margin:16px 0 4px; font-size:11px; font-weight:600; letter-spacing:.09em; color:var(--fg2); }
+  .sub:first-child { margin-top:2px; }
+
+  .set { min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .set + .set, .set.next { border-top:1px solid var(--line); }
+  .set.tall { padding:10px 0; flex-direction:column; align-items:stretch; }
+  .lab small { display:block; font-size:11.5px; color:var(--fg2); margin-top:1px; }
+  .lab small.miss { color:var(--miss); }
+  .seg { display:inline-flex; background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:3px; }
+  .seg span { padding:5px 12px; border-radius:6px; font-size:13px; color:var(--fg2); }
+  .seg span.on { background:var(--bg3); color:var(--fg); box-shadow:0 1px 2px #0005; }
+  .sw { width:36px; height:20px; border-radius:10px; background:var(--bg3); border:1px solid var(--line); position:relative; flex-shrink:0; }
+  .sw::after { content:""; position:absolute; width:14px; height:14px; border-radius:7px; background:var(--fg2); top:2px; left:3px; }
+  .sw.on { background:var(--accent); border-color:transparent; }
+  .sw.on::after { left:18px; background:#fff; }
+  .range { display:flex; align-items:center; gap:10px; }
+  .range .track { width:170px; height:4px; border-radius:2px; background:var(--bg3); position:relative; }
+  .range .fill { position:absolute; left:0; top:0; bottom:0; border-radius:2px; background:var(--accent); }
+  .range .knob { position:absolute; top:-5px; width:14px; height:14px; border-radius:7px; background:var(--accent); margin-left:-7px; }
+  .range output { width:30px; text-align:right; font-size:13px; color:var(--fg2); }
+  .btn { padding:6px 12px; border-radius:7px; background:var(--bg3); border:1px solid var(--line); font-size:13px; white-space:nowrap; }
+  .drop { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:7px; background:var(--bg3); border:1px solid var(--line); font-size:13px; max-width:240px; }
+  .drop::after { content:""; width:6px; height:6px; border-right:1.5px solid var(--fg2); border-bottom:1.5px solid var(--fg2); transform:rotate(45deg) translateY(-2px); }
+  .path { font-size:13px; }
+  .link { color:var(--accent); font-size:12.5px; margin-top:12px; }
+  .input { padding:6px 10px; border-radius:7px; background:var(--bg); border:1px solid var(--line); color:var(--fg2); font-size:13px; width:220px; }
+
+  /* Design cards: four a row now */
+  .cards { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:6px 6px 7px; text-align:center; font-size:12px; color:var(--fg2); background:var(--bg); }
+  .card.on { border:2px solid var(--accent); color:var(--fg); }
+  .card i { display:block; height:58px; border-radius:5px; margin-bottom:5px; position:relative; }
+  .card i::after { content:""; position:absolute; left:8px; top:6px; width:46px; height:46px; border-radius:50%; background:radial-gradient(circle, #333 0 4px, #111 5px 11px, #1a1a1a 12px 22px, #0b0b0b 23px); }
+  .card.c0 i { background:linear-gradient(160deg, #2A2C31, #17181B); } .card.c0 i::after { background:radial-gradient(circle, #222 0 2px, #E86A3C 3px 10px, #111 11px 22px, #0b0b0b 23px); }
+  .card.c1 i { background:linear-gradient(160deg, #6b4a2b, #3a2616); }
+  .card.c2 i { background:linear-gradient(160deg, #d7d9dc, #9da1a6); }
+  .card.c3 i { background:repeating-linear-gradient(45deg, #222 0 3px, #2c2c2c 3px 6px); }
+  .card.c4 i { background:linear-gradient(160deg, #1b1b1d, #050506); }
+  .card.c5 i { background:linear-gradient(160deg, #e8dccb, #b9a58c); }
+  .card.c6 i { background:linear-gradient(160deg, #3a3d45, #22242a); }
+  .light .card.c0 i { background:linear-gradient(160deg, #F7F5F1, #DCD8D0); }
+
+  /* Equalizer */
+  .eq { display:grid; grid-template-columns:44px repeat(10, 1fr); gap:0; margin-top:4px; text-align:center; font-size:10.5px; color:var(--fg2); }
+  .eq .col { display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .eq .col.pre { border-right:1px solid var(--line); }
+  .eq .rail { width:4px; height:132px; border-radius:2px; background:var(--bg3); position:relative; }
+  .eq .rail::before { content:""; position:absolute; left:-6px; right:-6px; top:50%; height:1px; background:var(--line); }
+  .eq .rail .k { position:absolute; left:-5px; width:14px; height:14px; border-radius:7px; background:var(--accent); margin-top:-7px; }
+  .eq .rail .f { position:absolute; left:0; right:0; border-radius:2px; background:var(--accent); }
+
+  /* Page states */
+  .empty { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; color:var(--fg2); font-size:13px; padding-bottom:40px; }
+  .empty b { color:var(--fg); font-size:14px; font-weight:600; }
+  .empty svg { width:28px; height:28px; stroke:var(--miss); fill:none; stroke-width:1.6; margin-bottom:4px; }
+  .empty .btn { margin-top:6px; color:var(--fg); }
+  .empty code { font-family:"Cascadia Mono", Consolas, monospace; font-size:11.5px; background:var(--bg); border:1px solid var(--line); border-radius:5px; padding:3px 6px; color:var(--fg2); }
+
+  .dec { background:#1f3a26; color:#bfe8c7; border-radius:6px; padding:8px 12px; font-size:12.5px; margin:8px 0 0; max-width:1100px; line-height:1.5; }
+</style>
+</head>
+<body>
+<h1>#188 · Settings: a sidebar of pages, the selected page on the right</h1>
+<p class="note">The dialog grows from 440 to <b>720 × 600</b> (a fixed height, so it doesn't jump between pages; it shrinks with the window, 40 px from its top and bottom as today). The sidebar is <b>184 wide</b> with "Settings" at its top and one entry a page, drawn like the window's own sidebar (13.5 px, 14 px icons, the <code>Bg3Brush</code> pill for the selected entry). The page has its title and the close button at the top and scrolls on its own. Every change still applies at once; there is no Save button.</p>
+
+<section id="s1"><h2>1 · The pages (dark): Equalizer as its own page</h2>
+<p class="note">The Equalizer is tall (the sliders are 132 px), so on its own page Audio becomes three rows and the bands have room. The design cards go four to a row in the wider page.</p>
+<div class="row" id="darkPages"></div>
+
+</section><section id="s2"><h2>2 · Light</h2>
+<div class="row" id="lightPages"></div>
+
+</section><section id="s3"><h2>3 · Question A: the Equalizer on its own page, or at the bottom of Audio?</h2>
+<p class="note">Left: its own page (as in 1). Right: kept in Audio under a sub-heading, which scrolls (the bands sit below the fold at 600 px).</p>
+<div class="row" id="qEq"></div>
+
+</section><section id="s4"><h2>4 · Question B: the selected entry</h2>
+<p class="note">B1: the window sidebar's pill and nothing more (consistent with Albums / Tracks). B2: the pill plus a 3 px accent edge. B3: the sidebar darker (<code>BgBrush</code>) than the page, with the pill. The keyboard focus is an accent ring on the entry (shown on Shelf).</p>
+<div class="row" id="qSel"></div>
+
+</section><section id="s5"><h2>5 · Unhappy paths</h2>
+<p class="note">Left: no library service (the Library view model is missing, as in a test host or a failed start): its entry is left out, as the section is hidden today, and the next entry takes its place. Right: a page whose view model throws while it builds: the entry stays, with a red "!", and the page says what failed, with Try again.</p>
+<div class="row" id="qFail"></div>
+
+</section><section id="s6"><h2>Proposed answers (for Gabriel to confirm or change)</h2>
+<div class="dec">
+A → the Equalizer gets its own page (sidebar: Appearance, Turntable, Shelf, Library, Audio, Equalizer).<br>
+B → B1, the window sidebar's pill.<br>
+Opening → Settings opens on the last page used in this run of the app (the first page after a restart). Not saved to settings.json.<br>
+Keys → ↑/↓ (and Home/End) move through the sidebar and show the page at once; Tab goes into the page; Esc closes Settings from anywhere in it.<br>
+Built as a ListBox (the pages) and a ContentControl bound to the selected page view model, not a restyled TabControl: the selection lives in <code>SettingsViewModel.SelectedPage</code>, the ListBox gives the arrow keys and the automation names, and each page is a DataTemplate.
+</div>
+</section>
+
+<script>
+const I = {
+  appearance:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg>',
+  turntable:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1.6"/></svg>',
+  shelf:'<svg viewBox="0 0 16 16"><path d="M2 13.5h12M3.5 13.5V4M6.5 13.5V3M9.5 13.5l2.6-9 2 .6-2.4 8.4"/></svg>',
+  library:'<svg viewBox="0 0 16 16"><path d="M2 4.5V12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8L6.5 3.5H3a1 1 0 0 0-1 1z"/></svg>',
+  audio:'<svg viewBox="0 0 16 16"><path d="M2.5 6h2.5l3.5-3v10L5 10H2.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4"/></svg>',
+  equalizer:'<svg viewBox="0 0 16 16"><path d="M4 2.5v11M8 2.5v11M12 2.5v11"/><circle cx="4" cy="10" r="1.5" fill="currentColor"/><circle cx="8" cy="5.5" r="1.5" fill="currentColor"/><circle cx="12" cy="8.5" r="1.5" fill="currentColor"/></svg>',
+};
+const X = '<svg viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>';
+const NAMES = { appearance:'Appearance', turntable:'Turntable', shelf:'Shelf', library:'Library', audio:'Audio', equalizer:'Equalizer' };
+
+const seg = (items, on) => `<span class="seg">${items.map(i => `<span class="${i===on?'on':''}">${i}</span>`).join('')}</span>`;
+const sw = on => `<span class="sw ${on?'on':''}"></span>`;
+const lab = (t, n, cls='') => `<div class="lab">${t}${n?`<small class="${cls}">${n}</small>`:''}</div>`;
+const set = (l, r, cls='') => `<div class="set ${cls}">${l}${r||''}</div>`;
+const range = (pct, out) => `<span class="range"><span class="track"><span class="fill" style="width:${pct}%"></span><span class="knob" style="left:${pct}%"></span></span><output>${out}</output></span>`;
+const designs = ['Classic','Walnut &amp; Brass','Brushed Aluminium','Carbon Signal','Piano Black &amp; Chrome','Linear Tracking','Smoked Acrylic'];
+
+const eqBlock = () => {
+  const bands = [['31',2],['62',3],['125',1.5],['250',0],['500',-1],['1k',-1.5],['2k',0],['4k',1],['8k',2.5],['16k',3.5]];
+  const col = (lbl, g, pre) => { const t = 50 - g/12*50; const f = g>=0 ? `top:${t}%;height:${50-t}%` : `top:50%;height:${t-50}%`;
+    return `<div class="col ${pre?'pre':''}"><span>${g>0?'+':''}${g}</span><span class="rail"><span class="f" style="${f}"></span><span class="k" style="top:${t}%"></span></span><span>${lbl}</span></div>`; };
+  return set(lab('Equalizer', 'Boosts lower the pre-amp by 3.5 dB'), sw(true))
+       + `<div class="set next" style="gap:8px">${lab('Preset')}<span style="flex:1"></span><span class="drop">Bass &amp; treble</span><span class="btn">Reset</span></div>`
+       + `<div class="set next tall"><div class="eq">${col('Pre',-3.5,true)}${bands.map(b=>col(b[0],b[1])).join('')}</div></div>`
+       + `<div class="set next" style="gap:8px"><span class="input">Name these settings</span><span style="flex:1"></span><span class="btn">Save preset</span></div>`;
+};
+
+const PAGES = {
+  appearance: () => set(lab('Theme'), seg(['Dark','Light'],'Dark'))
+                  + set(lab('Motion','The record spins in every mode'), seg(['Smooth','Fast','None'],'Smooth')),
+  turntable: () => set(lab('Speed'), seg(['33⅓','45','16⅔'],'33⅓'))
+                 + set(lab('Vinyl transition','The record travels onto the deck when you choose an album'), sw(true))
+                 + `<div class="set tall next">${lab('Design')}<div class="cards">${designs.map((d,i)=>`<div class="card c${i} ${i==0?'on':''}"><i></i>${d}</div>`).join('')}</div></div>`,
+  shelf: () => set(lab('Tilt'), range(64,'58°')) + set(lab('Depth','0 is flat, higher looks deeper'), range(40,'40')),
+  library: () => set(lab('Music folders'), '<span class="btn">Add folder…</span>')
+               + set(lab('<span class="path">D:\\Music</span>','1,204 tracks'), '<span class="btn">Remove</span>')
+               + set(lab('<span class="path">E:\\Vinyl rips</span>','Not found: moved, renamed or unplugged','miss'), '<span class="btn">Remove</span>')
+               + set(lab('Scan','Last scanned 2 minutes ago'), '<span class="btn">Rescan</span>')
+               + set(lab('Watch folders','Keep the library up to date while the app runs'), sw(true))
+               + '<div class="link">3 files couldn\'t be read</div>',
+  audio: () => set(lab('Output','Playing through Speakers (Realtek), 48 kHz, shared'), '<span class="drop">System default</span>')
+             + set(lab('Exclusive mode','Other apps go silent and the system doesn\'t resample'), sw(false))
+             + set(lab('Volume levelling','Evens out track loudness (ReplayGain / R128)'), sw(true)),
+  equalizer: eqBlock,
+  audioWithEq: () => PAGES.audio() + '<div class="sub" style="margin-top:20px">EQUALIZER</div>' + eqBlock(),
+  failed: () => `<div class="empty"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.2v.3"/></svg><b>Audio couldn't open</b>The player didn't answer with its devices.<span class="btn">Try again</span></div>`,
+};
+
+function dialog({ theme='dark', page='appearance', entries=Object.keys(NAMES), side='', hover=null, focus=null, warn=null, body=null, title=null, scroll=null }) {
+  const nav = entries.map(e => `<div class="nav ${e===page?'on':''} ${e===hover?'hover':''} ${e===focus?'focus':''}">${I[e]}<span>${NAMES[e]}</span>${e===warn?'<span class="warn">!</span>':''}</div>`).join('');
+  return `<div class="stage ${theme}"><div class="dlg">
+    <div class="side ${side}"><h2>Settings</h2>${nav}</div>
+    <div class="page"><div class="head"><h3>${title||NAMES[page]}</h3><span class="x">${X}</span></div>
+      <div class="body">${scroll?`<span class="scroll" style="height:${scroll}px"></span>`:''}${(body||PAGES[page])()}</div></div>
+  </div></div>`;
+}
+const fig = (cap, html) => `<div><div class="cap">${cap}</div>${html}</div>`;
+
+document.getElementById('darkPages').innerHTML = Object.keys(NAMES).map(p => fig(NAMES[p], dialog({ page:p }))).join('');
+document.getElementById('lightPages').innerHTML = ['turntable','library','equalizer'].map(p => fig(NAMES[p], dialog({ theme:'light', page:p }))).join('');
+document.getElementById('qEq').innerHTML =
+    fig('A1 · its own page <span class="rec">(proposed)</span>', dialog({ page:'audio' }))
+  + fig('A2 · in Audio, scrolling', dialog({ page:'audio', entries:['appearance','turntable','shelf','library','audio'], body:PAGES.audioWithEq, scroll:300 }));
+document.getElementById('qSel').innerHTML =
+    fig('B1 · pill <span class="rec">(proposed)</span>', dialog({ page:'turntable', focus:'shelf' }))
+  + fig('B2 · pill + accent edge', `<div class="bar">${dialog({ page:'turntable', focus:'shelf' })}</div>`)
+  + fig('B3 · darker sidebar', dialog({ page:'turntable', side:'tint', focus:'shelf' }))
+  + fig('B3 · light', dialog({ theme:'light', page:'turntable', side:'tint', focus:'shelf' }));
+document.getElementById('qFail').innerHTML =
+    fig('No Library view model: the entry is left out', dialog({ page:'appearance', entries:['appearance','turntable','shelf','audio','equalizer'] }))
+  + fig('A page that fails to build', dialog({ page:'audio', warn:'audio', body:PAGES.failed }));
+// Render one section alone: 188-settings-sidebar.html?s3 (a query, not a #, which would scroll to it)
+if (location.search) { if (location.search !== "?s1") document.querySelectorAll("body > h1, body > p.note").forEach(e => e.style.display = "none"); document.querySelectorAll("section").forEach(s => { if ("?" + s.id !== location.search) s.style.display = "none"; else s.querySelector("h2").style.marginTop = "0"; }); }
+</script>
+</body>
+</html>
