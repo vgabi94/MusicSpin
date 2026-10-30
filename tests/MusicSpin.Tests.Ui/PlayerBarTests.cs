@@ -178,15 +178,29 @@ public sealed class PlayerBarTests
         Assert.Equal(Of("Song").Right + gap, Of("Volume").X, 1); // the song up to the volume (#189)
         Assert.Equal(Of("Transport").X, Of("Volume").Right + gap, 1); // the volume against the transport
         Assert.Equal(Of("Transport").Right + gap, Of("Analyzer").X, 1); // the analyzer right after it
-        Assert.Equal(Of("Analyzer").Right + gap, Of("ExclusiveButton").X, 1); // then the Exclusive pill (#191)
-        Assert.True(Of("Centre").Right + gap <= Of("Right").X + 0.5, "the pill keeps to the centre");
-        Assert.True(Of("ExclusiveButton").Right + gap <= Of("Tech").X + 0.5, "the format keeps to its column");
+        Assert.True(Of("Analyzer").Right + gap <= Of("Tech").X + 0.5, "the format keeps to its column");
         Assert.True(Of("Tech").Right < Of("QueueButton").X);
         Assert.True(Of("SettingsButton").Right <= app.Window.Bounds.Width);
         Assert.True(Of("Shuffle").X >= Of("Transport").X && Of("Repeat").Right <= Of("Transport").Right, "the transport's buttons fit");
+
+        // The Exclusive pill right after Repeat, inside the transport (#191); the play button over the position's middle,
+        // or on the narrowest window a little left of it, so the pill fits.
+        var transportGap = (double)app.Window.FindResource("TransportGap")!;
+        var slot = (double)app.Window.FindResource("ExclusiveSlotWidth")!;
+        Assert.Equal(Of("Repeat").Right + transportGap, Of("ExclusiveButton").X, 1);
+        Assert.True(Of("ExclusiveButton").X + slot <= Of("Transport").Right + 0.5, "the pill's slot fits the transport");
+        var offCentre = Of("PositionBar").Center.X - Of("PlayPause").Center.X;
+        if (width > 1280)
+        {
+            Assert.Equal(0, offCentre, 0);
+        }
+        else
+        {
+            Assert.InRange(offCentre, 0, 32); // moved left only as far as the pill needs
+        }
+
         var middle = (Of("Song").X + songMin + Of("Right").X) / 2; // between the song's narrowest and the right
-        Assert.Equal(Of("Centre").X, Of("Volume").X, 1);
-        Assert.Equal(middle, (Of("Centre").X + Of("Centre").Right) / 2, 0); // the four together, in the middle
+        Assert.Equal(middle, (Of("Volume").X + Of("Analyzer").Right) / 2, 0); // the three together, in the middle
         var widest = (double)app.Window.FindResource("PlayerTransportMaxWidth")!;
         Assert.True(Of("Transport").Width <= widest + 0.5);
         if (width >= 2560)
@@ -238,6 +252,25 @@ public sealed class PlayerBarTests
         if (width >= 280 + 364 + 32)
         {
             Assert.Equal(width, end.X + end.Width);
+        }
+    }
+
+    [AvaloniaTheory]
+    [Trait("Category", "Unhappy")]
+    [InlineData(400, 150, 125)] // room for both: the row centred
+    [InlineData(331, 150, 90)] // just room: still centred (rounded down to a whole pixel)
+    [InlineData(273, 150, 33)] // the narrowest window's transport: the row moves left just enough for the pill
+    [InlineData(200, 150, 0)] // no room even at the start: the row starts there, the pill runs past the end
+    [InlineData(0, 150, 0)] // not laid out yet
+    public void A_trailed_row_stays_centred_and_moves_left_only_as_far_as_its_trailer_needs(double width, double row, double expected)
+    {
+        var (rowX, trailerX) = new TrailedRow { Spacing = 14, TrailerWidth = 76 }.Positions(width, row);
+
+        Assert.Equal(expected, rowX);
+        Assert.Equal(rowX + row + 14, trailerX);
+        if (width >= row + 14 + 76)
+        {
+            Assert.True(trailerX + 76 <= width, "the trailer fits");
         }
     }
 

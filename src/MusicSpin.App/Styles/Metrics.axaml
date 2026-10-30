@@ -359,20 +359,19 @@
     <!--
       Its columns (#133): each part has its own width, whatever it shows, and the transport takes the rest. The song (the
       sleeve, then its text; at least this wide, and on a wide window up to the volume, #189); the volume (the speaker 30,
-      the bar 90, the box 2 + 46, 8 apart); the analyzer; the Exclusive pill (#191), wide enough for "EXCLUSIVE !"; the
-      format and the two round buttons, wide enough for the longest format label beside HI-RES.
+      the bar 90, the box 2 + 46, 8 apart); the analyzer; the format and the two round buttons, wide enough for the
+      longest format label beside HI-RES.
     -->
     <sys:Double x:Key="PlayerSongMinWidth">280</sys:Double>
     <GridLength x:Key="PlayerVolumeColumn">184</GridLength>
     <GridLength x:Key="PlayerAnalyzerColumn">79</GridLength>
-    <GridLength x:Key="PlayerExclusiveColumn">76</GridLength>
     <sys:Double x:Key="PlayerRightWidth">364</sys:Double>
     <!--
-      The transport at its widest (mockup: .progress), and so the volume, the transport, the analyzer and the Exclusive
-      pill between them, 16 apart: 184 + 16 + 560 + 16 + 79 + 16 + 76. XAML can't add, so PlayerBarTests checks the sum.
+      The transport at its widest (mockup: .progress), and so the volume, the transport and the analyzer between them, 16
+      apart: 184 + 16 + 560 + 16 + 79. XAML can't add, so PlayerBarTests checks the sum.
     -->
     <sys:Double x:Key="PlayerTransportMaxWidth">560</sys:Double>
-    <sys:Double x:Key="PlayerCentreMaxWidth">947</sys:Double>
+    <sys:Double x:Key="PlayerCentreMaxWidth">855</sys:Double>
     <sys:Double x:Key="PlayerSongGap">16</sys:Double>
     <sys:Double x:Key="MiniWidth">84</sys:Double>
     <sys:Double x:Key="MiniHeight">58</sys:Double>
@@ -417,7 +416,11 @@
     <Thickness x:Key="HiResPadding">4,1</Thickness>
     <CornerRadius x:Key="HiResRadius">3</CornerRadius>
     <sys:Double x:Key="HiResLetterSpacing">0.4</sys:Double>
-    <!-- The Exclusive pill (#191): HI-RES's size and letters; its edge a rectangle so it can be dashed. -->
+    <!--
+      The Exclusive pill after Repeat (#191): HI-RES's size and letters; its edge a rectangle so it can be dashed; a slot
+      wide enough for "EXCLUSIVE !", so the buttons don't move when it shows the "!".
+    -->
+    <sys:Double x:Key="ExclusiveSlotWidth">76</sys:Double>
     <Thickness x:Key="ExclusivePadding">5,2</Thickness>
     <sys:Double x:Key="ExclusiveRadius">3</sys:Double>
     <sys:Double x:Key="ExclusiveEdgeThickness">1</sys:Double>

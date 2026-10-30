@@ -9,6 +9,8 @@
     <AssemblyName>MusicSpin</AssemblyName>
     <RootNamespace>MusicSpin.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- MusicSpin.exe's icon (#187), made from Assets/AppIcon/app-icon.svg by eng/make-app-icon.cs. -->
+    <ApplicationIcon>Assets\AppIcon\app-icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- The macOS and Windows media controls call the Objective-C runtime and WinRT through function pointers (Services/MediaControls/ObjC.cs, WinRT.cs). -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -25,8 +27,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The tray icon's image (#83); the turntable designs' drawings and fonts (#25–#30). -->
+    <!-- The turntable designs' drawings and fonts (#25–#30). -->
     <AvaloniaResource Include="Assets\**" />
+    <!--
+      The app icon (#187): only the window's icon and the tray's are loaded at run time. The master and the macOS and
+      Linux files are inputs to the publish scripts, so they stay out of the executable.
+    -->
+    <AvaloniaResource Remove="Assets\AppIcon\**" />
+    <AvaloniaResource Include="Assets\AppIcon\app-icon.ico;Assets\AppIcon\app-icon-64.png" />
   </ItemGroup>
 
   <ItemGroup>

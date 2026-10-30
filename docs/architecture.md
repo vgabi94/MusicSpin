@@ -331,7 +331,9 @@ src/MusicSpin.App/
 - **The bar's layout (#133).** Each part has a column of its own width (`Metrics.axaml`), so a long name, a new track,
   the time growing a digit or the analyzer lighting up moves nothing else: the song (sleeve, title and heart, "artist ·
   album") on the left, the format and the queue and settings buttons on the right, and between them the volume, the
-  transport, the analyzer and the Exclusive pill, kept together and centred once the transport reaches its widest. The times sit in
+  transport and the analyzer, kept together and centred once the transport reaches its widest. The transport's buttons
+  stay centred over the position with the Exclusive pill after Repeat (`TrailedRow`); on a window too narrow for that
+  they move left just enough for the pill. The times sit in
   columns that hold "0:00:00" in tabular digits. A title or "artist · album" too long for its place is a `Marquee`: it
   rests at the start, scrolls to the end, rests and scrolls back, moving only its text's render transform, by whole
   device pixels, on the app's clock (its timer sleeps through each rest). It starts again at the beginning for a new

@@ -3,10 +3,10 @@
           xmlns:vm="using:MusicSpin.App.ViewModels"
           x:Class="MusicSpin.App.Views.TrayIconView"
           x:DataType="vm:TrayViewModel"
-          Icon="avares://MusicSpin/Assets/tray.png"
+          Icon="avares://MusicSpin/Assets/AppIcon/app-icon-64.png"
           ToolTipText="{Binding ToolTip}"
           Command="{Binding TogglePlayPauseCommand}">
-    <!-- The tray icon of a background player (#83): bindings only. Clicking the icon toggles play/pause where the OS sends clicks. -->
+    <!-- The tray icon of a background player (#83), drawn as the app icon (#187): bindings only. Clicking the icon toggles play/pause where the OS sends clicks. -->
     <TrayIcon.Menu>
         <NativeMenu>
             <NativeMenuItem Header="{Binding PlayPauseHeader}" Command="{Binding TogglePlayPauseCommand}" />

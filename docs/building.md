@@ -67,7 +67,7 @@ dotnet test --solution MusicSpin.slnx -- --timeout 300s       # abort a hung run
 | `--out DIR` | `-Out` | output root (default `artifacts/publish`) |
 | `--zip` | `-Zip` | also create `musicspin-<version>-<rid>.zip` |
 
-`eng/Publish.props` (imported by the App and CLI projects) turns on these settings whenever a RID is given: `SelfContained`, `PublishSingleFile`, `IncludeNativeLibrariesForSelfExtract` (miniaudio and Skia inside the single file), `EnableCompressionInSingleFile`, embedded PDBs, English-only satellite resources. `TagLibSharp.dll` is excluded from the bundle (LGPL replaceability). On osx RIDs, `publish.sh` also builds `MusicSpin.app` (Info.plist, plus an ad-hoc `codesign` when run on macOS). Cross-published osx builds need `codesign --force --deep -s -` before they launch on Apple Silicon.
+`eng/Publish.props` (imported by the App and CLI projects) turns on these settings whenever a RID is given: `SelfContained`, `PublishSingleFile`, `IncludeNativeLibrariesForSelfExtract` (miniaudio and Skia inside the single file), `EnableCompressionInSingleFile`, embedded PDBs, English-only satellite resources. `TagLibSharp.dll` is excluded from the bundle (LGPL replaceability). On osx RIDs, `publish.sh` also builds `MusicSpin.app` (Info.plist, the app icon, plus an ad-hoc `codesign` when run on macOS). Cross-published osx builds need `codesign --force --deep -s -` before they launch on Apple Silicon. On linux RIDs, both scripts put the app icon next to the executable as `MusicSpin.png` (512 px), for a `.desktop` launcher.
 
 FFmpeg is copied as the real versioned libraries only (`libavcodec.so.63`, `avcodec-63.dll`, ...), with its license, and without symlink duplicates.
 
@@ -76,6 +76,24 @@ Sizes (linux-x64, Release): `music-spin` ≈ 41 MB, `MusicSpin` ≈ 49 MB, `TagL
 ### Why trimming is off
 
 `PublishTrimmed` was evaluated. It shrinks the CLI from about 40 MB to 15 MB, but then every `--json` command fails ("Reflection-based serialization has been disabled"). LiteDB and TagLib# are not trim-safe (IL2104), and the trimmer rewrites `TagLibSharp.dll` (500 KB → 75 KB), which defeats the LGPL replaceability. Enabling trimming would need System.Text.Json source generation plus trimmer roots for LiteDB and TagLib#. It is off for now. `-p:PublishTrimmed=true` still works for experiments. **Planned:** source generation, then trimming, and a `dotnet tool` package for the CLI.
+
+### App icon
+
+The master is `src/MusicSpin.App/Assets/AppIcon/app-icon.svg` (#187): a vinyl record on a graphite deck, with a metallic navy eighth note on the label. The other files in that folder are made from it, so edit the SVG, then run this from the repository root:
+
+```sh
+dotnet run eng/make-app-icon.cs
+```
+
+It draws each size straight from the SVG with Svg.Skia, the renderer the app already uses for its SVGs. Keep every gradient in user space (`gradientUnits="userSpaceOnUse"`): Svg.Skia draws `objectBoundingBox` gradients flat. Its output:
+
+| File | Used by |
+|---|---|
+| `app-icon.ico` (16–256 px) | `MusicSpin.exe` (`ApplicationIcon` in the App csproj) and the main window's `Icon` |
+| `app-icon.icns` (16–1024 px, with the @2x sizes) | `MusicSpin.app`: `publish.sh` copies it to `Contents/Resources/MusicSpin.icns` (`CFBundleIconFile`) |
+| `app-icon-<n>.png` (16, 24, 32, 48, 64, 128, 256, 512) | the tray icon (64 px) and Linux: the publish scripts ship the 512 px one as `MusicSpin.png` |
+
+Only the `.ico` and the 64 px PNG are Avalonia resources. The master and the macOS and Linux files stay out of the executable.
 
 ## CI and release workflows
 

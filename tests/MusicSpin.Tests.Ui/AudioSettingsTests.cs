@@ -660,8 +660,8 @@ public sealed class AudioSettingsTests
         Assert.Equal(expected, AutomationProperties.GetName(pill));
         var warning = Gui.All<TextBlock>(pill).Single(t => t.Classes.Contains("warning"));
         Assert.True(warning.IsEffectivelyVisible);
-        var column = (GridLength)app.Window.FindResource("PlayerExclusiveColumn")!;
-        Assert.True(pill.Bounds.Width <= column.Value, $"the pill with its \"!\" ({pill.Bounds.Width}) fits its column ({column.Value})");
+        var slot = (double)app.Window.FindResource("ExclusiveSlotWidth")!;
+        Assert.True(pill.Bounds.Width <= slot, $"the pill with its \"!\" ({pill.Bounds.Width}) fits its slot ({slot})");
 
         await OutputAsync(app, new OutputInfo("null", null, false)); // no audio device at all: no reason given
         Assert.Contains("refused", pill.Classes);
