@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  .dark  { --bg:#0E0F12; --bg2:#15171C; --bg3:#1D2027; --line:rgba(255,255,255,.07); --fg:#EEF0F4; --fg2:#9AA1AD; --fg3:#5E6470; --ex:#FF5A6A; --track:rgba(255,255,255,.12); --accent:#E86A3C; --play:#EEF0F4; --playInk:#0E0F12; }
+  .light { --bg:#F4F2EE; --bg2:#EBE8E2; --bg3:#DFDBD3; --line:rgba(0,0,0,.08);       --fg:#1B1C1F; --fg2:#6C6F76; --fg3:#A3A3A6; --ex:#C8283E; --track:rgba(0,0,0,.12);       --accent:#E86A3C; --play:#1B1C1F; --playInk:#F4F2EE; }
+  body { margin:0; font-family: Inter, "Segoe UI", system-ui, sans-serif; }
+  h2 { font-size:14px; margin:22px 0 4px; font-weight:600; }
+  h2:first-child { margin-top:0; }
+  p.note { font-size:12px; color:var(--muted-foreground); margin:0 0 8px; line-height:1.45; }
+  .tag { font-size:10.5px; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.06em; margin:10px 0 4px; }
+  .frame { border-radius:var(--radius); overflow:hidden; }
+
+  .bar { box-sizing:border-box; height:84px; background:var(--bg2); border-top:1px solid var(--line); padding:0 18px; display:flex; align-items:center; gap:16px; color:var(--fg2); }
+  .song { display:flex; align-items:center; gap:16px; flex:none; }
+  .sleeve { width:58px; height:58px; border-radius:3px; background:linear-gradient(135deg,#3a4150,#1b1f27); position:relative; flex:none; }
+  .sleeve::after { content:""; position:absolute; right:-24px; top:3px; width:52px; height:52px; border-radius:50%; background:radial-gradient(circle,#c33 0 6px,#111 7px 100%); z-index:-1; }
+  .song .t { font-size:14px; font-weight:600; color:var(--fg); }
+  .song .a { font-size:12.5px; margin-top:2px; }
+  .centre { display:flex; align-items:center; gap:16px; flex:none; }
+  .vol { width:184px; display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:12px; }
+  .vol .vb { width:90px; height:4px; border-radius:2px; background:linear-gradient(90deg,var(--fg2) 80%,var(--track) 80%); }
+  .transport { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .tb { display:flex; align-items:center; gap:14px; }
+  .tb i { width:15px; height:13px; display:block; border-radius:2px; background:var(--fg2); opacity:.8; }
+  .tb .pl { width:38px; height:38px; border-radius:19px; background:var(--play); }
+  .prog { display:flex; align-items:center; width:100%; font-size:11.5px; }
+  .prog span { width:54px; flex:none; text-align:right; padding-right:8px; box-sizing:border-box; }
+  .prog span:last-child { text-align:left; padding:0 0 0 5px; }
+  .prog .pb { flex:1; height:4px; border-radius:2px; background:linear-gradient(90deg,var(--accent) 22%,var(--track) 22%); }
+  .an { width:79px; height:32px; display:flex; align-items:flex-end; gap:1px; flex:none; }
+  .an b { width:4px; background:linear-gradient(0deg,color-mix(in srgb,var(--accent) 40%,transparent),var(--accent)); border-radius:1px; }
+  .ancol { display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .right { display:flex; align-items:center; justify-content:flex-end; gap:18px; width:364px; flex:none; }
+  .tech { display:flex; align-items:center; gap:8px; min-width:0; }
+  .hires { white-space:nowrap; flex-shrink:0; border:1px solid #D4B25A; color:#D4B25A; font-size:9.5px; font-weight:700; letter-spacing:.4px; padding:1px 4px; border-radius:3px; }
+  .badge { background:var(--bg3); border:1px solid var(--line); border-radius:4px; padding:2px 7px; font-size:12px; font-weight:500; white-space:nowrap; }
+  .badge b { color:var(--fg); font-weight:600; }
+  .btns { display:flex; gap:6px; }
+  .round { width:30px; height:30px; border-radius:15px; display:grid; place-items:center; position:relative; }
+  .round i { width:15px; height:12px; border-top:2px solid var(--fg2); border-bottom:2px solid var(--fg2); box-sizing:border-box; display:block; }
+  .round.cog i { width:16px; height:16px; border:2px dotted var(--fg2); border-radius:50%; }
+  .count { position:absolute; top:-4px; right:-6px; background:var(--accent); color:#000; font-size:10px; font-weight:700; min-width:17px; height:17px; border-radius:9px; display:grid; place-items:center; }
+  .ex { font-size:9.5px; font-weight:700; letter-spacing:.4px; padding:1px 4px; border-radius:3px; border:1px solid; white-space:nowrap; flex:none; }
+  .ex.on  { border-color:var(--ex); color:var(--ex); }
+  .ex.off { border-color:var(--fg3); color:var(--fg3); }
+  .ex.fall { border-color:var(--ex); border-style:dashed; color:var(--fg2); }
+  .ex.fall::after { content:" !"; color:var(--ex); }
+  .excol { width:66px; display:flex; justify-content:flex-start; flex:none; }
+  .nums { font-family:var(--font-mono); font-size:11.5px; }
+</style>
+</head>
+<body>
+
+<h2>Exclusive to the right of the analyzer</h2>
+<p class="note">The pill becomes a fourth part of the centre group: volume · transport · analyzer · <b>EXCLUSIVE</b>. It goes in a 66 px column 16 px after the analyzer, so the group's limit grows from 855 to 937 and it stays centred. The right column keeps its 364 px and the format is never cut.</p>
+
+<div class="tag">1440 px, dark, proposed</div>
+<div class="frame" id="b1440"></div>
+<div class="tag">1440 px, light, proposed (an MP3, shared)</div>
+<div class="frame" id="b1440l"></div>
+
+<h2>The cost: the narrowest window</h2>
+<p class="note">At 1280 px nothing has room to spare, so the 82 px come out of the transport, wherever the pill goes. The buttons above it still fit (about 160 px). What shrinks is the position bar, from <span class="nums">165</span> to <span class="nums">83</span> px. At 1440 it goes from <span class="nums">325</span> to <span class="nums">243</span> px, and from about 1650 px up it doesn't change.</p>
+<div class="tag">1280 px, today</div>
+<div class="frame" id="b1280now"></div>
+<div class="tag">1280 px, Exclusive to the right of the analyzer</div>
+<div class="frame" id="b1280"></div>
+<div class="tag">1280 px, alternative: Exclusive under the analyzer (no width cost)</div>
+<div class="frame" id="b1280under"></div>
+
+<h2>Close-up, real size</h2>
+<div class="tag">right of the analyzer: on · off · asked but got shared · restarting</div>
+<div id="close"></div>
+
+<script>
+const heights = [22,27,30,28,25,21,24,19,16,18,14,11,9,7,5,3];
+const an = () => `<div class="an">${heights.map(h => `<b style="height:${h}px"></b>`).join('')}</div>`;
+const pill = (s, op) => `<span class="ex ${s}"${op ? ` style="opacity:${op}"` : ''}>EXCLUSIVE</span>`;
+
+// layout: inner = width - 36; centre = min(inner - songMin - right - 32, max) ; spare split
+function bar({ width, theme, mode, state = 'on', hires = true, fmt }) {
+  const inner = width - 36, songMin = 280, right = 364;
+  const exW = mode === 'right' ? 66 + 16 : 0;
+  const max = 855 + exW;
+  const room = Math.max(0, inner - songMin - right - 32);
+  const centre = Math.min(room, max);
+  const spare = (room - centre) / 2;
+  const song = songMin + Math.floor(spare);
+  const transport = centre - 184 - 79 - 32 - exW;
+  const anPart = mode === 'under'
+    ? `<div class="ancol">${an()}${pill(state)}</div>`
+    : an();
+  const exPart = mode === 'right' ? `<div class="excol">${pill(state)}</div>` : '';
+  const f = fmt ?? '<b>FLAC</b> 24 bit, 192 kHz, 6431k, Stereo';
+  const html = `
+  <div class="bar ${theme}" style="width:${width}px">
+    <div class="song" style="width:${song}px"><div class="sleeve"></div><div style="margin-left:24px"><div class="t">The Thread</div><div class="a">Kodo Arai · Night Transit</div></div></div>
+    <div class="centre" style="width:${centre}px; margin-left:${spare - Math.floor(spare)}px">
+      <div class="vol"><span>🔉</span><div class="vb"></div><span style="width:46px">80%</span></div>
+      <div class="transport" style="width:${transport}px">
+        <div class="tb"><i></i><i></i><div class="pl"></div><i></i><i></i></div>
+        <div class="prog"><span>1:23</span><div class="pb"></div><span>6:46</span></div>
+      </div>
+      ${anPart}${exPart}
+    </div>
+    <div class="right" style="margin-left:${spare}px">
+      <div class="tech">${hires ? '<span class="hires">HI-RES</span>' : ''}<span class="badge">${f}</span></div>
+      <div class="btns"><div class="round"><i></i><span class="count">7</span></div><div class="round cog"><i></i></div></div>
+    </div>
+  </div>`;
+  return html;
+}
+function place(id, opts) {
+  const el = document.getElementById(id);
+  const avail = el.parentElement.clientWidth || 728;
+  const z = avail / opts.width;
+  el.innerHTML = `<div style="zoom:${z}">${bar(opts)}</div>`;
+}
+place('b1440', { width: 1440, theme: 'dark', mode: 'right' });
+place('b1440l', { width: 1440, theme: 'light', mode: 'right', state: 'off', hires: false, fmt: '<b>MP3</b> 44.1 kHz, 320k, Stereo' });
+place('b1280now', { width: 1280, theme: 'dark', mode: 'none' });
+place('b1280', { width: 1280, theme: 'dark', mode: 'right' });
+place('b1280under', { width: 1280, theme: 'dark', mode: 'under' });
+
+// close-up: analyzer + pill at 1:1, dark then light
+const close = ['dark', 'light'].map(t => `
+  <div class="bar ${t}" style="height:64px; border-radius:var(--radius); margin-bottom:6px; gap:8px; padding:0 12px; justify-content:space-between">
+    ${[['on'],['off'],['fall'],['on', .35]].map(([s, op]) => `<div style="display:flex; align-items:center; gap:16px">${an()}<div class="excol" style="width:auto">${pill(s, op)}</div></div>`).join('')}
+  </div>`).join('');
+document.getElementById('close').innerHTML = close;
+</script>
+</body>
+</html>
