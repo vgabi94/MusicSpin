@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Services;
 using MusicSpin.Core;
 using MusicSpin.Core.Normalization;
+using MusicSpin.Core.Remote;
 
 namespace MusicSpin.App.ViewModels;
 
@@ -11,13 +12,19 @@ namespace MusicSpin.App.ViewModels;
 /// saved as <c>outputDevice</c>), exclusive mode (saved as <c>exclusiveMode</c>), and what the player plays through now.
 /// Output options apply only when the player starts, so a change restarts it: the queue and the position come back, and
 /// the music goes on if it was playing. Volume levelling (#139) and the equalizer (#141, <see cref="Equalizer"/>) apply at
-/// once, without a restart.
+/// once, without a restart. The player bar's Exclusive pill (#191) is the same switch: <see cref="ToggleExclusiveCommand"/>.
 /// </summary>
 public sealed partial class AudioSettingsViewModel : ObservableObject
 {
     public const string SystemDefault = "System default";
 
     public const string ExclusiveNote = "Other apps go silent and the system doesn't resample";
+
+    public const string ExclusiveOnTip = "Exclusive mode: on. " + ExclusiveNote + ". Click for shared mode.";
+
+    public const string ExclusiveOffTip = "Exclusive mode: off (shared). Click for exclusive mode.";
+
+    public const string ExclusiveRefusedTip = "Exclusive mode is on, but the player plays shared.";
 
     public const string LevellingNote = "Evens out track loudness (ReplayGain / R128)";
 
@@ -31,6 +38,7 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     private NormalizationMode _levellingMode;
     private int _sending; // normalize commands on their way: FollowPlayer must not undo a newer switch flip
     private bool _missed; // a status came while a change was in flight: Settle follows it once answered
+    private OutputInfo? _outputBeforeRestart; // until the restarted player says what it opened, its output is unknown
 
     public AudioSettingsViewModel(IAudioDevices devices, ISettingsService settings, PlayerViewModel player, MenuViewModel menu, Notices notices)
     {
@@ -58,6 +66,8 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
             if (e.PropertyName == nameof(PlayerViewModel.Output))
             {
                 OnPropertyChanged(nameof(InUse));
+                OnPropertyChanged(nameof(IsExclusiveRefused));
+                OnPropertyChanged(nameof(ExclusiveTip));
             }
         };
         _ready = true; // from here on, a change is the user's: saved, and the player restarts
@@ -71,9 +81,22 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     /// <summary>The device button's text: "System default", the device's name, or "… (not connected)".</summary>
     public string DeviceLabel => Label(Device);
 
-    /// <summary>Exclusive mode: the switch; a change restarts the player.</summary>
+    /// <summary>Exclusive mode: the switch, and the player bar's pill; a change restarts the player.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsExclusiveRefused), nameof(ExclusiveTip))]
     public partial bool Exclusive { get; set; }
+
+    /// <summary>
+    /// Exclusive was asked for, but the player plays shared (<c>status.output</c>): the device refused the format or was
+    /// busy. Not while restarting, nor before the restarted player has said what it opened.
+    /// </summary>
+    public bool IsExclusiveRefused
+        => Exclusive && !IsRestarting && _player.Output is { Exclusive: false } output && !ReferenceEquals(output, _outputBeforeRestart);
+
+    /// <summary>The pill's tooltip and accessible name: on, off, or asked but shared with the player's reason.</summary>
+    public string ExclusiveTip => IsExclusiveRefused
+        ? ExclusiveRefusedTip + (_player.Output?.Notice is { } notice ? $"\n{notice}" : string.Empty) + "\nClick for shared mode."
+        : Exclusive ? ExclusiveOnTip : ExclusiveOffTip;
 
     /// <summary>
     /// Volume levelling (#139): the switch. On keeps the mode saved (auto unless <c>music-spin normalize</c> chose track or
@@ -87,7 +110,8 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
 
     /// <summary>A change is restarting the player: the controls wait.</summary>
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(OpenDeviceMenuCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenDeviceMenuCommand), nameof(ToggleExclusiveCommand))]
+    [NotifyPropertyChangedFor(nameof(IsExclusiveRefused), nameof(ExclusiveTip))]
     public partial bool IsRestarting { get; private set; }
 
     /// <summary>
@@ -204,6 +228,10 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
         return RestartAsync();
     }
 
+    /// <summary>The player bar's pill (#191): flips the switch, so saved and restarted as from Settings.</summary>
+    [RelayCommand(CanExecute = nameof(CanChange))]
+    private void ToggleExclusive() => Exclusive = !Exclusive;
+
     partial void OnExclusiveChanged(bool value)
     {
         if (!_ready)
@@ -297,6 +325,7 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     /// <summary>Restarts the player so it takes the output saved now (the controls wait meanwhile).</summary>
     private async Task RestartAsync()
     {
+        _outputBeforeRestart = _player.Output;
         IsRestarting = true;
         try
         {

@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -540,6 +541,151 @@ public sealed class AudioSettingsTests
         Assert.True(inUse.TextLayout.TextLines.Count >= 3, "the status line and the notice, wrapped over at least two lines");
     }
 
+    // ---- the player bar's Exclusive pill (#191) -------------------------------------------------------------------
+
+    private static Button Pill(AppHarness app) => Gui.Find<Button>(app.Window, "ExclusiveButton");
+
+    private const string Refused = "Exclusive mode unavailable: the device does not accept 44.1 kHz, 2 ch in exclusive mode "
+        + "(tried s24in32, s32, s24). Playing in shared mode through the Windows mixer.";
+
+    private static async Task OutputAsync(AppHarness app, OutputInfo output)
+    {
+        app.Scripted!.Status = app.Scripted.Status with { Output = output };
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.Player.Output == output, "the output");
+        Gui.Settle();
+    }
+
+    [AvaloniaFact]
+    public async Task The_player_bar_pill_saves_exclusive_mode_and_restarts_the_player_then_turns_it_off_again()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { OutputDevice = "USB DAC" });
+        await PlayingAsync(app);
+        var pill = Pill(app);
+        Assert.DoesNotContain("on", pill.Classes);
+        Assert.Equal(AudioSettingsViewModel.ExclusiveOffTip, ToolTip.GetTip(pill));
+        Assert.Equal(AudioSettingsViewModel.ExclusiveOffTip, AutomationProperties.GetName(pill));
+
+        Gui.Click(app.Window, pill);
+        await RestartedAsync(app, 2);
+
+        Assert.True(new SettingsStore(app.Data).Load().ExclusiveMode);
+        Assert.Equal(new PlayerOutput("USB DAC", true), app.Scripted!.StartOutputs.Last());
+        await Gui.UntilAsync(() => app.Scripted.Count("resume") == 1, "the music resumed");
+        Assert.Contains("on", pill.Classes);
+        Assert.DoesNotContain("refused", pill.Classes);
+        Assert.Equal(AudioSettingsViewModel.ExclusiveOnTip, ToolTip.GetTip(pill));
+        Assert.Equal(AudioSettingsViewModel.ExclusiveOnTip, AutomationProperties.GetName(pill));
+
+        Gui.Click(app.Window, pill);
+        await RestartedAsync(app, 3);
+
+        Assert.False(new SettingsStore(app.Data).Load().ExclusiveMode);
+        Assert.Equal(new PlayerOutput("USB DAC", false), app.Scripted.StartOutputs.Last());
+        Assert.DoesNotContain("on", pill.Classes);
+    }
+
+    [AvaloniaFact]
+    public async Task The_pill_and_the_Settings_switch_are_the_same_setting_both_ways()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+
+        FlipExclusive(app); // Settings › Audio on: the pill follows
+        await RestartedAsync(app, 2);
+        Assert.Contains("on", Pill(app).Classes);
+
+        app.ViewModel.Settings.Close();
+        Gui.FinishAnimations();
+        Gui.Click(app.Window, Pill(app)); // the pill off: the switch follows
+        await RestartedAsync(app, 3);
+        await OpenSettingsAsync(app);
+
+        Assert.False(Gui.Find<ToggleButton>(app.Window, "ExclusiveMode").IsChecked);
+        Assert.DoesNotContain("on", Pill(app).Classes);
+        Assert.False(new SettingsStore(app.Data).Load().ExclusiveMode);
+        Assert.Equal(3, app.Scripted!.AppStarts); // one restart each, no echo between the two
+    }
+
+    [AvaloniaFact]
+    public async Task While_the_player_restarts_the_pill_waits_and_does_not_say_exclusive_was_refused()
+    {
+        await using var app = await OpenAsync();
+        await OpenSettingsAsync(app);
+        var gate = app.Scripted!.ConnectGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pill = Pill(app);
+        app.ViewModel.Settings.Close();
+        Gui.FinishAnimations();
+
+        Gui.Click(app.Window, pill);
+        try
+        {
+            await Gui.UntilAsync(() => app.Scripted.ConnectsWaiting == 1, "the restart connecting");
+
+            // Asked for exclusive; the old player's output (shared) says nothing about the new one yet.
+            Assert.False(app.ViewModel.Player.Output!.Exclusive);
+            Assert.False(pill.IsEffectivelyEnabled);
+            Assert.Contains("on", pill.Classes);
+            Assert.DoesNotContain("refused", pill.Classes);
+            Assert.True(ToolTip.GetShowOnDisabled(pill)); // its tooltip still says what it is
+            Assert.False(Audio(app).ToggleExclusiveCommand.CanExecute(null));
+            Assert.False(Gui.Find<ToggleButton>(app.Window, "ExclusiveMode").IsEnabled);
+        }
+        finally
+        {
+            gate.TrySetResult(); // a failure above must not leave the window waiting for the restart as it closes
+        }
+
+        await RestartedAsync(app, 2);
+        Assert.True(pill.IsEffectivelyEnabled);
+        Assert.DoesNotContain("refused", pill.Classes);
+        Assert.Equal(new PlayerOutput(null, true), app.Scripted.StartOutputs.Last());
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Exclusive_asked_for_but_played_shared_shows_on_the_pill_with_the_players_reason()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { OutputDevice = "USB DAC", ExclusiveMode = true });
+        await Gui.UntilAsync(() => app.ViewModel.Player.Output is { Exclusive: true }, "the exclusive output");
+        var pill = Pill(app);
+        Assert.DoesNotContain("refused", pill.Classes);
+
+        await OutputAsync(app, new OutputInfo("scripted", "USB DAC", false, Notice: Refused)); // a 16-bit-only device
+
+        Assert.Contains("refused", pill.Classes);
+        Assert.Contains("on", pill.Classes); // still the setting: a click turns it off
+        var expected = $"{AudioSettingsViewModel.ExclusiveRefusedTip}\n{Refused}\nClick for shared mode.";
+        Assert.Equal(expected, ToolTip.GetTip(pill));
+        Assert.Equal(expected, AutomationProperties.GetName(pill));
+        var warning = Gui.All<TextBlock>(pill).Single(t => t.Classes.Contains("warning"));
+        Assert.True(warning.IsEffectivelyVisible);
+        var column = (GridLength)app.Window.FindResource("PlayerExclusiveColumn")!;
+        Assert.True(pill.Bounds.Width <= column.Value, $"the pill with its \"!\" ({pill.Bounds.Width}) fits its column ({column.Value})");
+
+        await OutputAsync(app, new OutputInfo("null", null, false)); // no audio device at all: no reason given
+        Assert.Contains("refused", pill.Classes);
+        Assert.Equal($"{AudioSettingsViewModel.ExclusiveRefusedTip}\nClick for shared mode.", ToolTip.GetTip(pill));
+
+        await OutputAsync(app, new OutputInfo("scripted", "USB DAC", true)); // the device took it after all
+        Assert.DoesNotContain("refused", pill.Classes);
+        Assert.False(warning.IsEffectivelyVisible);
+        Assert.Equal(AudioSettingsViewModel.ExclusiveOnTip, ToolTip.GetTip(pill));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_shared_output_with_exclusive_mode_off_is_just_off()
+    {
+        await using var app = await OpenAsync();
+
+        await OutputAsync(app, new OutputInfo("scripted", null, false, Notice: "The device runs at 48 kHz: the audio is resampled."));
+
+        Assert.DoesNotContain("refused", Pill(app).Classes);
+        Assert.DoesNotContain("on", Pill(app).Classes);
+        Assert.Equal(AudioSettingsViewModel.ExclusiveOffTip, ToolTip.GetTip(Pill(app)));
+    }
+
     // ---- volume levelling (#139) --------------------------------------------------------------------------------
 
     /// <summary>Flips the Volume levelling switch with the mouse and returns what it shows after.</summary>
@@ -705,6 +851,35 @@ public sealed class AudioSettingsViewModelTests : IAsyncDisposable
         Assert.False(vm.IsRestarting);
         Assert.Equal(0, _player.AppStarts);
         Assert.Single(_posted);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void The_pill_on_a_settings_file_that_wont_take_it_stays_off_and_restarts_nothing()
+    {
+        var vm = Create(new UnwritableSettings());
+
+        vm.ToggleExclusiveCommand.Execute(null);
+
+        Assert.False(vm.Exclusive);
+        Assert.False(vm.IsExclusiveRefused);
+        Assert.Equal(AudioSettingsViewModel.ExclusiveOffTip, vm.ExclusiveTip);
+        Assert.False(vm.IsRestarting);
+        Assert.True(vm.ToggleExclusiveCommand.CanExecute(null));
+        Assert.Equal(0, _player.AppStarts);
+        Assert.StartsWith("The setting wasn't saved, so the player keeps its output", Assert.Single(_posted), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Without_a_player_status_exclusive_mode_is_not_said_to_be_refused()
+    {
+        var vm = Create(new RecordingSettings(new AppSettings { ExclusiveMode = true }));
+
+        Assert.Null(_playerVm.Output);
+        Assert.True(vm.Exclusive);
+        Assert.False(vm.IsExclusiveRefused);
+        Assert.Equal(AudioSettingsViewModel.ExclusiveOnTip, vm.ExclusiveTip);
     }
 
     [Fact]

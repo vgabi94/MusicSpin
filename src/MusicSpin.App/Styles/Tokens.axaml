@@ -13,6 +13,9 @@
             <SolidColorBrush x:Key="LineBrush" Color="#12FFFFFF" />
             <SolidColorBrush x:Key="FgBrush" Color="#EEF0F4" />
             <SolidColorBrush x:Key="Fg2Brush" Color="#9AA1AD" />
+            <!-- The player bar's Exclusive pill (#191): red while exclusive, a dim grey while shared. -->
+            <SolidColorBrush x:Key="ExclusiveBrush" Color="#FF5A6A" />
+            <SolidColorBrush x:Key="ExclusiveOffBrush" Color="#5E6470" />
             <SolidColorBrush x:Key="BannerBrush" Color="#33E8A03C" />
             <SolidColorBrush x:Key="PlaceholderBrush" Color="#2A2E37" />
             <SolidColorBrush x:Key="PlaceholderInkBrush" Color="#C9CED8" />
@@ -62,6 +65,8 @@
             <SolidColorBrush x:Key="LineBrush" Color="#14000000" />
             <SolidColorBrush x:Key="FgBrush" Color="#1B1C1F" />
             <SolidColorBrush x:Key="Fg2Brush" Color="#6C6F76" />
+            <SolidColorBrush x:Key="ExclusiveBrush" Color="#C8283E" />
+            <SolidColorBrush x:Key="ExclusiveOffBrush" Color="#A3A3A6" />
             <SolidColorBrush x:Key="BannerBrush" Color="#33C0782A" />
             <SolidColorBrush x:Key="PlaceholderBrush" Color="#D3CEC5" />
             <SolidColorBrush x:Key="PlaceholderInkBrush" Color="#4A4C52" />
