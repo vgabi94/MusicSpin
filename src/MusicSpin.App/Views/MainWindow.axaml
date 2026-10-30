@@ -11,6 +11,7 @@
         x:Class="MusicSpin.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Classes="shell"
+        Icon="avares://MusicSpin/Assets/AppIcon/app-icon.ico"
         Title="Music Spin">
     <Window.KeyBindings>
         <KeyBinding Gesture="Escape" Command="{Binding EscapeCommand}" />

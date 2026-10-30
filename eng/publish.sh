@@ -13,6 +13,7 @@
 # Layout of <out>/<rid>/ (everything portable; data goes to .usrdata/ on first run):
 #   music-spin[.exe]         CLI (single file)
 #   MusicSpin[.exe]          desktop app (single file); on macOS: MusicSpin.app bundle instead
+#   MusicSpin.png            on Linux: the app icon (512 px), for a .desktop launcher
 #   TagLibSharp.dll          LGPL, kept replaceable (outside the bundle)
 #   ffmpeg/                  LGPL FFmpeg shared libraries (optional; system/Homebrew FFmpeg is used otherwise)
 #   LICENSE, THIRD-PARTY-NOTICES.md
@@ -23,6 +24,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$root/artifacts/publish"
+icon_dir="$root/src/MusicSpin.App/Assets/AppIcon" # made by eng/make-app-icon.cs
 config="Release"
 projects=(cli app)
 rids=()
@@ -109,6 +111,7 @@ make_app_bundle() { # dir exe
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
   mv "$dir/MusicSpin" "$app/Contents/MacOS/"
   cp "$dir/TagLibSharp.dll" "$app/Contents/MacOS/"
+  cp "$icon_dir/app-icon.icns" "$app/Contents/Resources/MusicSpin.icns"
   cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -120,6 +123,7 @@ make_app_bundle() { # dir exe
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleExecutable</key><string>MusicSpin</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>MusicSpin</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
@@ -142,6 +146,7 @@ for rid in "${rids[@]}"; do
     dotnet publish "$proj" -c "$config" -r "$rid" -o "$dest" -nologo -v quiet
   done
   [[ "$rid" == osx-* && -f "$dest/MusicSpin" ]] && make_app_bundle "$dest"
+  [[ "$rid" == linux-* && -f "$dest/MusicSpin" ]] && cp "$icon_dir/app-icon-512.png" "$dest/MusicSpin.png"
   if [[ -n "$ffmpeg_dir" ]]; then copy_ffmpeg "$ffmpeg_dir" "$dest/ffmpeg" "$rid"; fi
   if $download_ffmpeg && [[ -z "$ffmpeg_dir" ]]; then download_ffmpeg_for "$rid" "$dest/ffmpeg"; fi
   cp "$root/LICENSE" "$root/THIRD-PARTY-NOTICES.md" "$dest/"
