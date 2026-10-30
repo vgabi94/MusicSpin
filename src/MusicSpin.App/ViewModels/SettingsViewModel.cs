@@ -62,6 +62,7 @@ public sealed partial class SettingsViewModel : LayerViewModel
         var defaults = new AppSettings();
         ThemeChoice = Pick(Themes, Appearance.ParseTheme(current.Theme));
         MotionChoice = Pick(Motions, MotionModes.Parse(current.Motion));
+        VinylTransition = current.VinylTransition;
         SpeedChoice = Pick(Speeds, current.RecordSpeedRpm);
         Design = DeckDesigns.Parse(current.TurntableDesign);
         ShelfTilt = Whole(current.ShelfTilt, MinTilt, MaxTilt, defaults.ShelfTilt);
@@ -183,6 +184,17 @@ public sealed partial class SettingsViewModel : LayerViewModel
     public AppTheme Theme => ThemeChoice.Value;
 
     public MotionMode Motion => MotionChoice.Value;
+
+    public const string VinylTransitionNote = "The record travels onto the deck when you choose an album";
+
+    /// <summary>
+    /// The vinyl transition (#197): on, choosing an album runs the turntable scene; off, it plays at once. A scene already
+    /// running finishes. Applies at once.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool VinylTransition { get; set; }
+
+    partial void OnVinylTransitionChanged(bool value) => Save(s => s with { VinylTransition = value });
 
     /// <summary>33.333, 45 or 16.667 rpm.</summary>
     public double RecordSpeed => SpeedChoice.Value;

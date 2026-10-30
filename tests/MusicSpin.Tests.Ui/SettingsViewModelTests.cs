@@ -146,6 +146,33 @@ public sealed class SettingsViewModelTests : IDisposable
     }
 
     [Fact]
+    public void The_vinyl_transition_is_on_by_default_and_a_flip_is_saved()
+    {
+        var vm = Create();
+        Assert.True(vm.VinylTransition);
+        Assert.False(File.Exists(_data.SettingsFile)); // nothing written until it changes
+
+        vm.VinylTransition = false;
+        Assert.False(Saved().VinylTransition);
+
+        Assert.False(Create().VinylTransition); // read back as saved
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_vinyl_transition_that_cannot_be_saved_still_applies_and_says_so()
+    {
+        var vm = new SettingsViewModel(new UnwritableSettings(), _appearance, _spinClock, _notices);
+        string? notice = null;
+        _notices.Posted += (_, message) => notice = message;
+
+        vm.VinylTransition = false;
+
+        Assert.False(vm.VinylTransition);
+        Assert.StartsWith("The setting applies now but wasn't saved", notice, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void It_is_a_layer_above_the_queue_and_counts_its_openings()
     {
         var vm = Create();

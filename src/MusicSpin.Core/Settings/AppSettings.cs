@@ -72,6 +72,12 @@ public sealed record AppSettings
     /// </summary>
     public string Motion { get; init; } = "smooth";
 
+    /// <summary>
+    /// The vinyl transition (#197): choosing an album carries its record from the sleeve onto the deck before it plays.
+    /// Off: Now Playing opens and the album plays at once, while everything else keeps its Motion.
+    /// </summary>
+    public bool VinylTransition { get; init; } = true;
+
     /// <summary>How fast the records in the app turn: 33.333, 45 or 16.667 rpm.</summary>
     public double RecordSpeedRpm { get; init; } = 33.333;
 

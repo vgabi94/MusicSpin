@@ -251,6 +251,65 @@ public sealed class SceneTests
         }
     }
 
+    // ---- the vinyl transition switch (#197) ---------------------------------------------------------------------
+
+    [AvaloniaFact]
+    public async Task With_the_vinyl_transition_off_an_album_plays_at_once_and_everything_else_keeps_its_Motion()
+    {
+        await using var app = await OpenAsync();
+        app.ViewModel.Settings.VinylTransition = false;
+
+        Gui.Click(app.Window, Clickable(app, Album));
+        await Gui.UntilAsync(() => app.Scripted!.Count("queue.set") == 1, "the album sent");
+
+        Assert.True(app.Scripted!.Sent("queue.set")[0].GetProperty("play").GetBoolean());
+        Assert.False(app.ViewModel.Scene.IsRunning);
+        Assert.False(app.ViewModel.Scene.IsFlying);
+        Assert.False(Flight(app).IsVisible);
+        Assert.True(app.ViewModel.NowPlaying.IsOpen);
+        Assert.Equal(MotionMode.Smooth, app.ViewModel.Settings.Motion); // only the scene is off
+        Assert.Equal(1, MotionScale.Current.Multiplier);
+        Assert.False(new Core.Settings.SettingsStore(app.Data).Load().VinylTransition);
+    }
+
+    [AvaloniaFact]
+    public async Task With_the_vinyl_transition_on_again_the_next_album_travels_onto_the_deck()
+    {
+        await using var app = await OpenAsync();
+        Assert.True(app.ViewModel.Settings.VinylTransition); // on by default
+        app.ViewModel.Settings.VinylTransition = false;
+        app.ViewModel.Settings.VinylTransition = true;
+
+        await StartAsync(app);
+
+        Assert.True(app.ViewModel.Scene.IsRunning);
+        Assert.True(new Core.Settings.SettingsStore(app.Data).Load().VinylTransition);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Turning_the_vinyl_transition_off_during_a_scene_lets_it_finish_and_the_next_album_plays_at_once()
+    {
+        await using var app = await OpenAsync();
+        await StartAsync(app);
+        var clock = new SceneClock(app);
+        clock.To(600);
+
+        app.ViewModel.Settings.VinylTransition = false;
+        Assert.True(app.ViewModel.Scene.IsRunning); // the record already on its way lands
+
+        clock.To(SceneTimeline.End + 40);
+        await Gui.UntilAsync(() => !app.ViewModel.Scene.IsRunning, "the scene over");
+        await Gui.UntilAsync(() => app.Scripted!.Count("resume") == 1, "the album playing");
+
+        app.ViewModel.NowPlaying.Close();
+        Gui.FinishAnimations();
+        Gui.Click(app.Window, Clickable(app, 2));
+        await Gui.UntilAsync(() => app.Scripted!.Count("queue.set") == 2, "the next album");
+        Assert.False(app.ViewModel.Scene.IsRunning);
+        Assert.True(app.Scripted!.Sent("queue.set")[1].GetProperty("play").GetBoolean());
+    }
+
     [AvaloniaFact]
     public async Task A_sleeve_scrolled_off_screen_plays_at_once()
     {

@@ -151,6 +151,8 @@ src/MusicSpin.App/
   strings, with the few that every OS's fallback fonts draw listed in the test.
 - **Motion.** Settings › Motion multiplies every duration (Smooth 1, Fast 0.5, None 0). Views write
   `Duration="{theming:Motion HoverDuration}"`; the extension binds the base duration to the current multiplier.
+  Settings › Turntable › Vinyl transition (`vinylTransition`, on by default, #197) turns off only the turntable scene:
+  off, choosing an album plays it at once, as at Motion None, and everything else keeps its Motion.
 - **Accent colour.** The playing album's colour (the most saturated prominent colour of its cover, mixed 80% with white)
   replaces `AccentBrush`, and `AccentInkBrush` (mixed 55% with black on the light theme) for text. Each album is
   computed once per session.
