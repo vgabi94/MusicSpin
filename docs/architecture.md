@@ -329,7 +329,7 @@ src/MusicSpin.App/
 - **The bar's layout (#133).** Each part has a column of its own width (`Metrics.axaml`), so a long name, a new track,
   the time growing a digit or the analyzer lighting up moves nothing else: the song (sleeve, title and heart, "artist ·
   album") on the left, the format and the queue and settings buttons on the right, and between them the volume, the
-  transport and the analyzer, kept together and centred once the transport reaches its widest. The times sit in
+  transport, the analyzer and the Exclusive pill, kept together and centred once the transport reaches its widest. The times sit in
   columns that hold "0:00:00" in tabular digits. A title or "artist · album" too long for its place is a `Marquee`: it
   rests at the start, scrolls to the end, rests and scrolls back, moving only its text's render transform, by whole
   device pixels, on the app's clock (its timer sleeps through each rest). It starts again at the beginning for a new
@@ -361,7 +361,10 @@ src/MusicSpin.App/
   output is used at the next start, and the input held or waiting meanwhile is dropped (sent then, it would start a
   player while the old one still holds the data folder). Closing the window during a restart waits for it, then shuts
   down the player it started. Who owns the player doesn't change: one the CLI started is still left
-  playing when the window closes. "In use now" is `status.output`.
+  playing when the window closes. "In use now" is `status.output`. The player bar's Exclusive pill (#191) is the same
+  switch (`ToggleExclusiveCommand`), so the two always agree; it waits while the player restarts, and when exclusive
+  was asked for but `status.output` says shared (the device refused the format, or was busy) it shows a dashed edge
+  and a "!", with the player's reason in its tooltip.
 - **Settings › Audio › Equalizer.** `EqualizerViewModel` keeps a `GraphicEqualizer` of its own as the model (from
   settings.json at start): a change is made to it, shown and sent to a running player as the matching `eq`
   (`PlayerViewModel.SetEqualizerAsync`), then saved (`EqualizerSettings.ApplyTo`, with the user's presets) so a player

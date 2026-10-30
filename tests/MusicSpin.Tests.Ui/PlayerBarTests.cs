@@ -115,7 +115,7 @@ public sealed class PlayerBarTests
     private static readonly string[] BarParts =
     [
         "MiniButton", "Meta", "TitleMarquee", "ArtistMarquee", "Volume", "MuteButton", "VolumeBar", "VolumeBox", "Shuffle", "Previous",
-        "PlayPause", "Next", "Repeat", "ElapsedBox", "PositionBar", "DurationText", "Analyzer", "Right", "QueueButton", "SettingsButton",
+        "PlayPause", "Next", "Repeat", "ElapsedBox", "PositionBar", "DurationText", "Analyzer", "ExclusiveButton", "Right", "QueueButton", "SettingsButton",
     ];
 
     private static Rect[] BarLayout(AppHarness app) => [.. BarParts.Select(n => Gui.BoundsIn(app.Window, Find<Control>(app, n)))];
@@ -178,12 +178,15 @@ public sealed class PlayerBarTests
         Assert.Equal(Of("Song").Right + gap, Of("Volume").X, 1); // the song up to the volume (#189)
         Assert.Equal(Of("Transport").X, Of("Volume").Right + gap, 1); // the volume against the transport
         Assert.Equal(Of("Transport").Right + gap, Of("Analyzer").X, 1); // the analyzer right after it
-        Assert.True(Of("Analyzer").Right + gap <= Of("Tech").X + 0.5, "the format keeps to its column");
+        Assert.Equal(Of("Analyzer").Right + gap, Of("ExclusiveButton").X, 1); // then the Exclusive pill (#191)
+        Assert.True(Of("Centre").Right + gap <= Of("Right").X + 0.5, "the pill keeps to the centre");
+        Assert.True(Of("ExclusiveButton").Right + gap <= Of("Tech").X + 0.5, "the format keeps to its column");
         Assert.True(Of("Tech").Right < Of("QueueButton").X);
         Assert.True(Of("SettingsButton").Right <= app.Window.Bounds.Width);
         Assert.True(Of("Shuffle").X >= Of("Transport").X && Of("Repeat").Right <= Of("Transport").Right, "the transport's buttons fit");
         var middle = (Of("Song").X + songMin + Of("Right").X) / 2; // between the song's narrowest and the right
-        Assert.Equal(middle, (Of("Volume").X + Of("Analyzer").Right) / 2, 0); // the three together, in the middle
+        Assert.Equal(Of("Centre").X, Of("Volume").X, 1);
+        Assert.Equal(middle, (Of("Centre").X + Of("Centre").Right) / 2, 0); // the four together, in the middle
         var widest = (double)app.Window.FindResource("PlayerTransportMaxWidth")!;
         Assert.True(Of("Transport").Width <= widest + 0.5);
         if (width >= 2560)
@@ -1044,6 +1047,47 @@ public sealed class PlayerBarTests
         await using var app = await OpenAsync(Status(state: PlayerState.Playing, track: track), theme);
         app.Window.MouseMove(new Point(700, 300)); // away from the bar
         Snapshots.Match(app.Window, Find<PlayerBar>(app, "PlayerBarView"), $"player-bar-{format}-{theme.ToString().ToLowerInvariant()}");
+    }
+
+    public static TheoryData<string, AppTheme> ExclusiveSnapshots()
+    {
+        var data = new TheoryData<string, AppTheme>();
+        foreach (var state in new[] { "on", "refused", "restarting" })
+        {
+            data.Add(state, AppTheme.Dark);
+            data.Add(state, AppTheme.Light);
+        }
+
+        return data;
+    }
+
+    /// <summary>The Exclusive pill after the analyzer (#191): on, asked for but played shared, and waiting for a restart. Off is in the bar's other snapshots.</summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(ExclusiveSnapshots))]
+    public async Task Snapshot_of_the_player_bar_with_the_Exclusive_pill(string state, AppTheme theme)
+    {
+        var flac = PlayerBarLogicTests.Track("/m/a.flac", "flac", 192_000, 24, 2, 6_431_000, true, hiRes: true);
+        await using var app = await AppHarness.OpenAsync(new AppOptions
+        {
+            Scripted = true,
+            Theme = theme,
+            Settings = new Core.Settings.AppSettings { ExclusiveMode = state != "restarting" },
+        });
+        var output = new OutputInfo("scripted", null, Exclusive: state != "refused", Notice: state == "refused" ? "The device refused 24-bit." : null);
+        await SetAsync(app, Status(state: PlayerState.Playing, track: flac) with { Output = output });
+        var pill = Find<Button>(app, "ExclusiveButton");
+        if (state == "restarting")
+        {
+            app.Scripted!.ConnectGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Gui.Click(app.Window, pill);
+            await Gui.UntilAsync(() => app.Scripted.ConnectsWaiting == 1, "the restart connecting");
+            Assert.False(pill.IsEffectivelyEnabled);
+        }
+
+        Assert.Equal(state == "refused", pill.Classes.Contains("refused"));
+        app.Window.MouseMove(new Point(700, 300)); // away from the bar
+        Snapshots.Match(app.Window, Find<PlayerBar>(app, "PlayerBarView"), $"player-bar-exclusive-{state}-{theme.ToString().ToLowerInvariant()}");
+        app.Scripted!.ConnectGate?.TrySetResult();
     }
 
     /// <summary>A long title a second into its scroll, cut at its column's edges, with the analyzer beside the transport (#133).</summary>

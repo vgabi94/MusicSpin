@@ -96,6 +96,57 @@
         <Setter Property="IsHitTestVisible" Value="False" />
     </Style>
 
+    <!--
+      Exclusive mode (#191; the same switch as Settings › Audio), after the analyzer: a red pill like HI-RES while
+      exclusive, dim grey while shared, a dashed red edge and a "!" when exclusive was asked for but the player plays
+      shared. Faded while the player restarts.
+    -->
+    <Style Selector="Button.exclusive">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource ExclusiveOffBrush}" />
+        <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
+    </Style>
+    <Style Selector="Button.exclusive Rectangle.edge">
+        <Setter Property="Stroke" Value="{DynamicResource ExclusiveOffBrush}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource ExclusiveEdgeThickness}" />
+        <Setter Property="RadiusX" Value="{StaticResource ExclusiveRadius}" />
+        <Setter Property="RadiusY" Value="{StaticResource ExclusiveRadius}" />
+    </Style>
+    <Style Selector="Button.exclusive StackPanel">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Margin" Value="{StaticResource ExclusivePadding}" />
+    </Style>
+    <Style Selector="Button.exclusive TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource HiResFontSize}" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="{StaticResource HiResLetterSpacing}" />
+    </Style>
+    <Style Selector="Button.exclusive:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.exclusive:pointerover Rectangle.edge">
+        <Setter Property="Stroke" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.exclusive.on">
+        <Setter Property="Foreground" Value="{DynamicResource ExclusiveBrush}" />
+    </Style>
+    <Style Selector="Button.exclusive.on Rectangle.edge">
+        <Setter Property="Stroke" Value="{DynamicResource ExclusiveBrush}" />
+    </Style>
+    <Style Selector="Button.exclusive.refused">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="Button.exclusive.refused Rectangle.edge">
+        <Setter Property="StrokeDashArray" Value="3,2" />
+    </Style>
+    <Style Selector="Button.exclusive TextBlock.warning">
+        <Setter Property="Foreground" Value="{DynamicResource ExclusiveBrush}" />
+    </Style>
+    <Style Selector="Button.exclusive:disabled">
+        <Setter Property="Opacity" Value="{StaticResource TransportDisabledOpacity}" />
+    </Style>
+
     <!-- Round icon buttons: the speaker, the queue and the cog. -->
     <Style Selector="Button.round">
         <Setter Property="Width" Value="{StaticResource RoundButtonSize}" />
