@@ -123,8 +123,13 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
         : $"In use now: {(string.IsNullOrWhiteSpace(output.Device) ? "the system default" : output.Device)}, {output.Describe()}"
           + (output.Notice is { } notice ? $"\n{notice}" : string.Empty);
 
-    /// <summary>Reads the devices (when Settings opens: one may have been plugged in).</summary>
-    public Task LoadAsync() => _notices.GuardAsync(async () =>
+    /// <summary>Reads the devices (when Settings opens: one may have been plugged in). A failure is a notice.</summary>
+    public Task LoadAsync() => _notices.GuardAsync(ReadAsync);
+
+    /// <summary>
+    /// <see cref="LoadAsync"/>, failing with the player's exception instead (Settings › Audio shows it on the page).
+    /// </summary>
+    public async Task ReadAsync()
     {
         FollowPlayer(); // the mode the player has now: music-spin normalize may have changed it since the app started
         if (_player.IsConnected)
@@ -135,7 +140,7 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
         var devices = await _devices.ListAsync().ConfigureAwait(true);
         _names = [.. devices.Select(d => d.Name).Distinct(StringComparer.Ordinal)];
         OnPropertyChanged(nameof(DeviceLabel));
-    });
+    }
 
     /// <summary>
     /// The switch shows the mode the running player has (its status), not only the one read at start-up: nothing is saved

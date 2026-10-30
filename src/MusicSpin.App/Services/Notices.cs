@@ -22,21 +22,34 @@ public sealed class Notices(AppLog? log = null)
     /// </summary>
     public async Task GuardAsync(Func<Task> action)
     {
+        if (await TryAsync(action).ConfigureAwait(true) is { } problem)
+        {
+            Post(problem);
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> as <see cref="GuardAsync"/> does, but returns what went wrong (null: nothing) for
+    /// the caller to show in place instead of in a notice (a Settings page that couldn't load, #188).
+    /// </summary>
+    public async Task<string?> TryAsync(Func<Task> action)
+    {
         ArgumentNullException.ThrowIfNull(action);
         try
         {
             await action().ConfigureAwait(true);
+            return null;
         }
         catch (Exception ex) when (ex is Core.MusicSpinException or IOException or UnauthorizedAccessException)
         {
-            Post(ex.Message);
+            return ex.Message;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _log.Write("unexpected failure", ex);
-            Post(_log.File is { } file
+            return _log.File is { } file
                 ? $"Something went wrong: {ex.Message} The details are in {file}."
-                : $"Something went wrong: {ex.Message}");
+                : $"Something went wrong: {ex.Message}";
         }
     }
 }

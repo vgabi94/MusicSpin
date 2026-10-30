@@ -39,11 +39,10 @@ public sealed class AudioSettingsTests
     private static async Task OpenSettingsAsync(AppHarness app)
     {
         var lists = app.Options.AudioDevices.Lists;
+        app.ShowSettingsPage("Audio");
         app.ViewModel.Settings.Open();
         Gui.FinishAnimations();
         await Gui.UntilAsync(() => app.Options.AudioDevices.Lists > lists, "the devices listed");
-        Gui.All<ScrollViewer>(Gui.Find<Border>(app.Window, "Dialog")).First().ScrollToEnd(); // Audio is the last section
-        Gui.Settle();
     }
 
     private static void Click(AppHarness app, Control control)
@@ -433,15 +432,30 @@ public sealed class AudioSettingsTests
 
     [AvaloniaFact]
     [Trait("Category", "Unhappy")]
-    public async Task When_the_devices_cannot_be_listed_a_notice_says_so_and_System_default_is_still_offered()
+    public async Task When_the_devices_cannot_be_listed_the_page_says_so_and_Try_again_brings_them_back()
     {
         await using var app = await OpenAsync();
         app.Options.AudioDevices.Error = new MusicSpinException(MusicSpinErrorCode.AudioDeviceError, "The audio devices couldn't be listed: no backend.");
         await OpenSettingsAsync(app);
+        var page = app.ViewModel.Settings.SelectedPage;
+        await Gui.UntilAsync(() => page.HasProblem, "the page's problem");
 
-        await Gui.UntilAsync(() => app.ViewModel.Banner == "The audio devices couldn't be listed: no backend.", "the notice");
+        // #188: on the page, in place of its settings, rather than in a notice
+        Assert.True(Gui.Find<StackPanel>(app.Window, "PageProblem").IsEffectivelyVisible);
+        Assert.Equal("The audio devices couldn't be listed: no backend.", Gui.Find<TextBlock>(app.Window, "ProblemText").Text);
+        Assert.False(Gui.Find<ContentControl>(app.Window, "SettingsPage").IsVisible);
+        Assert.Null(app.ViewModel.Banner);
+
+        Click(app, Gui.Find<Button>(app.Window, "TryAgain")); // still failing: the page still says so
+        await Gui.UntilAsync(() => app.Options.AudioDevices.Lists >= 2, "listed again");
+        Assert.True(page.HasProblem);
+
+        app.Options.AudioDevices.Error = null;
+        Click(app, Gui.Find<Button>(app.Window, "TryAgain"));
+        await Gui.UntilAsync(() => !page.HasProblem, "the devices listed");
+        Assert.False(Gui.Find<StackPanel>(app.Window, "PageProblem").IsVisible);
         Click(app, Gui.Find<Button>(app.Window, "OutputDevice"));
-        Assert.Equal(["System default"], MenuLabels(app));
+        Assert.Equal(["System default", .. TwoDevices], MenuLabels(app));
     }
 
     [AvaloniaFact]

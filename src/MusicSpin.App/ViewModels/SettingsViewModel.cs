@@ -67,20 +67,42 @@ public sealed partial class SettingsViewModel : LayerViewModel
         Design = DeckDesigns.Parse(current.TurntableDesign);
         ShelfTilt = Whole(current.ShelfTilt, MinTilt, MaxTilt, defaults.ShelfTilt);
         ShelfDepth = Whole(current.ShelfDepth, MinDepth, MaxDepth, defaults.ShelfDepth);
+        Pages =
+        [
+            new AppearancePage(this, notices),
+            new TurntablePage(this, notices),
+            new ShelfPage(this, notices),
+            .. library is null ? [] : new SettingsPage[] { new LibraryPage(library, notices) },
+            .. audio is null ? [] : new SettingsPage[] { new AudioPage(audio, notices), new EqualizerPage(audio.Equalizer, notices) },
+        ];
+        SelectedPage = Pages[0];
         _ready = true;
     }
 
     public override int Order => LayerOrder.Settings;
 
-    /// <summary>The music folders and scanning (null: the section isn't shown).</summary>
+    /// <summary>The music folders and scanning (null: there is no Library page).</summary>
     public LibrarySettingsViewModel? Library { get; }
 
-    /// <summary>The output device and exclusive mode (null: the section isn't shown).</summary>
+    /// <summary>The output device and exclusive mode (null: there are no Audio and Equalizer pages).</summary>
     public AudioSettingsViewModel? Audio { get; }
 
+    /// <summary>The sidebar's entries, in order (#188). A section without its view model has no page.</summary>
+    public IReadOnlyList<SettingsPage> Pages { get; }
+
     /// <summary>
-    /// Opening reads the library folders and the audio devices afresh (a scan or the CLI may have changed the folders; a
-    /// device may have been plugged in). Closing saves a slider a drag left unsaved.
+    /// The page shown. It stays chosen while the app runs, so Settings reopens where it was left; it isn't saved. Null is
+    /// ignored: the sidebar's list box clears its selection when it goes away, and that is not the user choosing.
+    /// </summary>
+    public SettingsPage SelectedPage
+    {
+        get;
+        set => Change(ref field, value);
+    } = null!;
+
+    /// <summary>
+    /// Opening reads every page afresh (a scan or the CLI may have changed the folders; a device may have been plugged
+    /// in). Closing saves a slider a drag left unsaved.
     /// </summary>
     protected override void OnOpenChanged(bool isOpen)
     {
@@ -90,14 +112,9 @@ public sealed partial class SettingsViewModel : LayerViewModel
             return;
         }
 
-        if (Library is { } library)
+        foreach (var page in Pages)
         {
-            _ = library.LoadAsync();
-        }
-
-        if (Audio is { } audio)
-        {
-            _ = audio.LoadAsync();
+            _ = page.LoadAsync();
         }
     }
 

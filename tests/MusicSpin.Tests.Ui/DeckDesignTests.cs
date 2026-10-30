@@ -518,6 +518,7 @@ public sealed class DeckDesignTests
         app.ViewModel.NowPlaying.Open();
         Gui.FinishAnimations(Settled);
         Assert.IsType<ClassicDeckView>(Gui.Find<DeckHost>(app.Window, "Deck").Deck);
+        app.ShowSettingsPage("Turntable");
         app.ViewModel.Settings.Open();
         Gui.FinishAnimations();
 

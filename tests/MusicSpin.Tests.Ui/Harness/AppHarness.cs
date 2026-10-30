@@ -180,6 +180,13 @@ internal sealed class AppHarness : IAsyncDisposable
         return [.. library.Tracks(new TrackQuery { Paging = new Paging(0, Paging.MaxLimit) }).Items.Select(t => t.Path)];
     }
 
+    /// <summary>Chooses the Settings page titled <paramref name="title"/> ("Audio"), as its sidebar entry would.</summary>
+    public void ShowSettingsPage(string title)
+    {
+        ViewModel.Settings.SelectedPage = ViewModel.Settings.Pages.Single(p => p.Title == title);
+        Gui.Settle();
+    }
+
     /// <summary>Opens the library as another process would (the CLI): dispose it to let go of the lock.</summary>
     public MusicLibrary OpenLibrary() => MusicLibrary.OpenWritable(Data, lockTimeout: TimeSpan.FromSeconds(5));
 

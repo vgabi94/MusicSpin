@@ -443,6 +443,7 @@ public sealed class MotionCostTests
     public async Task Settings_still_previews_of_the_designs_hold_no_images()
     {
         await using var app = await OpenAsync();
+        app.ShowSettingsPage("Turntable");
         app.ViewModel.Settings.Open();
         Gui.FinishAnimations(Settled);
 

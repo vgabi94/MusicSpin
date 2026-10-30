@@ -1,7 +1,7 @@
 <!--
   Control themes shared by every area: a plain button (no Fluent chrome; areas style it with classes), the bar you drag,
-  the scroll bars, the box you type a value into, the search text box, a segmented control and a list of cards. Merged
-  into the application resources.
+  the scroll bars, the box you type a value into, the search text box, a segmented control, a list of cards and Settings'
+  list of pages. Merged into the application resources.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -480,6 +480,78 @@
             <ItemsPanelTemplate>
                 <WrapPanel ItemSpacing="{StaticResource DesignCardGap}" LineSpacing="{StaticResource DesignCardGap}" />
             </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}">
+                    <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!--
+      A page of Settings in its sidebar (#188): drawn like the window's sidebar entries (Sidebar.axaml, Button.nav), the
+      chosen one on the Bg3 pill; an accent ring inside the entry when the keyboard is on it. A page that couldn't load
+      has a "!" at the end.
+    -->
+    <ControlTheme x:Key="SettingsNavItem" TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="{StaticResource NavItemPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource NavItemRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource NavFontSize}" />
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="AutomationProperties.Name" Value="{ReflectionBinding Title}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </Border>
+                    <Border Name="PART_FocusRing"
+                            BorderThickness="{StaticResource FocusRingThickness}"
+                            BorderBrush="{DynamicResource AccentBrush}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            IsVisible="False" />
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="{DynamicResource RowHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^:selected">
+            <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^:focus-visible /template/ Border#PART_FocusRing">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+    </ControlTheme>
+
+    <!-- Settings' pages (#188), one under the other, one always chosen; ↑ ↓ Home End move the choice. -->
+    <ControlTheme x:Key="SettingsNav" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="SelectionMode" Value="Single,AlwaysSelected" />
+        <Setter Property="ItemContainerTheme" Value="{StaticResource SettingsNavItem}" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Spacing="{StaticResource SettingsNavSpacing}" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="ItemTemplate">
+            <DataTemplate x:DataType="vm:SettingsPage">
+                <Grid Classes="settingsEntry" ColumnDefinitions="Auto,*,Auto">
+                    <controls:Icon Data="{Binding Icon, Converter={x:Static theming:IconConverters.Geometry}}"
+                                   IsStroked="{Binding Icon, Converter={x:Static theming:IconConverters.IsStroked}}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Title}" />
+                    <TextBlock Grid.Column="2" Classes="pageProblem" Text="!" IsVisible="{Binding HasProblem}" />
+                </Grid>
+            </DataTemplate>
         </Setter>
         <Setter Property="Template">
             <ControlTemplate>

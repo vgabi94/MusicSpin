@@ -61,11 +61,10 @@ public sealed class EqualizerSettingsTests
     private static async Task OpenSettingsAsync(AppHarness app)
     {
         var lists = app.Options.AudioDevices.Lists;
+        app.ShowSettingsPage("Equalizer");
         app.ViewModel.Settings.Open();
         Gui.FinishAnimations();
         await Gui.UntilAsync(() => app.Options.AudioDevices.Lists > lists, "the devices listed");
-        Gui.All<ScrollViewer>(Find<Border>(app, "Dialog")).First().ScrollToEnd(); // the equalizer is the last thing in it
-        Gui.Settle();
     }
 
     /// <summary>Playing, with the equalizer saved (as a player started now has it), applying <c>eq</c> as a player does.</summary>
