@@ -405,7 +405,8 @@ public sealed class PlayerBarTests
             await SetAsync(app, Status() with { Repeat = mode });
             Gui.FinishAnimations();
             Assert.Equal((mode != RepeatMode.Off, mode == RepeatMode.One), (repeat.Classes.Contains("on"), repeat.Classes.Contains("one")));
-            Assert.Same(app.Window.FindResource(mode == RepeatMode.One ? "RepeatOne" : "Repeat"), icon.Data);
+            Assert.Same(app.Window.FindResource(mode switch { RepeatMode.One => "RepeatOne", RepeatMode.All => "Repeat", _ => "RepeatOff" }), icon.Data);
+            Assert.Equal(app.Window.FindResource("RepeatViewBox"), icon.ViewBox); // one box for every mode, so the loop stays put
             Assert.Equal(tip, ToolTip.GetTip(repeat));
             Assert.Equal(tip, ControlAutomationPeer.CreatePeerForElement(repeat).GetName());
             using var drawn = Snapshots.Capture(app.Window, repeat);
@@ -415,6 +416,46 @@ public sealed class PlayerBarTests
 
         Assert.NotEqual(looks[RepeatMode.Off], looks[RepeatMode.All]);
         Assert.NotEqual(looks[RepeatMode.All], looks[RepeatMode.One]); // the "1" is drawn, inside the button
+    }
+
+
+    [AvaloniaFact]
+    public async Task Shuffle_shows_off_and_on_by_shape_and_during_radio_the_crossed_arrows_in_grey_whatever_the_setting()
+    {
+        await using var app = await OpenAsync();
+        var shuffle = Find<Button>(app, "Shuffle");
+        var icon = Find<Icon>(app, "ShuffleIcon");
+        var accent = Assert.IsType<SolidColorBrush>(app.Window.FindResource("AccentInkBrush")).Color;
+        var grey = Assert.IsType<SolidColorBrush>(app.Window.FindResource(app.Window.ActualThemeVariant, "Fg2Brush")).Color;
+        var radio = new RadioInfo(new Core.Library.RadioFilter(), "Whole library", 50);
+        var looks = new Dictionary<string, byte[]>();
+
+        // Off, on, radio with the setting on and then off (radio is already random), and off again once radio ends.
+        foreach (var (look, on, onRadio, geometry, colour, tip) in new[]
+        {
+            ("off", false, false, "ShuffleOff", grey, "Shuffle: off"),
+            ("on", true, false, "Shuffle", accent, "Shuffle: on"),
+            ("radio", true, true, "Shuffle", grey, PlayerBarViewModel.RadioShuffleTip),
+            ("radio", false, true, "Shuffle", grey, PlayerBarViewModel.RadioShuffleTip),
+            ("off", false, false, "ShuffleOff", grey, "Shuffle: off"),
+        })
+        {
+            await SetAsync(app, Status() with { Shuffle = on, Radio = onRadio ? radio : null });
+            Gui.FinishAnimations();
+            Assert.Same(app.Window.FindResource(geometry), icon.Data);
+            Assert.Equal(app.Window.FindResource("ShuffleViewBox"), icon.ViewBox); // one box for every state, so the arrows stay put
+            Assert.Equal(colour, Assert.IsType<SolidColorBrush>(shuffle.Foreground).Color);
+            Assert.Equal(!onRadio, shuffle.IsEffectivelyEnabled);
+            Assert.Equal(tip, ToolTip.GetTip(shuffle));
+            Assert.Equal("Shuffle", ControlAutomationPeer.CreatePeerForElement(shuffle).GetName());
+            using var drawn = Snapshots.Capture(app.Window, shuffle);
+            Assert.Equal(looks.TryGetValue(look, out var before) ? before : drawn.Bytes, drawn.Bytes); // radio looks the same either way
+            looks[look] = drawn.Bytes;
+        }
+
+        Assert.NotEqual(looks["off"], looks["on"]);
+        Assert.NotEqual(looks["on"], looks["radio"]); // grey, not the accent
+        Assert.NotEqual(looks["off"], looks["radio"]); // crossed, not straight
     }
 
     [AvaloniaFact]

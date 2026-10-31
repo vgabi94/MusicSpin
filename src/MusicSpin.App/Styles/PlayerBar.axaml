@@ -256,7 +256,8 @@
         <Setter Property="Width" Value="{StaticResource TransportIconSize}" />
         <Setter Property="Height" Value="{StaticResource TransportIconSize}" />
     </Style>
-    <!-- Shuffle and Repeat: lines; in the accent while on, Repeat one with a "1" inside the loop. -->
+    <!-- Shuffle and Repeat: lines; off and on differ by shape as well as colour (#190), in the accent while on.
+         Shuffle: straight arrows off, crossed on. Repeat: an arrow to a bar off, the loop on, with a "1" for one. -->
     <Style Selector="StackPanel.transportButtons > Button.mode controls|Icon">
         <Setter Property="Width" Value="{StaticResource ModeIconSize}" />
         <Setter Property="Height" Value="{StaticResource ModeIconSize}" />
@@ -265,7 +266,25 @@
     <Style Selector="StackPanel.transportButtons > Button.mode.on">
         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
     </Style>
+    <Style Selector="StackPanel.transportButtons > Button.shuffle controls|Icon">
+        <Setter Property="ViewBox" Value="{StaticResource ShuffleViewBox}" />
+        <Setter Property="Data" Value="{StaticResource ShuffleOff}" />
+    </Style>
+    <Style Selector="StackPanel.transportButtons > Button.shuffle.on controls|Icon">
+        <Setter Property="Data" Value="{StaticResource Shuffle}" />
+    </Style>
+    <!-- During radio Shuffle rests (disabled): radio is already random, so the crossed arrows, grey whatever the setting. -->
+    <Style Selector="StackPanel.transportButtons > Button.shuffle.radio">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="StackPanel.transportButtons > Button.shuffle.radio controls|Icon">
+        <Setter Property="Data" Value="{StaticResource Shuffle}" />
+    </Style>
     <Style Selector="StackPanel.transportButtons > Button.repeat controls|Icon">
+        <Setter Property="ViewBox" Value="{StaticResource RepeatViewBox}" />
+        <Setter Property="Data" Value="{StaticResource RepeatOff}" />
+    </Style>
+    <Style Selector="StackPanel.transportButtons > Button.repeat.on controls|Icon">
         <Setter Property="Data" Value="{StaticResource Repeat}" />
     </Style>
     <Style Selector="StackPanel.transportButtons > Button.repeat.one controls|Icon">

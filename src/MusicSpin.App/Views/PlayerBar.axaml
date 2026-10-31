@@ -121,12 +121,13 @@
                     <controls:TrailedRow Classes="transportRow">
                         <StackPanel Classes="transportButtons">
                             <Button Name="Shuffle"
-                                    Classes="mode"
+                                    Classes="mode shuffle"
                                     Classes.on="{Binding Player.Shuffle}"
+                                    Classes.radio="{Binding Player.IsRadio}"
                                     Command="{Binding PlayerBar.ToggleShuffleCommand}"
                                     ToolTip.Tip="{Binding PlayerBar.ShuffleToolTip}"
                                     AutomationProperties.Name="Shuffle">
-                                <controls:Icon Data="{StaticResource Shuffle}" />
+                                <controls:Icon Name="ShuffleIcon" />
                             </Button>
                             <Button Name="Previous"
                                     Command="{Binding PlayerBar.PreviousCommand}"

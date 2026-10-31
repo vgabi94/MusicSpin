@@ -49,6 +49,13 @@
     <!-- Repeat with a "1" inside the loop: the same bounds, so the loop draws exactly where Repeat's does. The stem is
          on the loop's centre line, x 12, which falls on a pixel column at ModeIconSize, so it stays sharp at 100%. -->
     <StreamGeometry x:Key="RepeatOne">M4,12 V10 A3,3 0 0 1 7,7 H20 M17,4 L20,7 L17,10 M20,12 V14 A3,3 0 0 1 17,17 H4 M7,14 L4,17 L7,20 M10.5,10.5 L12,9.5 V14.5</StreamGeometry>
+    <!-- Shuffle and Repeat show off by shape, not only by colour (#190): Shuffle off is the crossed arrows straightened out,
+         and Repeat off an arrow that stops at a bar. Each button's states share one box (Icon.ViewBox, today's bounds of the
+         on icon), so the lines that stay put don't move or rescale when the state changes. -->
+    <StreamGeometry x:Key="ShuffleOff">M3,7 H21 M3,17 H21 M18,4 L21,7 L18,10 M18,14 L21,17 L18,20</StreamGeometry>
+    <Rect x:Key="ShuffleViewBox">3,4,18,16</Rect>
+    <StreamGeometry x:Key="RepeatOff">M4,12 H17 M14,9 L17,12 L14,15 M20,7 V17</StreamGeometry>
+    <Rect x:Key="RepeatViewBox">4,4,16,16</Rect>
     <!-- END Transport -->
 
     <!-- BEGIN Player bar. The volume icon is layers in one 24 x 24 box (Icon.ViewBox): a filled speaker, and stroked
