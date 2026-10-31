@@ -369,7 +369,7 @@ internal sealed class StubLibrary : ILibraryService
     public int Scans { get; private set; }
 
     public Task<IReadOnlyList<FolderInfo>> FoldersAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<FolderInfo>>([.. Folders]);
+        => Read<IReadOnlyList<FolderInfo>>(nameof(FoldersAsync), () => [.. Folders]);
 
     public Task<FolderAddResult> AddFolderAsync(string path, CancellationToken cancellationToken = default)
     {

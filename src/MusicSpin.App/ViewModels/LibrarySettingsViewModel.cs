@@ -128,8 +128,13 @@ public sealed partial class LibrarySettingsViewModel : ObservableObject, IDispos
     /// <summary>The watch saw a change and waits for the folders to go quiet (tests read it).</summary>
     internal bool WatchHasPending => _watcher?.HasPending ?? false;
 
-    /// <summary>Reads the folders, the last scan and the issues; starts the watch when it is on.</summary>
-    public Task LoadAsync() => _notices.GuardAsync(async () =>
+    /// <summary>Reads the folders, the last scan and the issues; starts the watch when it is on. A failure is a notice.</summary>
+    public Task LoadAsync() => _notices.GuardAsync(ReadAsync);
+
+    /// <summary>
+    /// <see cref="LoadAsync"/>, failing with the library's exception instead (Settings › Library shows it on the page).
+    /// </summary>
+    public async Task ReadAsync()
     {
         var folders = await _library.FoldersAsync().ConfigureAwait(true);
         var issues = await _library.IssuesAsync().ConfigureAwait(true);
@@ -142,7 +147,7 @@ public sealed partial class LibrarySettingsViewModel : ObservableObject, IDispos
         }
 
         Watch();
-    });
+    }
 
     public void Dispose()
     {

@@ -29,6 +29,7 @@ public sealed class LibrarySettingsTests
 
     private static async Task OpenSettingsAsync(AppHarness app)
     {
+        app.ShowSettingsPage("Library");
         app.ViewModel.Settings.Open();
         Gui.FinishAnimations();
         await Gui.UntilAsync(() => Library(app).Folders.Count == app.Read(l => l.Folders()).Count, "the folders read");
@@ -386,8 +387,6 @@ public sealed class LibrarySettingsTests
         library.Issues.Add(new ScanIssue("/home/ana/Music/Broken/01.flac", "unreadable", "Not an audio file."));
         await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Library = library, Covers = SampleLibrary.Covers(), Theme = theme });
         await OpenSettingsAsync2(app);
-        Gui.Find<StackPanel>(app.Window, "LibrarySection").BringIntoView();
-        Gui.Settle();
 
         Snapshots.Match(app.Window, Gui.Find<Border>(app.Window, "Dialog"), $"settings-library-{theme.ToString().ToLowerInvariant()}");
     }
@@ -406,6 +405,7 @@ public sealed class LibrarySettingsTests
     private static async Task OpenSettingsAsync2(AppHarness app)
     {
         var library = (StubLibrary)app.Services.Library;
+        app.ShowSettingsPage("Library");
         app.ViewModel.Settings.Open();
         Gui.FinishAnimations();
         await Gui.UntilAsync(() => Library(app).Folders.Count == library.Folders.Count && Library(app).Issues.Count == library.Issues.Count, "the folders read");

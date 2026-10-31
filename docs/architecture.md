@@ -347,6 +347,13 @@ src/MusicSpin.App/
   Motion through `IAppearance`, the speed and Motion to the spin clock; the turntable design, the shelf's tilt and depth
   are properties Now Playing and the shelf read. Each design is a `DeckDesign` type (`DeckDesigns.All`), so its preview
   in Settings and its deck in Now Playing are picked by data template.
+- **Settings' pages (#188).** The dialog is a sidebar of pages (`SettingsViewModel.Pages`: Appearance, Turntable,
+  Shelf, Library, Audio, Equalizer) and the page chosen (`SelectedPage`), each page a `SettingsPage` type shown by its
+  own data template; a section whose view model is missing has no page. The sidebar is a list box, so ↑ ↓ Home End move
+  through the pages and the page follows; opening Settings focuses the chosen entry, Tab goes into the page and reaches
+  ✕ after it. The page chosen lasts while the app runs (Settings reopens on it) and isn't saved. Opening loads every
+  page (`SettingsPage.LoadAsync`): Library reads the folders, Audio the devices. A page that can't load says why in
+  place of its settings, with Try again, and its entry has a "!", instead of a notice (`Notices.TryAsync`).
 - **Settings › Library.** `LibrarySettingsViewModel` lists the music folders (a missing one says so), adds one through
   the OS's folder picker (`IFolderPicker`; tests use a stub) and says what `library add` did in plain words (added,
   already covered, taking in folders inside it), removes one after asking, and shows when the last scan ran and what it

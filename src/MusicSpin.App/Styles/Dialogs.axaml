@@ -17,15 +17,17 @@
         <Setter Property="IsTabStop" Value="False" />
     </Style>
 
+    <!-- The window's height less its margin; the dialog in it is at most DialogMaxHeight and centred. -->
     <Style Selector="views|SettingsDialog">
         <Setter Property="HorizontalAlignment" Value="Center" />
-        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="Margin" Value="{StaticResource DialogMargin}" />
         <!-- A user control clips to its bounds, which would cut the dialog's shadow off. -->
         <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.dialog">
         <Setter Property="Width" Value="{StaticResource DialogWidth}" />
+        <Setter Property="MaxHeight" Value="{StaticResource DialogMaxHeight}" />
         <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
         <Setter Property="BorderThickness" Value="{StaticResource DialogBorderThickness}" />
@@ -35,12 +37,68 @@
         <Setter Property="ClipToBounds" Value="False" />
         <Setter Property="KeyboardNavigation.TabNavigation" Value="Cycle" />
     </Style>
-    <Style Selector="Border.dialog > ScrollViewer > StackPanel">
-        <Setter Property="Margin" Value="{StaticResource DialogPadding}" />
+
+    <!-- Settings' sidebar (#188): "Settings", then the pages; a line between it and the page. -->
+    <Style Selector="Border.settingsSidebar">
+        <Setter Property="Width" Value="{StaticResource SettingsSidebarWidth}" />
+        <Setter Property="Padding" Value="{StaticResource SettingsSidebarPadding}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource HairlineRight}" />
     </Style>
-    <Style Selector="Grid.dialogHeader">
-        <Setter Property="Margin" Value="{StaticResource DialogHeaderMargin}" />
+    <Style Selector="Border.settingsSidebar TextBlock.dialogTitle">
+        <Setter Property="Margin" Value="{StaticResource SettingsSidebarTitleMargin}" />
     </Style>
+    <Style Selector="Grid.settingsEntry">
+        <Setter Property="ColumnSpacing" Value="{StaticResource NavIconGap}" />
+    </Style>
+    <Style Selector="Grid.settingsEntry controls|Icon">
+        <Setter Property="Width" Value="{StaticResource NavIconSize}" />
+        <Setter Property="Height" Value="{StaticResource NavIconSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Grid.settingsEntry TextBlock">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="Grid.settingsEntry TextBlock.pageProblem">
+        <Setter Property="Foreground" Value="{StaticResource InvalidBrush}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+    </Style>
+    <!-- The page: its title and ✕, then its settings, which scroll on their own. -->
+    <Style Selector="Grid.pageHeader">
+        <Setter Property="Margin" Value="{StaticResource SettingsPageHeaderMargin}" />
+    </Style>
+    <Style Selector="ScrollViewer.settingsPage > StackPanel">
+        <Setter Property="Margin" Value="{StaticResource SettingsPagePadding}" />
+    </Style>
+    <!-- A page that couldn't load: why, and Try again, in the middle of the page. -->
+    <Style Selector="StackPanel.pageProblem">
+        <Setter Property="Spacing" Value="{StaticResource SettingsProblemGap}" />
+        <Setter Property="Margin" Value="{StaticResource SettingsProblemPadding}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.pageProblem controls|Icon">
+        <Setter Property="Width" Value="{StaticResource SettingsProblemIconSize}" />
+        <Setter Property="Height" Value="{StaticResource SettingsProblemIconSize}" />
+        <Setter Property="IsStroked" Value="True" />
+        <Setter Property="Foreground" Value="{StaticResource InvalidBrush}" />
+    </Style>
+    <Style Selector="StackPanel.pageProblem > TextBlock">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="StackPanel.pageProblem > TextBlock.problemTitle">
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="StackPanel.pageProblem > Button">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
     <Style Selector="TextBlock.dialogTitle">
         <Setter Property="Margin" Value="{StaticResource DialogTitleMargin}" />
         <Setter Property="FontSize" Value="{StaticResource DialogTitleFontSize}" />
@@ -69,14 +127,6 @@
         <Setter Property="Height" Value="{StaticResource DialogCloseIconSize}" />
     </Style>
 
-    <!-- A section heading, in capitals. -->
-    <Style Selector="TextBlock.settingsSection">
-        <Setter Property="Margin" Value="{StaticResource SettingsSectionMargin}" />
-        <Setter Property="FontSize" Value="{StaticResource SettingsSectionFontSize}" />
-        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
-        <Setter Property="LetterSpacing" Value="{StaticResource SettingsSectionLetterSpacing}" />
-        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
-    </Style>
     <!-- A setting: its name (and a note) on the left, its control on the right; a line between rows. -->
     <Style Selector="Border.settingRow">
         <Setter Property="MinHeight" Value="{StaticResource SettingRowMinHeight}" />
@@ -254,7 +304,7 @@
     </Style>
 
     <!--
-      Settings › Audio › Equalizer (#141): the preset row and the name row, their buttons closer together; the pre-amp
+      Settings › Equalizer (#141): the preset row and the name row, their buttons closer together; the pre-amp
       and the ten bands, each an upright slider in its own column, its gain over it and its band under it.
     -->
     <Style Selector="Border.settingRow > Grid.eqPreset">

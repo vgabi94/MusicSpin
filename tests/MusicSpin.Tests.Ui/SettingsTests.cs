@@ -4,18 +4,24 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Automation;
 using Avalonia.Input;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
+using Microsoft.Extensions.Time.Testing;
 using MusicSpin.App.Controls;
 using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
+using MusicSpin.App.Views;
+using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Settings;
+using MusicSpin.Tests.Shared;
 using MusicSpin.Tests.Ui.Harness;
 
 namespace MusicSpin.Tests.Ui;
 
-/// <summary>The Settings dialog in the window (#22).</summary>
+/// <summary>The Settings dialog in the window (#22), a sidebar of pages and the page chosen (#188).</summary>
 public sealed class SettingsTests
 {
     private static async Task<AppHarness> OpenAsync(AppTheme theme = AppTheme.Dark, AppSettings? settings = null)
@@ -40,6 +46,26 @@ public sealed class SettingsTests
         Gui.Click(app.Window, Find<Button>(app, "SettingsButton"));
         Assert.True(app.ViewModel.Settings.IsOpen);
     }
+
+    private static readonly string[] AllPages = ["Appearance", "Turntable", "Shelf", "Library", "Audio", "Equalizer"];
+
+    /// <summary>The sidebar entry of the page titled <paramref name="title"/>.</summary>
+    private static ListBoxItem Entry(AppHarness app, string title)
+        => Gui.All<ListBoxItem>(Find<ListBox>(app, "SettingsPages")).Single(i => i.DataContext is SettingsPage p && p.Title == title);
+
+    /// <summary>Clicks the sidebar entry of <paramref name="title"/>, as the user chooses a page.</summary>
+    private static void ShowPage(AppHarness app, string title)
+    {
+        Gui.Click(app.Window, Entry(app, title));
+        Assert.Equal(title, app.ViewModel.Settings.SelectedPage.Title);
+    }
+
+    /// <summary>The title of the page shown (its heading).</summary>
+    private static string? Shown(AppHarness app) => Find<TextBlock>(app, "SettingsPageTitle").Text;
+
+    /// <summary>True when the control named <paramref name="name"/> is in the window now (only the page shown is).</summary>
+    private static bool Has(AppHarness app, string name)
+        => Gui.All<Control>(app.Window).Any(c => c.Name == name && c.IsEffectivelyVisible);
 
     /// <summary>The segment or card showing <paramref name="label"/> in the list <paramref name="list"/>.</summary>
     private static ListBoxItem Item(AppHarness app, string list, string label)
@@ -78,7 +104,8 @@ public sealed class SettingsTests
 
         Assert.True(Find<Panel>(app, "SettingsLayer").IsVisible);
         Assert.Contains("on", cog.Classes);
-        Assert.Same(Find<Button>(app, "CloseSettings"), Focused(app));
+        Assert.Equal("Appearance", Shown(app)); // the first page, in a new window
+        Assert.Same(Entry(app, "Appearance"), Focused(app)); // so ↑ ↓ move through the pages at once
 
         Gui.Click(app.Window, Find<Button>(app, "CloseSettings"));
 
@@ -104,6 +131,200 @@ public sealed class SettingsTests
         OpenSettings(app);
         Gui.Press(app.Window, Avalonia.Input.Key.Escape, PhysicalKey.Escape);
         Assert.False(app.ViewModel.Settings.IsOpen);
+
+        // from inside a page too: a slider has the focus
+        OpenSettings(app);
+        ShowPage(app, "Shelf");
+        Find<ScrubBar>(app, "TiltBar").Focus();
+        Gui.Settle();
+        Gui.Press(app.Window, Avalonia.Input.Key.Escape, PhysicalKey.Escape);
+        Assert.False(app.ViewModel.Settings.IsOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task The_sidebar_lists_a_page_per_section_by_name_and_shows_the_one_chosen()
+    {
+        await using var app = await OpenAsync();
+        OpenSettings(app);
+
+        var entries = Gui.All<ListBoxItem>(Find<ListBox>(app, "SettingsPages")).ToList();
+        Assert.Equal(AllPages, entries.Select(e => ((SettingsPage)e.DataContext!).Title));
+        Assert.Equal(AllPages, entries.Select(AutomationProperties.GetName)); // what a screen reader says
+        Assert.Equal("Settings pages", AutomationProperties.GetName(Find<ListBox>(app, "SettingsPages")));
+        Assert.True(Entry(app, "Appearance").IsSelected);
+        Assert.True(Has(app, "ThemeChoice"));
+
+        ShowPage(app, "Shelf");
+
+        Assert.Equal("Shelf", Shown(app));
+        Assert.True(Entry(app, "Shelf").IsSelected);
+        Assert.False(Entry(app, "Appearance").IsSelected);
+        Assert.True(Has(app, "TiltBar"));
+        Assert.False(Has(app, "ThemeChoice")); // one page at a time
+
+        foreach (var (title, control) in AllPages.Zip(new[] { "MotionChoice", "DesignChoice", "DepthBar", "AddFolder", "ExclusiveMode", "EqualizerSwitch" }))
+        {
+            ShowPage(app, title);
+            Assert.Equal(title, Shown(app));
+            Assert.True(Has(app, control), $"{title} shows {control}");
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Arrow_keys_move_through_the_pages_and_stop_at_either_end()
+    {
+        await using var app = await OpenAsync();
+        OpenSettings(app);
+        var settings = app.ViewModel.Settings;
+
+        Key(app, Avalonia.Input.Key.Down, PhysicalKey.ArrowDown);
+        Assert.Equal(("Turntable", "Turntable"), (settings.SelectedPage.Title, Shown(app)));
+        Assert.Same(Entry(app, "Turntable"), Focused(app));
+        Assert.True(Has(app, "DesignChoice"));
+
+        Key(app, Avalonia.Input.Key.Up, PhysicalKey.ArrowUp);
+        Assert.Equal("Appearance", Shown(app));
+        Key(app, Avalonia.Input.Key.Up, PhysicalKey.ArrowUp); // already the first
+        Assert.Equal("Appearance", Shown(app));
+        Assert.Same(Entry(app, "Appearance"), Focused(app));
+
+        Key(app, Avalonia.Input.Key.End, PhysicalKey.End);
+        Assert.Equal("Equalizer", Shown(app));
+        Key(app, Avalonia.Input.Key.Down, PhysicalKey.ArrowDown); // already the last
+        Assert.Equal("Equalizer", Shown(app));
+
+        Key(app, Avalonia.Input.Key.Home, PhysicalKey.Home);
+        Assert.Equal("Appearance", Shown(app));
+        Assert.True(settings.IsOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task Tab_goes_from_the_sidebar_into_the_page_then_to_close_and_back_round()
+    {
+        await using var app = await OpenAsync();
+        OpenSettings(app);
+        var page = Find<ContentControl>(app, "SettingsPage");
+
+        Key(app, Avalonia.Input.Key.Tab, PhysicalKey.Tab);
+        Assert.True(Focused(app) is Visual first && Find<ListBox>(app, "ThemeChoice").IsVisualAncestorOf(first), $"focus on {Focused(app)}");
+
+        Key(app, Avalonia.Input.Key.Tab, PhysicalKey.Tab);
+        Assert.True(Focused(app) is Visual second && Find<ListBox>(app, "MotionChoice").IsVisualAncestorOf(second), $"focus on {Focused(app)}");
+
+        Key(app, Avalonia.Input.Key.Tab, PhysicalKey.Tab);
+        Assert.Same(Find<Button>(app, "CloseSettings"), Focused(app)); // after the page's settings
+
+        Key(app, Avalonia.Input.Key.Tab, PhysicalKey.Tab);
+        Assert.Same(Entry(app, "Appearance"), Focused(app)); // round inside the dialog
+
+        Key(app, Avalonia.Input.Key.Tab, PhysicalKey.Tab, RawInputModifiers.Shift);
+        Assert.Same(Find<Button>(app, "CloseSettings"), Focused(app));
+        Assert.False(page.IsVisualAncestorOf((Visual)Focused(app)!));
+        Assert.True(app.ViewModel.Settings.IsOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task It_reopens_on_the_page_last_used_but_a_new_window_starts_on_the_first()
+    {
+        await using (var app = await OpenAsync())
+        {
+            OpenSettings(app);
+            ShowPage(app, "Audio");
+            Gui.Press(app.Window, Avalonia.Input.Key.Escape, PhysicalKey.Escape);
+
+            OpenSettings(app);
+
+            Assert.Equal("Audio", Shown(app));
+            Assert.Same(Entry(app, "Audio"), Focused(app));
+            Assert.True(Has(app, "ExclusiveMode"));
+        }
+
+        await using var next = await OpenAsync(); // not saved: the app starting again opens on the first page
+        OpenSettings(next);
+        Assert.Equal("Appearance", Shown(next));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_page_that_cannot_load_says_why_and_marks_its_entry_until_Try_again_works()
+    {
+        await using var app = await OpenAsync();
+        var library = (StubLibrary)app.Services.Library;
+        library.Failures[nameof(StubLibrary.FoldersAsync)] = StubLibrary.Corrupt();
+        OpenSettings(app);
+        var page = app.ViewModel.Settings.Pages.Single(p => p.Title == "Library");
+        await Gui.UntilAsync(() => page.HasProblem, "the Library page's problem");
+
+        // on another page: only the entry says so
+        Assert.Equal("Appearance", Shown(app));
+        Assert.True(Gui.All<TextBlock>(Entry(app, "Library")).Single(t => t.Classes.Contains("pageProblem")).IsEffectivelyVisible);
+        Assert.False(Gui.All<TextBlock>(Entry(app, "Shelf")).Single(t => t.Classes.Contains("pageProblem")).IsVisible);
+        Assert.False(Find<StackPanel>(app, "PageProblem").IsVisible);
+        Assert.Null(app.ViewModel.Banner); // the page says it, not a notice
+
+        ShowPage(app, "Library");
+        Assert.True(Find<StackPanel>(app, "PageProblem").IsEffectivelyVisible);
+        Assert.Equal("Library couldn't load", Gui.All<TextBlock>(Find<StackPanel>(app, "PageProblem")).First().Text);
+        Assert.Equal(StubLibrary.Corrupt().Message, Find<TextBlock>(app, "ProblemText").Text);
+        Assert.False(Has(app, "AddFolder"));
+
+        library.Failures.Clear();
+        Gui.Click(app.Window, Find<Button>(app, "TryAgain"));
+        await Gui.UntilAsync(() => !page.HasProblem, "the page loaded");
+
+        Assert.False(Find<StackPanel>(app, "PageProblem").IsVisible);
+        Assert.True(Has(app, "AddFolder"));
+        Assert.False(Gui.All<TextBlock>(Entry(app, "Library")).Single(t => t.Classes.Contains("pageProblem")).IsVisible);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_page_that_failed_loads_again_when_Settings_reopens()
+    {
+        await using var app = await OpenAsync();
+        var library = (StubLibrary)app.Services.Library;
+        library.Failures[nameof(StubLibrary.FoldersAsync)] = StubLibrary.Corrupt();
+        OpenSettings(app);
+        var page = app.ViewModel.Settings.Pages.Single(p => p.Title == "Library");
+        await Gui.UntilAsync(() => page.HasProblem, "the Library page's problem");
+        app.ViewModel.Settings.Close();
+
+        library.Failures.Clear();
+        var reads = library.ReadsOf(nameof(StubLibrary.FoldersAsync));
+        OpenSettings(app);
+
+        await Gui.UntilAsync(() => library.ReadsOf(nameof(StubLibrary.FoldersAsync)) > reads && !page.HasProblem, "read again");
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public void Without_the_library_or_audio_view_models_their_pages_are_left_out()
+    {
+        // A host without them (as before #31 / #32, or tests of the other sections): the rest still works.
+        var root = TempDir.Create("settings-pages");
+        using var spinClock = new SpinClock(new FakeTimeProvider(), new QueueDispatcher());
+        var window = new Window { Width = 1000, Height = 800 };
+        try
+        {
+            var data = new DataDirectory(System.IO.Path.Combine(root, "data"), DataDirectorySource.Override);
+            var settings = new SettingsViewModel(new SettingsService(data), new StubAppearance(), spinClock, new Notices());
+            window.Content = new SettingsDialog { DataContext = settings };
+            window.Show();
+            settings.Open();
+            Gui.Settle();
+
+            var entries = Gui.All<ListBoxItem>(Gui.Find<ListBox>(window, "SettingsPages")).ToList();
+            Assert.Equal(["Appearance", "Turntable", "Shelf"], entries.Select(i => ((SettingsPage)i.DataContext!).Title));
+
+            Gui.Click(window, entries[^1]);
+            Assert.Equal("Shelf", Gui.Find<TextBlock>(window, "SettingsPageTitle").Text);
+            Assert.True(Gui.Find<ScrubBar>(window, "TiltBar").IsEffectivelyVisible);
+        }
+        finally
+        {
+            window.Close();
+            TempDir.TryDelete(root);
+        }
     }
 
     [AvaloniaFact]
@@ -114,6 +335,8 @@ public sealed class SettingsTests
         await app.Scripted.PushAsync("stateChanged");
         await Gui.UntilAsync(() => app.ViewModel.Player.IsPlaying, "playing");
         OpenSettings(app);
+        Key(app, Avalonia.Input.Key.Space, PhysicalKey.Space); // on a sidebar entry
+        ShowPage(app, "Shelf");
         Find<ScrubBar>(app, "TiltBar").Focus();
         Gui.Settle();
 
@@ -143,6 +366,7 @@ public sealed class SettingsTests
             Assert.Equal(0.5, MotionScale.Current.Multiplier);
             Assert.Equal(0.5, app.ViewModel.SpinClock.MotionMultiplier);
 
+            ShowPage(app, "Turntable");
             Gui.Click(app.Window, Item(app, "SpeedChoice", "45"));
             Assert.Equal(45, app.ViewModel.SpinClock.Rpm);
 
@@ -159,6 +383,7 @@ public sealed class SettingsTests
             Gui.Click(app.Window, vinyl);
             Assert.False(app.ViewModel.Settings.VinylTransition);
 
+            ShowPage(app, "Shelf");
             var tilt = Find<ScrubBar>(app, "TiltBar");
             tilt.Focus();
             Key(app, Avalonia.Input.Key.Home, PhysicalKey.Home);
@@ -169,8 +394,6 @@ public sealed class SettingsTests
             Assert.Equal("70°", Find<TextBlock>(app, "TiltText").Text);
 
             var depth = Find<ScrubBar>(app, "DepthBar");
-            depth.BringIntoView(); // below the dialog's fold
-            Gui.Settle();
             var bounds = Gui.BoundsIn(app.Window, depth);
             PressAt(app, new Point(bounds.X + (bounds.Width / 4), bounds.Center.Y));
             Assert.InRange(app.ViewModel.Settings.ShelfDepth, 24, 26);
@@ -190,8 +413,7 @@ public sealed class SettingsTests
     /// <summary>The whole bar, left to right at its vertical middle, in steps of <paramref name="steps"/> moves.</summary>
     private static IReadOnlyList<Point> Across(AppHarness app, string bar, int steps)
     {
-        Find<ScrubBar>(app, bar).BringIntoView(); // the shelf's bars are below the dialog's fold
-        Gui.Settle();
+        app.ShowSettingsPage("Shelf");
         var bounds = Gui.BoundsIn(app.Window, Find<ScrubBar>(app, bar));
         return [.. Enumerable.Range(0, steps + 1).Select(i => new Point(bounds.X + 2 + ((bounds.Width - 4) * i / steps), bounds.Center.Y))];
     }
@@ -288,8 +510,10 @@ public sealed class SettingsTests
 
         Assert.True(Item(app, "ThemeChoice", "Light").IsSelected);
         Assert.True(Item(app, "MotionChoice", "Smooth").IsSelected);
+        ShowPage(app, "Turntable");
         Assert.True(Item(app, "SpeedChoice", "16⅔").IsSelected);
         Assert.True(Item(app, "DesignChoice", "Classic").IsSelected);
+        ShowPage(app, "Shelf");
         Assert.Equal(("33°", "0"), (Find<TextBlock>(app, "TiltText").Text, Find<TextBlock>(app, "DepthText").Text));
         Assert.Equal((33, 0), (Find<ScrubBar>(app, "TiltBar").Value, Find<ScrubBar>(app, "DepthBar").Value));
     }
@@ -326,5 +550,36 @@ public sealed class SettingsTests
         Gui.Settle();
 
         Snapshots.Match(app.Window, $"settings-{theme.ToString().ToLowerInvariant()}");
+    }
+
+    /// <summary>The pages with nothing to read; Library, Audio and Equalizer have theirs next to their tests.</summary>
+    [AvaloniaTheory]
+    [InlineData("Turntable", AppTheme.Dark)]
+    [InlineData("Turntable", AppTheme.Light)]
+    [InlineData("Shelf", AppTheme.Dark)]
+    [InlineData("Shelf", AppTheme.Light)]
+    public async Task Snapshot_of_a_Settings_page(string page, AppTheme theme)
+    {
+        await using var app = await OpenAsync(theme);
+        app.ShowSettingsPage(page);
+        app.ViewModel.Settings.Open();
+        Gui.FinishAnimations();
+
+        Snapshots.Match(app.Window, Find<Border>(app, "Dialog"), $"settings-{page.ToLowerInvariant()}-{theme.ToString().ToLowerInvariant()}");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(AppTheme.Dark)]
+    [InlineData(AppTheme.Light)]
+    public async Task Snapshot_of_a_Settings_page_that_cannot_load(AppTheme theme)
+    {
+        await using var app = await OpenAsync(theme);
+        ((StubLibrary)app.Services.Library).Failures[nameof(StubLibrary.FoldersAsync)] = StubLibrary.Corrupt();
+        app.ShowSettingsPage("Library");
+        app.ViewModel.Settings.Open();
+        await Gui.UntilAsync(() => app.ViewModel.Settings.SelectedPage.HasProblem, "the problem");
+        Gui.FinishAnimations();
+
+        Snapshots.Match(app.Window, Find<Border>(app, "Dialog"), $"settings-problem-{theme.ToString().ToLowerInvariant()}");
     }
 }

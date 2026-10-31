@@ -288,6 +288,101 @@ public sealed class SettingsViewModelTests : IDisposable
         Assert.Single(notices);
     }
 
+    // ---- pages (#188) ------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Without_the_library_and_audio_the_pages_are_the_rest_and_the_first_is_chosen()
+    {
+        var vm = Create();
+
+        Assert.Equal(["Appearance", "Turntable", "Shelf"], vm.Pages.Select(p => p.Title));
+        Assert.Equal(["Appearance", "Turntable", "Shelf"], vm.Pages.Select(p => p.Icon));
+        Assert.Same(vm.Pages[0], vm.SelectedPage);
+        Assert.All(vm.Pages, p => Assert.Same(vm, Assert.IsAssignableFrom<SettingsPage>(p) switch
+        {
+            AppearancePage a => a.Settings,
+            TurntablePage t => t.Settings,
+            ShelfPage s => s.Settings,
+            _ => null,
+        }));
+    }
+
+    [Fact]
+    public void The_page_chosen_stays_across_closing_and_opening_and_null_is_ignored()
+    {
+        var vm = Create();
+        var changes = new List<string?>();
+        vm.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        vm.SelectedPage = vm.Pages[2];
+        vm.Open();
+        vm.Close();
+        vm.Open();
+        Assert.Same(vm.Pages[2], vm.SelectedPage);
+
+        vm.SelectedPage = null!; // the sidebar's list box letting go as it leaves
+        Assert.Same(vm.Pages[2], vm.SelectedPage);
+        Assert.Single(changes, nameof(SettingsViewModel.SelectedPage));
+        Assert.False(File.Exists(_data.SettingsFile)); // not saved
+    }
+
+    [Fact]
+    public async Task A_page_that_fails_to_read_keeps_why_until_a_read_works_and_posts_no_notice()
+    {
+        var notices = new List<string>();
+        _notices.Posted += (_, message) => notices.Add(message);
+        var page = new ReadingPage(_notices) { Failure = new MusicSpinException(MusicSpinErrorCode.LibraryCorrupt, "The library database is corrupt.") };
+
+        await page.LoadAsync();
+        Assert.Equal(("The library database is corrupt.", true), (page.Problem, page.HasProblem));
+        Assert.Equal("Reading couldn't load", page.ProblemTitle);
+
+        await page.LoadCommand.ExecuteAsync(null); // Try again, still failing
+        Assert.Equal((2, true), (page.Reads, page.HasProblem));
+
+        page.Failure = null;
+        await page.LoadCommand.ExecuteAsync(null);
+        Assert.Equal((3, null, false), (page.Reads, page.Problem, page.HasProblem));
+        Assert.Empty(notices);
+    }
+
+    [Fact]
+    public async Task A_page_that_fails_unexpectedly_says_so_and_a_cancelled_read_reaches_the_caller()
+    {
+        var page = new ReadingPage(_notices) { Failure = new InvalidOperationException("No reader.") };
+        await page.LoadAsync();
+        Assert.Equal("Something went wrong: No reader.", page.Problem);
+
+        page.Failure = new OperationCanceledException();
+        await Assert.ThrowsAsync<OperationCanceledException>(page.LoadAsync);
+    }
+
+    [Fact]
+    public async Task A_page_with_nothing_to_read_never_has_a_problem()
+    {
+        var vm = Create();
+        foreach (var page in vm.Pages)
+        {
+            await page.LoadAsync();
+        }
+
+        Assert.All(vm.Pages, p => Assert.False(p.HasProblem));
+    }
+
+    /// <summary>A page whose read fails with <see cref="Failure"/> while it is set.</summary>
+    private sealed class ReadingPage(Notices notices) : SettingsPage("Reading", "Folder", notices)
+    {
+        public Exception? Failure { get; set; }
+
+        public int Reads { get; private set; }
+
+        protected override Task ReadAsync()
+        {
+            Reads++;
+            return Failure is { } failure ? Task.FromException(failure) : Task.CompletedTask;
+        }
+    }
+
     /// <summary>Counts the saves (each one re-reads and rewrites settings.json).</summary>
     private sealed class CountingSettings(ISettingsService inner) : ISettingsService
     {

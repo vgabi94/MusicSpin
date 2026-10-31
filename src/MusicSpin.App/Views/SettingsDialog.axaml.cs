@@ -8,8 +8,9 @@ using MusicSpin.App.ViewModels;
 namespace MusicSpin.App.Views;
 
 /// <summary>
-/// The Settings dialog. Opening it moves the keyboard focus to ✕ (Tab then cycles inside the dialog); closing it gives
-/// the focus back to where it was.
+/// The Settings dialog. Opening it moves the keyboard focus to the chosen page's entry in the sidebar, so ↑ ↓ move
+/// through the pages at once (Tab then goes into the page, and cycles inside the dialog); closing it gives the focus
+/// back to where it was.
 /// </summary>
 public partial class SettingsDialog : UserControl
 {
@@ -44,7 +45,7 @@ public partial class SettingsDialog : UserControl
         {
             _returnFocus = focus.GetFocusedElement();
             // after the dialog is shown (the window shows it on the same change)
-            Dispatcher.UIThread.Post(() => CloseSettings.Focus(), DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(FocusChosenPage, DispatcherPriority.Loaded);
         }
         else
         {
@@ -58,6 +59,18 @@ public partial class SettingsDialog : UserControl
             {
                 focus.Focus(null);
             }
+        }
+    }
+
+    private void FocusChosenPage()
+    {
+        if (SettingsPages.ContainerFromItem(SettingsPages.SelectedItem!) is { } entry)
+        {
+            entry.Focus();
+        }
+        else
+        {
+            CloseSettings.Focus();
         }
     }
 }

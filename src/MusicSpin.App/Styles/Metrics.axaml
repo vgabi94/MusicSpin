@@ -497,13 +497,15 @@
     <sys:Double x:Key="VinylHoleScale">0.032</sys:Double>
     <sys:Double x:Key="VinylGroovePitch">2.4</sys:Double>
 
-    <!-- Dialogs (mockup: .dlg, .dlg header, .qclose): 440 wide, 40 px from the window's top and bottom at most. -->
-    <sys:Double x:Key="DialogWidth">440</sys:Double>
+    <!--
+      Dialogs (mockup: .dlg, .dlg header, .qclose; Settings, #188: mockups/188): 720 wide and 600 high, so a page change
+      doesn't resize it; lower in a window with less than 40 px above and below it.
+    -->
+    <sys:Double x:Key="DialogWidth">720</sys:Double>
+    <sys:Double x:Key="DialogMaxHeight">600</sys:Double>
     <Thickness x:Key="DialogMargin">0,40</Thickness>
-    <Thickness x:Key="DialogPadding">22,8,22,22</Thickness>
     <CornerRadius x:Key="DialogRadius">14</CornerRadius>
     <Thickness x:Key="DialogBorderThickness">1</Thickness>
-    <Thickness x:Key="DialogHeaderMargin">0,0,-8,4</Thickness>
     <Thickness x:Key="DialogTitleMargin">0,10</Thickness>
     <sys:Double x:Key="DialogTitleFontSize">18</sys:Double>
     <sys:Double x:Key="DialogCloseSize">28</sys:Double>
@@ -512,10 +514,21 @@
     <!-- The dialog rising in (mockup: @keyframes dlg-in: from 8 px lower, at 98%). -->
     <sys:Double x:Key="DialogInOffset">8</sys:Double>
 
-    <!-- Settings (mockup: .dlg h3, .set-row, .seg, .range, output). -->
-    <Thickness x:Key="SettingsSectionMargin">0,18,0,4</Thickness>
-    <sys:Double x:Key="SettingsSectionFontSize">11</sys:Double>
-    <sys:Double x:Key="SettingsSectionLetterSpacing">0.9</sys:Double>
+    <!--
+      Settings' sidebar (#188): 184 wide, "Settings" at its top, then an entry per page drawn like the window's sidebar
+      (Nav*), 2 apart. The page: its title level with "Settings" and ✕ at the right, its settings 24 in from the sides.
+      A page that couldn't load: a 28 px "!", its title, the reason and Try again, 8 apart, centred.
+    -->
+    <sys:Double x:Key="SettingsSidebarWidth">184</sys:Double>
+    <Thickness x:Key="SettingsSidebarPadding">10,8,10,12</Thickness>
+    <Thickness x:Key="SettingsSidebarTitleMargin">10,10,10,14</Thickness>
+    <sys:Double x:Key="SettingsNavSpacing">2</sys:Double>
+    <Thickness x:Key="SettingsPageHeaderMargin">24,8,14,0</Thickness>
+    <Thickness x:Key="SettingsPagePadding">24,0,24,22</Thickness>
+    <sys:Double x:Key="SettingsProblemIconSize">28</sys:Double>
+    <sys:Double x:Key="SettingsProblemGap">8</sys:Double>
+    <Thickness x:Key="SettingsProblemPadding">24,0,24,40</Thickness>
+    <!-- Settings' rows (mockup: .set-row, .seg, .range, output). -->
     <sys:Double x:Key="SettingRowMinHeight">44</sys:Double>
     <sys:Double x:Key="SettingRowGap">16</sys:Double>
     <Thickness x:Key="SettingRowDivider">0,1,0,0</Thickness>
@@ -544,7 +557,7 @@
     <sys:Double x:Key="SettingSliderGap">10</sys:Double>
     <sys:Double x:Key="SettingOutputWidth">30</sys:Double>
     <!--
-      Settings › Audio › Equalizer (#141; not in the mockup): eleven columns 32 wide fill the dialog's 396, the pre-amp
+      Settings › Equalizer (#141; not in the mockup): eleven columns 32 wide, the pre-amp
       12 from the bands; each slider 120 long, its gain and band 4 above and below, a 14 px tick at 0 dB. The preset
       dropdown, Reset, the name and its buttons 8 apart; the name box padded 10 5.
     -->

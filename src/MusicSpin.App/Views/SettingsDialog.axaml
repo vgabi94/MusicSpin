@@ -1,6 +1,7 @@
 <!--
-  Settings (mockup: #setBack .dlg): Appearance (theme, Motion), Turntable (speed, vinyl transition, design), Shelf (tilt, depth). Every
-  change applies at once and is saved; there is no Save button. The window shows it over a dim (MainWindow.axaml).
+  Settings (mockup: #setBack .dlg; the sidebar, #188: mockups/188): a sidebar of pages on the left, the page chosen on the
+  right with its title and ✕ over its settings, which scroll on their own. Every change applies at once and is saved;
+  there is no Save button. The window shows it over a dim (MainWindow.axaml).
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -11,6 +12,377 @@
              x:Class="MusicSpin.App.Views.SettingsDialog"
              x:DataType="vm:SettingsViewModel">
     <UserControl.DataTemplates>
+        <!-- Appearance: the theme and Motion. -->
+        <DataTemplate DataType="vm:AppearancePage">
+            <ScrollViewer Classes="settingsPage">
+                <StackPanel>
+                    <Border Classes="settingRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Theme" />
+                            <ListBox Name="ThemeChoice"
+                                     Grid.Column="1"
+                                     Theme="{StaticResource Segmented}"
+                                     ItemsSource="{Binding Settings.Themes}"
+                                     SelectedItem="{Binding Settings.ThemeChoice}"
+                                     AutomationProperties.Name="Theme" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Motion" />
+                                <TextBlock Classes="settingNote" Text="The record spins in every mode" />
+                            </StackPanel>
+                            <ListBox Name="MotionChoice"
+                                     Grid.Column="1"
+                                     Theme="{StaticResource Segmented}"
+                                     ItemsSource="{Binding Settings.Motions}"
+                                     SelectedItem="{Binding Settings.MotionChoice}"
+                                     AutomationProperties.Name="Motion" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
+        <!-- Turntable: the record speed, the vinyl transition and the deck's design. -->
+        <DataTemplate DataType="vm:TurntablePage">
+            <ScrollViewer Classes="settingsPage">
+                <StackPanel>
+                    <Border Classes="settingRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Speed" />
+                            <ListBox Name="SpeedChoice"
+                                     Grid.Column="1"
+                                     Theme="{StaticResource Segmented}"
+                                     ItemsSource="{Binding Settings.Speeds}"
+                                     SelectedItem="{Binding Settings.SpeedChoice}"
+                                     AutomationProperties.Name="Record speed" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Vinyl transition" />
+                                <TextBlock Classes="settingNote" Text="{x:Static vm:SettingsViewModel.VinylTransitionNote}" />
+                            </StackPanel>
+                            <ToggleButton Name="VinylTransition"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Settings.VinylTransition}"
+                                          AutomationProperties.Name="Vinyl transition" />
+                        </Grid>
+                    </Border>
+                    <!-- Seven designs: they wrap under the label. -->
+                    <Border Classes="settingRow next tall">
+                        <StackPanel Classes="designRow">
+                            <TextBlock Text="Design" />
+                            <ListBox Name="DesignChoice"
+                                     Theme="{StaticResource Cards}"
+                                     ItemsSource="{Binding Settings.Designs}"
+                                     SelectedItem="{Binding Settings.Design}"
+                                     AutomationProperties.Name="Turntable design">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="services:DeckDesign">
+                                        <StackPanel Classes="designCard">
+                                            <ContentControl Content="{Binding}" />
+                                            <TextBlock Text="{Binding Name}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
+        <!-- Shelf: the tilt and the depth. -->
+        <DataTemplate DataType="vm:ShelfPage">
+            <ScrollViewer Classes="settingsPage">
+                <StackPanel>
+                    <Border Classes="settingRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Tilt" />
+                            <StackPanel Grid.Column="1" Classes="range">
+                                <controls:ScrubBar Name="TiltBar"
+                                                   Classes="setting"
+                                                   Minimum="{x:Static vm:SettingsViewModel.MinTilt}"
+                                                   Maximum="{x:Static vm:SettingsViewModel.MaxTilt}"
+                                                   Value="{Binding Settings.ShelfTilt, Mode=OneWay}"
+                                                   CommitCommand="{Binding Settings.SetShelfTiltCommand}"
+                                                   Scrub="{Binding Settings.TiltScrub}"
+                                                   ValueText="{Binding Settings.ShelfTiltText}"
+                                                   AutomationProperties.Name="Shelf tilt" />
+                                <TextBlock Name="TiltText" Text="{Binding Settings.ShelfTiltText}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Depth" />
+                                <TextBlock Classes="settingNote" Text="0 is flat, higher looks deeper" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Classes="range">
+                                <controls:ScrubBar Name="DepthBar"
+                                                   Classes="setting"
+                                                   Minimum="{x:Static vm:SettingsViewModel.MinDepth}"
+                                                   Maximum="{x:Static vm:SettingsViewModel.MaxDepth}"
+                                                   Value="{Binding Settings.ShelfDepth, Mode=OneWay}"
+                                                   CommitCommand="{Binding Settings.SetShelfDepthCommand}"
+                                                   Scrub="{Binding Settings.DepthScrub}"
+                                                   ValueText="{Binding Settings.ShelfDepthText}"
+                                                   AutomationProperties.Name="Shelf depth" />
+                                <TextBlock Name="DepthText" Text="{Binding Settings.ShelfDepthText}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
+        <!--
+          Library (#31): the music folders (a missing one says so), Add folder…, the scan (its progress and Cancel while it
+          runs, else when it last ran), Watch folders, and what the last scan couldn't read.
+        -->
+        <DataTemplate DataType="vm:LibraryPage">
+            <ScrollViewer Classes="settingsPage">
+                <StackPanel>
+                    <Border Classes="settingRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Music folders" />
+                                <TextBlock Name="AddOutcome"
+                                           Classes="settingNote"
+                                           Text="{Binding Library.Outcome}"
+                                           IsVisible="{Binding Library.Outcome, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                            </StackPanel>
+                            <Button Name="AddFolder" Grid.Column="1" Classes="settingButton" Content="Add folder…" Command="{Binding Library.AddFolderCommand}" />
+                        </Grid>
+                    </Border>
+                    <ItemsControl Name="LibraryFolders" Classes="libraryFolders" ItemsSource="{Binding Library.Folders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:LibraryFolderViewModel">
+                                <Border Classes="settingRow next">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <StackPanel>
+                                            <TextBlock Classes="folderPath" Text="{Binding Path}" ToolTip.Tip="{Binding Path}" />
+                                            <TextBlock Classes="settingNote" Classes.missing="{Binding !IsReachable}" Text="{Binding Detail}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Classes="settingButton"
+                                                Content="Remove"
+                                                Command="{Binding $parent[ItemsControl].((vm:LibraryPage)DataContext).Library.RemoveCommand, FallbackValue={x:Null}}"
+                                                CommandParameter="{Binding}"
+                                                AutomationProperties.Name="{Binding Path, StringFormat='Remove {0}'}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Scan" />
+                                <TextBlock Name="ScanNote" Classes="settingNote" Text="{Binding Library.ScanNote}" />
+                            </StackPanel>
+                            <Panel Grid.Column="1">
+                                <Button Name="Rescan"
+                                        Classes="settingButton"
+                                        Content="Rescan"
+                                        Command="{Binding Library.RescanCommand}"
+                                        IsVisible="{Binding !Library.Scan.IsScanning}" />
+                                <Button Name="CancelScan"
+                                        Classes="settingButton"
+                                        Content="Cancel"
+                                        Command="{Binding Library.Scan.CancelCommand}"
+                                        IsVisible="{Binding Library.Scan.IsScanning}" />
+                            </Panel>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Watch folders" />
+                                <TextBlock Classes="settingNote" Text="Keep the library up to date while the app runs" />
+                            </StackPanel>
+                            <ToggleButton Name="WatchFolders"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Library.WatchFolders}"
+                                          AutomationProperties.Name="Watch folders" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Name="ScanIssues" Classes="scanIssues" IsVisible="{Binding Library.HasIssues}">
+                        <Button Name="IssuesLink" Classes="link" Content="{Binding Library.IssuesText}" Command="{Binding Library.ToggleIssuesCommand}" />
+                        <ItemsControl Name="IssueList" ItemsSource="{Binding Library.Issues}" IsVisible="{Binding Library.ShowsIssues}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:LibraryIssueViewModel">
+                                    <StackPanel Classes="scanIssue">
+                                        <TextBlock Classes="folderPath" Text="{Binding Path}" ToolTip.Tip="{Binding Path}" />
+                                        <TextBlock Classes="settingNote" Text="{Binding Message}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
+        <!--
+          Audio (#32): the output device (System default, then the devices; one saved but not plugged in says so), exclusive
+          mode and volume levelling. A device or mode change restarts the player, so both wait while it does. The note under
+          Output says what the player plays through now.
+        -->
+        <DataTemplate DataType="vm:AudioPage">
+            <ScrollViewer Classes="settingsPage">
+                <StackPanel>
+                    <Border Classes="settingRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Output" />
+                                <TextBlock Name="InUse"
+                                           Classes="settingNote wraps"
+                                           Text="{Binding Audio.InUse}"
+                                           IsVisible="{Binding Audio.InUse, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                            </StackPanel>
+                            <Button Name="OutputDevice"
+                                    Grid.Column="1"
+                                    Classes="dropdown settingDropdown"
+                                    Command="{Binding Audio.OpenDeviceMenuCommand}"
+                                    AutomationProperties.Name="Output device">
+                                <StackPanel>
+                                    <TextBlock Classes="chosen" Text="{Binding Audio.DeviceLabel}" />
+                                    <controls:Icon Data="{StaticResource ChevronDown}" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Exclusive mode" />
+                                <TextBlock Classes="settingNote" Text="{x:Static vm:AudioSettingsViewModel.ExclusiveNote}" />
+                            </StackPanel>
+                            <ToggleButton Name="ExclusiveMode"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Audio.Exclusive}"
+                                          IsEnabled="{Binding !Audio.IsRestarting}"
+                                          AutomationProperties.Name="Exclusive mode" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Volume levelling" />
+                                <TextBlock Classes="settingNote" Text="{x:Static vm:AudioSettingsViewModel.LevellingNote}" />
+                            </StackPanel>
+                            <ToggleButton Name="VolumeLevelling"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Audio.Levelling}"
+                                          AutomationProperties.Name="Volume levelling" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
+        <!--
+          Equalizer (#141; not in the mockup, so in the dialog's own look): the switch (its note says how far boosts lower
+          the pre-amp), the preset and Reset, the pre-amp and the ten bands upright, then saving the gains as a preset, and
+          deleting a saved one. Applies at once, without a restart.
+        -->
+        <DataTemplate DataType="vm:EqualizerPage">
+            <ScrollViewer Classes="settingsPage">
+                <StackPanel>
+                    <Border Classes="settingRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Equalizer" />
+                                <TextBlock Name="EqualizerNote"
+                                           Classes="settingNote"
+                                           Text="{Binding Equalizer.HeadroomNote, TargetNullValue={x:Static vm:EqualizerViewModel.Note}}" />
+                            </StackPanel>
+                            <ToggleButton Name="EqualizerSwitch"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Equalizer.Enabled}"
+                                          AutomationProperties.Name="Equalizer" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid Classes="eqPreset" ColumnDefinitions="*,Auto,Auto">
+                            <TextBlock Text="Preset" />
+                            <Button Name="EqualizerPreset"
+                                    Grid.Column="1"
+                                    Classes="dropdown settingDropdown"
+                                    Command="{Binding Equalizer.OpenPresetMenuCommand}"
+                                    AutomationProperties.Name="Equalizer preset">
+                                <StackPanel>
+                                    <TextBlock Classes="chosen" Text="{Binding Equalizer.PresetLabel}" />
+                                    <controls:Icon Data="{StaticResource ChevronDown}" />
+                                </StackPanel>
+                            </Button>
+                            <Button Name="EqualizerReset"
+                                    Grid.Column="2"
+                                    Classes="settingButton"
+                                    Content="Reset"
+                                    Command="{Binding Equalizer.ResetCommand}"
+                                    AutomationProperties.Name="Reset the equalizer" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next tall">
+                        <Grid Name="EqualizerSliders" Classes="eqSliders" ColumnDefinitions="Auto,*">
+                            <ContentControl Name="EqualizerPreamp" Content="{Binding Equalizer.Preamp}" />
+                            <ItemsControl Name="EqualizerBands" Grid.Column="1" ItemsSource="{Binding Equalizer.Bands}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Rows="1" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid Classes="eqPreset" ColumnDefinitions="*,Auto,Auto">
+                            <StackPanel>
+                                <TextBox Name="EqualizerPresetName"
+                                         Classes="presetName"
+                                         Text="{Binding Equalizer.NewPresetName}"
+                                         PlaceholderText="Name these settings"
+                                         MaxLength="{x:Static vm:EqualizerViewModel.MaxNameLength}"
+                                         AutomationProperties.Name="Preset name">
+                                    <TextBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding Equalizer.SavePresetCommand}" />
+                                    </TextBox.KeyBindings>
+                                </TextBox>
+                                <TextBlock Name="EqualizerPresetProblem"
+                                           Classes="settingNote missing"
+                                           Text="{Binding Equalizer.PresetProblem}"
+                                           IsVisible="{Binding Equalizer.PresetProblem, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                            </StackPanel>
+                            <Button Name="EqualizerSavePreset"
+                                    Grid.Column="1"
+                                    Classes="settingButton"
+                                    Content="Save preset"
+                                    Command="{Binding Equalizer.SavePresetCommand}" />
+                            <Button Name="EqualizerDeletePreset"
+                                    Grid.Column="2"
+                                    Classes="settingButton"
+                                    Content="Delete"
+                                    Command="{Binding Equalizer.AskDeletePresetCommand}"
+                                    IsVisible="{Binding Equalizer.IsUserPreset}"
+                                    AutomationProperties.Name="{Binding Equalizer.PresetLabel, StringFormat='Delete the preset {0}'}" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
         <!-- Each design's preview; each deck adds its own. -->
         <DataTemplate DataType="services:ClassicDeck">
             <Panel Classes="deckPreview classic">
@@ -82,10 +454,33 @@
             AutomationProperties.Name="Settings"
             theming:Animate.Play="DialogInAnimation"
             theming:Animate.Trigger="{Binding Opens}">
-        <ScrollViewer>
-            <StackPanel>
-                <Grid Classes="dialogHeader" ColumnDefinitions="*,Auto">
-                    <TextBlock Name="SettingsTitle" Classes="dialogTitle" Text="Settings" />
+        <Grid ColumnDefinitions="Auto,*">
+            <!-- The pages: ↑ ↓ Home End move through them, and the page follows at once. -->
+            <Border Classes="settingsSidebar">
+                <DockPanel>
+                    <TextBlock Name="SettingsTitle" DockPanel.Dock="Top" Classes="dialogTitle" Text="Settings" />
+                    <ListBox Name="SettingsPages"
+                             Theme="{StaticResource SettingsNav}"
+                             ItemsSource="{Binding Pages}"
+                             SelectedItem="{Binding SelectedPage}"
+                             AutomationProperties.Name="Settings pages" />
+                </DockPanel>
+            </Border>
+
+            <!-- The page before its heading, so Tab goes from the sidebar into the settings and reaches ✕ after them. -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                <ContentControl Name="SettingsPage"
+                                Grid.Row="1"
+                                Content="{Binding SelectedPage}"
+                                IsVisible="{Binding !SelectedPage.HasProblem}" />
+                <StackPanel Name="PageProblem" Grid.Row="1" Classes="pageProblem" IsVisible="{Binding SelectedPage.HasProblem}">
+                    <controls:Icon Data="{StaticResource Problem}" />
+                    <TextBlock Classes="problemTitle" Text="{Binding SelectedPage.ProblemTitle}" />
+                    <TextBlock Name="ProblemText" Text="{Binding SelectedPage.Problem}" />
+                    <Button Name="TryAgain" Classes="settingButton" Content="Try again" Command="{Binding SelectedPage.LoadCommand}" />
+                </StackPanel>
+                <Grid Classes="pageHeader" ColumnDefinitions="*,Auto">
+                    <TextBlock Name="SettingsPageTitle" Classes="dialogTitle" Text="{Binding SelectedPage.Title}" />
                     <Button Name="CloseSettings"
                             Grid.Column="1"
                             Classes="dialogClose"
@@ -95,348 +490,7 @@
                         <controls:Icon Data="{StaticResource Close}" />
                     </Button>
                 </Grid>
-
-                <TextBlock Classes="settingsSection" Text="APPEARANCE" />
-                <Border Classes="settingRow">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="Theme" />
-                        <ListBox Name="ThemeChoice"
-                                 Grid.Column="1"
-                                 Theme="{StaticResource Segmented}"
-                                 ItemsSource="{Binding Themes}"
-                                 SelectedItem="{Binding ThemeChoice}"
-                                 AutomationProperties.Name="Theme" />
-                    </Grid>
-                </Border>
-                <Border Classes="settingRow next">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel>
-                            <TextBlock Text="Motion" />
-                            <TextBlock Classes="settingNote" Text="The record spins in every mode" />
-                        </StackPanel>
-                        <ListBox Name="MotionChoice"
-                                 Grid.Column="1"
-                                 Theme="{StaticResource Segmented}"
-                                 ItemsSource="{Binding Motions}"
-                                 SelectedItem="{Binding MotionChoice}"
-                                 AutomationProperties.Name="Motion" />
-                    </Grid>
-                </Border>
-
-                <TextBlock Classes="settingsSection" Text="TURNTABLE" />
-                <Border Classes="settingRow">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="Speed" />
-                        <ListBox Name="SpeedChoice"
-                                 Grid.Column="1"
-                                 Theme="{StaticResource Segmented}"
-                                 ItemsSource="{Binding Speeds}"
-                                 SelectedItem="{Binding SpeedChoice}"
-                                 AutomationProperties.Name="Record speed" />
-                    </Grid>
-                </Border>
-                <Border Classes="settingRow next">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel>
-                            <TextBlock Text="Vinyl transition" />
-                            <TextBlock Classes="settingNote" Text="{x:Static vm:SettingsViewModel.VinylTransitionNote}" />
-                        </StackPanel>
-                        <ToggleButton Name="VinylTransition"
-                                      Grid.Column="1"
-                                      Theme="{StaticResource Switch}"
-                                      IsChecked="{Binding VinylTransition}"
-                                      AutomationProperties.Name="Vinyl transition" />
-                    </Grid>
-                </Border>
-                <!-- Seven designs: they wrap under the label. -->
-                <Border Classes="settingRow next tall">
-                    <StackPanel Classes="designRow">
-                        <TextBlock Text="Design" />
-                        <ListBox Name="DesignChoice"
-                                 Theme="{StaticResource Cards}"
-                                 ItemsSource="{Binding Designs}"
-                                 SelectedItem="{Binding Design}"
-                                 AutomationProperties.Name="Turntable design">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="services:DeckDesign">
-                                    <StackPanel Classes="designCard">
-                                        <ContentControl Content="{Binding}" />
-                                        <TextBlock Text="{Binding Name}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </StackPanel>
-                </Border>
-
-                <TextBlock Classes="settingsSection" Text="SHELF" />
-                <Border Classes="settingRow">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="Tilt" />
-                        <StackPanel Grid.Column="1" Classes="range">
-                            <controls:ScrubBar Name="TiltBar"
-                                               Classes="setting"
-                                               Minimum="{x:Static vm:SettingsViewModel.MinTilt}"
-                                               Maximum="{x:Static vm:SettingsViewModel.MaxTilt}"
-                                               Value="{Binding ShelfTilt, Mode=OneWay}"
-                                               CommitCommand="{Binding SetShelfTiltCommand}"
-                                               Scrub="{Binding TiltScrub}"
-                                               ValueText="{Binding ShelfTiltText}"
-                                               AutomationProperties.Name="Shelf tilt" />
-                            <TextBlock Name="TiltText" Text="{Binding ShelfTiltText}" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-                <Border Classes="settingRow next">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel>
-                            <TextBlock Text="Depth" />
-                            <TextBlock Classes="settingNote" Text="0 is flat, higher looks deeper" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Classes="range">
-                            <controls:ScrubBar Name="DepthBar"
-                                               Classes="setting"
-                                               Minimum="{x:Static vm:SettingsViewModel.MinDepth}"
-                                               Maximum="{x:Static vm:SettingsViewModel.MaxDepth}"
-                                               Value="{Binding ShelfDepth, Mode=OneWay}"
-                                               CommitCommand="{Binding SetShelfDepthCommand}"
-                                               Scrub="{Binding DepthScrub}"
-                                               ValueText="{Binding ShelfDepthText}"
-                                               AutomationProperties.Name="Shelf depth" />
-                            <TextBlock Name="DepthText" Text="{Binding ShelfDepthText}" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <!--
-                  Library (#31): the music folders (a missing one says so), Add folder…, the scan (its progress and Cancel
-                  while it runs, else when it last ran), Watch folders, and what the last scan couldn't read.
-                -->
-                <StackPanel Name="LibrarySection" IsVisible="{Binding Library, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <TextBlock Classes="settingsSection" Text="LIBRARY" />
-                    <Border Classes="settingRow">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel>
-                                <TextBlock Text="Music folders" />
-                                <TextBlock Name="AddOutcome"
-                                           Classes="settingNote"
-                                           Text="{Binding Library.Outcome, FallbackValue={x:Null}}"
-                                           IsVisible="{Binding Library.Outcome, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
-                            </StackPanel>
-                            <Button Name="AddFolder" Grid.Column="1" Classes="settingButton" Content="Add folder…" Command="{Binding Library.AddFolderCommand, FallbackValue={x:Null}}" />
-                        </Grid>
-                    </Border>
-                    <ItemsControl Name="LibraryFolders" Classes="libraryFolders" ItemsSource="{Binding Library.Folders, FallbackValue={x:Null}}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="vm:LibraryFolderViewModel">
-                                <Border Classes="settingRow next">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <StackPanel>
-                                            <TextBlock Classes="folderPath" Text="{Binding Path}" ToolTip.Tip="{Binding Path}" />
-                                            <TextBlock Classes="settingNote" Classes.missing="{Binding !IsReachable}" Text="{Binding Detail}" />
-                                        </StackPanel>
-                                        <Button Grid.Column="1"
-                                                Classes="settingButton"
-                                                Content="Remove"
-                                                Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).Library.RemoveCommand, FallbackValue={x:Null}}"
-                                                CommandParameter="{Binding}"
-                                                AutomationProperties.Name="{Binding Path, StringFormat='Remove {0}'}" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <Border Classes="settingRow next">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel>
-                                <TextBlock Text="Scan" />
-                                <TextBlock Name="ScanNote" Classes="settingNote" Text="{Binding Library.ScanNote, FallbackValue={x:Null}}" />
-                            </StackPanel>
-                            <Panel Grid.Column="1">
-                                <Button Name="Rescan"
-                                        Classes="settingButton"
-                                        Content="Rescan"
-                                        Command="{Binding Library.RescanCommand, FallbackValue={x:Null}}"
-                                        IsVisible="{Binding !Library.Scan.IsScanning, FallbackValue=False}" />
-                                <Button Name="CancelScan"
-                                        Classes="settingButton"
-                                        Content="Cancel"
-                                        Command="{Binding Library.Scan.CancelCommand, FallbackValue={x:Null}}"
-                                        IsVisible="{Binding Library.Scan.IsScanning, FallbackValue=False}" />
-                            </Panel>
-                        </Grid>
-                    </Border>
-                    <Border Classes="settingRow next">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel>
-                                <TextBlock Text="Watch folders" />
-                                <TextBlock Classes="settingNote" Text="Keep the library up to date while the app runs" />
-                            </StackPanel>
-                            <ToggleButton Name="WatchFolders"
-                                          Grid.Column="1"
-                                          Theme="{StaticResource Switch}"
-                                          IsChecked="{Binding Library.WatchFolders, FallbackValue=False}"
-                                          AutomationProperties.Name="Watch folders" />
-                        </Grid>
-                    </Border>
-                    <StackPanel Name="ScanIssues" Classes="scanIssues" IsVisible="{Binding Library.HasIssues, FallbackValue=False}">
-                        <Button Name="IssuesLink" Classes="link" Content="{Binding Library.IssuesText, FallbackValue={x:Null}}" Command="{Binding Library.ToggleIssuesCommand, FallbackValue={x:Null}}" />
-                        <ItemsControl Name="IssueList" ItemsSource="{Binding Library.Issues, FallbackValue={x:Null}}" IsVisible="{Binding Library.ShowsIssues, FallbackValue=False}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="vm:LibraryIssueViewModel">
-                                    <StackPanel Classes="scanIssue">
-                                        <TextBlock Classes="folderPath" Text="{Binding Path}" ToolTip.Tip="{Binding Path}" />
-                                        <TextBlock Classes="settingNote" Text="{Binding Message}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </StackPanel>
-
-                <!--
-                  Audio (#32): the output device (System default, then the devices; one saved but not plugged in says so)
-                  and exclusive mode. A change restarts the player, so both wait while it does. The note under Output says
-                  what the player plays through now.
-                -->
-                <StackPanel Name="AudioSection" IsVisible="{Binding Audio, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <TextBlock Classes="settingsSection" Text="AUDIO" />
-                    <Border Classes="settingRow">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel>
-                                <TextBlock Text="Output" />
-                                <TextBlock Name="InUse"
-                                           Classes="settingNote wraps"
-                                           Text="{Binding Audio.InUse, FallbackValue={x:Null}}"
-                                           IsVisible="{Binding Audio.InUse, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
-                            </StackPanel>
-                            <Button Name="OutputDevice"
-                                    Grid.Column="1"
-                                    Classes="dropdown settingDropdown"
-                                    Command="{Binding Audio.OpenDeviceMenuCommand, FallbackValue={x:Null}}"
-                                    AutomationProperties.Name="Output device">
-                                <StackPanel>
-                                    <TextBlock Classes="chosen" Text="{Binding Audio.DeviceLabel, FallbackValue={x:Null}}" />
-                                    <controls:Icon Data="{StaticResource ChevronDown}" />
-                                </StackPanel>
-                            </Button>
-                        </Grid>
-                    </Border>
-                    <Border Classes="settingRow next">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel>
-                                <TextBlock Text="Exclusive mode" />
-                                <TextBlock Classes="settingNote" Text="{x:Static vm:AudioSettingsViewModel.ExclusiveNote}" />
-                            </StackPanel>
-                            <ToggleButton Name="ExclusiveMode"
-                                          Grid.Column="1"
-                                          Theme="{StaticResource Switch}"
-                                          IsChecked="{Binding Audio.Exclusive, FallbackValue=False}"
-                                          IsEnabled="{Binding !Audio.IsRestarting, FallbackValue=False}"
-                                          AutomationProperties.Name="Exclusive mode" />
-                        </Grid>
-                    </Border>
-                    <Border Classes="settingRow next">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel>
-                                <TextBlock Text="Volume levelling" />
-                                <TextBlock Classes="settingNote" Text="{x:Static vm:AudioSettingsViewModel.LevellingNote}" />
-                            </StackPanel>
-                            <ToggleButton Name="VolumeLevelling"
-                                          Grid.Column="1"
-                                          Theme="{StaticResource Switch}"
-                                          IsChecked="{Binding Audio.Levelling, FallbackValue=False}"
-                                          AutomationProperties.Name="Volume levelling" />
-                        </Grid>
-                    </Border>
-
-                    <!--
-                      Equalizer (#141; not in the mockup, so in the dialog's own look): the switch (its note says how far
-                      boosts lower the pre-amp), the preset and Reset, the pre-amp and the ten bands upright, then saving
-                      the gains as a preset, and deleting a saved one. Applies at once, without a restart.
-                    -->
-                    <Border Classes="settingRow next">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel>
-                                <TextBlock Text="Equalizer" />
-                                <TextBlock Name="EqualizerNote"
-                                           Classes="settingNote"
-                                           Text="{Binding Audio.Equalizer.HeadroomNote, FallbackValue={x:Null}, TargetNullValue={x:Static vm:EqualizerViewModel.Note}}" />
-                            </StackPanel>
-                            <ToggleButton Name="EqualizerSwitch"
-                                          Grid.Column="1"
-                                          Theme="{StaticResource Switch}"
-                                          IsChecked="{Binding Audio.Equalizer.Enabled, FallbackValue=False}"
-                                          AutomationProperties.Name="Equalizer" />
-                        </Grid>
-                    </Border>
-                    <Border Classes="settingRow next">
-                        <Grid Classes="eqPreset" ColumnDefinitions="*,Auto,Auto">
-                            <TextBlock Text="Preset" />
-                            <Button Name="EqualizerPreset"
-                                    Grid.Column="1"
-                                    Classes="dropdown settingDropdown"
-                                    Command="{Binding Audio.Equalizer.OpenPresetMenuCommand, FallbackValue={x:Null}}"
-                                    AutomationProperties.Name="Equalizer preset">
-                                <StackPanel>
-                                    <TextBlock Classes="chosen" Text="{Binding Audio.Equalizer.PresetLabel, FallbackValue={x:Null}}" />
-                                    <controls:Icon Data="{StaticResource ChevronDown}" />
-                                </StackPanel>
-                            </Button>
-                            <Button Name="EqualizerReset"
-                                    Grid.Column="2"
-                                    Classes="settingButton"
-                                    Content="Reset"
-                                    Command="{Binding Audio.Equalizer.ResetCommand, FallbackValue={x:Null}}"
-                                    AutomationProperties.Name="Reset the equalizer" />
-                        </Grid>
-                    </Border>
-                    <Border Classes="settingRow tall">
-                        <Grid Name="EqualizerSliders" Classes="eqSliders" ColumnDefinitions="Auto,*">
-                            <ContentControl Name="EqualizerPreamp" Content="{Binding Audio.Equalizer.Preamp, FallbackValue={x:Null}}" />
-                            <ItemsControl Name="EqualizerBands" Grid.Column="1" ItemsSource="{Binding Audio.Equalizer.Bands, FallbackValue={x:Null}}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <UniformGrid Rows="1" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
-                        </Grid>
-                    </Border>
-                    <Border Classes="settingRow next">
-                        <Grid Classes="eqPreset" ColumnDefinitions="*,Auto,Auto">
-                            <StackPanel>
-                                <TextBox Name="EqualizerPresetName"
-                                         Classes="presetName"
-                                         Text="{Binding Audio.Equalizer.NewPresetName, FallbackValue={x:Null}}"
-                                         PlaceholderText="Name these settings"
-                                         MaxLength="{x:Static vm:EqualizerViewModel.MaxNameLength}"
-                                         AutomationProperties.Name="Preset name">
-                                    <TextBox.KeyBindings>
-                                        <KeyBinding Gesture="Enter" Command="{Binding Audio.Equalizer.SavePresetCommand, FallbackValue={x:Null}}" />
-                                    </TextBox.KeyBindings>
-                                </TextBox>
-                                <TextBlock Name="EqualizerPresetProblem"
-                                           Classes="settingNote missing"
-                                           Text="{Binding Audio.Equalizer.PresetProblem, FallbackValue={x:Null}}"
-                                           IsVisible="{Binding Audio.Equalizer.PresetProblem, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
-                            </StackPanel>
-                            <Button Name="EqualizerSavePreset"
-                                    Grid.Column="1"
-                                    Classes="settingButton"
-                                    Content="Save preset"
-                                    Command="{Binding Audio.Equalizer.SavePresetCommand, FallbackValue={x:Null}}" />
-                            <Button Name="EqualizerDeletePreset"
-                                    Grid.Column="2"
-                                    Classes="settingButton"
-                                    Content="Delete"
-                                    Command="{Binding Audio.Equalizer.AskDeletePresetCommand, FallbackValue={x:Null}}"
-                                    IsVisible="{Binding Audio.Equalizer.IsUserPreset, FallbackValue=False}"
-                                    AutomationProperties.Name="{Binding Audio.Equalizer.PresetLabel, StringFormat='Delete the preset {0}', FallbackValue={x:Null}}" />
-                        </Grid>
-                    </Border>
-                </StackPanel>
-            </StackPanel>
-        </ScrollViewer>
+            </Grid>
+        </Grid>
     </Border>
 </UserControl>
