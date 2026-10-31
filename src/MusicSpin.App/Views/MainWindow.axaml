@@ -8,6 +8,7 @@
         xmlns:views="using:MusicSpin.App.Views"
         xmlns:pages="using:MusicSpin.App.Views.Pages"
         xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:core="using:MusicSpin.Core.Playback"
         x:Class="MusicSpin.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Classes="shell"
@@ -24,7 +25,93 @@
         <KeyBinding Gesture="Down" Command="{Binding FlipCrateOnCommand}" />
         <KeyBinding Gesture="Left" Command="{Binding FlipCrateBackCommand}" />
         <KeyBinding Gesture="Up" Command="{Binding FlipCrateBackCommand}" />
+        <KeyBinding Gesture="{OnPlatform Ctrl+F, macOS=Cmd+F}" Command="{Binding AppMenu.SearchCommand}" />
+        <KeyBinding Gesture="{OnPlatform Ctrl+OemComma, macOS=Cmd+OemComma}" Command="{Binding Settings.OpenCommand}" />
+        <KeyBinding Gesture="Ctrl+Q" Command="{Binding AppMenu.QuitCommand}" />
     </Window.KeyBindings>
+
+    <!--
+      The app menu (#135). Windows and Linux show it after the title (Views/TitleBar.axaml, a NativeMenuBar); macOS puts it
+      in the menu bar, which has its own Quit, so that one is left out there. The gestures of Space and Ctrl+arrows are
+      only shown: they are the window's key bindings, which give way to a focused text box. On macOS a menu's gesture
+      would run before the text box saw the key, so those show none there.
+    -->
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="_File">
+                <NativeMenu>
+                    <NativeMenuItem Header="_Add a music folder…" Command="{Binding Library.AddFolderCommand}" />
+                    <NativeMenuItem Header="_Rescan the library" Command="{Binding Library.RescanCommand}" />
+                    <NativeMenuItemSeparator />
+                    <NativeMenuItem Header="_Settings…"
+                                    Command="{Binding Settings.OpenCommand}"
+                                    Gesture="{OnPlatform Ctrl+OemComma, macOS=Cmd+OemComma}" />
+                    <NativeMenuItemSeparator IsVisible="{OnPlatform True, macOS=False}" />
+                    <NativeMenuItem Header="_Quit"
+                                    Command="{Binding AppMenu.QuitCommand}"
+                                    Gesture="Ctrl+Q"
+                                    IsVisible="{OnPlatform True, macOS=False}" />
+                </NativeMenu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="_Playback">
+                <NativeMenu>
+                    <NativeMenuItem Header="{Binding AppMenu.PlayPauseHeader}"
+                                    Command="{Binding AppMenu.TogglePlayCommand}"
+                                    Gesture="{OnPlatform Space, macOS={x:Null}}" />
+                    <NativeMenuItem Header="_Previous" Command="{Binding AppMenu.PreviousCommand}" />
+                    <NativeMenuItem Header="_Next" Command="{Binding AppMenu.NextCommand}" />
+                    <NativeMenuItemSeparator />
+                    <NativeMenuItem Header="S_huffle"
+                                    ToggleType="CheckBox"
+                                    IsChecked="{Binding AppMenu.IsShuffleOn, Mode=OneWay}"
+                                    Command="{Binding AppMenu.ToggleShuffleCommand}" />
+                    <NativeMenuItem Header="_Repeat">
+                        <NativeMenu>
+                            <NativeMenuItem Header="_Off"
+                                            ToggleType="Radio"
+                                            IsChecked="{Binding AppMenu.IsRepeatOff, Mode=OneWay}"
+                                            Command="{Binding AppMenu.SetRepeatCommand}"
+                                            CommandParameter="{x:Static core:RepeatMode.Off}" />
+                            <NativeMenuItem Header="_All"
+                                            ToggleType="Radio"
+                                            IsChecked="{Binding AppMenu.IsRepeatAll, Mode=OneWay}"
+                                            Command="{Binding AppMenu.SetRepeatCommand}"
+                                            CommandParameter="{x:Static core:RepeatMode.All}" />
+                            <NativeMenuItem Header="O_ne"
+                                            ToggleType="Radio"
+                                            IsChecked="{Binding AppMenu.IsRepeatOne, Mode=OneWay}"
+                                            Command="{Binding AppMenu.SetRepeatCommand}"
+                                            CommandParameter="{x:Static core:RepeatMode.One}" />
+                        </NativeMenu>
+                    </NativeMenuItem>
+                    <NativeMenuItemSeparator />
+                    <NativeMenuItem Header="Volume _up"
+                                    Command="{Binding AppMenu.VolumeUpCommand}"
+                                    Gesture="{OnPlatform Ctrl+Up, macOS={x:Null}}" />
+                    <NativeMenuItem Header="Volume _down"
+                                    Command="{Binding AppMenu.VolumeDownCommand}"
+                                    Gesture="{OnPlatform Ctrl+Down, macOS={x:Null}}" />
+                    <NativeMenuItem Header="_Mute"
+                                    ToggleType="CheckBox"
+                                    IsChecked="{Binding AppMenu.IsMuted, Mode=OneWay}"
+                                    Command="{Binding AppMenu.ToggleMuteCommand}" />
+                </NativeMenu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="_View">
+                <NativeMenu>
+                    <NativeMenuItem Header="_Albums" Command="{Binding AppMenu.ShowCommand}" CommandParameter="{x:Static vm:PageKind.Albums}" />
+                    <NativeMenuItem Header="_Tracks" Command="{Binding AppMenu.ShowCommand}" CommandParameter="{x:Static vm:PageKind.Tracks}" />
+                    <NativeMenuItem Header="_Radio" Command="{Binding AppMenu.ShowCommand}" CommandParameter="{x:Static vm:PageKind.Radio}" />
+                    <NativeMenuItem Header="_Favorites" Command="{Binding AppMenu.ShowCommand}" CommandParameter="{x:Static vm:PageKind.Favorites}" />
+                    <NativeMenuItemSeparator />
+                    <NativeMenuItem Header="_Now Playing" Command="{Binding AppMenu.OpenNowPlayingCommand}" />
+                    <NativeMenuItem Header="_Queue" Command="{Binding AppMenu.OpenQueueCommand}" />
+                    <NativeMenuItemSeparator />
+                    <NativeMenuItem Header="_Search" Command="{Binding AppMenu.SearchCommand}" Gesture="{OnPlatform Ctrl+F, macOS=Cmd+F}" />
+                </NativeMenu>
+            </NativeMenuItem>
+        </NativeMenu>
+    </NativeMenu.Menu>
 
     <Window.DataTemplates>
         <DataTemplate DataType="vm:AlbumsPageViewModel">

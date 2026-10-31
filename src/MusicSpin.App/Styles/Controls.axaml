@@ -7,7 +7,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="using:MusicSpin.App.Controls"
                     xmlns:theming="using:MusicSpin.App.Theming"
-                    xmlns:vm="using:MusicSpin.App.ViewModels">
+                    xmlns:vm="using:MusicSpin.App.ViewModels"
+                    xmlns:conv="using:Avalonia.Controls.Converters">
     <!-- The default look of every Button (no Fluent chrome); areas style it with classes. Being the implicit theme, it
          never overrides a theme set on purpose, like the window buttons in Window.axaml. -->
     <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
@@ -596,5 +597,139 @@
                 </Panel>
             </ControlTemplate>
         </Setter>
+    </ControlTheme>
+
+    <!--
+      The app menu (#135) in the look of the window's own menu (mockup: .menu): a raised list on Bg3, entries that light
+      up under the pointer or the keyboard, and the ✓ of a setting that is on (or of the choice made) after its name, where
+      a submenu has its ›. AppMenuBarItem is a title in the title bar; the implicit MenuItem theme is an entry in a list
+      (also a text box's Cut, Copy, Paste).
+    -->
+    <!-- A menu entry's shortcut as this OS writes it ("Ctrl+F", "⌘F"). -->
+    <conv:PlatformKeyGestureConverter x:Key="MenuGestureText" />
+
+    <ControlTheme x:Key="AppMenuBarItem" TargetType="MenuItem">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="Padding" Value="{StaticResource AppMenuBarItemPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource MenuEntryRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource MenuFontSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_LayoutRoot"
+                        Background="{TemplateBinding Background}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <Panel>
+                        <ContentPresenter Name="PART_HeaderPresenter"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          Margin="{TemplateBinding Padding}"
+                                          RecognizesAccessKey="True"
+                                          VerticalAlignment="Center" />
+                        <Popup Name="PART_Popup"
+                               WindowManagerAddShadowHint="False"
+                               IsLightDismissEnabled="True"
+                               IsOpen="{TemplateBinding IsSubMenuOpen, Mode=TwoWay}"
+                               Placement="BottomEdgeAlignedLeft"
+                               HorizontalOffset="{StaticResource MenuPopupOffsetX}"
+                               VerticalOffset="{StaticResource MenuPopupOffsetY}"
+                               OverlayInputPassThroughElement="{Binding $parent[Menu]}">
+                            <Border Classes="menuPopup">
+                                <ItemsPresenter Name="PART_ItemsPresenter"
+                                                ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                Grid.IsSharedSizeScope="True" />
+                            </Border>
+                        </Popup>
+                    </Panel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource MenuHoverBrush}" />
+        </Style>
+        <Style Selector="^:selected">
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^:open">
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        </Style>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type MenuItem}" TargetType="MenuItem">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="Padding" Value="{StaticResource MenuEntryPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource MenuEntryRadius}" />
+        <Setter Property="FontSize" Value="{StaticResource MenuFontSize}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel>
+                    <Border Name="PART_LayoutRoot"
+                            Padding="{TemplateBinding Padding}"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemGesture" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemTrail" />
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter Name="PART_HeaderPresenter"
+                                              Content="{TemplateBinding Header}"
+                                              ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                              RecognizesAccessKey="True"
+                                              VerticalAlignment="Center" />
+                            <TextBlock Name="PART_InputGestureText"
+                                       Grid.Column="1"
+                                       Classes="menuGesture"
+                                       Text="{TemplateBinding InputGesture, Converter={StaticResource MenuGestureText}}" />
+                            <Panel Grid.Column="2" Classes="menuTrail">
+                                <controls:Icon Name="PART_Check" Classes="menuCheck" Data="{StaticResource Check}" IsVisible="False" />
+                                <controls:Icon Name="PART_Chevron" Classes="menuChevron" Data="{StaticResource ChevronRight}" />
+                            </Panel>
+                        </Grid>
+                    </Border>
+                    <Popup Name="PART_Popup"
+                           WindowManagerAddShadowHint="False"
+                           IsLightDismissEnabled="False"
+                           IsOpen="{TemplateBinding IsSubMenuOpen, Mode=TwoWay}"
+                           Placement="RightEdgeAlignedTop"
+                           HorizontalOffset="{StaticResource MenuSubPopupOffsetX}"
+                           VerticalOffset="{StaticResource MenuSubPopupOffsetY}">
+                        <Border Classes="menuPopup">
+                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                            ItemsPanel="{TemplateBinding ItemsPanel}"
+                                            Grid.IsSharedSizeScope="True" />
+                        </Border>
+                    </Popup>
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource MenuHoverBrush}" />
+        </Style>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <Style Selector="^:empty /template/ controls|Icon#PART_Chevron">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:checked:toggle /template/ controls|Icon#PART_Check">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="^:checked:radio /template/ controls|Icon#PART_Check">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="^:separator">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Separator />
+                </ControlTemplate>
+            </Setter>
+        </Style>
     </ControlTheme>
 </ResourceDictionary>

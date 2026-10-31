@@ -58,6 +58,10 @@ public partial class MainWindow : Window, IScenePlaces
         }, RoutingStrategies.Bubble, handledEventsToo: true);
         Deactivated += (_, _) => _viewModel?.Menu.Close();
 
+        // While the app menu is open, its keys (the arrows, Enter, Esc) are the menu's; Space plays nothing then either.
+        AddHandler(MenuBase.OpenedEvent, (_, e) => _viewModel?.IsAppMenuOpen = e.Source is Menu, RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(MenuBase.ClosedEvent, (_, e) => _viewModel?.IsAppMenuOpen &= e.Source is not Menu, RoutingStrategies.Bubble, handledEventsToo: true);
+
         _drag = new LibraryDrag(this);
     }
 
@@ -95,13 +99,28 @@ public partial class MainWindow : Window, IScenePlaces
     {
         base.OnDataContextChanged(e);
         _viewModel?.Menu.PropertyChanged -= OnMenuChanged;
+        _viewModel?.AppMenu.SearchRequested -= OnSearchRequested;
+        _viewModel?.AppMenu.QuitRequested -= OnQuitRequested;
         _viewModel?.Scene.Places = null;
         _viewModel = DataContext as MainWindowViewModel;
         _viewModel?.IsShown = WindowState != WindowState.Minimized;
         _viewModel?.Menu.PropertyChanged += OnMenuChanged;
+        _viewModel?.AppMenu.SearchRequested += OnSearchRequested;
+        _viewModel?.AppMenu.QuitRequested += OnQuitRequested;
         _viewModel?.Scene.Places = this;
         _scene.DataContext = _viewModel;
     }
+
+    /// <summary>Ctrl+F or View › Search: the search box takes the focus, with what it holds selected to type over.</summary>
+    private void OnSearchRequested(object? sender, EventArgs e)
+    {
+        var box = TitleBarView.SearchBox;
+        box.Focus(NavigationMethod.Tab);
+        box.SelectAll();
+    }
+
+    /// <summary>File › Quit (Ctrl+Q): closes the window as its ✕ does, so the music stops first (<see cref="OnClosing"/>).</summary>
+    private void OnQuitRequested(object? sender, EventArgs e) => Close();
 
     /// <summary>Minimized, the window shows nothing: its clocks stop until it is restored (#125).</summary>
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

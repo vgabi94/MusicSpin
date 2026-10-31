@@ -102,7 +102,7 @@ src/MusicSpin.App/
 ├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers,
 │                          notices, the format label, typed values (seek and volume syntax), turntable designs,
 │                          the scene's timeline, RadioStation (radio tags, their filter and description)
-├── ViewModels/            MainWindow (shell), Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
+├── ViewModels/            MainWindow (shell), AppMenu, Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
 │                          layers (Settings, Now Playing, the queue drawer and its name form, the menu),
 │                          LibraryItemActions (right-click and drag of albums and tracks), PlaylistActions (the
 │                          sidebar's playlists, Add to playlist ›), Favorites (the hearts), pages (Albums, Tracks,
@@ -236,6 +236,21 @@ src/MusicSpin.App/
   submenu shown in the menu's place: the playlists, then New playlist…); a track also gets Add to (or Remove from)
   favorites. `PlaylistActions` makes a sidebar playlist's menu: Play, Rename, Delete… (which asks first, in the
   menu's place).
+- **The title bar and the app menu (#135).** Left to right: the title, the app menu, an empty stretch, the search box
+  (a fixed width, so it keeps its place as the window is resized) and the room the system window buttons are drawn
+  over. The bar is the window's drag area (`WindowDecorationProperties.ElementRole` TitleBar: the platform moves the
+  window from it and maximizes on a double-click); the menu and the search box are `User`, so they take their own
+  input. The menu is one `NativeMenu` on the window (File, Playback, View): `NativeMenuBar` shows it after the title on
+  Windows and Linux, and macOS puts it in the menu bar (the bar then shows nothing; File leaves out Quit, which the app
+  menu has). Its entries bind the commands the rest of the window runs; `AppMenuViewModel` adds only when each can run
+  (Next waits at the end of the queue unless repeat is all or radio is on; play/pause, ⏮ and Now Playing wait for a
+  track; the playback entries wait for the player), the checks (Shuffle, Repeat, Mute, following the player whoever
+  changes it) and two events the window handles: Search (Ctrl+F, ⌘F) focuses the search box with its text selected,
+  and Quit (Ctrl+Q) closes the window as its ✕ does. Alt opens the menu. Key bindings run before the focused control
+  sees a key, so while the menu is open (`IsAppMenuOpen`, which the window reports) the window's shortcuts decline and
+  the arrows, Enter and Esc are the menu's. Its lists use the app's `MenuItem` themes (`Controls.axaml`): the look of
+  the window's menu, with the ✓ and › after the entry. On macOS the shortcuts that give way to a text box (Space,
+  Ctrl+arrows) are not given to the menu bar, which would run them first.
 - **OS media controls (#34, #35, #36).** `Services/MediaControls`: `MediaControlsBridge` is the platform-neutral half.
   It follows `PlayerViewModel` (so the CLI's changes show too) and passes the track, its cached cover file
   (`CoverSize.Medium`), the timeline and the volume to an `IMediaControlsAdapter`, only when something shown changed (a

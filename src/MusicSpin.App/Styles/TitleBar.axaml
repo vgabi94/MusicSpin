@@ -1,6 +1,7 @@
 <!--
-  The title bar (mockup: .titlebar): brand, search box, and room for the system window buttons.
-  On macOS (Window.mac) the system buttons sit on the left, so the brand moves right and no room is kept on the right.
+  The title bar (mockup: .titlebar, #135): the title, the app menu and its lists, the search box, and room for the system
+  window buttons. On macOS (Window.mac) the system buttons sit on the left, so the title moves right and no room is kept
+  on the right; the menu is in the menu bar there.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -61,13 +62,58 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- The app menu after the title (#135); its lists are the menu control themes in Controls.axaml. -->
+    <Style Selector="NativeMenuBar.appMenu">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="NativeMenuBar.appMenu Menu">
+        <Setter Property="Height" Value="NaN" />
+        <Setter Property="ItemContainerTheme" Value="{StaticResource AppMenuBarItem}" />
+    </Style>
+    <Style Selector="Border.menuPopup">
+        <Setter Property="Margin" Value="{StaticResource MenuPopupShadowRoom}" />
+        <Setter Property="MinWidth" Value="{StaticResource MenuMinWidth}" />
+        <Setter Property="Padding" Value="{StaticResource MenuPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource MenuRadius}" />
+        <Setter Property="Background" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="BoxShadow" Value="0 8 20 0 #66000000" />
+    </Style>
+    <Style Selector="TextBlock.menuGesture">
+        <Setter Property="Margin" Value="{StaticResource MenuGestureMargin}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Panel.menuTrail">
+        <Setter Property="Margin" Value="{StaticResource MenuTrailMargin}" />
+        <Setter Property="Width" Value="{StaticResource MenuCheckSize}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Panel.menuTrail > controls|Icon">
+        <Setter Property="Width" Value="{StaticResource MenuCheckSize}" />
+        <Setter Property="Height" Value="{StaticResource MenuCheckSize}" />
+        <Setter Property="IsStroked" Value="True" />
+    </Style>
+    <Style Selector="controls|Icon.menuCheck">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="controls|Icon.menuChevron">
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="MenuItem > Separator">
+        <Setter Property="Height" Value="{StaticResource MenuSeparatorHeight}" />
+        <Setter Property="Margin" Value="{StaticResource MenuSeparatorMargin}" />
+        <Setter Property="Background" Value="{DynamicResource LineBrush}" />
+    </Style>
+
     <Style Selector="Border.search">
         <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
         <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
         <Setter Property="CornerRadius" Value="{StaticResource SearchRadius}" />
         <Setter Property="Padding" Value="{StaticResource SearchPadding}" />
-        <Setter Property="MaxWidth" Value="{StaticResource SearchMaxWidth}" />
+        <Setter Property="Width" Value="{StaticResource SearchWidth}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Border.search > Grid">
