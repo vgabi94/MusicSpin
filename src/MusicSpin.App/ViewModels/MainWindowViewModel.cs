@@ -57,6 +57,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
             Sidebar.MarkFresh(playlist.Id);
         });
         PlayerBar = new PlayerBarViewModel(Player, NowPlaying, QueueDrawer, services.Time, services.Ui);
+        AppMenu = new AppMenuViewModel(PlayerBar, Sidebar, NowPlaying, QueueDrawer);
         MediaControls = StartMediaControls(services);
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
@@ -117,6 +118,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     public SpinClock SpinClock { get; }
 
     public PlayerBarViewModel PlayerBar { get; }
+
+    /// <summary>The app menu (#135): after the title on Windows and Linux, in the menu bar on macOS.</summary>
+    public AppMenuViewModel AppMenu { get; }
 
     /// <summary>
     /// Whether the window shows (the view sets it: false while minimized). While it doesn't, nothing animates for it (#125):
@@ -208,6 +212,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     [ObservableProperty]
     public partial bool IsTextInputFocused { get; set; }
 
+    /// <summary>
+    /// True while the app menu is open (the window reports it). Its keys are the menu's then: the arrows move through it,
+    /// Enter chooses, Esc closes it, and Space does nothing. Key bindings run before the menu sees a key, so theirs decline.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsAppMenuOpen { get; set; }
+
     /// <summary>The cog's dialog: the theme, Motion, the record speed and design, the shelf's tilt and depth, the library.</summary>
     public SettingsViewModel Settings { get; }
 
@@ -234,16 +245,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         }
     }
 
-    /// <summary>Esc: closes the topmost open layer (a menu, Settings, the queue drawer, Now Playing).</summary>
-    [RelayCommand]
+    /// <summary>
+    /// Esc: closes the topmost open layer (a menu, Settings, the queue drawer, Now Playing). Not while the app menu is
+    /// open: Esc closes that, and the layer under it stays.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsAppMenuClosed))]
     private void Escape() => Layers.CloseTopmost();
+
+    private bool IsAppMenuClosed() => !IsAppMenuOpen;
 
     /// <summary>Space: play/pause, unless a text box has focus (then Space types; see <see cref="IsTextInputFocused"/>).</summary>
     [RelayCommand(CanExecute = nameof(CanUseShortcuts))]
     private Task Space() => Player.TogglePlayCommand.ExecuteAsync(null);
 
-    /// <summary>Shortcuts work unless a text box has focus or Settings is open over the window.</summary>
-    private bool CanUseShortcuts() => !IsTextInputFocused && !Settings.IsOpen;
+    /// <summary>Shortcuts work unless a text box has focus, Settings is open over the window, or the app menu is open.</summary>
+    private bool CanUseShortcuts() => !IsTextInputFocused && !Settings.IsOpen && !IsAppMenuOpen;
 
     /// <summary>Ctrl+→: seeks forward, unless a text box has focus (Ctrl+arrows move its caret by words then).</summary>
     [RelayCommand(CanExecute = nameof(CanUseShortcuts), AllowConcurrentExecutions = true)]
@@ -364,6 +380,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     partial void OnSearchTextChanged(string value) => CurrentPage.SearchText = value;
 
     partial void OnIsTextInputFocusedChanged(bool value) => NotifyShortcutsChanged();
+
+    partial void OnIsAppMenuOpenChanged(bool value)
+    {
+        NotifyShortcutsChanged();
+        EscapeCommand.NotifyCanExecuteChanged();
+    }
 
     private void NotifyShortcutsChanged()
     {
