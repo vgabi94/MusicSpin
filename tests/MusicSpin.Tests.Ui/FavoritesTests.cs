@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using MusicSpin.App.Controls;
 using MusicSpin.App.Services;
@@ -523,6 +524,13 @@ public sealed class FavoritesTests
         await PlayAsync(app, "Kind of Blue 2");
         var page = await OpenFavoritesAsync(app, 2);
         await Gui.UntilAsync(() => page.Tracks.Where(t => t.Album == "Kind of Blue").All(t => t.Art.Cover is not null) && app.ViewModel.PlayingCover is not null, "the covers");
+
+        // The album's colour comes after its cover (MainWindowViewModel): wait for it too, or the snapshot catches the
+        // default accent on one machine and the album's on another.
+        var accent = AccentColors.Accent(Assert.NotNull(await app.Services.Covers.AccentAsync(app.ViewModel.PlayingAlbumId!)));
+        await Gui.UntilAsync(
+            () => app.Window.FindResource("AccentBrush") is ISolidColorBrush brush && brush.Color == Color.FromRgb(accent.R, accent.G, accent.B),
+            "the album's accent");
         app.Window.MouseMove(new Point(1, 1));
         Gui.Settle();
         Gui.FinishAnimations();
