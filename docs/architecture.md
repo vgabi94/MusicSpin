@@ -246,7 +246,7 @@ src/MusicSpin.App/
   (Next waits at the end of the queue unless repeat is all or radio is on; play/pause, ⏮ and Now Playing wait for a
   track; the playback entries wait for the player), the checks (Shuffle, Repeat, Mute, following the player whoever
   changes it) and two events the window handles: Search (Ctrl+F, ⌘F) focuses the search box with its text selected,
-  and Quit (Ctrl+Q) closes the window as its ✕ does. Alt opens the menu. Key bindings run before the focused control
+  and Quit (Ctrl+Q, ⌘Q) closes the window as its ✕ does. Alt opens the menu. Key bindings run before the focused control
   sees a key, so while the menu is open (`IsAppMenuOpen`, which the window reports) the window's shortcuts decline and
   the arrows, Enter and Esc are the menu's. Its lists use the app's `MenuItem` themes (`Controls.axaml`): the look of
   the window's menu, with the ✓ and › after the entry. On macOS the shortcuts that give way to a text box (Space,

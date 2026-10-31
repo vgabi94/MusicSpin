@@ -32,18 +32,22 @@ public sealed class AppMenuTests
         var drag = Gui.BoundsIn(window, Gui.Find<Panel>(window, "DragArea"));
         var search = SearchBounds(window);
 
+        // Windows and Linux keep room on the right for the window buttons (138); macOS draws them on the left, so the
+        // title starts after them (78) and the search box goes to the right edge. Either way the bar's gap (16) is
+        // before the search box's right edge.
+        var (titleLeft, buttonsRight) = OperatingSystem.IsMacOS() ? (78, 0) : (16, 138);
         Assert.Equal(["_File", "_Playback", "_View"], TopItems(window).Select(i => i.Header));
-        Assert.Equal(16, brand.Left);
-        Assert.Equal(220, menu.Left); // over the content, past the sidebar's 220
+        Assert.Equal(titleLeft, brand.Left);
+        Assert.Equal(titleLeft + 188 + 16, menu.Left); // after the title's 188 and the gap: past the sidebar on Windows and Linux
         Assert.True(drag.Left > menu.Right && drag.Right < search.Left, $"menu {menu}, drag area {drag}, search {search}");
         Assert.True(drag.Width > 400, $"drag area {drag}");
         Assert.Equal(320, search.Width);
-        Assert.Equal(1440 - 138 - 16, search.Right); // the window buttons' 138, and the bar's gap
+        Assert.Equal(1440 - buttonsRight - 16, search.Right);
 
         // A wider window widens the empty stretch only: the search box keeps its size and its place by the buttons.
         window.Width = 1700;
         Gui.Settle();
-        Assert.Equal(new Rect(1700 - 138 - 16 - 320, search.Top, 320, search.Height), SearchBounds(window));
+        Assert.Equal(new Rect(1700 - buttonsRight - 16 - 320, search.Top, 320, search.Height), SearchBounds(window));
         Assert.Equal(menu, Gui.BoundsIn(window, Gui.Find<NativeMenuBar>(window, "AppMenuBar")));
     }
 
@@ -77,8 +81,30 @@ public sealed class AppMenuTests
         Assert.DoesNotContain(TopItems(window), i => i.IsSubMenuOpen);
 
         app.ViewModel.Settings.Close();
-        Choose(window, "_File", "_Quit");
+        if (OperatingSystem.IsMacOS())
+        {
+            // The menu bar's app menu has Quit on macOS, so File doesn't; ⌘Q is still the window's.
+            Open(window, "_File");
+            Assert.False(Entry(window, "_File", "_Quit").IsVisible);
+            Close(window);
+            PressCommand(window, Key.Q, PhysicalKey.Q);
+        }
+        else
+        {
+            Choose(window, "_File", "_Quit");
+        }
+
         await Gui.UntilAsync(() => !window.IsVisible, "the window closed");
+    }
+
+    [AvaloniaFact]
+    public async Task The_quit_shortcut_closes_the_window()
+    {
+        await using var app = await AppHarness.OpenAsync();
+
+        PressCommand(app.Window, Key.Q, PhysicalKey.Q);
+
+        await Gui.UntilAsync(() => !app.Window.IsVisible, "the window closed");
     }
 
     [AvaloniaFact]
@@ -262,14 +288,14 @@ public sealed class AppMenuTests
     // ---- keyboard ------------------------------------------------------------------------------------------------
 
     [AvaloniaFact]
-    public async Task Ctrl_F_focuses_the_search_box_which_still_filters_the_page()
+    public async Task Ctrl_F_or_Cmd_F_focuses_the_search_box_which_still_filters_the_page()
     {
         await using var app = await AppHarness.OpenAsync();
         var window = app.Window;
         var search = Gui.Find<TextBox>(window, "SearchBox");
         Assert.False(search.IsFocused);
 
-        PressCtrl(window, Key.F, PhysicalKey.F);
+        PressCommand(window, Key.F, PhysicalKey.F);
         Assert.True(search.IsFocused);
         Assert.True(app.ViewModel.IsTextInputFocused);
 
@@ -452,10 +478,13 @@ public sealed class AppMenuTests
         Gui.Settle();
     }
 
-    private static void PressCtrl(Window window, Key key, PhysicalKey physical)
+    private static RawInputModifiers CommandKey => OperatingSystem.IsMacOS() ? RawInputModifiers.Meta : RawInputModifiers.Control;
+
+    /// <summary>The key with Ctrl, or with ⌘ on macOS (the platform's command key).</summary>
+    private static void PressCommand(Window window, Key key, PhysicalKey physical)
     {
-        window.KeyPress(key, RawInputModifiers.Control, physical, null);
-        window.KeyRelease(key, RawInputModifiers.Control, physical, null);
+        window.KeyPress(key, CommandKey, physical, null);
+        window.KeyRelease(key, CommandKey, physical, null);
         Gui.Settle();
     }
 

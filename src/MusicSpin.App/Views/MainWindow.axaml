@@ -27,7 +27,7 @@
         <KeyBinding Gesture="Up" Command="{Binding FlipCrateBackCommand}" />
         <KeyBinding Gesture="{OnPlatform Ctrl+F, macOS=Cmd+F}" Command="{Binding AppMenu.SearchCommand}" />
         <KeyBinding Gesture="{OnPlatform Ctrl+OemComma, macOS=Cmd+OemComma}" Command="{Binding Settings.OpenCommand}" />
-        <KeyBinding Gesture="Ctrl+Q" Command="{Binding AppMenu.QuitCommand}" />
+        <KeyBinding Gesture="{OnPlatform Ctrl+Q, macOS=Cmd+Q}" Command="{Binding AppMenu.QuitCommand}" />
     </Window.KeyBindings>
 
     <!--
