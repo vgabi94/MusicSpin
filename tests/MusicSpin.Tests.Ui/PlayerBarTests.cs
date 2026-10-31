@@ -418,7 +418,6 @@ public sealed class PlayerBarTests
         Assert.NotEqual(looks[RepeatMode.All], looks[RepeatMode.One]); // the "1" is drawn, inside the button
     }
 
-
     [AvaloniaFact]
     public async Task Shuffle_shows_off_and_on_by_shape_and_during_radio_the_crossed_arrows_in_grey_whatever_the_setting()
     {
@@ -430,12 +429,14 @@ public sealed class PlayerBarTests
         var radio = new RadioInfo(new Core.Library.RadioFilter(), "Whole library", 50);
         var looks = new Dictionary<string, byte[]>();
 
-        // Off, on, radio with the setting on and then off (radio is already random), and off again once radio ends.
+        // Off, on, radio with the setting on (radio is already random), on again once radio ends, radio with the setting
+        // off, and off again once radio ends: leaving radio brings back whichever look the setting has.
         foreach (var (look, on, onRadio, geometry, colour, tip) in new[]
         {
             ("off", false, false, "ShuffleOff", grey, "Shuffle: off"),
             ("on", true, false, "Shuffle", accent, "Shuffle: on"),
             ("radio", true, true, "Shuffle", grey, PlayerBarViewModel.RadioShuffleTip),
+            ("on", true, false, "Shuffle", accent, "Shuffle: on"),
             ("radio", false, true, "Shuffle", grey, PlayerBarViewModel.RadioShuffleTip),
             ("off", false, false, "ShuffleOff", grey, "Shuffle: off"),
         })
