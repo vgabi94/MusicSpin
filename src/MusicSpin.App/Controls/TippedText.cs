@@ -5,7 +5,9 @@ namespace MusicSpin.App.Controls;
 
 /// <summary>
 /// A <see cref="TextBlock"/> whose tooltip holds all of its text while the text is cut ("…", or lines past MaxLines),
-/// and which has no tooltip while all of it shows (#193). Styled as a TextBlock.
+/// and which has no tooltip while all of it shows (#193). Styled as a TextBlock. It owns its tooltip: one set on it is
+/// replaced at each arrange. "Cut" is what the text layout cuts (TextTrimming, MaxLines); text that only runs past a
+/// clipping parent (NoWrap without trimming) isn't.
 /// </summary>
 public class TippedText : TextBlock
 {

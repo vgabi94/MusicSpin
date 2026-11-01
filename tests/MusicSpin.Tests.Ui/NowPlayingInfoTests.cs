@@ -23,6 +23,9 @@ public sealed class NowPlayingInfoTests
     private const double DeckShare = 1.15;
     private const double MaxWidth = 900;
 
+    /// <summary>The album's width in a 1440 × 880 window: from 40 after the deck (668) to the padding (1384).</summary>
+    private const double At1440 = 676;
+
     private const string Mozart = "Sir Charles Mackerras Conducts Mozart";
     private const string Soloists = "Susan Gritton (soprano), Catherine Wyn-Rogers (mezzo-soprano), Timothy Robinson (tenor), Alastair Miles (bass), "
                                     + "Scottish Chamber Orchestra, Sir Charles Mackerras";
@@ -117,6 +120,7 @@ public sealed class NowPlayingInfoTests
     }
 
     [Theory]
+    [Trait("Category", "Unhappy")]
     [InlineData(0)]
     [InlineData(20)] // narrower than the gap
     public void A_body_too_narrow_for_the_gap_gives_the_album_no_room_rather_than_less_than_none(double width)
@@ -126,11 +130,28 @@ public sealed class NowPlayingInfoTests
         Assert.Equal(0, body.Album(width, 100).Width);
     }
 
+    [AvaloniaFact]
+    public void The_album_is_as_wide_as_its_cap_from_its_left_whatever_its_content_and_its_margin()
+    {
+        // A short album (little content) with a margin, in a body far wider than the cap.
+        var deck = new Border { Width = 200, Height = 100 };
+        var album = new StackPanel { MaxWidth = 300, Margin = new Thickness(0, 0, 24, 0), Children = { new TextBlock { Text = "Neon" } } };
+        var body = new NowPlayingBody { DeckShare = DeckShare, Spacing = Gap, Children = { deck, album } };
+        var window = new Window { Width = 2000, Height = 400, Content = body };
+        window.Show();
+        Gui.Settle();
+
+        var column = (2000 - Gap) * DeckShare / (DeckShare + 1);
+        Assert.Equal(((column + 200) / 2) + Gap, album.Bounds.Left, 1.0); // from its left, not centred in the room
+        Assert.Equal(300, album.Bounds.Width, 1.0); // its whole cap, not its content's width, and not less its margin
+        window.Close();
+    }
+
     // In the window.
 
     [AvaloniaTheory]
     [InlineData(1280, 800, 584)]
-    [InlineData(1440, 880, 676)]
+    [InlineData(1440, 880, At1440)]
     [InlineData(2560, 1440, MaxWidth)]
     public async Task The_album_widens_into_the_room_beside_the_deck_up_to_900_and_the_deck_stays_put(double width, double height, double expected)
     {
@@ -159,7 +180,7 @@ public sealed class NowPlayingInfoTests
 
         app.Window.Width = 2560;
         app.Window.Height = 1440;
-        await Gui.UntilAsync(() => Find<StackPanel>(app, "AlbumInfo").Bounds.Width >= MaxWidth - 1, $"the album widened (window {app.Window.ClientSize}, album {Find<StackPanel>(app, "AlbumInfo").Bounds})");
+        await Gui.UntilAsync(() => Find<StackPanel>(app, "AlbumInfo").Bounds.Width >= MaxWidth - 1, $"the album to widen to {MaxWidth}");
         Assert.False(first.IsCut);
         Assert.Null(ToolTip.GetTip(first));
         AssertBesideTheDeck(app);
@@ -202,6 +223,7 @@ public sealed class NowPlayingInfoTests
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
     public async Task A_short_album_after_a_long_one_leaves_no_tooltips_behind()
     {
         await using var app = await OpenAsync(1440, 880);
@@ -217,6 +239,7 @@ public sealed class NowPlayingInfoTests
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
     public async Task One_word_longer_than_the_window_breaks_inside_the_album_and_is_cut_with_its_tooltip()
     {
         await using var app = await OpenAsync(1440, 880);
@@ -232,6 +255,7 @@ public sealed class NowPlayingInfoTests
     }
 
     [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
     public async Task With_nothing_playing_the_empty_album_sits_beside_the_deck_with_no_tooltips()
     {
         await using var app = await OpenAsync(1440, 880);
@@ -257,7 +281,7 @@ public sealed class NowPlayingInfoTests
         await Gui.UntilAsync(() => kicker.IsVisible, "the kicker");
 
         Assert.Equal(InWindow(app, Find<TextBlock>(app, "AlbumTitle")).Left, InWindow(app, kicker).Left, 1.0);
-        Assert.Equal(676, InWindow(app, Find<StackPanel>(app, "AlbumInfo")).Width, 1.0);
+        Assert.Equal(At1440, InWindow(app, Find<StackPanel>(app, "AlbumInfo")).Width, 1.0);
         AssertBesideTheDeck(app);
     }
 }

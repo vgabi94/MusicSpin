@@ -79,7 +79,10 @@ public sealed class NowPlayingBody : Panel
         for (var i = 0; i < Children.Count; i++)
         {
             var child = Children[i];
-            child.Arrange(i == 0 ? new Rect(0, 0, column, finalSize.Height) : new Rect(x, 0, Math.Min(width, child.MaxWidth), finalSize.Height));
+            // MaxWidth leaves out the margin; the slot holds both.
+            child.Arrange(i == 0
+                ? new Rect(0, 0, column, finalSize.Height)
+                : new Rect(x, 0, Math.Min(width, child.MaxWidth + child.Margin.Left + child.Margin.Right), finalSize.Height));
         }
 
         return finalSize;
