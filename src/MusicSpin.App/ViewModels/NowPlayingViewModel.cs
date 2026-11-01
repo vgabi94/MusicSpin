@@ -103,9 +103,12 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
     [ObservableProperty]
     public partial string? Title { get; private set; }
 
-    /// <summary>"Artist · Year".</summary>
+    /// <summary>"Artist · Year · total running time" (the album's tracks added up; "1:02:03" from an hour).</summary>
     [ObservableProperty]
     public partial string? ArtistLine { get; private set; }
+
+    /// <summary>The album's artist alone (the player's, for a file outside the library): a dragged track's ghost names it.</summary>
+    public string? AlbumArtist { get; private set; }
 
     /// <summary>The cover, large: the record's label (and the turntable scene's sleeve). Held while shown.</summary>
     [ObservableProperty]
@@ -183,7 +186,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
         _shown = albumId is not null;
         if (albumId is null)
         {
-            (Title, ArtistLine, Tracks) = (_player.Album ?? _player.Title, _player.Artist, []);
+            (Title, ArtistLine, AlbumArtist, Tracks) = (_player.Album ?? _player.Title, _player.Artist, _player.Artist, []);
             ShowCover(null, ++_coverReads);
             ShowBackdrop(null);
             return;
@@ -234,7 +237,13 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
 
                 var album = albums.FirstOrDefault(a => a.Id == albumId);
                 Title = album?.Title ?? _player.Album;
-                ArtistLine = string.Join(" · ", new[] { album?.Artist ?? _player.Artist, album?.Year?.ToString(CultureInfo.InvariantCulture) }
+                // "artist · year · total running time" (#193), each left out when unknown.
+                var length = tracks.Sum(t => Math.Max(0, t.DurationSeconds));
+                AlbumArtist = album?.Artist ?? _player.Artist;
+                ArtistLine = string.Join(" · ", new[]
+                    {
+                        AlbumArtist, album?.Year?.ToString(CultureInfo.InvariantCulture), length >= 1 ? Formats.Time(length) : null,
+                    }
                     .Where(s => !string.IsNullOrWhiteSpace(s)));
                 Tracks = [.. tracks.Select((t, i) => new NowPlayingTrackViewModel(t, i))];
                 MarkTracks();
@@ -371,7 +380,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
     {
         if (_albumId == albumId)
         {
-            (Title, ArtistLine, Tracks) = (_player.Album ?? _player.Title, _player.Artist, []);
+            (Title, ArtistLine, AlbumArtist, Tracks) = (_player.Album ?? _player.Title, _player.Artist, _player.Artist, []);
             ShowCover(null, ++_coverReads);
             ShowBackdrop(null);
         }
@@ -413,7 +422,7 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
                 MarkTracks();
                 break;
             case nameof(PlayerViewModel.Title) or nameof(PlayerViewModel.Artist) or nameof(PlayerViewModel.Album) when !_shown:
-                (Title, ArtistLine) = (_player.Album ?? _player.Title, _player.Artist);
+                (Title, ArtistLine, AlbumArtist) = (_player.Album ?? _player.Title, _player.Artist, _player.Artist);
                 break;
         }
     }

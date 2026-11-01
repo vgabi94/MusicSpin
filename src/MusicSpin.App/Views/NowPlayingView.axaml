@@ -49,7 +49,7 @@
             <controls:Icon Data="{StaticResource Close}" />
         </Button>
 
-        <Grid Classes="npBody" ColumnDefinitions="1.15*,*">
+        <controls:NowPlayingBody Name="Body" Classes="npBody">
             <controls:DeckHost Name="Deck"
                                Design="{Binding Settings.Design}"
                                Label="{Binding NowPlaying.Cover}"
@@ -61,53 +61,48 @@
                                Backdrop="{Binding #Backdrop}"
                                BackdropVeil="{Binding #Veil}" />
 
-            <!-- The album takes the column, up to its widest (mockup: .np-info, max-width). -->
-            <Grid Grid.Column="1">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" MaxWidth="{StaticResource NowPlayingInfoMaxWidth}" />
-                    <ColumnDefinition Width="0*" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Classes="npInfo">
-                    <StackPanel Name="Kicker" Classes="npKicker" IsVisible="{Binding NowPlaying.Kicker, Converter={x:Static ObjectConverters.IsNotNull}}">
-                        <controls:RadioIcon IsOnAir="{Binding Radio.IsOnAir}" />
-                        <TextBlock Classes="kicker" Text="{Binding NowPlaying.Kicker, Converter={x:Static theming:TextConverters.Upper}}" />
-                    </StackPanel>
-                    <TextBlock Name="AlbumTitle" Classes="npTitle" Text="{Binding NowPlaying.Title}" />
-                    <TextBlock Name="AlbumArtist" Classes="npArtist" Text="{Binding NowPlaying.ArtistLine}" />
-                    <ScrollViewer Name="TrackScroller" Classes="npTracks">
-                        <ItemsControl Name="Tracks" ItemsSource="{Binding NowPlaying.Tracks}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="vm:NowPlayingTrackViewModel">
-                                    <Button Classes="npTrack"
-                                            controls:QueueSource.Item="{Binding}"
-                                            Classes.current="{Binding IsCurrent}"
-                                            Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).NowPlaying.PlayTrackCommand}"
-                                            CommandParameter="{Binding}"
-                                            AutomationProperties.Name="{Binding Title}">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                            <Panel Classes="number">
-                                                <controls:Icon Classes="playingMark" Data="{StaticResource Note}" IsVisible="{Binding ShowsPlayingMark}" />
-                                                <TextBlock Classes="number" Text="{Binding Number}" />
-                                            </Panel>
-                                            <TextBlock Grid.Column="1" Classes="trim" Text="{Binding Title}" />
-                                            <Button Grid.Column="2"
-                                                    Classes="heart"
-                                                    Classes.on="{Binding IsFavorite}"
-                                                    Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).NowPlaying.ToggleFavoriteCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip.Tip="{Binding FavoriteLabel}"
-                                                    AutomationProperties.Name="{Binding FavoriteLabel}">
-                                                <controls:Icon Data="{StaticResource Heart}" />
-                                            </Button>
-                                            <TextBlock Grid.Column="3" Classes="duration" Text="{Binding Duration}" />
-                                        </Grid>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+            <!-- The album, from a gap after the deck, as wide as its names (#193). -->
+            <controls:FitColumn Name="AlbumInfo" Classes="npInfo">
+                <StackPanel Name="Kicker" Classes="npKicker" IsVisible="{Binding NowPlaying.Kicker, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <controls:RadioIcon IsOnAir="{Binding Radio.IsOnAir}" />
+                    <TextBlock Classes="kicker" Text="{Binding NowPlaying.Kicker, Converter={x:Static theming:TextConverters.Upper}}" />
                 </StackPanel>
-            </Grid>
-        </Grid>
+                <TextBlock Name="AlbumTitle" Classes="npTitle" Text="{Binding NowPlaying.Title}" />
+                <!-- Wrapped once in the width the title and tracks set, then cut: all of it in the tooltip while it is cut. -->
+                <controls:TippedText Name="AlbumArtist" Classes="npArtist" controls:FitColumn.Follows="True" Text="{Binding NowPlaying.ArtistLine}" />
+                <ScrollViewer Name="TrackScroller" Classes="npTracks">
+                    <ItemsControl Name="Tracks" ItemsSource="{Binding NowPlaying.Tracks}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:NowPlayingTrackViewModel">
+                                <Button Classes="npTrack"
+                                        controls:QueueSource.Item="{Binding}"
+                                        Classes.current="{Binding IsCurrent}"
+                                        Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).NowPlaying.PlayTrackCommand}"
+                                        CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Binding Title}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                        <Panel Classes="number">
+                                            <controls:Icon Classes="playingMark" Data="{StaticResource Note}" IsVisible="{Binding ShowsPlayingMark}" />
+                                            <TextBlock Classes="number" Text="{Binding Number}" />
+                                        </Panel>
+                                        <controls:TippedText Name="TrackTitle" Grid.Column="1" Classes="trim" Text="{Binding Title}" />
+                                        <Button Grid.Column="2"
+                                                Classes="heart"
+                                                Classes.on="{Binding IsFavorite}"
+                                                Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).NowPlaying.ToggleFavoriteCommand}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip.Tip="{Binding FavoriteLabel}"
+                                                AutomationProperties.Name="{Binding FavoriteLabel}">
+                                            <controls:Icon Data="{StaticResource Heart}" />
+                                        </Button>
+                                        <TextBlock Grid.Column="3" Classes="duration" Text="{Binding Duration}" />
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </controls:FitColumn>
+        </controls:NowPlayingBody>
     </Panel>
 </UserControl>

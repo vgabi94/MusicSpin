@@ -86,7 +86,10 @@ public sealed class PlayFromListTests
         await app.ViewModel.NowPlaying.ShowAlbumAsync(album[0].AlbumId);
         await app.ViewModel.Player.PlayTracksAsync(album);
         Assert.True(await app.ViewModel.Player.AddToQueueAsync(queued, QueuePosition.UpNext));
-        await Gui.UntilAsync(() => app.ViewModel.NowPlaying.Tracks.Count == album.Count, "the album's tracks shown");
+        // The app's own lookup of the playing album too: landing after a test shows another album, it would show this
+        // one again (the later ShowAlbumAsync wins).
+        await Gui.UntilAsync(() => app.ViewModel.PlayingAlbumId == album[0].AlbumId && app.ViewModel.NowPlaying.Tracks.Count == album.Count,
+            "the playing album looked up and its tracks shown");
     }
 
     private static async Task<QueueListing> QueueAsync(AppHarness app)
