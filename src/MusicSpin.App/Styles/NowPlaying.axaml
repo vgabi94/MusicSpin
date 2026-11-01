@@ -246,18 +246,21 @@
         <Setter Property="Height" Value="{StaticResource NowPlayingCloseIconSize}" />
     </Style>
 
-    <!-- Two columns, 1.15 : 1, the deck centred in the first and the album in the second (mockup: .np-body). -->
-    <Style Selector="Grid.npBody">
+    <!-- Two columns, 1.15 : 1, the deck centred in the first; the album from a gap after the deck (mockup: .np-body, #193). -->
+    <Style Selector="controls|NowPlayingBody.npBody">
         <Setter Property="Margin" Value="{StaticResource NowPlayingPadding}" />
-        <Setter Property="ColumnSpacing" Value="{StaticResource NowPlayingColumnGap}" />
+        <Setter Property="DeckShare" Value="{StaticResource NowPlayingDeckShare}" />
+        <Setter Property="Spacing" Value="{StaticResource NowPlayingColumnGap}" />
     </Style>
     <Style Selector="controls|DeckHost">
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Accent" Value="{DynamicResource AccentBrush}" />
     </Style>
+    <!-- The album: as wide as its room up to its widest (mockup: .np-info, max-width); NowPlayingBody puts it at the left. -->
     <Style Selector="StackPanel.npInfo">
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="MaxWidth" Value="{StaticResource NowPlayingInfoMaxWidth}" />
     </Style>
     <!-- "RADIO · JAZZ" in the accent ink while a station is on air, its waves pulsing (mockup: .np-kicker.np-radio). -->
     <Style Selector="StackPanel.npKicker">
@@ -286,6 +289,9 @@
         <Setter Property="FontSize" Value="{StaticResource NowPlayingArtistFontSize}" />
         <Setter Property="Margin" Value="{StaticResource NowPlayingArtistMargin}" />
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxLines" Value="{StaticResource NowPlayingArtistMaxLines}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
     <!-- A track (mockup: .tracklist li): number, title, duration; the current one in the album's colour. -->

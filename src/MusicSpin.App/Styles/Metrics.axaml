@@ -628,9 +628,12 @@
 
     <!--
       Now Playing (mockup: .nowplaying, .np-body, .np-info, .tracklist). The overlay covers the window between the title
-      bar and the player bar; its body is two columns, 1.15 : 1, 40 apart, inside 40 x 56 of padding.
+      bar and the player bar; its body is two columns, 1.15 : 1, 40 apart, inside 40 x 56 of padding. The deck sits in the
+      middle of the first; the album starts 40 after the deck itself and is at most 900 wide (#193; the mockup has 520),
+      so long classical names show more of themselves on a wide window.
     -->
     <Thickness x:Key="NowPlayingPadding">56,40</Thickness>
+    <sys:Double x:Key="NowPlayingDeckShare">1.15</sys:Double>
     <sys:Double x:Key="NowPlayingColumnGap">40</sys:Double>
     <Thickness x:Key="NowPlayingBackgroundInset">-60</Thickness>
     <!-- The blurred background: the small cover made into a 64-pixel image blurred once (Theming/BlurredCover), then
@@ -643,7 +646,7 @@
     <sys:Double x:Key="NowPlayingCloseIconSize">22</sys:Double>
     <CornerRadius x:Key="NowPlayingCloseRadius">18</CornerRadius>
     <Thickness x:Key="NowPlayingCloseMargin">16,12,0,0</Thickness>
-    <sys:Double x:Key="NowPlayingInfoMaxWidth">520</sys:Double>
+    <sys:Double x:Key="NowPlayingInfoMaxWidth">900</sys:Double>
     <!-- The radio kicker: the mockup's 15 icon (in its 24 box), 7 before the text (.np-radio). -->
     <sys:Double x:Key="NowPlayingKickerGap">7</sys:Double>
     <sys:Double x:Key="NowPlayingKickerIconSize">15</sys:Double>
@@ -652,6 +655,8 @@
     <Thickness x:Key="NowPlayingTitleMargin">0,3,0,1</Thickness>
     <sys:Double x:Key="NowPlayingArtistFontSize">18</sys:Double>
     <Thickness x:Key="NowPlayingArtistMargin">0,0,0,22</Thickness>
+    <!-- A long artist line (soloists, orchestra, conductor) wraps once, then ends in "…" (#193). -->
+    <sys:Int32 x:Key="NowPlayingArtistMaxLines">2</sys:Int32>
     <!-- The track list is at most 44% of the window high (mockup: max-height: 44vh). -->
     <sys:Double x:Key="NowPlayingTrackListShare">0.44</sys:Double>
     <Thickness x:Key="NowPlayingTrackPadding">10,8</Thickness>
