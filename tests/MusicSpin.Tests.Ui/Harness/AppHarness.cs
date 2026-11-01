@@ -258,19 +258,28 @@ internal sealed class AppHarness : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (Window is { IsVisible: true } window)
+        try
         {
-            window.Close();
-            await Gui.UntilAsync(() => !window.IsVisible, "the window closed");
-        }
+            if (Window is { IsVisible: true } window)
+            {
+                window.Close();
+                await Gui.UntilAsync(() => !window.IsVisible, "the window closed");
+            }
 
-        (Services?.Library as IDisposable)?.Dispose();
-        await Player.DisposeAsync();
-        if (Scripted is not null)
-        {
-            await Scripted.DisposeAsync();
+            (Services?.Library as IDisposable)?.Dispose();
+            await Player.DisposeAsync();
+            if (Scripted is not null)
+            {
+                await Scripted.DisposeAsync();
+            }
+            Dispatcher.UIThread.RunJobs();
+            TempDir.TryDelete(Root);
         }
-        Dispatcher.UIThread.RunJobs();
-        TempDir.TryDelete(Root);
+        finally
+        {
+            // The Motion setting is the whole process's (MotionScale.Current): an app started at Motion None or Fast, or
+            // set to it, mustn't leave the next tests at it (#202: the marquee rested half as long, or never moved).
+            MotionScale.Current.Set(MotionMode.Smooth);
+        }
     }
 }

@@ -353,7 +353,9 @@ src/MusicSpin.App/
   rests at the start, scrolls to the end, rests and scrolls back, moving only its text's render transform, by whole
   device pixels, on the app's clock (its timer sleeps through each rest). It starts again at the beginning for a new
   text or a new track, stops where it is while the window is minimized, and at Motion None doesn't move: the text
-  ends in an ellipsis. Each text's tooltip has all of it.
+  ends in an ellipsis. Each text's tooltip has all of it. Its `Motion` is the app's setting (`MotionScale.Current`)
+  unless given one: the setting is the whole process's, so its tests give each marquee their own, and `AppHarness`
+  puts it back to Smooth when an app closes (#202).
 - **Analyzer.** `SpectrumViewModel` moves 16 bars and their peak dots on the app's clock while anything shows, and
   stops the clock once everything has fallen, so an idle analyzer neither ticks nor draws.
 - **Settings.** `SettingsViewModel` is a layer: the cog opens it over a light dim, and ✕, Esc or a click on the dim
