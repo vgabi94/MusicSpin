@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  #193 mockups: Now Playing's album info on wide windows. The pictures in renders/ are the real app (a throwaway
+  headless test with the options switched on in code), dark theme, "Sir Charles Mackerras Conducts Mozart".
+  Sheets: ?w1440, ?w2560, ?lines (headless Edge screenshots; a hash would scroll).
+-->
+<style>
+  body { margin:0; padding:24px 28px; background:#fff; color:#1b1c1f; font-family: Inter, "Segoe UI", system-ui, sans-serif; }
+  .sheet { display:none; }
+  body.w1440 .s1440, body.w2560 .s2560, body.lines .slines { display:block; }
+  h2 { font-size:20px; margin:0 0 6px; }
+  p.note { font-size:14px; color:#555; margin:0 0 16px; line-height:1.5; max-width:1500px; }
+  .grid { display:grid; gap:22px 22px; }
+  .g2 { grid-template-columns: repeat(2, max-content); }
+  .g3 { grid-template-columns: repeat(3, max-content); }
+  .cap { font-size:14px; font-weight:600; margin:0 0 6px; }
+  .cap span { font-weight:400; color:#666; }
+  .crop { overflow:hidden; border-radius:6px; background-repeat:no-repeat; box-shadow:0 1px 3px #0003; position:relative; }
+  .whole { border-radius:6px; box-shadow:0 1px 3px #0003; display:block; }
+  .cap .rec, .rec { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; color:#fff; background:#2f7d4f; padding:2px 6px; border-radius:4px; margin-left:6px; vertical-align:1px; }
+
+  /* The artist-line and track close-ups, drawn like the app (dark). */
+  .dark { background:#14161b; color:#EEF0F4; border-radius:6px; padding:18px 22px; box-shadow:0 1px 3px #0003; }
+  .artist { font-size:18px; color:#9AA1AD; white-space:nowrap; overflow:hidden; width:676px; }
+  .artist .run { display:inline-block; }
+  .frames { display:grid; gap:10px; }
+  .frames .lbl { font-size:12px; color:#7d8490; margin-bottom:2px; }
+  .tip { position:absolute; background:#2a2d34; color:#EEF0F4; border:1px solid #ffffff1c; border-radius:6px; padding:6px 10px; font-size:13px; box-shadow:0 6px 18px #0009; white-space:nowrap; }
+  .arrow { position:absolute; font-size:22px; }
+</style>
+</head>
+<body>
+<script>document.body.className = (location.search.slice(1) || 'w1440');</script>
+
+<!-- 1440 × 880 -->
+<div class="sheet s1440">
+  <h2>1440 × 880: how wide the album info gets</h2>
+  <p class="note">The info column is only 599 px at this size, so lifting the 520 cap (A, or B at 900) gains just 79 px; A and B look the same here.
+    Today the column split also leaves 118 px of nothing between the deck and the info. In <b>C</b> the info starts one column gap (40 px) after the deck itself
+    and runs to the right padding: 676 px, and the deck doesn't move. The artist line wraps to two lines in A–C (see the last sheet). The crops show the right half of the window.</p>
+  <div class="grid g2">
+    <div><div class="cap">Today <span>cap 520</span></div><div class="crop" style="width:820px;height:600px;background-image:url(renders/1440-today.png);background-position:-620px -125px"></div></div>
+    <div><div class="cap">A / B <span>the whole column (or cap 900): 599 px</span></div><div class="crop" style="width:820px;height:600px;background-image:url(renders/1440-full.png);background-position:-620px -125px"></div></div>
+    <div><div class="cap">C <span>from the deck to the right padding: 676 px</span><span class="rec">RECOMMENDED</span></div><div class="crop" style="width:820px;height:600px;background-image:url(renders/1440-fromdeck.png);background-position:-620px -125px"></div></div>
+  </div>
+</div>
+
+<!-- 2560 × 1440 -->
+<div class="sheet s2560">
+  <h2>2560 × 1440: how wide the album info gets</h2>
+  <p class="note">Here the column has 1120 px. <b>A</b> uses all of it; <b>B</b> stops at 900 and leaves 220 px on the right; <b>C</b> also starts after the deck (1327 px);
+    <b>C + 900</b> starts after the deck and stops at 900, which keeps each duration near its title. Every track title fits from B up; the artist line fits in two lines in all of them.
+    The crops show the right part of the window (the deck's edge on the left), at 85 %.</p>
+  <div class="grid g2">
+    <div><div class="cap">Today <span>cap 520</span></div><div class="crop" style="width:1241px;height:493px;background-image:url(renders/2560-today.png);background-size:2176px;background-position:-935px -357px"></div></div>
+    <div><div class="cap">A <span>the whole column: 1120 px</span></div><div class="crop" style="width:1241px;height:493px;background-image:url(renders/2560-full.png);background-size:2176px;background-position:-935px -357px"></div></div>
+    <div><div class="cap">B <span>cap 900</span></div><div class="crop" style="width:1241px;height:493px;background-image:url(renders/2560-cap900.png);background-size:2176px;background-position:-935px -357px"></div></div>
+    <div><div class="cap">C <span>from the deck to the right padding: 1327 px</span></div><div class="crop" style="width:1241px;height:493px;background-image:url(renders/2560-fromdeck.png);background-size:2176px;background-position:-935px -357px"></div></div>
+    <div><div class="cap">C + 900 <span>from the deck, at most 900 px</span><span class="rec">RECOMMENDED</span></div><div class="crop" style="width:1241px;height:493px;background-image:url(renders/2560-fromdeck-cap900.png);background-size:2176px;background-position:-935px -357px"></div></div>
+  </div>
+</div>
+
+<!-- The artist line and the track titles -->
+<div class="sheet slines">
+  <h2>The artist line</h2>
+  <p class="note">The width is C at 1440 (676 px). <b>1. Wrap</b>: up to two lines, then "…", with a tooltip holding all of it. The title above already wraps, so the block
+    stays one piece. <b>2. Scroll</b>: one line that scrolls to its end and back like the player bar's title (#133 <code>Marquee</code>, same Motion setting and pauses), with the same tooltip.</p>
+  <div class="grid g2">
+    <div><div class="cap">1. Wrap to two lines <span>(real render)</span><span class="rec">RECOMMENDED</span></div>
+      <div class="crop" style="width:700px;height:150px;background-image:url(renders/1440-fromdeck.png);background-position:-698px -148px"></div></div>
+    <div><div class="cap">2. One line that scrolls <span>(drawn: start, middle, end)</span></div>
+      <div class="dark frames">
+        <div><div class="lbl">at rest</div><div class="artist"><span class="run">Susan Gritton (soprano), Catherine Wyn-Rogers (mezzo-soprano), Timothy Robinson (tenor), Alastair Miles (bass), Scottish Chamber Orchestra, Sir Charles Mackerras · 2009</span></div></div>
+        <div><div class="lbl">scrolling</div><div class="artist"><span class="run" style="transform:translateX(-330px)">Susan Gritton (soprano), Catherine Wyn-Rogers (mezzo-soprano), Timothy Robinson (tenor), Alastair Miles (bass), Scottish Chamber Orchestra, Sir Charles Mackerras · 2009</span></div></div>
+        <div><div class="lbl">at its end, then back</div><div class="artist"><span class="run" id="endrun">Susan Gritton (soprano), Catherine Wyn-Rogers (mezzo-soprano), Timothy Robinson (tenor), Alastair Miles (bass), Scottish Chamber Orchestra, Sir Charles Mackerras · 2009</span></div></div>
+      </div></div>
+  </div>
+
+  <h2 style="margin-top:30px">Track titles</h2>
+  <p class="note">They keep the "…" (even C at 1440 cuts six of these twelve). <b>Always:</b> a tooltip on the row with the full title when it's cut (none when it fits).
+    <b>Optional:</b> the hovered row's title scrolls like the bar's, and so does the playing row's. My pick is the tooltip only: twelve rows that might scroll would compete with the turntable,
+    and the playing title already scrolls in the player bar.</p>
+  <div class="grid g2">
+    <div><div class="cap">Tooltip on a cut title <span>(render + drawn tooltip)</span><span class="rec">RECOMMENDED</span></div>
+      <div class="crop" style="width:700px;height:190px;background-image:url(renders/1440-fromdeck.png);background-position:-700px -342px">
+        <div class="tip" style="left:56px;top:101px">Wolfgang Amadeus Mozart: Symphony No. 29 in A major, K201 - IV. Allegro con spirito</div>
+      </div></div>
+    <div><div class="cap">Plus: the hovered row scrolls <span>(drawn, mid-scroll)</span></div>
+      <div class="crop" style="width:700px;height:190px;background-image:url(renders/1440-fromdeck.png);background-position:-700px -342px">
+        <div style="position:absolute;left:0;top:66px;width:700px;height:33px;background:#202329;border-radius:7px"></div>
+        <div style="position:absolute;left:56px;top:73px;width:560px;overflow:hidden;white-space:nowrap;font-size:14px;color:#EEF0F4;line-height:19px"><span style="display:inline-block;transform:translateX(-90px)">Wolfgang Amadeus Mozart: Symphony No. 29 in A major, K201 - IV. Allegro con spirito</span></div>
+        <div style="position:absolute;left:37px;top:73px;font-size:14px;color:#9AA1AD;line-height:19px">4</div>
+        <div style="position:absolute;left:643px;top:73px;font-size:14px;color:#9AA1AD;line-height:19px">5:11</div>
+      </div></div>
+  </div>
+</div>
+
+<script>
+  const end = document.getElementById('endrun');
+  if (end) { end.style.transform = `translateX(${676 - end.scrollWidth}px)`; }
+</script>
+</body>
+</html>
