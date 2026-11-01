@@ -1,6 +1,8 @@
 <!--
-  The title bar (mockup: .titlebar). The bar drags the window; the search box takes input. The system window buttons
-  are drawn by the platform over the room kept for them (Panel.captionButtons).
+  The title bar (mockup: .titlebar, #135): the title, the app menu after it, an empty stretch, the search box, and room
+  for the system window buttons, which the platform draws over it (Panel.captionButtons). The bar drags the window and a
+  double-click maximizes it; the menu and the search box take their own input. On macOS the menu is in the menu bar (the
+  NativeMenuBar then shows nothing) and the window buttons are on the left.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -13,8 +15,9 @@
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" MaxWidth="{StaticResource SearchMaxWidth}" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Classes="brand">
@@ -25,7 +28,13 @@
                 </Panel>
                 <TextBlock Classes="brandName" Text="Music Spin" />
             </StackPanel>
-            <Border Grid.Column="1" Classes="search" chrome:WindowDecorationProperties.ElementRole="User">
+            <NativeMenuBar Name="AppMenuBar"
+                           Grid.Column="1"
+                           Classes="appMenu"
+                           AutomationProperties.Name="Menu"
+                           chrome:WindowDecorationProperties.ElementRole="User" />
+            <Panel Name="DragArea" Grid.Column="2" />
+            <Border Grid.Column="3" Classes="search" chrome:WindowDecorationProperties.ElementRole="User">
                 <Grid ColumnDefinitions="Auto,*">
                     <controls:Icon Data="{StaticResource MagnifyingGlassLight}" />
                     <TextBox Name="SearchBox"
@@ -36,7 +45,7 @@
                              Text="{Binding SearchText}" />
                 </Grid>
             </Border>
-            <Panel Grid.Column="3" Classes="captionButtons" />
+            <Panel Grid.Column="4" Classes="captionButtons" />
         </Grid>
     </Border>
 </UserControl>

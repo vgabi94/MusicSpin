@@ -31,7 +31,21 @@
     <sys:Double x:Key="BrandLabelSize">9</sys:Double>
     <sys:Double x:Key="BrandLabelInnerSize">7</sys:Double>
     <sys:Double x:Key="BrandFontSize">14</sys:Double>
-    <sys:Double x:Key="SearchMaxWidth">420</sys:Double>
+    <!-- The app menu after the title (#135): its titles, and the gap before the shortcuts in its lists. -->
+    <Thickness x:Key="AppMenuBarItemPadding">10,5</Thickness>
+    <Thickness x:Key="MenuGestureMargin">24,0,0,0</Thickness>
+    <Thickness x:Key="MenuTrailMargin">12,0,0,0</Thickness>
+    <Thickness x:Key="MenuSeparatorMargin">6,4</Thickness>
+    <sys:Double x:Key="MenuSeparatorHeight">1</sys:Double>
+    <!-- A list opens MenuAnchorGap under its title, its edge (inside the room its shadow is drawn in) under the title's. -->
+    <Thickness x:Key="MenuPopupShadowRoom">20,4,20,28</Thickness>
+    <sys:Double x:Key="MenuPopupOffsetX">-20</sys:Double>
+    <sys:Double x:Key="MenuPopupOffsetY">0</sys:Double>
+    <!-- A submenu beside its entry, its first entry level with it (MenuPadding + the shadow room). -->
+    <sys:Double x:Key="MenuSubPopupOffsetX">-14</sys:Double>
+    <sys:Double x:Key="MenuSubPopupOffsetY">-9</sys:Double>
+    <!-- Fixed, so the search box keeps its place and size as the window is resized (#135). -->
+    <sys:Double x:Key="SearchWidth">320</sys:Double>
     <Thickness x:Key="SearchPadding">10,5</Thickness>
     <CornerRadius x:Key="SearchRadius">8</CornerRadius>
     <sys:Double x:Key="SearchFontSize">13</sys:Double>

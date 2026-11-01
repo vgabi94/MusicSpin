@@ -11,7 +11,8 @@ namespace MusicSpin.App.Controls;
 /// A text that doesn't fit its width scrolls to its end, rests, scrolls back, rests, and so on (a ping-pong marquee,
 /// #133). It rests at the start first, so the beginning can be read. Only its child's render transform moves, so the
 /// marquee lays nothing out while it runs, and it moves by whole device pixels at <see cref="Speed"/>. It is timed on
-/// <see cref="Clock"/> (the app's clock, which tests fake), and its timer sleeps through each rest.
+/// <see cref="Clock"/> (the app's clock, which tests fake), its rests follow <see cref="Motion"/> (the Motion setting,
+/// which tests give their own), and its timer sleeps through each rest.
 /// <para>
 /// It starts again at the beginning when the text or <see cref="Restart"/> (the playing track) changes. It stops where it
 /// is while <see cref="IsShown"/> is false (the window is minimized, #125) and goes on from there when shown. At Motion
@@ -35,6 +36,9 @@ public sealed class Marquee : Control
     /// <summary>The app's clock (null: the system's).</summary>
     public static readonly StyledProperty<TimeProvider?> ClockProperty = AvaloniaProperty.Register<Marquee, TimeProvider?>(nameof(Clock));
 
+    /// <summary>The Motion setting it follows (null: the app's, <see cref="MotionScale.Current"/>).</summary>
+    public static readonly StyledProperty<MotionScale?> MotionProperty = AvaloniaProperty.Register<Marquee, MotionScale?>(nameof(Motion));
+
     /// <summary>Whether the window shows: while it doesn't, the marquee stops where it is.</summary>
     public static readonly StyledProperty<bool> IsShownProperty = AvaloniaProperty.Register<Marquee, bool>(nameof(IsShown), true);
 
@@ -50,6 +54,7 @@ public sealed class Marquee : Control
     private long _last;
     private TimeSpan _elapsed;
     private double _natural;
+    private MotionScale? _following;
 
     static Marquee()
     {
@@ -80,6 +85,12 @@ public sealed class Marquee : Control
     {
         get => GetValue(ClockProperty);
         set => SetValue(ClockProperty, value);
+    }
+
+    public MotionScale? Motion
+    {
+        get => GetValue(MotionProperty);
+        set => SetValue(MotionProperty, value);
     }
 
     public bool IsShown
@@ -143,14 +154,14 @@ public sealed class Marquee : Control
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        MotionScale.Current.PropertyChanged += OnMotionChanged;
+        Follow(Scale);
         Update();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
-        MotionScale.Current.PropertyChanged -= OnMotionChanged;
+        Follow(null);
         Stop();
     }
 
@@ -196,6 +207,16 @@ public sealed class Marquee : Control
         {
             Replan();
         }
+        else if (change.Property == MotionProperty)
+        {
+            if (_following is not null)
+            {
+                Follow(Scale);
+            }
+
+            Reset();
+            InvalidateMeasure();
+        }
         else if (change.Property == ClockProperty)
         {
             Stop(); // the time so far was on the old clock: it goes on from where it is on the new one
@@ -240,7 +261,9 @@ public sealed class Marquee : Control
     }
 
     /// <summary>Whether the text may move at all (not at Motion None).</summary>
-    private static bool Moves => MotionScale.Current.Multiplier > 0;
+    private bool Moves => Scale.Multiplier > 0;
+
+    private MotionScale Scale => Motion ?? MotionScale.Current;
 
     private TimeProvider Time => Clock ?? TimeProvider.System;
 
@@ -250,6 +273,14 @@ public sealed class Marquee : Control
         {
             Reset();
         }
+    }
+
+    /// <summary>Listens to <paramref name="scale"/> (in the tree) or to nothing (out of it).</summary>
+    private void Follow(MotionScale? scale)
+    {
+        _following?.PropertyChanged -= OnMotionChanged;
+        _following = scale;
+        _following?.PropertyChanged += OnMotionChanged;
     }
 
     private void OnMotionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -302,7 +333,7 @@ public sealed class Marquee : Control
         }
     }
 
-    private TimeSpan RestNow => MotionScale.Current.Scale(Rest);
+    private TimeSpan RestNow => Scale.Scale(Rest);
 
     private void Schedule()
     {

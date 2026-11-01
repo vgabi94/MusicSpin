@@ -10,7 +10,10 @@ using MusicSpin.App.Theming;
 
 namespace MusicSpin.Tests.Ui;
 
-/// <summary>The ping-pong marquee of a text too long for its place (#133), on a fake clock.</summary>
+/// <summary>
+/// The ping-pong marquee of a text too long for its place (#133), on a fake clock and a Motion setting of its own: the
+/// app's (<see cref="MotionScale.Current"/>) is shared by every test, and others change it while these run (#202).
+/// </summary>
 public sealed class MarqueeTests
 {
     private const string Long = "A very long song name that goes on and on and on, well past its place";
@@ -19,6 +22,7 @@ public sealed class MarqueeTests
     private static readonly TimeSpan Rest = TimeSpan.FromSeconds(2);
 
     private readonly FakeTimeProvider _time = new();
+    private readonly MotionScale _motion = new();
 
     // ---- the path alone --------------------------------------------------------------------------------------
 
@@ -116,6 +120,7 @@ public sealed class MarqueeTests
     private Marquee Make(string? text) => new()
     {
         Clock = _time,
+        Motion = _motion,
         Speed = Speed,
         Rest = Rest,
         HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -207,7 +212,7 @@ public sealed class MarqueeTests
         using var empty = new Shown(Make(null), 200);
         Assert.False(empty.Marquee.IsRunning);
 
-        using var bare = new Shown(new Marquee { Clock = _time }, 200);
+        using var bare = new Shown(new Marquee { Clock = _time, Motion = _motion }, 200);
         Assert.False(bare.Marquee.IsRunning);
         Assert.Equal(0, bare.Marquee.Overflow);
     }
@@ -371,47 +376,64 @@ public sealed class MarqueeTests
     [AvaloniaFact]
     public void At_Motion_None_a_long_text_ends_in_an_ellipsis_and_never_moves()
     {
-        MotionScale.Current.Set(MotionMode.None);
-        try
-        {
-            using var shown = new Shown(Make(Long), 200);
-            Assert.Equal((0.0, false), (shown.Marquee.Overflow, shown.Marquee.IsRunning));
-            Assert.True(shown.Text.TextLayout.TextLines[0].HasCollapsed, "trimmed with an ellipsis");
-            Assert.True(shown.Text.Bounds.Width <= 200);
-            Advance(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(1));
-            Assert.Equal(0, shown.Marquee.Offset);
+        _motion.Set(MotionMode.None);
+        using var shown = new Shown(Make(Long), 200);
+        Assert.Equal((0.0, false), (shown.Marquee.Overflow, shown.Marquee.IsRunning));
+        Assert.True(shown.Text.TextLayout.TextLines[0].HasCollapsed, "trimmed with an ellipsis");
+        Assert.True(shown.Text.Bounds.Width <= 200);
+        Advance(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(1));
+        Assert.Equal(0, shown.Marquee.Offset);
 
-            MotionScale.Current.Set(MotionMode.Smooth); // back on: it scrolls from the start
-            Settle();
-            Assert.True(shown.Marquee.IsRunning);
-            Assert.False(shown.Text.TextLayout.TextLines[0].HasCollapsed);
-            Advance(Rest + TimeSpan.FromSeconds(1));
-            Assert.Equal(Speed, shown.Marquee.Offset, 0);
+        _motion.Set(MotionMode.Smooth); // back on: it scrolls from the start
+        Settle();
+        Assert.True(shown.Marquee.IsRunning);
+        Assert.False(shown.Text.TextLayout.TextLines[0].HasCollapsed);
+        Advance(Rest + TimeSpan.FromSeconds(1));
+        Assert.Equal(Speed, shown.Marquee.Offset, 0);
 
-            MotionScale.Current.Set(MotionMode.None); // and off again mid-scroll: back to the start, trimmed
-            Settle();
-            Assert.Equal((0.0, false), (shown.Marquee.Offset, shown.Marquee.IsRunning));
-            Assert.True(shown.Text.TextLayout.TextLines[0].HasCollapsed);
-        }
-        finally
-        {
-            MotionScale.Current.Set(MotionMode.Smooth);
-        }
+        _motion.Set(MotionMode.None); // and off again mid-scroll: back to the start, trimmed
+        Settle();
+        Assert.Equal((0.0, false), (shown.Marquee.Offset, shown.Marquee.IsRunning));
+        Assert.True(shown.Text.TextLayout.TextLines[0].HasCollapsed);
     }
 
     [AvaloniaFact]
     public void At_Motion_Fast_it_rests_half_as_long_and_scrolls_as_fast()
     {
-        MotionScale.Current.Set(MotionMode.Fast);
-        try
-        {
-            using var shown = new Shown(Make(Long), 200);
-            Advance((Rest / 2) + TimeSpan.FromSeconds(1));
-            Assert.Equal(Speed, shown.Marquee.Offset, 0);
-        }
-        finally
-        {
-            MotionScale.Current.Set(MotionMode.Smooth);
-        }
+        _motion.Set(MotionMode.Fast);
+        using var shown = new Shown(Make(Long), 200);
+        Advance((Rest / 2) + TimeSpan.FromSeconds(1));
+        Assert.Equal(Speed, shown.Marquee.Offset, 0);
+    }
+
+    [AvaloniaFact]
+    public void Given_another_Motion_setting_it_follows_that_one_and_lets_the_old_one_go()
+    {
+        using var shown = new Shown(Make(Long), 200);
+        var marquee = shown.Marquee;
+        Advance(Rest + TimeSpan.FromSeconds(1));
+        Assert.True(marquee.Offset > 0);
+
+        var off = new MotionScale();
+        off.Set(MotionMode.None);
+        marquee.Motion = off; // a setting that doesn't move: back to the start, trimmed
+        Settle();
+        Assert.Equal((0.0, 0.0, false), (marquee.Overflow, marquee.Offset, marquee.IsRunning));
+
+        off.Set(MotionMode.Smooth); // the new one moves it: it scrolls from the start
+        Settle();
+        Assert.True(marquee.IsRunning);
+        Advance(Rest + TimeSpan.FromSeconds(1));
+        Assert.Equal(Speed, marquee.Offset, 0);
+
+        _motion.Set(MotionMode.Fast); // the old one no longer counts: it would have sent it back to the start
+        Settle();
+        Assert.Equal(Speed, marquee.Offset, 0);
+        Assert.True(marquee.IsRunning);
+
+        ((Panel)shown.Window.Content!).Children.Clear(); // out of the window it listens to neither: nothing sends it back
+        off.Set(MotionMode.None);
+        Assert.Equal(Speed, marquee.Offset, 0);
+        Assert.False(marquee.IsRunning);
     }
 }
