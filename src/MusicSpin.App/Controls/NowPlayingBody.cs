@@ -7,8 +7,8 @@ namespace MusicSpin.App.Controls;
 /// Now Playing's body (#193): the deck (the first child) centred in its column, <see cref="DeckShare"/> : 1 of the width
 /// left after <see cref="Spacing"/>, as in the mockup's <c>.np-body</c> grid; the album (the second child) from
 /// <see cref="Spacing"/> after the deck itself to the right edge, so a wide window gives long titles the room the grid
-/// left empty beside the deck. The deck doesn't move for it. The album is as wide as that room up to its own MaxWidth,
-/// from its left (a stretched control held back by MaxWidth would be centred in the room).
+/// left empty beside the deck. The deck doesn't move for it. The album is as wide as it asks for (FitColumn: its names)
+/// within that room, from its left.
 /// </summary>
 public sealed class NowPlayingBody : Panel
 {
@@ -79,10 +79,10 @@ public sealed class NowPlayingBody : Panel
         for (var i = 0; i < Children.Count; i++)
         {
             var child = Children[i];
-            // MaxWidth leaves out the margin; the slot holds both.
+            // The album as wide as it asked for (its margin included), within the room.
             child.Arrange(i == 0
                 ? new Rect(0, 0, column, finalSize.Height)
-                : new Rect(x, 0, Math.Min(width, child.MaxWidth + child.Margin.Left + child.Margin.Right), finalSize.Height));
+                : new Rect(x, 0, Math.Min(width, child.DesiredSize.Width), finalSize.Height));
         }
 
         return finalSize;

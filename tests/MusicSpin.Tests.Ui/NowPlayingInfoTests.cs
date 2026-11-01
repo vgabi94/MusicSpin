@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Layout;
+using Avalonia.Media;
 using MusicSpin.App.Controls;
 using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
@@ -13,15 +15,16 @@ using SkiaSharp;
 namespace MusicSpin.Tests.Ui;
 
 /// <summary>
-/// Now Playing's album beside the deck on wide windows (#193): it starts a gap after the deck, is at most 900 wide, and
-/// a cut artist line or track title has all of itself in its tooltip.
+/// Now Playing's album beside the deck on wide windows (#193): it starts a gap after the deck and is as wide as its title
+/// and track titles on one line (at least 360, at most the room); a cut artist line or track title has all of itself in
+/// its tooltip.
 /// </summary>
 public sealed class NowPlayingInfoTests
 {
     private const double Padding = 56;
     private const double Gap = 40;
     private const double DeckShare = 1.15;
-    private const double MaxWidth = 900;
+    private const double MinWidth = 360;
 
     /// <summary>The album's width in a 1440 × 880 window: from 40 after the deck (668) to the padding (1384).</summary>
     private const double At1440 = 676;
@@ -40,15 +43,20 @@ public sealed class NowPlayingInfoTests
     /// <summary>One word with no spaces, far longer than any window.</summary>
     private static readonly string LongWord = string.Concat(Enumerable.Repeat("Klavierkonzertsatz", 14));
 
-    // Album 11 is Mozart's, 12 is one long word throughout; 1–10 are the sample library's.
+    /// <summary>A short title, the soloists, and one track title that sets the width (wider than the minimum and the title).</summary>
+    private static readonly string[] SymphonyTracks = ["Symphony No. 29 in A major, K201 - I. Allegro moderato", "II. Andante"];
+
+    // Album 11 is Mozart's, 12 is one long word throughout, 13 the symphony; 1–10 are the sample library's.
     private const int MozartAlbum = 11;
     private const int WordAlbum = 12;
+    private const int SymphonyAlbum = 13;
 
     private static async Task<AppHarness> OpenAsync(double width, double height)
     {
         var library = SampleLibrary.Create();
         Add(library, MozartAlbum, Mozart, Soloists, MozartTracks);
         Add(library, WordAlbum, LongWord, LongWord, [LongWord]);
+        Add(library, SymphonyAlbum, "K. 201", Soloists, SymphonyTracks);
         var (a, b) = (SKColor.FromHsv(40, 55, 70), SKColor.FromHsv(200, 55, 50));
         var cover = TestImages.Bitmap(TestImages.Png(64, 64, (x, y) => x + y < 64 ? a : b));
         var covers = new StubCovers(_ => cover);
@@ -56,7 +64,7 @@ public sealed class NowPlayingInfoTests
         {
             Scripted = true, Library = library, Covers = covers, Theme = AppTheme.Dark, Width = width, Height = height,
         });
-        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 12, "the albums");
+        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 13, "the albums");
         return app;
     }
 
@@ -131,11 +139,37 @@ public sealed class NowPlayingInfoTests
     }
 
     [AvaloniaFact]
-    public void The_album_is_as_wide_as_its_cap_from_its_left_whatever_its_content_and_its_margin()
+    public void A_fit_column_is_as_wide_as_its_widest_line_between_its_minimum_and_the_room_and_a_follower_does_not_widen_it()
     {
-        // A short album (little content) with a margin, in a body far wider than the cap.
+        var line = new TextBlock { Text = "Wolfgang Amadeus Mozart: Symphony No. 29" };
+        var follower = new TextBlock { Text = string.Concat(Enumerable.Repeat("soprano, mezzo, tenor, bass ", 20)), TextWrapping = TextWrapping.Wrap };
+        FitColumn.SetFollows(follower, true);
+        var column = new FitColumn { MinWidth = 100, HorizontalAlignment = HorizontalAlignment.Left, Children = { line, follower } };
+        var window = new Window { Width = 2000, Height = 400, Content = column };
+        window.Show();
+        Gui.Settle();
+
+        var natural = line.TextLayout.WidthIncludingTrailingWhitespace;
+        Assert.InRange(natural, 150, 1000);
+        Assert.Equal(natural, column.Bounds.Width, 1.0); // its line's width: the long follower wraps in it instead
+        Assert.True(follower.TextLayout.TextLines.Count > 1);
+
+        line.Text = "Neon"; // narrower than the minimum
+        Gui.Settle();
+        Assert.Equal(100, column.Bounds.Width, 1.0);
+
+        window.Width = 120; // less room than the line wants: the room
+        line.Text = "Wolfgang Amadeus Mozart: Symphony No. 29";
+        Gui.Settle();
+        Assert.Equal(120, column.Bounds.Width, 1.0);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void The_body_puts_the_album_at_its_own_width_from_its_left_margin_included()
+    {
         var deck = new Border { Width = 200, Height = 100 };
-        var album = new StackPanel { MaxWidth = 300, Margin = new Thickness(0, 0, 24, 0), Children = { new TextBlock { Text = "Neon" } } };
+        var album = new Border { Width = 300, Margin = new Thickness(0, 0, 24, 0) };
         var body = new NowPlayingBody { DeckShare = DeckShare, Spacing = Gap, Children = { deck, album } };
         var window = new Window { Width = 2000, Height = 400, Content = body };
         window.Show();
@@ -143,7 +177,7 @@ public sealed class NowPlayingInfoTests
 
         var column = (2000 - Gap) * DeckShare / (DeckShare + 1);
         Assert.Equal(((column + 200) / 2) + Gap, album.Bounds.Left, 1.0); // from its left, not centred in the room
-        Assert.Equal(300, album.Bounds.Width, 1.0); // its whole cap, not its content's width, and not less its margin
+        Assert.Equal(300, album.Bounds.Width, 1.0); // its own width, not the room's, and not less its margin
         window.Close();
     }
 
@@ -152,8 +186,7 @@ public sealed class NowPlayingInfoTests
     [AvaloniaTheory]
     [InlineData(1280, 800, 584)]
     [InlineData(1440, 880, At1440)]
-    [InlineData(2560, 1440, MaxWidth)]
-    public async Task The_album_widens_into_the_room_beside_the_deck_up_to_900_and_the_deck_stays_put(double width, double height, double expected)
+    public async Task Names_longer_than_the_room_take_all_of_it_and_the_deck_stays_put(double width, double height, double expected)
     {
         await using var app = await OpenAsync(width, height);
         await PlayMozartAsync(app);
@@ -163,9 +196,51 @@ public sealed class NowPlayingInfoTests
         var column = (body.Width - Gap) * DeckShare / (DeckShare + 1);
         Assert.Equal(body.Left + (column / 2), InWindow(app, Find<DeckHost>(app, "Deck")).Center.X, 1.0);
 
+        Assert.Equal(expected, InWindow(app, Find<StackPanel>(app, "AlbumInfo")).Width, 1.0);
+        Assert.True(TrackTitles(app)[0].IsCut);
+        AssertBesideTheDeck(app);
+    }
+
+    [AvaloniaFact]
+    public async Task With_room_to_spare_the_album_is_as_wide_as_its_title_on_one_line_and_no_wider()
+    {
+        await using var app = await OpenAsync(2560, 1440);
+        await PlayMozartAsync(app);
+
+        var (info, title) = (InWindow(app, Find<StackPanel>(app, "AlbumInfo")), Find<TextBlock>(app, "AlbumTitle"));
+        Assert.Single(title.TextLayout.TextLines);
+        Assert.Equal(title.TextLayout.WidthIncludingTrailingWhitespace, info.Width, 1.0);
+        Assert.True(info.Right < app.Window.ClientSize.Width - Padding - 300, $"the album ({info}) stops well short of the padding");
+        Assert.All(TrackTitles(app), t => Assert.False(t.IsCut));
+        AssertBesideTheDeck(app);
+    }
+
+    [AvaloniaFact]
+    public async Task The_longest_track_title_sets_the_width_and_the_long_artist_line_wraps_in_it()
+    {
+        await using var app = await OpenAsync(2560, 1440);
+        await PlayAsync(app, SymphonyAlbum, SymphonyTracks[0], SymphonyTracks.Length);
+
         var info = InWindow(app, Find<StackPanel>(app, "AlbumInfo"));
-        Assert.Equal(expected, info.Width, 1.0);
-        Assert.True(info.Width > 520, "wider than the mockup's 520");
+        var longest = TrackTitles(app)[0];
+        Assert.False(longest.IsCut);
+        Assert.True(info.Width > MinWidth + 20 && info.Width < 900, $"the album is {info.Width} wide");
+        Assert.Equal(longest.TextLayout.WidthIncludingTrailingWhitespace, longest.Bounds.Width, 1.0); // its row has no room to spare
+
+        var artist = Find<TippedText>(app, "AlbumArtist");
+        Assert.Equal(2, artist.TextLayout.TextLines.Count);
+        Assert.True(artist.IsCut); // the artist line didn't widen the album to fit itself
+        AssertBesideTheDeck(app);
+    }
+
+    [AvaloniaFact]
+    public async Task Short_names_keep_the_album_at_its_minimum_with_the_durations_close()
+    {
+        await using var app = await OpenAsync(1440, 880);
+        var night = SampleLibrary.Albums[5];
+        await PlayAsync(app, 6, night.Tracks[0], night.Tracks.Length);
+
+        Assert.Equal(MinWidth, InWindow(app, Find<StackPanel>(app, "AlbumInfo")).Width, 1.0);
         AssertBesideTheDeck(app);
     }
 
@@ -180,7 +255,7 @@ public sealed class NowPlayingInfoTests
 
         app.Window.Width = 2560;
         app.Window.Height = 1440;
-        await Gui.UntilAsync(() => Find<StackPanel>(app, "AlbumInfo").Bounds.Width >= MaxWidth - 1, $"the album to widen to {MaxWidth}");
+        await Gui.UntilAsync(() => Find<StackPanel>(app, "AlbumInfo").Bounds.Width > At1440 + 50, "the album to widen");
         Assert.False(first.IsCut);
         Assert.Null(ToolTip.GetTip(first));
         AssertBesideTheDeck(app);

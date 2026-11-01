@@ -489,10 +489,11 @@ public sealed class MenusAndDragTests
         => Assert.Equal(new Point(8, 8), MenuPlacement.Place(new Rect(0, 40, 0, 0), new Size(170, 860), Area, 0, 8));
 
     [AvaloniaFact]
-    public async Task A_menu_opened_near_the_bottom_right_of_the_window_opens_above_and_left_of_the_pointer()
+    public async Task A_menu_opened_near_the_right_of_the_window_opens_left_of_the_pointer()
     {
+        // A track row runs to the window's right (Now Playing's rows are only as wide as their names, #193).
         await using var app = await OpenAsync();
-        var item = await ShowAsync(app, Kind.NowPlayingTrack);
+        var item = await ShowAsync(app, Kind.TrackRow);
         var row = Gui.BoundsIn(app.Window, item);
         var at = new Point(row.Right - 2, row.Bottom - 2);
         RightClick(app.Window, at);

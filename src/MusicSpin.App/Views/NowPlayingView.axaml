@@ -61,15 +61,15 @@
                                Backdrop="{Binding #Backdrop}"
                                BackdropVeil="{Binding #Veil}" />
 
-            <!-- The album, from a gap after the deck, up to its widest (mockup: .np-info, max-width; #193). -->
-            <StackPanel Name="AlbumInfo" Classes="npInfo">
+            <!-- The album, from a gap after the deck, as wide as its names (#193). -->
+            <controls:FitColumn Name="AlbumInfo" Classes="npInfo">
                 <StackPanel Name="Kicker" Classes="npKicker" IsVisible="{Binding NowPlaying.Kicker, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <controls:RadioIcon IsOnAir="{Binding Radio.IsOnAir}" />
                     <TextBlock Classes="kicker" Text="{Binding NowPlaying.Kicker, Converter={x:Static theming:TextConverters.Upper}}" />
                 </StackPanel>
                 <TextBlock Name="AlbumTitle" Classes="npTitle" Text="{Binding NowPlaying.Title}" />
-                <!-- Wrapped once, then cut: all of it in the tooltip while it is cut. -->
-                <controls:TippedText Name="AlbumArtist" Classes="npArtist" Text="{Binding NowPlaying.ArtistLine}" />
+                <!-- Wrapped once in the width the title and tracks set, then cut: all of it in the tooltip while it is cut. -->
+                <controls:TippedText Name="AlbumArtist" Classes="npArtist" controls:FitColumn.Follows="True" Text="{Binding NowPlaying.ArtistLine}" />
                 <ScrollViewer Name="TrackScroller" Classes="npTracks">
                     <ItemsControl Name="Tracks" ItemsSource="{Binding NowPlaying.Tracks}">
                         <ItemsControl.ItemTemplate>
@@ -102,7 +102,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
-            </StackPanel>
+            </controls:FitColumn>
         </controls:NowPlayingBody>
     </Panel>
 </UserControl>

@@ -629,8 +629,9 @@
     <!--
       Now Playing (mockup: .nowplaying, .np-body, .np-info, .tracklist). The overlay covers the window between the title
       bar and the player bar; its body is two columns, 1.15 : 1, 40 apart, inside 40 x 56 of padding. The deck sits in the
-      middle of the first; the album starts 40 after the deck itself and is at most 900 wide (#193; the mockup has 520),
-      so long classical names show more of themselves on a wide window.
+      middle of the first; the album starts 40 after the deck itself and is as wide as its title and track titles want,
+      from NowPlayingInfoMinWidth up to the room (#193; the mockup has a fixed 520), so long classical names show more of
+      themselves on a wide window and short ones keep their durations close.
     -->
     <Thickness x:Key="NowPlayingPadding">56,40</Thickness>
     <sys:Double x:Key="NowPlayingDeckShare">1.15</sys:Double>
@@ -646,7 +647,7 @@
     <sys:Double x:Key="NowPlayingCloseIconSize">22</sys:Double>
     <CornerRadius x:Key="NowPlayingCloseRadius">18</CornerRadius>
     <Thickness x:Key="NowPlayingCloseMargin">16,12,0,0</Thickness>
-    <sys:Double x:Key="NowPlayingInfoMaxWidth">900</sys:Double>
+    <sys:Double x:Key="NowPlayingInfoMinWidth">360</sys:Double>
     <!-- The radio kicker: the mockup's 15 icon (in its 24 box), 7 before the text (.np-radio). -->
     <sys:Double x:Key="NowPlayingKickerGap">7</sys:Double>
     <sys:Double x:Key="NowPlayingKickerIconSize">15</sys:Double>

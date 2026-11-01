@@ -257,10 +257,10 @@
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Accent" Value="{DynamicResource AccentBrush}" />
     </Style>
-    <!-- The album: as wide as its room up to its widest (mockup: .np-info, max-width); NowPlayingBody puts it at the left. -->
+    <!-- The album: as wide as its title and track titles on one line (FitColumn), at least NowPlayingInfoMinWidth. -->
     <Style Selector="StackPanel.npInfo">
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="MaxWidth" Value="{StaticResource NowPlayingInfoMaxWidth}" />
+        <Setter Property="MinWidth" Value="{StaticResource NowPlayingInfoMinWidth}" />
     </Style>
     <!-- "RADIO · JAZZ" in the accent ink while a station is on air, its waves pulsing (mockup: .np-kicker.np-radio). -->
     <Style Selector="StackPanel.npKicker">
