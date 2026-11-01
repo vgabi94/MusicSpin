@@ -652,8 +652,9 @@
     <sys:Double x:Key="NowPlayingKickerGap">7</sys:Double>
     <sys:Double x:Key="NowPlayingKickerIconSize">15</sys:Double>
     <sys:Double x:Key="NowPlayingTitleFontSize">40</sys:Double>
-    <!-- 6 above and 4 below, less the half-leading line-height 1.05 takes off a 40 px line (3 each side). -->
-    <Thickness x:Key="NowPlayingTitleMargin">0,3,0,1</Thickness>
+    <!-- 6 above and 10 below (the mockup has 4; the artist line sits a little apart from the title, #193), less the
+         half-leading line-height 1.05 takes off a 40 px line (3 each side). -->
+    <Thickness x:Key="NowPlayingTitleMargin">0,3,0,7</Thickness>
     <sys:Double x:Key="NowPlayingArtistFontSize">18</sys:Double>
     <Thickness x:Key="NowPlayingArtistMargin">0,0,0,22</Thickness>
     <!-- A long artist line (soloists, orchestra, conductor) wraps once, then ends in "…" (#193). -->

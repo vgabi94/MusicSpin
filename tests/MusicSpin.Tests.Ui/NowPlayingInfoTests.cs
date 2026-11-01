@@ -51,12 +51,18 @@ public sealed class NowPlayingInfoTests
     private const int WordAlbum = 12;
     private const int SymphonyAlbum = 13;
 
+    // 14: four tracks adding up to more than an hour; 15: tracks whose length is unknown (0).
+    private const int LongAlbum = 14;
+    private const int UntimedAlbum = 15;
+
     private static async Task<AppHarness> OpenAsync(double width, double height)
     {
         var library = SampleLibrary.Create();
         Add(library, MozartAlbum, Mozart, Soloists, MozartTracks);
         Add(library, WordAlbum, LongWord, LongWord, [LongWord]);
         Add(library, SymphonyAlbum, "K. 201", Soloists, SymphonyTracks);
+        Add(library, LongAlbum, "Requiem", "Mackerras", ["Introitus", "Kyrie", "Sequentia", "Offertorium"], [900, 1000, 1100, 723]);
+        Add(library, UntimedAlbum, "Untimed", "Nobody Knows", ["One", "Two"], [0, 0]);
         var (a, b) = (SKColor.FromHsv(40, 55, 70), SKColor.FromHsv(200, 55, 50));
         var cover = TestImages.Bitmap(TestImages.Png(64, 64, (x, y) => x + y < 64 ? a : b));
         var covers = new StubCovers(_ => cover);
@@ -64,15 +70,16 @@ public sealed class NowPlayingInfoTests
         {
             Scripted = true, Library = library, Covers = covers, Theme = AppTheme.Dark, Width = width, Height = height,
         });
-        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 13, "the albums");
+        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 15, "the albums");
         return app;
     }
 
-    private static void Add(StubLibrary library, int album, string title, string artist, string[] tracks)
+    /// <summary>Adds an album from 2009; its tracks last <paramref name="lengths"/> seconds (or 200, 237, 274, …).</summary>
+    private static void Add(StubLibrary library, int album, string title, string artist, string[] tracks, double[]? lengths = null)
     {
         library.Albums.Add(new AlbumSummary($"a{album}", title, artist, 2009, "Classical", "FLAC", "24/96", tracks.Length, tracks.Length * 300, true));
         library.Tracks.AddRange(tracks.Select((t, i) => new TrackSummary($"a{album}-{i + 1}", $"/music/{album}/{i + 1}.flac", t, artist, title,
-            $"a{album}", i + 1, "Classical", 200 + (i * 37), "FLAC", true)));
+            $"a{album}", i + 1, "Classical", lengths?[i] ?? 200 + (i * 37), "FLAC", true)));
     }
 
     private static async Task PlayAsync(AppHarness app, int album, string firstTrack, int tracks)
@@ -262,6 +269,68 @@ public sealed class NowPlayingInfoTests
     }
 
     [AvaloniaFact]
+    public async Task The_artist_line_ends_with_the_albums_total_running_time_after_the_year()
+    {
+        await using var app = await OpenAsync(1440, 880);
+        var night = SampleLibrary.Albums[5];
+        await PlayAsync(app, 6, night.Tracks[0], night.Tracks.Length);
+
+        // Night Transit's three tracks: 192 + 223 + 254 s.
+        Assert.Equal("Kodo Arai · 2021 · 11:09", Find<TextBlock>(app, "AlbumArtist").Text);
+    }
+
+    [AvaloniaFact]
+    public async Task An_album_longer_than_an_hour_shows_hours_minutes_and_seconds()
+    {
+        await using var app = await OpenAsync(1440, 880);
+        await PlayAsync(app, LongAlbum, "Introitus", 4);
+
+        Assert.Equal("Mackerras · 2009 · 1:02:03", Find<TextBlock>(app, "AlbumArtist").Text);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Without_a_year_the_running_time_follows_the_artist()
+    {
+        await using var app = await OpenAsync(1440, 880);
+        var tape = SampleLibrary.Albums[9]; // Untitled Tape, by Nobody, no year
+        await PlayAsync(app, 10, tape.Tracks[0], tape.Tracks.Length);
+
+        Assert.Equal("Nobody · 12:33", Find<TextBlock>(app, "AlbumArtist").Text); // 220 + 251 + 282 s
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Tracks_of_unknown_length_leave_the_running_time_out_rather_than_showing_nothing_long()
+    {
+        await using var app = await OpenAsync(1440, 880);
+        await PlayAsync(app, UntimedAlbum, "One", 2);
+
+        Assert.Equal("Nobody Knows · 2009", Find<TextBlock>(app, "AlbumArtist").Text);
+    }
+
+    [AvaloniaFact]
+    public async Task A_dragged_tracks_ghost_names_the_album_artist_alone_not_the_year_and_running_time()
+    {
+        await using var app = await OpenAsync(1440, 880);
+        var night = SampleLibrary.Albums[5];
+        await PlayAsync(app, 6, night.Tracks[0], night.Tracks.Length);
+
+        using var ghost = app.ViewModel.Items.Ghost(app.ViewModel.NowPlaying.Tracks[1]);
+        Assert.Equal(("Night Transit", "Kodo Arai", "Night Bus"), (ghost!.Album, ghost.Artist, ghost.Title));
+    }
+
+    [AvaloniaFact]
+    public async Task The_artist_line_sits_apart_from_the_title()
+    {
+        await using var app = await OpenAsync(1440, 880);
+        await PlayMozartAsync(app);
+
+        var (title, artist) = (InWindow(app, Find<TextBlock>(app, "AlbumTitle")), InWindow(app, Find<TextBlock>(app, "AlbumArtist")));
+        Assert.Equal(7, artist.Top - title.Bottom, 1.0); // the title's margin below (0,3,0,7)
+    }
+
+    [AvaloniaFact]
     public async Task A_long_artist_line_wraps_once_then_is_cut_with_all_of_it_in_its_tooltip()
     {
         await using var app = await OpenAsync(1440, 880);
@@ -270,17 +339,17 @@ public sealed class NowPlayingInfoTests
 
         Assert.Equal(2, artist.TextLayout.TextLines.Count);
         Assert.True(artist.IsCut);
-        Assert.Equal($"{Soloists} · 2009", ToolTip.GetTip(artist));
+        Assert.Equal($"{Soloists} · 2009 · 11:51", ToolTip.GetTip(artist));
     }
 
     [AvaloniaFact]
-    public async Task On_a_wide_window_the_whole_artist_line_shows_in_two_lines_and_has_no_tooltip()
+    public async Task An_artist_line_that_fits_has_no_tooltip()
     {
-        await using var app = await OpenAsync(2560, 1440);
-        await PlayMozartAsync(app);
+        await using var app = await OpenAsync(1440, 880);
+        await PlayAsync(app, LongAlbum, "Introitus", 4);
         var artist = Find<TippedText>(app, "AlbumArtist");
 
-        Assert.Equal(2, artist.TextLayout.TextLines.Count);
+        Assert.Single(artist.TextLayout.TextLines);
         Assert.False(artist.IsCut);
         Assert.Null(ToolTip.GetTip(artist));
     }
@@ -324,7 +393,7 @@ public sealed class NowPlayingInfoTests
         Assert.True(Find<TextBlock>(app, "AlbumTitle").TextLayout.TextLines.Count > 1);
         var artist = Find<TippedText>(app, "AlbumArtist");
         Assert.True(artist.IsCut);
-        Assert.Equal($"{LongWord} · 2009", ToolTip.GetTip(artist));
+        Assert.Equal($"{LongWord} · 2009 · 3:20", ToolTip.GetTip(artist));
         Assert.Equal(LongWord, ToolTip.GetTip(TrackTitles(app).Single()));
         AssertBesideTheDeck(app);
     }

@@ -149,7 +149,7 @@ public sealed class LibraryItemActions(
         TrackAlbumHeaderViewModel header => AlbumGhost(header.Album, header.Tracks.Count),
         TrackItemViewModel track => new DragGhostViewModel(DragGhostViewModel.Copy(track.Art.Loaded), track.Album, track.AlbumArtist, track.Title, track.Artist),
         NowPlayingTrackViewModel track => new DragGhostViewModel(DragGhostViewModel.Copy(nowPlaying.Cover), track.Track.Album,
-            nowPlaying.ArtistLine ?? track.Track.Artist, track.Title, track.Track.Artist),
+            nowPlaying.AlbumArtist ?? track.Track.Artist, track.Title, track.Track.Artist),
         QueueRowViewModel row => new DragGhostViewModel(DragGhostViewModel.Copy(row.Art?.Loaded), row.Album, row.Artist, row.Title, row.Artist),
         _ => null,
     };
