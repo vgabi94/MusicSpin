@@ -27,6 +27,7 @@ public interface IAppearance
 /// <summary>
 /// Sets <see cref="Application.RequestedThemeVariant"/> (the theme dictionaries in Styles/Tokens.axaml follow it) and
 /// replaces <c>AccentBrush</c> / <c>AccentInkBrush</c> in the application resources (views use them as DynamicResource).
+/// The accent and its ink are made to read on the theme (#194): see <see cref="Colors"/>.
 /// </summary>
 public sealed class Appearance(Application application) : IAppearance
 {
@@ -63,6 +64,12 @@ public sealed class Appearance(Application application) : IAppearance
     /// <summary>The accent at 16% (0x29), fading out by 70%: the live station's wash (mockup: .station.live, linear-gradient(160deg, …)).</summary>
     private const byte GlowAlpha = 0x29;
 
+    /// <summary>
+    /// The theme's backgrounds, the page first: accent text is drawn on each (the page, the sidebar and bars, cards and
+    /// panels), and the tinted current row on the page.
+    /// </summary>
+    private static readonly string[] SurfaceKeys = ["BgBrush", "Bg2Brush", "Bg3Brush"];
+
     private Rgb? _base;
 
     public AppTheme Theme { get; private set; } = AppTheme.Dark;
@@ -85,10 +92,54 @@ public sealed class Appearance(Application application) : IAppearance
         ApplyAccent();
     }
 
+    /// <summary>
+    /// The accent and its ink for a cover's colour (<paramref name="cover"/>, null without art) on a theme whose
+    /// backgrounds are <paramref name="surfaces"/> (the page first), with <paramref name="onAccent"/> as the text on
+    /// accent fills:
+    /// <list type="bullet">
+    /// <item>A grey cover (<see cref="AccentColors.IsGrey"/>), or none, gives <see cref="DefaultAccent"/>.</item>
+    /// <item>The accent is a fill under <paramref name="onAccent"/> text in both themes, and on the dark theme it is the
+    /// text colour as well. It is lightened (darkened, were <paramref name="onAccent"/> light), keeping its hue, until it
+    /// has <see cref="AccentColors.MinContrast"/> against <paramref name="onAccent"/> and, on the dark theme, against
+    /// each surface and against the page under the accent tint (the current row in Now Playing).</item>
+    /// <item>On the light theme the ink starts as the accent mixed with black and is darkened, keeping its hue, until it
+    /// has that contrast against each surface and the page under the tint.</item>
+    /// </list>
+    /// The tinted brushes are made from the returned accent, so they follow it.
+    /// </summary>
+    public static (Rgb Accent, Rgb Ink) Colors(Rgb? cover, AppTheme theme, IReadOnlyList<Rgb> surfaces, Rgb onAccent)
+    {
+        ArgumentNullException.ThrowIfNull(surfaces);
+        var picked = cover is { } c && !AccentColors.IsGrey(c) ? AccentColors.Accent(c) : DefaultAccent;
+        var light = theme == AppTheme.Light;
+        var accent = AccentColors.Readable(
+            picked,
+            a => AccentColors.Contrast(a, onAccent) >= AccentColors.MinContrast && (light || AccentColors.ReadsOn(a, Behind(a, surfaces))),
+            lighten: AccentColors.Luminance(onAccent) < 0.5);
+        var ink = light
+            ? AccentColors.Readable(AccentColors.Ink(accent), i => AccentColors.ReadsOn(i, Behind(accent, surfaces)), lighten: false)
+            : accent;
+        return (accent, ink);
+    }
+
+    /// <summary>What accent text can be drawn on: each surface, and the page (the first) under the accent tint.</summary>
+    private static IEnumerable<Rgb> Behind(Rgb accent, IReadOnlyList<Rgb> surfaces)
+        => surfaces.Count == 0 ? [] : surfaces.Append(Tinted(accent, surfaces[0]));
+
+    /// <summary><paramref name="surface"/> under <c>AccentTintBrush</c>.</summary>
+    public static Rgb Tinted(Rgb accent, Rgb surface) => AccentColors.Mix(accent, surface, TintAlpha / 255.0);
+
+    /// <summary><see cref="Colors"/> on <paramref name="theme"/>'s backgrounds and accent text, as the app's resources have them.</summary>
+    public (Rgb Accent, Rgb Ink) ColorsFor(Rgb? cover, AppTheme theme)
+    {
+        var variant = theme == AppTheme.Light ? ThemeVariant.Light : ThemeVariant.Dark;
+        var surfaces = SurfaceKeys.Select(key => Resource(key, variant)).OfType<Rgb>().ToList();
+        return Colors(cover, theme, surfaces, Resource("OnAccentBrush", variant) ?? new Rgb(0, 0, 0));
+    }
+
     private void ApplyAccent()
     {
-        var accent = _base is { } b ? AccentColors.Accent(b) : DefaultAccent;
-        var ink = Theme == AppTheme.Light ? AccentColors.Ink(accent) : accent;
+        var (accent, ink) = ColorsFor(_base, Theme);
         application.Resources["AccentBrush"] = new SolidColorBrush(ToColor(accent));
         application.Resources["AccentInkBrush"] = new SolidColorBrush(ToColor(ink));
         application.Resources["AccentTintBrush"] = new SolidColorBrush(Color.FromArgb(TintAlpha, accent.R, accent.G, accent.B));
@@ -114,6 +165,10 @@ public sealed class Appearance(Application application) : IAppearance
             new GradientStop(Color.FromArgb(0, accent.R, accent.G, accent.B), 0.7),
         },
     };
+
+    /// <summary>A solid brush of the theme (Styles/Tokens.axaml) as an opaque colour; null when it isn't there.</summary>
+    private Rgb? Resource(string key, ThemeVariant variant)
+        => application.TryGetResource(key, variant, out var value) && value is ISolidColorBrush { Color: var c } ? new Rgb(c.R, c.G, c.B) : null;
 
     private static Color ToColor(Rgb c) => Color.FromRgb(c.R, c.G, c.B);
 }

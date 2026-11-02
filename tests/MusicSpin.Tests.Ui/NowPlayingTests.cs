@@ -15,6 +15,7 @@ using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
 using MusicSpin.Core.Remote;
 using MusicSpin.Tests.Ui.Harness;
+using SkiaSharp;
 
 namespace MusicSpin.Tests.Ui;
 
@@ -64,6 +65,43 @@ public sealed class NowPlayingTests
 
         var name = state == PlayerState.Playing ? "playing" : "parked";
         Snapshots.Match(app.Window, $"now-playing-{name}-{theme.ToString().ToLowerInvariant()}");
+    }
+
+    /// <summary>
+    /// #194: a dark grey cover (Sir Charles Mackerras Conducts Mozart, roughly) gets the default accent; a dark navy one is
+    /// lightened on the dark theme. Either way the playing row reads on both themes.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("dark-grey", AppTheme.Dark)]
+    [InlineData("dark-grey", AppTheme.Light)]
+    [InlineData("navy", AppTheme.Dark)]
+    [InlineData("navy", AppTheme.Light)]
+    public async Task Snapshot_of_Now_Playing_with_a_dark_cover(string cover, AppTheme theme)
+    {
+        var (main, shade) = cover == "navy"
+            ? (new SKColor(0x10, 0x18, 0x60), new SKColor(0x08, 0x0C, 0x30))
+            : (new SKColor(0x2C, 0x2E, 0x33), new SKColor(0x12, 0x13, 0x16));
+        var art = TestImages.Bitmap(TestImages.Png(64, 64, (x, y) => x + y < 80 ? main : shade));
+        var albumId = SampleLibrary.AlbumId(Album);
+        var colour = new Rgb(main.Red, main.Green, main.Blue);
+        await using var app = await AppHarness.OpenAsync(new AppOptions
+        {
+            Scripted = true, Library = SampleLibrary.Create(), Theme = theme,
+            Covers = new StubCovers(id => id == albumId ? art : null, id => id == albumId ? colour : null),
+        });
+        await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 10, "the albums");
+        await LoadAsync(app);
+        var (accent, ink) = new Appearance(Application.Current!).ColorsFor(colour, theme);
+        await Gui.UntilAsync(() => app.Window.FindResource("AccentInkBrush") is ISolidColorBrush brush && brush.Color == Color.FromRgb(ink.R, ink.G, ink.B),
+            "the album's accent");
+        app.ViewModel.NowPlaying.Open();
+        Gui.FinishAnimations(Settled);
+
+        var row = Gui.All<Button>(Find<Control>(app, "NowPlayingLayer")).Single(b => b.Classes.Contains("npTrack") && b.Classes.Contains("current"));
+        var text = Assert.IsAssignableFrom<ISolidColorBrush>(row.Foreground).Color;
+        Assert.Equal(Color.FromRgb(ink.R, ink.G, ink.B), text);
+        Assert.Equal(cover == "dark-grey", accent == Appearance.DefaultAccent);
+        Snapshots.Match(app.Window, $"now-playing-{cover}-cover-{theme.ToString().ToLowerInvariant()}");
     }
 
     [AvaloniaFact]
