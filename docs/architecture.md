@@ -362,11 +362,15 @@ src/MusicSpin.App/
 - **Player bar.** `PlayerBarViewModel` holds the transport (⏮ restarts after 3 seconds), the format label and the
   queue count; `PositionViewModel` and `VolumeViewModel` hold the bars and their text boxes. A `TypedField` is the
   logic of a box you type a value into (the elapsed time takes `seek`'s syntax, shared with the CLI as Core's
-  `SeekSyntax`; the volume takes percents and the CLI's fractions); `TypedBox` connects it to a text box. `ScrubBar`
+  `SeekSyntax`; the volume takes percents, the CLI's fractions and decibels); `TypedBox` connects it to a text box. `ScrubBar`
   doesn't set its own value: it runs a command with the new one, so the player stays the only source of truth. Its
   keys are its own key bindings, so on the focused bar they win over window shortcuts on the same keys. Mute is the
   player's (`mute`): it plays at 0 and keeps the level, which `status` still reports with `muted`, so a mute outlives
-  the app and a volume set anywhere (the CLI) unmutes.
+  the app and a volume set anywhere (the CLI) unmutes. Settings › Audio › Volume in decibels (`volumeInDecibels`, off by
+  default, #39) shows the same linear volume in dB to a tenth (100% is 0 dB, the bit-perfect path) on a loudness bar:
+  0 to −60 dB spread evenly, a step a dB, then one step to silence, so the quiet range is no longer squeezed into the
+  bar's first fifth. Nothing is sent when it changes; the box takes `-12 dB` and `40%` in either mode, a bare number in
+  the unit shown.
 - **The bar's layout (#133).** Each part has a column of its own width (`Metrics.axaml`), so a long name, a new track,
   the time growing a digit or the analyzer lighting up moves nothing else: the song (sleeve, title and heart, "artist ·
   album") on the left, the format and the queue and settings buttons on the right, and between them the volume, the

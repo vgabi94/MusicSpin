@@ -69,7 +69,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         LibraryScan = new LibraryScanViewModel(services.Library, Notices, services.Ui, () => ReloadAsync());
         Library = new LibrarySettingsViewModel(services.Library, services.FolderPicker, services.Settings, LibraryScan, Menu, Notices, services.Time,
             services.Ui, () => ReloadAsync());
-        Audio = new AudioSettingsViewModel(services.AudioDevices, services.Settings, Player, Menu, Notices);
+        Audio = new AudioSettingsViewModel(services.AudioDevices, services.Settings, Player, Menu, Notices, PlayerBar.Volume);
         Settings = new SettingsViewModel(services.Settings, services.Appearance, SpinClock, Notices, Library, Audio);
         Scene = new TurntableSceneViewModel(Player, NowPlaying, services.Library, services.Covers, Settings, services.Time, services.Ui, Notices);
         AlbumsPage = new AlbumsPageViewModel(services.Library, services.Covers, Player, Radio, SpinClock, NowPlaying, Scene, Menu, Playlists, Notices, Settings,
