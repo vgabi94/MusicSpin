@@ -57,7 +57,7 @@ public sealed class MenusAndDragTests
                 page.ViewChoice = page.Views[1];
                 break;
             case Kind.CrateRecord:
-                page.ViewChoice = page.Views[2];
+                page.ViewChoice = AlbumsPageViewModel.CrateView;
                 break;
             case Kind.TrackRow:
             case Kind.AlbumHeader:

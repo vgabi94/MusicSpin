@@ -32,7 +32,7 @@ public sealed class AlbumsScrollTests
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == Albums, "the albums");
         var page = app.ViewModel.AlbumsPage;
         page.Grouping = grouping;
-        page.ViewChoice = page.Views.Single(v => v.Value == view);
+        page.ViewChoice = page.ChoiceOf(view);
         Gui.Settle();
         return app;
     }

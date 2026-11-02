@@ -57,7 +57,7 @@ public sealed class CardArtTests
     private static void Show(AppHarness app, AlbumsView view)
     {
         var page = app.ViewModel.AlbumsPage;
-        page.ViewChoice = page.Views.Single(v => v.Value == view);
+        page.ViewChoice = page.ChoiceOf(view);
         Gui.Settle();
     }
 

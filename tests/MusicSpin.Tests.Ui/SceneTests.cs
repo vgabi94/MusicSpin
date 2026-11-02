@@ -29,7 +29,7 @@ public sealed class SceneTests
             Scripted = true, Library = SampleLibrary.Create(), Covers = SampleLibrary.Covers(accents: true),
         });
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 10, "the albums");
-        app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views.Single(v => v.Value == view);
+        app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.ChoiceOf(view);
         app.ViewModel.Settings.SetMotion(motion);
         Gui.FinishAnimations();
         return app;

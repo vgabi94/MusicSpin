@@ -99,7 +99,7 @@ public sealed class ScrollBarTests
         foreach (var (view, grouping) in new[] { (AlbumsView.Cards, AlbumGrouping.None), (AlbumsView.Shelf, AlbumGrouping.None), (AlbumsView.Crate, AlbumGrouping.Genre) })
         {
             albums.Grouping = grouping;
-            albums.ViewChoice = albums.Views.Single(v => v.Value == view);
+            albums.ViewChoice = albums.ChoiceOf(view);
             Gui.Settle();
             AssertAllAppTheme(app, Assert.IsType<AlbumsPage>(Page(app)), $"Albums › {view}");
         }
