@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -100,23 +101,41 @@ public sealed class AboutTests
     }
 
     [Fact]
-    public void The_version_leaves_out_the_source_revision()
+    public void The_version_is_the_apps_without_the_source_revision()
     {
-        Assert.Equal("0.1.0", AboutViewModel.VersionOf(typeof(AboutViewModel).Assembly));
+        var app = typeof(AboutViewModel).Assembly;
+        var version = AboutViewModel.VersionOf(app);
+
+        // The SDK stamps "0.1.0+<commit>"; the dialog shows the part before the '+'.
+        Assert.Contains("+", app.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion, StringComparison.Ordinal);
+        Assert.Equal(app.GetName().Version!.ToString(3), version);
+        Assert.Equal(version, new AboutViewModel().Version);
         Assert.Equal("Version 1.2.3-beta", new AboutViewModel("1.2.3-beta").VersionText);
         Assert.Throws<ArgumentNullException>(() => AboutViewModel.VersionOf(null!));
+    }
+
+    [Fact]
+    public void The_copyright_is_the_builds_with_the_full_name_and_a_build_without_one_names_the_author()
+    {
         Assert.Equal("Copyright © 2026 Gabriel-Eugen Vaduva", AboutViewModel.Copyright);
+
+        var unstamped = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("Unstamped"), AssemblyBuilderAccess.Run);
+        Assert.Equal("Copyright © Gabriel-Eugen Vaduva", AboutViewModel.CopyrightOf(unstamped));
+        Assert.Equal("0.0.0", AboutViewModel.VersionOf(unstamped)); // no informational version: the assembly version
+        Assert.Throws<ArgumentNullException>(() => AboutViewModel.CopyrightOf(null!));
     }
 
     [Fact]
     public void Each_entry_opens_its_page_and_Back_returns_to_About()
     {
         var about = new AboutViewModel("1.0");
+        Assert.Equal((null, null), (about.LicenseText, about.Notices)); // nothing read before a page shows it
 
         about.ShowLicenseCommand.Execute(null);
         Assert.True(about.IsOpen);
         Assert.Equal((AboutPage.License, "License"), (about.Page, about.Title));
         Assert.Contains("Permission is hereby granted", about.LicenseText, StringComparison.Ordinal);
+        Assert.Null(about.Notices);
 
         about.BackCommand.Execute(null);
         Assert.Equal((AboutPage.About, "About Music Spin"), (about.Page, about.Title));
@@ -125,7 +144,7 @@ public sealed class AboutTests
         about.Close();
         about.ShowNoticesCommand.Execute(null);
         Assert.Equal((true, AboutPage.Notices, "Third-party notices"), (about.IsOpen, about.Page, about.Title));
-        Assert.NotEmpty(about.Notices.Components);
+        Assert.NotEmpty(about.Notices!.Components);
 
         about.Close();
         about.ShowAboutCommand.Execute(null);
@@ -172,8 +191,9 @@ public sealed class AboutTests
         Gui.Click(window, Gui.Find<HyperlinkButton>(window, "NoticesLink"));
         Assert.Equal("Third-party notices", Gui.Find<TextBlock>(window, "AboutTitle").Text);
         var rows = Gui.Find<ItemsControl>(window, "NoticeComponents");
-        Assert.Equal(app.ViewModel.About.Notices.Components.Count, rows.ItemCount);
-        Assert.Contains(Gui.All<TextBlock>(rows), t => t.Text == "LiteDB 5.0.21");
+        var components = app.ViewModel.About.Notices!.Components;
+        Assert.Equal(components.Count, rows.ItemCount);
+        Assert.Contains(Gui.All<TextBlock>(rows), t => t.Text == components[^1].Name);
     }
 
     [AvaloniaFact]

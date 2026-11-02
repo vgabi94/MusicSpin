@@ -16,7 +16,8 @@ public enum AboutPage
 /// <summary>
 /// Help › About Music Spin, License and Third-party notices: one dialog over the window (a layer, so Esc closes it) with
 /// three pages. About names the app, its version, who made it and its repository, and links to the other two; they
-/// show the documents the executable carries (<see cref="AppDocuments"/>), read the first time they are shown.
+/// show the documents the executable carries (<see cref="AppDocuments"/>), read the first time their page is shown (until
+/// then their properties are null, so the window's hidden pages read nothing at start).
 /// </summary>
 public sealed partial class AboutViewModel : LayerViewModel
 {
@@ -25,11 +26,9 @@ public sealed partial class AboutViewModel : LayerViewModel
     public const string Summary =
         "A desktop music player for hi-res audio, with a command line that people and AI agents can script. Free and open source under the MIT License.";
 
-    private string? _license;
-    private ThirdPartyNotices? _notices;
-
+    /// <summary>The app's own version (not the entry assembly's, which in tests is the test runner).</summary>
     public AboutViewModel()
-        : this(VersionOf(Assembly.GetEntryAssembly() ?? typeof(AboutViewModel).Assembly))
+        : this(VersionOf(typeof(AboutViewModel).Assembly))
     {
     }
 
@@ -45,7 +44,8 @@ public sealed partial class AboutViewModel : LayerViewModel
 
     public string VersionText => $"Version {Version}";
 
-    public static string Copyright => $"Copyright © 2026 {Author}";
+    /// <summary>The build's copyright (Directory.Build.props), with © for "(c)".</summary>
+    public static string Copyright { get; } = CopyrightOf(typeof(AboutViewModel).Assembly);
 
     public static Uri Repository => AppDocuments.Repository;
 
@@ -66,11 +66,13 @@ public sealed partial class AboutViewModel : LayerViewModel
         _ => $"About {AppName}",
     };
 
-    /// <summary>The MIT License as the executable carries it.</summary>
-    public string LicenseText => _license ??= AppDocuments.License();
+    /// <summary>The MIT License as the executable carries it; null until its page is first shown.</summary>
+    [ObservableProperty]
+    public partial string? LicenseText { get; private set; }
 
-    /// <summary>What the executable contains or loads, with each component's license.</summary>
-    public ThirdPartyNotices Notices => _notices ??= AppDocuments.Notices();
+    /// <summary>What the executable contains or loads, with each component's license; null until its page is first shown.</summary>
+    [ObservableProperty]
+    public partial ThirdPartyNotices? Notices { get; private set; }
 
     /// <summary>Help › About Music Spin.</summary>
     [RelayCommand]
@@ -90,8 +92,25 @@ public sealed partial class AboutViewModel : LayerViewModel
 
     private void Show(AboutPage page)
     {
+        if (page == AboutPage.License)
+        {
+            LicenseText ??= AppDocuments.License();
+        }
+        else if (page == AboutPage.Notices)
+        {
+            Notices ??= AppDocuments.Notices();
+        }
+
         Page = page;
         Open();
+    }
+
+    /// <summary>The assembly's copyright with © for "(c)", or the author's name when the build stamped none.</summary>
+    public static string CopyrightOf(Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+        var stamped = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright;
+        return string.IsNullOrWhiteSpace(stamped) ? $"Copyright © {Author}" : stamped.Replace("(c)", "©", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The version the build stamped, without the source revision the SDK appends after a '+'.</summary>

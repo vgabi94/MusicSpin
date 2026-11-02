@@ -20,7 +20,7 @@
         <!-- The page before its heading, so Tab goes through the page's links and reaches ‹ and ✕ after them. -->
         <Grid RowDefinitions="Auto,*">
             <StackPanel Name="AboutPage" Grid.Row="1" Classes="aboutPage" IsVisible="{Binding IsAboutPage}">
-                <Image Classes="aboutIcon" Source="avares://MusicSpin/Assets/AppIcon/app-icon-64.png" />
+                <Image Classes="aboutIcon" />
                 <TextBlock Classes="aboutName" Text="{x:Static vm:AboutViewModel.AppName}" />
                 <TextBlock Name="AboutVersion" Classes="aboutNote" Text="{Binding VersionText}" />
                 <TextBlock Classes="aboutSummary" Text="{x:Static vm:AboutViewModel.Summary}" />

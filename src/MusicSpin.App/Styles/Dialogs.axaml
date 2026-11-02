@@ -403,6 +403,7 @@
         <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
     <Style Selector="Image.aboutIcon">
+        <Setter Property="Source" Value="avares://MusicSpin/Assets/AppIcon/app-icon-64.png" />
         <Setter Property="Width" Value="{StaticResource AboutIconSize}" />
         <Setter Property="Height" Value="{StaticResource AboutIconSize}" />
     </Style>
