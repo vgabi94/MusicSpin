@@ -13,6 +13,7 @@ namespace MusicSpin.App.ViewModels;
 /// Output options apply only when the player starts, so a change restarts it: the queue and the position come back, and
 /// the music goes on if it was playing. Volume levelling (#139) and the equalizer (#141, <see cref="Equalizer"/>) apply at
 /// once, without a restart. The player bar's Exclusive pill (#191) is the same switch: <see cref="ToggleExclusiveCommand"/>.
+/// Volume in decibels (#39) only changes how the player bar shows the volume: <see cref="VolumeViewModel.InDecibels"/>.
 /// </summary>
 public sealed partial class AudioSettingsViewModel : ObservableObject
 {
@@ -28,11 +29,14 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
 
     public const string LevellingNote = "Evens out track loudness (ReplayGain / R128)";
 
+    public const string DecibelsNote = "The volume bar spreads 0 to −60 dB evenly";
+
     private readonly IAudioDevices _devices;
     private readonly ISettingsService _settings;
     private readonly PlayerViewModel _player;
     private readonly MenuViewModel _menu;
     private readonly Notices _notices;
+    private readonly VolumeViewModel? _volume;
     private IReadOnlyList<string> _names = [];
     private bool _ready;
     private NormalizationMode _levellingMode;
@@ -40,7 +44,9 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     private bool _missed; // a status came while a change was in flight: Settle follows it once answered
     private OutputInfo? _outputBeforeRestart; // until the restarted player says what it opened, its output is unknown
 
-    public AudioSettingsViewModel(IAudioDevices devices, ISettingsService settings, PlayerViewModel player, MenuViewModel menu, Notices notices)
+    /// <param name="volume">The player bar's volume, which shows in the unit chosen here (none in tests of the rest).</param>
+    public AudioSettingsViewModel(IAudioDevices devices, ISettingsService settings, PlayerViewModel player, MenuViewModel menu, Notices notices,
+        VolumeViewModel? volume = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(player);
@@ -49,6 +55,9 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
         _player = player;
         _menu = menu;
         _notices = notices;
+        _volume = volume;
+        VolumeInDecibels = settings.Current.VolumeInDecibels;
+        _volume?.InDecibels = VolumeInDecibels;
         var output = PlayerOutput.From(settings.Current);
         Device = output.Device;
         Exclusive = output.Exclusive;
@@ -104,6 +113,13 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial bool Levelling { get; set; }
+
+    /// <summary>
+    /// Volume in decibels (#39): the switch. The player bar shows the volume in dB on a loudness bar at once; the player's
+    /// volume doesn't change. Saved as <c>volumeInDecibels</c>; off by default.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool VolumeInDecibels { get; set; }
 
     /// <summary>The 10-band graphic equalizer (#141): applies at once, without a restart.</summary>
     public EqualizerViewModel Equalizer { get; }
@@ -253,6 +269,25 @@ public sealed partial class AudioSettingsViewModel : ObservableObject
         }
 
         _ = RestartAsync();
+    }
+
+    /// <summary>Applies at once; a file that can't be written keeps it for this session and says so.</summary>
+    partial void OnVolumeInDecibelsChanged(bool value)
+    {
+        _volume?.InDecibels = value;
+        if (!_ready)
+        {
+            return;
+        }
+
+        try
+        {
+            _settings.Update(s => s with { VolumeInDecibels = value });
+        }
+        catch (MusicSpinException ex)
+        {
+            _notices.Post($"The setting applies now but wasn't saved: {ex.Message}");
+        }
     }
 
     partial void OnLevellingChanged(bool value)

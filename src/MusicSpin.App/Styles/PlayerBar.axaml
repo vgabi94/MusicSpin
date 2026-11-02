@@ -224,6 +224,18 @@
         <Setter Property="CornerRadius" Value="{StaticResource VolumeBoxRadius}" />
         <Setter Property="FontSize" Value="{StaticResource VolumeFontSize}" />
     </Style>
+    <!--
+      In decibels (#39): a loudness bar from silence through −60 dB to 0 dB, a step a dB, and a box wide enough for
+      "−60.5 dB"; the bar is shorter by what the box takes, so nothing beside the volume moves.
+    -->
+    <Style Selector="StackPanel.volume.decibels > controls|ScrubBar.volume">
+        <Setter Property="Width" Value="{StaticResource VolumeDecibelBarWidth}" />
+        <Setter Property="Minimum" Value="{x:Static vm:VolumeViewModel.DecibelBarMinimum}" />
+        <Setter Property="Maximum" Value="{x:Static vm:VolumeViewModel.DecibelBarMaximum}" />
+    </Style>
+    <Style Selector="StackPanel.volume.decibels > TextBox.volume">
+        <Setter Property="Width" Value="{StaticResource VolumeDecibelBoxWidth}" />
+    </Style>
 
     <!-- The transport: buttons over the position. -->
     <Style Selector="StackPanel.transport">

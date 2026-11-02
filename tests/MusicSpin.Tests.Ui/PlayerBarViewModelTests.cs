@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Time.Testing;
+using MusicSpin.App.Services;
 using MusicSpin.App.ViewModels;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
@@ -515,6 +516,194 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
         number.CommitCommand.Execute(null);
         Assert.True(number.IsInvalid);
         Assert.Equal(2, _player.Count("volume"));
+    }
+
+    // ---- the volume in decibels (#39) ------------------------------------------------------------------------
+
+    private static float Linear(double decibels) => (float)Math.Pow(10, decibels / 20);
+
+    private static double SentDecibels(JsonElement request) => 20 * Math.Log10(request.GetProperty("value").GetDouble());
+
+    [Fact]
+    public async Task In_decibels_the_same_volume_shows_in_dB_and_switching_unit_sends_nothing()
+    {
+        await StartAsync(Playing() with { Volume = 0.8f });
+        var volume = _bar.Volume;
+        Assert.False(volume.InDecibels); // percent unless the setting says otherwise
+        Assert.Equal((80.0, "80%", 80.0), (volume.Level, volume.Number.Text, volume.BarValue));
+
+        volume.InDecibels = true;
+        Assert.Equal(("−1.9 dB", "−1.9 dB", -1.9), (volume.Number.Text, volume.ValueText, volume.BarValue));
+        Assert.Equal(VolumeViewModel.DecibelTypeTip, volume.NumberTip);
+        Assert.True(volume.IsFull);
+
+        volume.InDecibels = false;
+        Assert.Equal(("80%", VolumeViewModel.TypeTip), (volume.Number.Text, volume.NumberTip));
+        Assert.Equal(0, _player.Count("volume")); // only the display changed
+
+        await ChangeAsync(_player.Status with { Volume = 1 });
+        volume.InDecibels = true;
+        Assert.Equal(("0 dB", 0.0, VolumeViewModel.BitPerfectTip), (volume.Number.Text, volume.BarValue, volume.NumberTip));
+    }
+
+    [Fact]
+    public async Task In_decibels_steps_are_whole_dB_and_the_one_below_minus_60_is_silence()
+    {
+        _player.FollowsCommands = true;
+        await StartAsync(Playing() with { Volume = Linear(-58.5) });
+        var volume = _bar.Volume;
+        volume.InDecibels = true;
+        Assert.Equal("−58.5 dB", volume.Number.Text);
+
+        await volume.StepCommand.ExecuteAsync(-1d);
+        Assert.Equal(-59, SentDecibels(await SentAsync("volume")), 6);
+        await volume.StepCommand.ExecuteAsync(-1d);
+        Assert.Equal(-60, SentDecibels(await SentAsync("volume", 2)), 6);
+        await volume.StepCommand.ExecuteAsync(-1d);
+        Assert.Equal(0, (await SentAsync("volume", 3)).GetProperty("value").GetDouble());
+        _ui.Run();
+        Assert.Equal(("−∞ dB", VolumeViewModel.DecibelBarMinimum, true), (volume.Number.Text, volume.BarValue, volume.IsSilent));
+
+        await volume.StepCommand.ExecuteAsync(-1d); // nothing below silence
+        Assert.Equal(0, (await SentAsync("volume", 4)).GetProperty("value").GetDouble());
+        await volume.StepCommand.ExecuteAsync(1d);
+        Assert.Equal(-60, SentDecibels(await SentAsync("volume", 5)), 6);
+        await volume.StepInBoxCommand.ExecuteAsync(VolumeViewModel.LargeKeyStep);
+        Assert.Equal(-50, SentDecibels(await SentAsync("volume", 6)), 6);
+        _ui.Run();
+        Assert.Equal("−50 dB", volume.Number.Text);
+
+        await ChangeAsync(_player.Status with { Volume = Linear(-0.4) });
+        await volume.StepCommand.ExecuteAsync(1d);
+        Assert.Equal(1, (await SentAsync("volume", 7)).GetProperty("value").GetDouble()); // up to the bit-perfect 0 dB
+        await volume.StepCommand.ExecuteAsync(1d);
+        Assert.Equal(1, (await SentAsync("volume", 8)).GetProperty("value").GetDouble()); // and no further
+    }
+
+    [Fact]
+    public async Task The_decibel_bar_runs_from_silence_through_minus_60_to_0_dB()
+    {
+        _player.FollowsCommands = true;
+        await StartAsync(Playing() with { Volume = 0.5f });
+        var volume = _bar.Volume;
+        volume.InDecibels = true;
+
+        await volume.SetBarCommand.ExecuteAsync(-30d);
+        Assert.Equal(-30, SentDecibels(await SentAsync("volume")), 6);
+        _ui.Run();
+        Assert.True(volume.IsFull); // the bar's middle and up: both waves
+        await volume.SetBarCommand.ExecuteAsync(-31d);
+        Assert.Equal(-31, SentDecibels(await SentAsync("volume", 2)), 6);
+        _ui.Run();
+        Assert.True(volume.IsLow); // though 2.8% is far below percent's 50
+        await volume.SetBarCommand.ExecuteAsync(VolumeViewModel.DecibelBarMinimum);
+        Assert.Equal(0, (await SentAsync("volume", 3)).GetProperty("value").GetDouble());
+        await volume.SetBarCommand.ExecuteAsync(VolumeViewModel.DecibelBarMaximum);
+        Assert.Equal(1, (await SentAsync("volume", 4)).GetProperty("value").GetDouble());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_level_below_minus_60_dB_shows_its_value_with_the_bar_at_minus_60()
+    {
+        await StartAsync(Playing() with { Volume = Linear(-80) });
+        var volume = _bar.Volume;
+        volume.InDecibels = true;
+        Assert.Equal(("−80 dB", TypedValues.DecibelFloor, false), (volume.Number.Text, volume.BarValue, volume.IsSilent));
+
+        volume.InDecibels = false;
+        Assert.Equal("0%", volume.Number.Text); // 0.01%: below a tenth of a percent, as percent always showed it
+    }
+
+    [Fact]
+    public async Task In_decibels_the_box_takes_dB_and_percents_rounded_to_a_tenth_of_a_dB()
+    {
+        _player.FollowsCommands = true;
+        await StartAsync(Playing() with { Volume = 0.8f });
+        var volume = _bar.Volume;
+        volume.InDecibels = true;
+        var number = volume.Number;
+
+        number.Begin();
+        number.Text = "-12";
+        number.CommitCommand.Execute(null);
+        Assert.Equal(-12, SentDecibels(await SentAsync("volume")), 6);
+        _ui.Run();
+        Assert.Equal("−12 dB", number.Text);
+
+        number.Begin();
+        number.Text = "40%";
+        number.CommitCommand.Execute(null);
+        Assert.Equal(-8, SentDecibels(await SentAsync("volume", 2)), 6); // 40% is −7.96 dB
+        _ui.Run();
+        Assert.Equal("−8 dB", number.Text);
+
+        number.Begin();
+        number.Text = "+3 dB";
+        number.CommitCommand.Execute(null);
+        Assert.Equal(-5, SentDecibels(await SentAsync("volume", 3)), 6);
+
+        number.Begin();
+        number.Text = "-inf";
+        number.CommitCommand.Execute(null);
+        Assert.Equal(0, (await SentAsync("volume", 4)).GetProperty("value").GetDouble());
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task In_decibels_a_level_above_0_dB_is_refused()
+    {
+        await StartAsync(Playing() with { Volume = 0.8f });
+        var number = _bar.Volume.Number;
+        _bar.Volume.InDecibels = true;
+
+        foreach (var text in new[] { "6", "0.5", "3 dB" }) // a bare fraction is +0.5 dB here, not 50%
+        {
+            number.Begin();
+            number.Text = text;
+            number.CommitCommand.Execute(null);
+            Assert.True(number.IsInvalid, text);
+            number.CancelCommand.Execute(null);
+        }
+
+        Assert.Equal(0, _player.Count("volume"));
+    }
+
+    [Fact]
+    public async Task In_percent_the_box_takes_dB_too_rounded_to_a_tenth_of_a_percent()
+    {
+        await StartAsync(Playing() with { Volume = 0.8f });
+        var number = _bar.Volume.Number;
+        number.Begin();
+        number.Text = "-12 dB";
+        _player.Status = _player.Status with { Volume = 0.251f };
+        number.CommitCommand.Execute(null);
+        Assert.Equal(0.251, (await SentAsync("volume")).GetProperty("value").GetDouble(), 6);
+        _ui.Run();
+        Assert.Equal("25.1%", number.Text);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task A_poll_from_before_a_step_near_minus_60_dB_does_not_undo_it()
+    {
+        // −60 and −59.9 dB are 0.1% and 0.1012%: a tolerance in percent would take one for the other.
+        await StartAsync(Playing() with { Volume = Linear(-59.9) });
+        var volume = _bar.Volume;
+        volume.InDecibels = true;
+        var gate = _player.Hold("volume");
+        _player.Status = _player.Status with { Volume = Linear(-60) };
+        var step = volume.StepCommand.ExecuteAsync(-1d);
+        await SentAsync("volume");
+        Assert.Equal("−60 dB", volume.Number.Text);
+
+        _vm.Apply(Playing() with { Volume = Linear(-59.9) }); // a poll's answer from before the step
+        Assert.Equal("−60 dB", volume.Number.Text);
+
+        gate.SetResult();
+        await step;
+        _ui.Run();
+        Assert.Equal("−60 dB", volume.Number.Text);
     }
 
     // ---- the analyzer (#19) ----------------------------------------------------------------------------------

@@ -108,6 +108,117 @@ public sealed class PlayerBarLogicTests
     public void Volumes_over_100_or_malformed_are_refused(string? text)
         => Assert.False(TypedValues.TryVolume(text, percent: 80, out _));
 
+    // ---- the volume in decibels (#39) ------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("-12", true, -12)]
+    [InlineData("-12 dB", true, -12)]
+    [InlineData("−12dB", true, -12)]
+    [InlineData("-12.34 DB", true, -12.3)]
+    [InlineData("-6,5", true, -6.5)]
+    [InlineData("0", true, 0)]
+    [InlineData("0 dB", true, 0)]
+    [InlineData("-0", true, 0)]
+    [InlineData("+3", true, -4)] // from −7 dB
+    [InlineData("+3 dB", false, -4)]
+    [InlineData("+20 dB", true, 0)] // stops at 0 dB
+    [InlineData("-12 dB", false, -12)] // the other unit, written out, in percent too
+    [InlineData("-80", true, -80)] // below the bar's −60, still a level
+    public void Decibel_volumes_are_levels_and_plus_is_louder(string text, bool inDecibels, double decibels)
+    {
+        Assert.True(TypedValues.TryVolume(text, percent: 100 * Math.Pow(10, -7 / 20.0), inDecibels, out var result));
+        Assert.Equal(decibels, TypedValues.ToDecibels(result), 6);
+    }
+
+    [Theory]
+    [InlineData("-inf", true)]
+    [InlineData("-∞ dB", true)]
+    [InlineData("−∞", true)]
+    [InlineData("-INF dB", false)]
+    [InlineData("0%", true)]
+    public void Minus_infinity_decibels_is_silence(string text, bool inDecibels)
+    {
+        Assert.True(TypedValues.TryVolume(text, percent: 80, inDecibels, out var result));
+        Assert.Equal(0, result);
+    }
+
+    [Theory]
+    [InlineData("40%", 40)]
+    [InlineData("+5%", 85)]
+    [InlineData("-10%", 70)]
+    [InlineData("37.5 %", 37.5)]
+    public void Percents_with_their_sign_work_while_decibels_are_shown(string text, double expected)
+    {
+        Assert.True(TypedValues.TryVolume(text, percent: 80, inDecibels: true, out var result));
+        Assert.Equal(expected, result, 3);
+    }
+
+    [Theory]
+    [InlineData("3", true)] // a level above 0 dB is over 100%
+    [InlineData("12 dB", true)]
+    [InlineData("12 dB", false)]
+    [InlineData("0.5", true)] // a bare fraction reads as +0.5 dB while decibels are shown
+    [InlineData("+inf", true)]
+    [InlineData("inf", true)]
+    [InlineData("-12 dB dB", true)]
+    [InlineData("-12 d", true)]
+    [InlineData("dB", true)]
+    [InlineData("", true)]
+    [InlineData(null, true)]
+    [InlineData("150%", true)]
+    [InlineData("-inf", false)] // a bare −∞ is decibels: it needs "dB" while percent is shown
+    public void Decibel_volumes_over_0_dB_or_malformed_are_refused(string? text, bool inDecibels)
+        => Assert.False(TypedValues.TryVolume(text, percent: 80, inDecibels, out _));
+
+    [Fact]
+    public void A_bare_number_is_percent_unless_decibels_are_shown()
+    {
+        Assert.True(TypedValues.TryVolume("-10", percent: 80, inDecibels: false, out var percent));
+        Assert.Equal(70, percent, 6); // 10% less
+        Assert.True(TypedValues.TryVolume("-10", percent: 80, inDecibels: true, out var decibels));
+        Assert.Equal(-10, TypedValues.ToDecibels(decibels), 6); // −10 dB
+    }
+
+    [Fact]
+    public void Plus_decibels_from_silence_start_at_the_bottom_of_the_bar()
+    {
+        Assert.True(TypedValues.TryVolume("+3", percent: 0, inDecibels: true, out var result));
+        Assert.Equal(-57, TypedValues.ToDecibels(result), 6);
+    }
+
+    [Theory]
+    [InlineData(100, "0 dB")]
+    [InlineData(50, "−6 dB")]
+    [InlineData(25.1188643, "−12 dB")]
+    [InlineData(37.5, "−8.5 dB")]
+    [InlineData(99.9, "−0.1 dB")] // not 0 dB: that is the bit-perfect 100%
+    [InlineData(99.999, "−0.1 dB")]
+    [InlineData(0.1, "−60 dB")]
+    [InlineData(0.0001, "−120 dB")]
+    [InlineData(0, "−∞ dB")]
+    public void Decibels_show_to_a_tenth_and_only_100_percent_is_0_dB(double percent, string expected)
+        => Assert.Equal(expected, VolumeViewModel.FormatDecibels(percent));
+
+    [Theory]
+    [InlineData(double.NaN, 0)]
+    [InlineData(-5, 0)]
+    [InlineData(0, 0)]
+    [InlineData(100, 100)]
+    [InlineData(120, 100)]
+    public void Rounding_to_decibels_keeps_silence_and_100_percent_and_clamps_the_rest(double percent, double expected)
+        => Assert.Equal(expected, TypedValues.RoundToDecibels(percent));
+
+    [Fact]
+    public void Decibels_and_percents_convert_both_ways()
+    {
+        Assert.Equal(0, TypedValues.ToDecibels(100));
+        Assert.Equal(-6.0206, TypedValues.ToDecibels(50), 4);
+        Assert.Equal(double.NegativeInfinity, TypedValues.ToDecibels(0));
+        Assert.Equal(100, TypedValues.FromDecibels(0));
+        Assert.Equal(0.1, TypedValues.FromDecibels(-60), 9);
+        Assert.Equal(0, TypedValues.FromDecibels(double.NegativeInfinity));
+    }
+
     [Theory]
     [InlineData(37.5, 1, 38)]
     [InlineData(37.5, -1, 37)]
