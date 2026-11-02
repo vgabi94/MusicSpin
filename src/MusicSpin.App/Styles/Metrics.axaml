@@ -373,7 +373,7 @@
     <!--
       Its columns (#133): each part has its own width, whatever it shows, and the transport takes the rest. The song (the
       sleeve, then its text; at least this wide, and on a wide window up to the volume, #189); the volume (the speaker 30,
-      the bar 90, the box 2 + 46, 8 apart); the analyzer; the format and the two round buttons, wide enough for the
+      the bar 90, the box 2 + 46, 8 apart; in decibels the bar 68 and the box 68, #39); the analyzer; the format and the two round buttons, wide enough for the
       longest format label beside HI-RES.
     -->
     <sys:Double x:Key="PlayerSongMinWidth">280</sys:Double>
@@ -484,6 +484,9 @@
     <sys:Double x:Key="SpeakerStrokeThickness">1.7</sys:Double>
     <sys:Double x:Key="VolumeBarWidth">90</sys:Double>
     <sys:Double x:Key="VolumeBoxWidth">46</sys:Double>
+    <!-- In decibels (#39) the box takes "−60.5 dB" and the bar gives it the room, so the column keeps its width. -->
+    <sys:Double x:Key="VolumeDecibelBarWidth">68</sys:Double>
+    <sys:Double x:Key="VolumeDecibelBoxWidth">68</sys:Double>
     <Thickness x:Key="VolumeBoxMargin">2,0,0,0</Thickness>
     <Thickness x:Key="VolumeBoxPadding">5,3</Thickness>
     <CornerRadius x:Key="VolumeBoxRadius">6</CornerRadius>

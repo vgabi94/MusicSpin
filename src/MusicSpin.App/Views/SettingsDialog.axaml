@@ -287,6 +287,19 @@
                                           AutomationProperties.Name="Volume levelling" />
                         </Grid>
                     </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Volume in decibels" />
+                                <TextBlock Classes="settingNote" Text="{x:Static vm:AudioSettingsViewModel.DecibelsNote}" />
+                            </StackPanel>
+                            <ToggleButton Name="VolumeInDecibels"
+                                          Grid.Column="1"
+                                          Theme="{StaticResource Switch}"
+                                          IsChecked="{Binding Audio.VolumeInDecibels}"
+                                          AutomationProperties.Name="Volume in decibels" />
+                        </Grid>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </DataTemplate>

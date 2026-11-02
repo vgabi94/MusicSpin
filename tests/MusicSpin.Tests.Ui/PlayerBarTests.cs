@@ -3,6 +3,7 @@ using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -44,9 +45,9 @@ public sealed class PlayerBarTests
             Item = new QueueItem("/music/" + title + ".flac", title, "Kodo Arai", "Night Transit", DurationSeconds: Duration),
         };
 
-    private static async Task<AppHarness> OpenAsync(PlayerStatus? status = null, AppTheme theme = AppTheme.Dark)
+    private static async Task<AppHarness> OpenAsync(PlayerStatus? status = null, AppTheme theme = AppTheme.Dark, Core.Settings.AppSettings? settings = null)
     {
-        var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Theme = theme });
+        var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true, Theme = theme, Settings = settings ?? new() });
         await SetAsync(app, status ?? Status());
         return app;
     }
@@ -883,6 +884,96 @@ public sealed class PlayerBarTests
         Assert.False(Find<Icon>(app, "WaveFar").IsVisible);
     }
 
+    // ---- the volume in decibels (#39) ------------------------------------------------------------------------
+
+    private static readonly Core.Settings.AppSettings InDecibels = new() { VolumeInDecibels = true };
+
+    private static float Linear(double decibels) => (float)Math.Pow(10, decibels / 20);
+
+    /// <summary>The box's text is drawn whole: as wide as its room at most.</summary>
+    private static void AssertFits(TextBox box)
+    {
+        Gui.Settle();
+        var presenter = Gui.Find<TextPresenter>(box, "PART_TextPresenter");
+        var room = Gui.Find<ScrollViewer>(box, "PART_ScrollViewer").Viewport.Width;
+        Assert.True(presenter.TextLayout.WidthIncludingTrailingWhitespace <= room + 0.01,
+            $"'{box.Text}' is {presenter.TextLayout.WidthIncludingTrailingWhitespace:0.#} wide in {room:0.#}");
+    }
+
+    [AvaloniaFact]
+    public async Task In_decibels_the_volume_shows_dB_on_a_loudness_bar_in_the_same_room()
+    {
+        await using var app = await OpenAsync(Status(volume: 0.8f), settings: InDecibels);
+        var bar = Find<ScrubBar>(app, "VolumeBar");
+        var box = Find<TextBox>(app, "VolumeBox");
+        Assert.Equal("−1.9 dB", box.Text);
+        Assert.Equal((VolumeViewModel.DecibelBarMinimum, VolumeViewModel.DecibelBarMaximum, -1.9), (bar.Minimum, bar.Maximum, bar.Value));
+        Assert.Equal((68.0, 68.0), (bar.Bounds.Width, box.Bounds.Width));
+        Assert.Equal(Math.Round(68 * 59.1 / 61), bar.FillWidth); // −1.9 dB of the 61 steps from silence
+        Assert.Equal(((GridLength)app.Window.FindResource("PlayerVolumeColumn")!).Value, Find<Control>(app, "Volume").Bounds.Width);
+        Assert.Equal("−1.9 dB", ControlAutomationPeer.CreatePeerForElement(bar).GetProvider<IValueProvider>()!.Value);
+        Assert.Equal(VolumeViewModel.DecibelTypeTip, ToolTip.GetTip(box));
+
+        // The widest values fit, and −30 dB is half the bar (in percent it would be 3%).
+        foreach (var decibels in new[] { -60.5, -0.1, double.NegativeInfinity, -30 })
+        {
+            await SetAsync(app, Status(volume: Linear(decibels)));
+            AssertFits(box);
+        }
+
+        Assert.Equal("−30 dB", box.Text);
+        Assert.Equal(Math.Round(68 * 31.0 / 61), bar.FillWidth);
+        Assert.True(Find<Icon>(app, "WaveFar").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public async Task In_decibels_clicks_and_keys_on_the_bar_set_whole_dB_down_to_silence()
+    {
+        await using var app = await OpenAsync(Status(volume: 0.8f), settings: InDecibels);
+        app.Scripted!.FollowsCommands = true;
+        var bar = Find<ScrubBar>(app, "VolumeBar");
+
+        app.Window.MouseDown(At(app, bar, 46), MouseButton.Left); // −61 + 41.3
+        app.Window.MouseUp(At(app, bar, 46), MouseButton.Left);
+        Assert.Equal(0.1, await SentAsync(app, "volume", "value", 1), 6); // −20 dB
+        app.Window.MouseDown(At(app, bar, 0.5), MouseButton.Left);
+        app.Window.MouseUp(At(app, bar, 0.5), MouseButton.Left);
+        Assert.Equal(0, await SentAsync(app, "volume", "value", 2));
+
+        bar.Focus(NavigationMethod.Tab);
+        Gui.Settle();
+        Key(app, Avalonia.Input.Key.Right, PhysicalKey.ArrowRight);
+        Assert.Equal(0.001, await SentAsync(app, "volume", "value", 3), 6); // silence, then −60 dB
+        Key(app, Avalonia.Input.Key.PageUp, PhysicalKey.PageUp);
+        Assert.Equal(Linear(-50), await SentAsync(app, "volume", "value", 4), 6); // to the next ten
+        Key(app, Avalonia.Input.Key.End, PhysicalKey.End);
+        Assert.Equal(1, await SentAsync(app, "volume", "value", 5));
+        Key(app, Avalonia.Input.Key.Home, PhysicalKey.Home);
+        Assert.Equal(0, await SentAsync(app, "volume", "value", 6));
+    }
+
+    [AvaloniaFact]
+    public async Task In_decibels_the_box_takes_a_typed_dB_or_percent_and_shakes_at_a_level_over_0_dB()
+    {
+        await using var app = await OpenAsync(Status(volume: 0.8f), settings: InDecibels);
+        var box = Find<TextBox>(app, "VolumeBox");
+
+        Type(app, box, "-12");
+        Gui.Press(app.Window, Avalonia.Input.Key.Enter, PhysicalKey.Enter);
+        Assert.Equal(Linear(-12), await SentAsync(app, "volume", "value", 1), 6);
+
+        Type(app, box, "50%");
+        Gui.Press(app.Window, Avalonia.Input.Key.Enter, PhysicalKey.Enter);
+        Assert.Equal(Linear(-6), await SentAsync(app, "volume", "value", 2), 6); // 50% to the tenth of a dB
+
+        Type(app, box, "6 dB");
+        Gui.Press(app.Window, Avalonia.Input.Key.Enter, PhysicalKey.Enter);
+        Assert.True(box.IsFocused);
+        Assert.Contains("invalid", box.Classes);
+        Assert.Equal(1, Animate.GetPlayed(box));
+        Assert.Equal(2, app.Scripted!.Count("volume"));
+    }
+
     // ---- the analyzer (#19) ----------------------------------------------------------------------------------
 
     private static readonly float[] SomeLevels = [.. Enumerable.Range(0, 16).Select(i => (i + 1) / 16f)];
@@ -1163,6 +1254,19 @@ public sealed class PlayerBarTests
         app.Window.MouseMove(new Point(700, 300)); // away from the bar
         Snapshots.Match(app.Window, Find<PlayerBar>(app, "PlayerBarView"), $"player-bar-exclusive-{state}-{theme.ToString().ToLowerInvariant()}");
         app.Scripted!.ConnectGate?.TrySetResult();
+    }
+
+    /// <summary>The volume in decibels (#39): −12 dB, four fifths of the loudness bar, and the wider box.</summary>
+    [AvaloniaTheory]
+    [InlineData(AppTheme.Dark)]
+    [InlineData(AppTheme.Light)]
+    public async Task Snapshot_of_the_player_bar_with_the_volume_in_decibels(AppTheme theme)
+    {
+        var flac = PlayerBarLogicTests.Track("/m/a.flac", "flac", 192_000, 24, 2, 6_431_000, true, hiRes: true);
+        await using var app = await OpenAsync(Status(state: PlayerState.Playing, track: flac, volume: Linear(-12)), theme, InDecibels);
+        Assert.Equal("−12 dB", Find<TextBox>(app, "VolumeBox").Text);
+        app.Window.MouseMove(new Point(700, 300)); // away from the bar
+        Snapshots.Match(app.Window, Find<PlayerBar>(app, "PlayerBarView"), $"player-bar-decibels-{theme.ToString().ToLowerInvariant()}");
     }
 
     /// <summary>A long title a second into its scroll, cut at its column's edges, with the analyzer beside the transport (#133).</summary>

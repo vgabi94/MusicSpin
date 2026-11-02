@@ -78,6 +78,13 @@ public sealed record AppSettings
     /// </summary>
     public bool VinylTransition { get; init; } = true;
 
+    /// <summary>
+    /// The player bar's volume in decibels (#39): its number in dB and its bar spread evenly from 0 to −60 dB, with one
+    /// last step to silence. Off (the default): percent on a linear bar. Only the display changes; <see cref="Volume"/>
+    /// stays linear.
+    /// </summary>
+    public bool VolumeInDecibels { get; init; }
+
     /// <summary>How fast the records in the app turn: 33.333, 45 or 16.667 rpm.</summary>
     public double RecordSpeedRpm { get; init; } = 33.333;
 
