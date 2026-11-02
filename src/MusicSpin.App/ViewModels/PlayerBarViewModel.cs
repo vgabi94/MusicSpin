@@ -18,6 +18,7 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
 
     public const string RestartTip = "Back to the start";
     public const string PreviousTip = "Previous track";
+    public const string NextTip = "Next track";
     public const string RadioShuffleTip = "Radio is already random";
 
     private readonly LayerViewModel _nowPlaying;

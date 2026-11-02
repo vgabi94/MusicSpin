@@ -141,7 +141,7 @@
                                     <controls:Icon Data="{StaticResource Pause}" IsVisible="{Binding Player.IsPlaying}" />
                                 </Panel>
                             </Button>
-                            <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="Next track" AutomationProperties.Name="Next track">
+                            <Button Name="Next" Command="{Binding Player.NextCommand}" ToolTip.Tip="{x:Static vm:PlayerBarViewModel.NextTip}" AutomationProperties.Name="{x:Static vm:PlayerBarViewModel.NextTip}">
                                 <controls:Icon Data="{StaticResource Next}" />
                             </Button>
                             <Button Name="Repeat"

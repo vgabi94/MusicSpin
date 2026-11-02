@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Rendering;
 using MusicSpin.App.Services;
 using MusicSpin.App.Services.MediaControls;
+using MusicSpin.App.Services.Taskbar;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
 using MusicSpin.App.Views;
@@ -67,6 +68,12 @@ public static class AppComposition
     {
         var viewModel = new MainWindowViewModel(services);
         var window = new MainWindow { DataContext = viewModel };
+        if (OperatingSystem.IsWindows())
+        {
+            // Before the window shows: its taskbar button is made then, and says so (#142).
+            viewModel.AttachTaskbar(WindowsTaskbarThumbnail.TryCreate(window, services.Log));
+        }
+
         if (Environment.GetEnvironmentVariable(FpsVariable) == "1")
         {
             window.RendererDiagnostics.DebugOverlays =
