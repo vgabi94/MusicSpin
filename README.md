@@ -231,28 +231,3 @@ How it fits together is in [Architecture](docs/architecture.md). Building, testi
 | [Building](docs/building.md) | build, test, publish, CI |
 | [Licensing](docs/licensing.md) | MIT and the LGPL obligations (FFmpeg, TagLib#) |
 | [UI design](docs/design/README.md) | the mockup the desktop app is built from |
-
-## Roadmap
-
-Done: the playback core, the library, the background player, the CLI with `--json`, the MCP server, playlists,
-favorites, radio, gapless playback, rename and move detection, album art, and portable single-file builds.
-
-Next:
-
-- [ ] Finish the desktop app from the mockup
-- [ ] Verify real audio output and the published builds on Windows and macOS
-- [ ] Native DSD/DoP output, and bit-perfect checks on real hardware (WASAPI exclusive, ALSA `hw:`, CoreAudio)
-- [ ] GitHub releases with an audio-only LGPL FFmpeg (a few MB instead of ~120 MB), signed and notarized on macOS
-- [ ] Trimming, and a `dotnet tool` package for the CLI
-
-Later: reproducible and saved radio stations, radio that leans toward what you haven't heard lately, and `--exclude-*`
-filters for `play`, `tracks` and `filter`.
-
-## License
-
-Music Spin is MIT-licensed. Copyright (c) 2026 Gabriel-Eugen Vaduva, see [LICENSE](LICENSE).
-
-Third-party components keep their own licenses. FFmpeg (LGPL, loaded at runtime from `ffmpeg/`) and TagLib# (LGPL-2.1,
-a separate `TagLibSharp.dll`) stay replaceable; the rest is MIT, Apache-2.0, BSD, MS-PL, OFL or public domain. The app
-lists them under Help › Third-party notices; see also [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
-[Licensing](docs/licensing.md).
