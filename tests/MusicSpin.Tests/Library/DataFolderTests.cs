@@ -130,6 +130,24 @@ public sealed class DataFolderTests : LibraryTestBase
     }
 
     [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_settings_file_from_before_the_decibel_volume_shows_percent_and_on_is_saved_as_volumeInDecibels()
+    {
+        var store = new SettingsStore(Data);
+        store.Save(new AppSettings { Volume = 0.5 });
+        var path = Path.Combine(Data.Path, "settings.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.True(json.Remove("volumeInDecibels")); // as an older app wrote it
+        File.WriteAllText(path, json.ToJsonString());
+
+        Assert.False(new SettingsStore(Data).Load().VolumeInDecibels);
+
+        store.Save(new AppSettings { VolumeInDecibels = true });
+        Assert.True(System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!["volumeInDecibels"]!.GetValue<bool>());
+        Assert.True(new SettingsStore(Data).Load().VolumeInDecibels);
+    }
+
+    [Fact]
     public void Concurrent_first_starts_create_the_settings_file_once_and_never_fail()
     {
         // Racing `play` commands and players on a fresh data folder all try to write the default settings.

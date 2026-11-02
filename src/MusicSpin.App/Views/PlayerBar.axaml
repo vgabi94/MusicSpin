@@ -77,7 +77,10 @@
                     <ColumnDefinition Width="{StaticResource PlayerAnalyzerColumn}" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Name="Volume" Classes="volume" Classes.silent="{Binding PlayerBar.Volume.IsSilent}">
+                <StackPanel Name="Volume"
+                            Classes="volume"
+                            Classes.silent="{Binding PlayerBar.Volume.IsSilent}"
+                            Classes.decibels="{Binding PlayerBar.Volume.InDecibels}">
                     <Button Name="MuteButton"
                             Classes="round"
                             Command="{Binding PlayerBar.Volume.ToggleMuteCommand}"
@@ -92,8 +95,8 @@
                     </Button>
                     <controls:ScrubBar Name="VolumeBar"
                                        Classes="volume"
-                                       Value="{Binding PlayerBar.Volume.Level, Mode=OneWay}"
-                                       CommitCommand="{Binding PlayerBar.Volume.SetLevelCommand}"
+                                       Value="{Binding PlayerBar.Volume.BarValue, Mode=OneWay}"
+                                       CommitCommand="{Binding PlayerBar.Volume.SetBarCommand}"
                                        ValueText="{Binding PlayerBar.Volume.ValueText}"
                                        AutomationProperties.Name="Volume" />
                     <TextBox Name="VolumeBox"

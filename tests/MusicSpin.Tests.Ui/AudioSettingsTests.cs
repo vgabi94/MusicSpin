@@ -802,6 +802,44 @@ public sealed class AudioSettingsTests
         Assert.Equal("album", app.Scripted!.Sent("normalize")[1].GetProperty("mode").GetString());
     }
 
+    // ---- the volume in decibels (#39) -----------------------------------------------------------------------------
+
+    [AvaloniaFact]
+    public async Task Volume_in_decibels_is_off_by_default_and_the_switch_turns_the_player_bar_to_dB_at_once_without_sending_a_volume()
+    {
+        await using var app = await OpenAsync();
+        app.Scripted!.Status = app.Scripted.Status with { Volume = 0.5f };
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.PlayerBar.Volume.Level == 50, "50%");
+        await OpenSettingsAsync(app);
+        var toggle = Gui.Find<ToggleButton>(app.Window, "VolumeInDecibels");
+        var box = Gui.Find<TextBox>(app.Window, "VolumeBox");
+        var bar = Gui.Find<MusicSpin.App.Controls.ScrubBar>(app.Window, "VolumeBar");
+        Assert.False(toggle.IsChecked);
+        Assert.Equal(("50%", 100.0), (box.Text, bar.Maximum));
+
+        Click(app, toggle);
+        Assert.True(toggle.IsChecked);
+        Assert.Equal(("−6 dB", VolumeViewModel.DecibelBarMinimum, 0.0, -6.0), (box.Text, bar.Minimum, bar.Maximum, bar.Value));
+        Assert.True(new SettingsStore(app.Data).Load().VolumeInDecibels);
+
+        Click(app, toggle);
+        Assert.Equal(("50%", 0.0, 100.0, 50.0), (box.Text, bar.Minimum, bar.Maximum, bar.Value));
+        Assert.False(new SettingsStore(app.Data).Load().VolumeInDecibels);
+        Assert.Equal(0, app.Scripted.Count("volume"));
+        Assert.Equal(0.5f, app.Scripted.Status.Volume);
+    }
+
+    [AvaloniaFact]
+    public async Task A_saved_volume_in_decibels_shows_the_switch_on_and_the_player_bar_in_dB()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { VolumeInDecibels = true });
+        await OpenSettingsAsync(app);
+        Assert.True(Gui.Find<ToggleButton>(app.Window, "VolumeInDecibels").IsChecked);
+        Assert.True(app.ViewModel.PlayerBar.Volume.InDecibels);
+        Assert.EndsWith(" dB", Gui.Find<TextBox>(app.Window, "VolumeBox").Text, StringComparison.Ordinal);
+    }
+
     // ---- snapshots ----------------------------------------------------------------------------------------------
 
     [AvaloniaTheory]
@@ -835,8 +873,40 @@ public sealed class AudioSettingsViewModelTests : IAsyncDisposable
         _notices.Posted += (_, message) => _posted.Add(message);
     }
 
-    private AudioSettingsViewModel Create(ISettingsService settings)
-        => new(new StubAudioDevices { Names = ["USB DAC"] }, settings, _playerVm, new MenuViewModel(), _notices);
+    private AudioSettingsViewModel Create(ISettingsService settings, VolumeViewModel? volume = null)
+        => new(new StubAudioDevices { Names = ["USB DAC"] }, settings, _playerVm, new MenuViewModel(), _notices, volume);
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Volume_in_decibels_the_settings_file_wont_take_still_applies_for_this_session_and_says_so()
+    {
+        var volume = new VolumeViewModel(_playerVm);
+        var vm = Create(new UnwritableSettings(), volume);
+        Assert.False(volume.InDecibels);
+
+        vm.VolumeInDecibels = true;
+
+        Assert.True(vm.VolumeInDecibels); // only the display: nothing to undo, unlike the player's own settings
+        Assert.True(volume.InDecibels);
+        Assert.StartsWith("The setting applies now but wasn't saved", Assert.Single(_posted), StringComparison.Ordinal);
+        Assert.Equal(0, _player.Count("volume"));
+    }
+
+    [Fact]
+    public void Volume_in_decibels_saved_by_an_earlier_session_applies_to_the_player_bar_at_once()
+    {
+        var volume = new VolumeViewModel(_playerVm);
+        var settings = new RecordingSettings(new AppSettings { VolumeInDecibels = true });
+
+        var vm = Create(settings, volume);
+
+        Assert.True(vm.VolumeInDecibels);
+        Assert.True(volume.InDecibels);
+        Assert.Empty(_posted); // read, not saved again
+        vm.VolumeInDecibels = false;
+        Assert.False(volume.InDecibels);
+        Assert.False(settings.Current.VolumeInDecibels);
+    }
 
     [Fact]
     [Trait("Category", "Unhappy")]
