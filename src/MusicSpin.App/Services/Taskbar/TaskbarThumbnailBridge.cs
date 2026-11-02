@@ -46,12 +46,16 @@ public sealed class TaskbarThumbnailBridge : IDisposable
         }
     }
 
-    /// <summary>The buttons as they should look now.</summary>
+    /// <summary>
+    /// The buttons as they should look now. Whether each can run comes from the player's state (the menu's own rules),
+    /// not from <c>CanExecute</c>, which is also false while a click's command runs: a button would grey out for every
+    /// click and back.
+    /// </summary>
     public IReadOnlyList<ThumbButton> Buttons =>
     [
-        new(ThumbButtonId.Previous, ThumbGlyph.Previous, _bar.PreviousToolTip, _menu.PreviousCommand.CanExecute(null)),
-        new(ThumbButtonId.PlayPause, _menu.Player.IsPlaying ? ThumbGlyph.Pause : ThumbGlyph.Play, _menu.PlayPauseHeader, _menu.TogglePlayCommand.CanExecute(null)),
-        new(ThumbButtonId.Next, ThumbGlyph.Next, PlayerBarViewModel.NextTip, _menu.NextCommand.CanExecute(null)),
+        new(ThumbButtonId.Previous, ThumbGlyph.Previous, _bar.PreviousToolTip, _menu.HasTrack),
+        new(ThumbButtonId.PlayPause, _menu.Player.IsPlaying ? ThumbGlyph.Pause : ThumbGlyph.Play, _menu.PlayPauseHeader, _menu.HasTrack),
+        new(ThumbButtonId.Next, ThumbGlyph.Next, PlayerBarViewModel.NextTip, _menu.HasNext),
     ];
 
     /// <summary>A taskbar call failed: the buttons stay as they were, and nothing more is sent.</summary>

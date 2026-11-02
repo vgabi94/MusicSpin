@@ -189,6 +189,28 @@ public sealed class TaskbarThumbnailTests
     }
 
     [AvaloniaFact]
+    public async Task A_click_whose_command_waits_on_the_player_leaves_the_buttons_as_they_are()
+    {
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Scripted = true });
+        var scripted = app.Scripted!;
+        scripted.SetQueue(["One", "Two"]);
+        await scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.Player.HasTrack && app.ViewModel.Player.QueueLength == 2, "two queued");
+        var thumbnail = Attach(app);
+        var bridge = app.ViewModel.Taskbar!;
+        Assert.All(thumbnail.Shown!, b => Assert.True(b.IsEnabled));
+
+        var held = scripted.Hold("next");
+        thumbnail.Click(ThumbButtonId.Next);
+        await Gui.UntilAsync(() => scripted.Count("next") == 1, "next sent");
+        Assert.False(app.ViewModel.AppMenu.NextCommand.CanExecute(null)); // the menu's command runs...
+
+        Assert.Equal(["add"], thumbnail.Calls); // ...but the buttons don't grey out for it
+        held.SetResult();
+        await bridge.LastClick;
+    }
+
+    [AvaloniaFact]
     public async Task A_click_with_an_id_that_is_not_ours_or_on_a_button_that_waits_does_nothing()
     {
         await using var app = await OpenAsync();

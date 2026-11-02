@@ -60,7 +60,9 @@ public sealed partial class AppMenuViewModel : ObservableObject
     public bool IsMuted => _bar.Volume.IsMuted;
 
     /// <summary>A track is loaded: play/pause, ⏮ and Now Playing have something to act on.</summary>
-    private bool HasTrack() => Player.IsConnected && Player.HasTrack;
+    public bool HasTrack => Player.IsConnected && Player.HasTrack;
+
+    private bool CanActOnTrack() => HasTrack;
 
     /// <summary>
     /// The player has an entry after this one: a later entry in the queue, the first again under repeat all, or the
@@ -72,14 +74,14 @@ public sealed partial class AppMenuViewModel : ObservableObject
 
     private bool IsConnected() => Player.IsConnected;
 
-    [RelayCommand(CanExecute = nameof(HasTrack))]
+    [RelayCommand(CanExecute = nameof(CanActOnTrack))]
     private Task TogglePlay() => Player.TogglePlayCommand.ExecuteAsync(null);
 
     [RelayCommand(CanExecute = nameof(HasNext))]
     private Task Next() => Player.NextCommand.ExecuteAsync(null);
 
     /// <summary>As the player bar's ⏮: back to the start after a few seconds, otherwise the previous track.</summary>
-    [RelayCommand(CanExecute = nameof(HasTrack))]
+    [RelayCommand(CanExecute = nameof(CanActOnTrack))]
     private Task Previous() => _bar.PreviousCommand.ExecuteAsync(null);
 
     /// <summary>Radio is random already, so Shuffle waits until it ends (as the player bar's button does).</summary>
@@ -109,7 +111,7 @@ public sealed partial class AppMenuViewModel : ObservableObject
         _ => _sidebar.Albums,
     });
 
-    [RelayCommand(CanExecute = nameof(HasTrack))]
+    [RelayCommand(CanExecute = nameof(CanActOnTrack))]
     private void OpenNowPlaying() => _nowPlaying.Open();
 
     [RelayCommand]
