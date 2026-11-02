@@ -240,7 +240,7 @@ src/MusicSpin.App/
   (a fixed width, so it keeps its place as the window is resized) and the room the system window buttons are drawn
   over. The bar is the window's drag area (`WindowDecorationProperties.ElementRole` TitleBar: the platform moves the
   window from it and maximizes on a double-click); the menu and the search box are `User`, so they take their own
-  input. The menu is one `NativeMenu` on the window (File, Playback, View): `NativeMenuBar` shows it after the title on
+  input. The menu is one `NativeMenu` on the window (File, Playback, View, Help): `NativeMenuBar` shows it after the title on
   Windows and Linux, and macOS puts it in the menu bar (the bar then shows nothing; File leaves out Quit, which the app
   menu has). Its entries bind the commands the rest of the window runs; `AppMenuViewModel` adds only when each can run
   (Next waits at the end of the queue unless repeat is all or radio is on; play/pause, ⏮ and Now Playing wait for a
@@ -251,6 +251,13 @@ src/MusicSpin.App/
   the arrows, Enter and Esc are the menu's. Its lists use the app's `MenuItem` themes (`Controls.axaml`): the look of
   the window's menu, with the ✓ and › after the entry. On macOS the shortcuts that give way to a text box (Space,
   Ctrl+arrows) are not given to the menu bar, which would run them first.
+- **About, License and Third-party notices.** Help's entries open one dialog over the window (`AboutViewModel`, a
+  layer, so Esc closes it, and the window's shortcuts wait while it is open) on one of three pages: About (the icon, the
+  name, the version the build stamped, the copyright, and links to the repository, the license and the notices), the
+  license, and the notices. `LICENSE` and `THIRD-PARTY-NOTICES.md` are embedded in the executable, so a published single
+  file carries them; `AppDocuments` reads them (a build without them points at the repository) and turns the notices'
+  Markdown into plain text: the intro, a row a component (its name and home page, license and how it ships) and each
+  `##` section's paragraphs.
 - **OS media controls (#34, #35, #36).** `Services/MediaControls`: `MediaControlsBridge` is the platform-neutral half.
   It follows `PlayerViewModel` (so the CLI's changes show too) and passes the track, its cached cover file
   (`CoverSize.Medium`), the timeline and the volume to an `IMediaControlsAdapter`, only when something shown changed (a

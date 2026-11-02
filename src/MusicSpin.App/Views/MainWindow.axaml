@@ -110,6 +110,14 @@
                     <NativeMenuItem Header="_Search" Command="{Binding AppMenu.SearchCommand}" Gesture="{OnPlatform Ctrl+F, macOS=Cmd+F}" />
                 </NativeMenu>
             </NativeMenuItem>
+            <NativeMenuItem Header="_Help">
+                <NativeMenu>
+                    <NativeMenuItem Header="_License" Command="{Binding About.ShowLicenseCommand}" />
+                    <NativeMenuItem Header="_Third-party notices" Command="{Binding About.ShowNoticesCommand}" />
+                    <NativeMenuItemSeparator />
+                    <NativeMenuItem Header="_About Music Spin" Command="{Binding About.ShowAboutCommand}" />
+                </NativeMenu>
+            </NativeMenuItem>
         </NativeMenu>
     </NativeMenu.Menu>
 
@@ -342,6 +350,15 @@
                     Command="{Binding Settings.CloseCommand}"
                     AutomationProperties.Name="Close Settings" />
             <views:SettingsDialog Name="SettingsView" DataContext="{Binding Settings}" />
+        </Panel>
+
+        <!-- Help › About, License and Third-party notices; a click on the dim around it closes it. -->
+        <Panel Name="AboutLayer" Grid.RowSpan="3" Grid.ColumnSpan="2" IsVisible="{Binding About.IsOpen}">
+            <Button Name="AboutBackdrop"
+                    Classes="backdrop"
+                    Command="{Binding About.CloseCommand}"
+                    AutomationProperties.Name="Close About" />
+            <views:AboutDialog Name="AboutView" DataContext="{Binding About}" />
         </Panel>
 
         <!-- The menu, over everything, under the button that opened it (MainWindow.axaml.cs places it). -->

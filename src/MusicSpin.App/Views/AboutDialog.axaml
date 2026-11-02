@@ -1,0 +1,105 @@
+<!--
+  Help › About Music Spin, License and Third-party notices (not in the mockup, so in Settings' look): one dialog with
+  three pages. About: the app's icon and name, its version, what it is, who made it, and links to its repository, its
+  license and the notices. The two documents scroll under the dialog's title, with ‹ back to About. The window shows it
+  over a dim (MainWindow.axaml).
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MusicSpin.App.ViewModels"
+             xmlns:services="using:MusicSpin.App.Services"
+             xmlns:controls="using:MusicSpin.App.Controls"
+             xmlns:theming="using:MusicSpin.App.Theming"
+             x:Class="MusicSpin.App.Views.AboutDialog"
+             x:DataType="vm:AboutViewModel">
+    <Border Name="AboutBox"
+            Classes="dialog about"
+            AutomationProperties.Name="{Binding Title}"
+            theming:Animate.Play="DialogInAnimation"
+            theming:Animate.Trigger="{Binding Opens}">
+        <!-- The page before its heading, so Tab goes through the page's links and reaches ‹ and ✕ after them. -->
+        <Grid RowDefinitions="Auto,*">
+            <StackPanel Name="AboutPage" Grid.Row="1" Classes="aboutPage" IsVisible="{Binding IsAboutPage}">
+                <Image Classes="aboutIcon" Source="avares://MusicSpin/Assets/AppIcon/app-icon-64.png" />
+                <TextBlock Classes="aboutName" Text="{x:Static vm:AboutViewModel.AppName}" />
+                <TextBlock Name="AboutVersion" Classes="aboutNote" Text="{Binding VersionText}" />
+                <TextBlock Classes="aboutSummary" Text="{x:Static vm:AboutViewModel.Summary}" />
+                <TextBlock Name="AboutCopyright" Classes="aboutNote" Text="{x:Static vm:AboutViewModel.Copyright}" />
+                <StackPanel Classes="aboutLinks">
+                    <HyperlinkButton Name="RepositoryLink"
+                                     NavigateUri="{x:Static vm:AboutViewModel.Repository}"
+                                     AutomationProperties.Name="Music Spin on GitHub">
+                        <TextBlock Text="GitHub" />
+                    </HyperlinkButton>
+                    <HyperlinkButton Name="LicenseLink" Command="{Binding ShowLicenseCommand}">
+                        <TextBlock Text="License" />
+                    </HyperlinkButton>
+                    <HyperlinkButton Name="NoticesLink" Command="{Binding ShowNoticesCommand}">
+                        <TextBlock Text="Third-party notices" />
+                    </HyperlinkButton>
+                </StackPanel>
+            </StackPanel>
+
+            <ScrollViewer Name="LicensePage" Grid.Row="1" Classes="aboutDocument" IsVisible="{Binding IsLicensePage}">
+                <SelectableTextBlock Name="LicenseText" Classes="aboutDocument" Text="{Binding LicenseText}" />
+            </ScrollViewer>
+
+            <ScrollViewer Name="NoticesPage" Grid.Row="1" Classes="aboutDocument" IsVisible="{Binding IsNoticesPage}">
+                <StackPanel>
+                    <SelectableTextBlock Classes="aboutDocument" Text="{Binding Notices.Intro}" />
+                    <ItemsControl Name="NoticeComponents" Classes="noticeComponents" ItemsSource="{Binding Notices.Components}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="services:ThirdPartyComponent">
+                                <Border Classes="settingRow next tall">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <StackPanel>
+                                            <TextBlock Classes="noticeName" Text="{Binding Name}" />
+                                            <SelectableTextBlock Classes="noticeShips" Text="{Binding Ships}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Classes="noticeLicense" Text="{Binding License}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl Name="NoticeSections" ItemsSource="{Binding Notices.Sections}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="services:NoticeSection">
+                                <StackPanel Classes="noticeSection">
+                                    <TextBlock Classes="noticeTitle" Text="{Binding Title}" />
+                                    <ItemsControl ItemsSource="{Binding Paragraphs}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <SelectableTextBlock Classes="aboutDocument" Text="{Binding}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Grid Classes="pageHeader" ColumnDefinitions="Auto,*,Auto">
+                <Button Name="AboutBack"
+                        Classes="dialogClose back"
+                        Command="{Binding BackCommand}"
+                        IsVisible="{Binding !IsAboutPage}"
+                        ToolTip.Tip="Back to About"
+                        AutomationProperties.Name="Back to About">
+                    <controls:Icon Data="{StaticResource ChevronLeft}" />
+                </Button>
+                <TextBlock Name="AboutTitle" Grid.Column="1" Classes="dialogTitle" Text="{Binding Title}" />
+                <Button Name="CloseAbout"
+                        Grid.Column="2"
+                        Classes="dialogClose"
+                        Command="{Binding CloseCommand}"
+                        ToolTip.Tip="Close (Esc)"
+                        AutomationProperties.Name="Close">
+                    <controls:Icon Data="{StaticResource Close}" />
+                </Button>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

@@ -18,7 +18,7 @@
     </Style>
 
     <!-- The window's height less its margin; the dialog in it is at most DialogMaxHeight and centred. -->
-    <Style Selector="views|SettingsDialog">
+    <Style Selector="views|SettingsDialog, views|AboutDialog">
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="Margin" Value="{StaticResource DialogMargin}" />
@@ -379,5 +379,98 @@
         <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!--
+      Help › About (not in the mockup): Settings' dialog, narrower and of one height for its three pages. About: the
+      icon, the name, the version, what the app is, the copyright and the links, centred. The documents scroll under the
+      title, a page's width in from the sides; the notices list a component a row, its license on the right.
+    -->
+    <Style Selector="Border.dialog.about">
+        <Setter Property="Width" Value="{StaticResource AboutDialogWidth}" />
+        <Setter Property="Height" Value="{StaticResource AboutDialogHeight}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.dialogClose.back controls|Icon">
+        <Setter Property="IsStroked" Value="True" />
+    </Style>
+    <Style Selector="StackPanel.aboutPage">
+        <Setter Property="Margin" Value="{StaticResource SettingsPagePadding}" />
+        <Setter Property="Spacing" Value="{StaticResource AboutGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.aboutPage > :is(Control)">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Image.aboutIcon">
+        <Setter Property="Width" Value="{StaticResource AboutIconSize}" />
+        <Setter Property="Height" Value="{StaticResource AboutIconSize}" />
+    </Style>
+    <Style Selector="TextBlock.aboutName">
+        <Setter Property="FontSize" Value="{StaticResource PageTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="TextBlock.aboutNote">
+        <Setter Property="FontSize" Value="{StaticResource SmallFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+    </Style>
+    <Style Selector="TextBlock.aboutSummary">
+        <Setter Property="MaxWidth" Value="{StaticResource AboutSummaryWidth}" />
+        <Setter Property="Margin" Value="{StaticResource AboutSummaryMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="StackPanel.aboutLinks">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{StaticResource AboutLinksGap}" />
+        <Setter Property="Margin" Value="{StaticResource AboutLinksMargin}" />
+    </Style>
+    <Style Selector="StackPanel.aboutLinks HyperlinkButton">
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="StackPanel.aboutLinks HyperlinkButton TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+    </Style>
+    <Style Selector="ScrollViewer.aboutDocument > StackPanel, ScrollViewer.aboutDocument > SelectableTextBlock">
+        <Setter Property="Margin" Value="{StaticResource SettingsPagePadding}" />
+    </Style>
+    <Style Selector="SelectableTextBlock.aboutDocument">
+        <Setter Property="FontSize" Value="{StaticResource SmallFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource AboutDocumentLineHeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="ItemsControl.noticeComponents">
+        <Setter Property="Margin" Value="{StaticResource NoticeComponentsMargin}" />
+    </Style>
+    <Style Selector="Border.settingRow TextBlock.noticeName">
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Border.settingRow SelectableTextBlock.noticeShips">
+        <Setter Property="Margin" Value="{StaticResource SettingNoteMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Border.settingRow TextBlock.noticeLicense">
+        <Setter Property="MaxWidth" Value="{StaticResource NoticeLicenseWidth}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="StackPanel.noticeSection">
+        <Setter Property="Spacing" Value="{StaticResource AboutGap}" />
+        <Setter Property="Margin" Value="{StaticResource NoticeSectionMargin}" />
+    </Style>
+    <Style Selector="TextBlock.noticeTitle">
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
     </Style>
 </Styles>

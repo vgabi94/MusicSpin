@@ -525,6 +525,23 @@
     <sys:Double x:Key="DialogCloseSize">28</sys:Double>
     <CornerRadius x:Key="DialogCloseRadius">14</CornerRadius>
     <sys:Double x:Key="DialogCloseIconSize">14</sys:Double>
+    <!--
+      Help › About (not in the mockup): 560 x 520 for all three pages. About: a 64 px icon, 6 between its lines, the
+      summary at most 400 wide with 6 more above and below it, the links 20 apart. The documents: lines of 19; the
+      notices' rows 14 under the intro, each license at most 160 wide, a section 18 under the rows.
+    -->
+    <sys:Double x:Key="AboutDialogWidth">560</sys:Double>
+    <sys:Double x:Key="AboutDialogHeight">520</sys:Double>
+    <sys:Double x:Key="AboutIconSize">64</sys:Double>
+    <sys:Double x:Key="AboutGap">6</sys:Double>
+    <sys:Double x:Key="AboutSummaryWidth">400</sys:Double>
+    <Thickness x:Key="AboutSummaryMargin">0,6</Thickness>
+    <sys:Double x:Key="AboutLinksGap">20</sys:Double>
+    <Thickness x:Key="AboutLinksMargin">0,8,0,0</Thickness>
+    <sys:Double x:Key="AboutDocumentLineHeight">19</sys:Double>
+    <Thickness x:Key="NoticeComponentsMargin">0,14,0,0</Thickness>
+    <sys:Double x:Key="NoticeLicenseWidth">160</sys:Double>
+    <Thickness x:Key="NoticeSectionMargin">0,18,0,0</Thickness>
     <!-- The dialog rising in (mockup: @keyframes dlg-in: from 8 px lower, at 98%). -->
     <sys:Double x:Key="DialogInOffset">8</sys:Double>
 

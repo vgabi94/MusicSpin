@@ -13,8 +13,8 @@
     <NoWarn>$(NoWarn);CA1716</NoWarn>
 
     <Product>MusicSpin</Product>
-    <Authors>Gabriel Vaduva</Authors>
-    <Copyright>Copyright (c) 2026 Gabriel Vaduva</Copyright>
+    <Authors>Gabriel-Eugen Vaduva</Authors>
+    <Copyright>Copyright (c) 2026 Gabriel-Eugen Vaduva</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Version>0.1.0</Version>
   </PropertyGroup>

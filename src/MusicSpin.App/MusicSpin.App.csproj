@@ -38,6 +38,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Help › License and Third-party notices: embedded, not copied, so a published single file still carries the license
+      and the notices it is obliged to.
+    -->
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="LICENSE" Visible="false" />
+    <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="THIRD-PARTY-NOTICES.md" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MusicSpin.Core\MusicSpin.Core.csproj" />
   </ItemGroup>
 

@@ -17,6 +17,8 @@
     <StreamGeometry x:Key="Check">M5,12.5 L9.5,17 L19,7</StreamGeometry>
     <!-- "Add to playlist ›" (a submenu follows); drawn as a line. -->
     <StreamGeometry x:Key="ChevronRight">M9,5 L16,12 L9,19</StreamGeometry>
+    <!-- The About dialog's back from a document (stroked, as ChevronRight). -->
+    <StreamGeometry x:Key="ChevronLeft">M15,5 L8,12 L15,19</StreamGeometry>
     <StreamGeometry x:Key="Note">M11,17 A3,3 0 1 1 9,14.17 V4 H17 V7.5 H11 Z</StreamGeometry>
     <!-- END General -->
 
