@@ -107,6 +107,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
                 NotifyShortcutsChanged();
             }
         };
+        Layers.Register(About);
+        About.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AboutViewModel.IsOpen))
+            {
+                NotifyShortcutsChanged();
+            }
+        };
     }
 
     public SidebarViewModel Sidebar { get; } = new();
@@ -223,6 +231,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     /// <summary>The cog's dialog: the theme, Motion, the record speed and design, the shelf's tilt and depth, the library.</summary>
     public SettingsViewModel Settings { get; }
 
+    /// <summary>Help › About Music Spin, License and Third-party notices: one dialog over the window.</summary>
+    public AboutViewModel About { get; } = new();
+
     /// <summary>The library's scan: Settings › Library's Rescan, the empty library's Add a music folder, the folder watch.</summary>
     public LibraryScanViewModel LibraryScan { get; }
 
@@ -260,7 +271,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     private Task Space() => Player.TogglePlayCommand.ExecuteAsync(null);
 
     /// <summary>Shortcuts work unless a text box has focus, Settings is open over the window, or the app menu is open.</summary>
-    private bool CanUseShortcuts() => !IsTextInputFocused && !Settings.IsOpen && !IsAppMenuOpen;
+    private bool CanUseShortcuts() => !IsTextInputFocused && !Settings.IsOpen && !About.IsOpen && !IsAppMenuOpen;
 
     /// <summary>Ctrl+→: seeks forward, unless a text box has focus (Ctrl+arrows move its caret by words then).</summary>
     [RelayCommand(CanExecute = nameof(CanUseShortcuts), AllowConcurrentExecutions = true)]

@@ -36,7 +36,7 @@ public sealed class AppMenuTests
         // title starts after them (78) and the search box goes to the right edge. Either way the bar's gap (16) is
         // before the search box's right edge.
         var (titleLeft, buttonsRight) = OperatingSystem.IsMacOS() ? (78, 0) : (16, 138);
-        Assert.Equal(["_File", "_Playback", "_View"], TopItems(window).Select(i => i.Header));
+        Assert.Equal(["_File", "_Playback", "_View", "_Help"], TopItems(window).Select(i => i.Header));
         Assert.Equal(titleLeft, brand.Left);
         Assert.Equal(titleLeft + 188 + 16, menu.Left); // after the title's 188 and the gap: past the sidebar on Windows and Linux
         Assert.True(drag.Left > menu.Right && drag.Right < search.Left, $"menu {menu}, drag area {drag}, search {search}");

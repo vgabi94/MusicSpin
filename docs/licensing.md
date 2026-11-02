@@ -4,7 +4,7 @@
 
 ## MusicSpin
 
-MusicSpin is **MIT-licensed**: Copyright (c) 2026 Gabriel Vaduva. See [`LICENSE`](../LICENSE). Contributions are accepted under the same license.
+MusicSpin is **MIT-licensed**: Copyright (c) 2026 Gabriel-Eugen Vaduva. See [`LICENSE`](../LICENSE). Contributions are accepted under the same license.
 
 ## Third-party components
 
