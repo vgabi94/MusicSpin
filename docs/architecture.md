@@ -227,7 +227,9 @@ src/MusicSpin.App/
   only the records near the front are made. Grouped crates are the full-size crate scaled down whole (a `Viewbox`). The
   wheel flips a crate once its turns add up to half a notch, at most every 180 ms on the app's clock, and past either
   end it leaves the wheel to the page; the arrow keys are window key bindings, so a focused text box or slider keeps
-  them.
+  them. Crate is hidden for now: the view switch lists only Cards and Shelf (`AlbumsPageViewModel.Views`), and the crate
+  view is reached through `AlbumsPageViewModel.CrateView`, which its tests use. Adding it back to `Views` offers it
+  again.
 - **The menu.** The Sort and Group dropdowns, the ＋ buttons and right-clicks fill one `MenuViewModel` (a layer, so Esc
   closes it) with entries. The window places it under the button that opened it, or with its corner at the pointer for
   a right-click, always 8 px inside the window (`MenuPlacement`). A press anywhere else, a scroll (not the queue drawer's) and

@@ -36,7 +36,7 @@ agree.
 
 ### The desktop app
 
-- **Albums three ways:** as cards, standing on a shelf, or flipped through in record crates, sorted by
+- **Albums two ways:** as cards or standing on a shelf, sorted by
   artist, title or year and grouped by artist or genre.
 - **Tracks** in one long sortable list, grouped as you like, with instant search.
 - **Now Playing** puts the album on a turntable. There are seven decks to choose from (Classic, Walnut & Brass,
@@ -111,7 +111,7 @@ and the albums appear as the scan finds them. You can add more folders, rescan o
 
 - Click an album to play it; it lands on the turntable in **Now Playing**. Right-click an album or a track to play it
   next, or add it to the queue or a playlist.
-- Switch between **Cards**, **Shelf** and **Crate** at the top of the Albums page, and change the sorting and grouping
+- Switch between **Cards** and **Shelf** at the top of the Albums page, and change the sorting and grouping
   beside them.
 - Open the queue with the ☰ button in the player bar, and drag albums and tracks into it.
 - On the **Radio** page, pick what the station should play and press **Start radio**.
