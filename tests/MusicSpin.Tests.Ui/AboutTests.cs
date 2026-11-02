@@ -44,7 +44,7 @@ public sealed class AboutTests
     }
 
     [Fact]
-    public void Every_row_of_the_notices_table_becomes_a_component_in_plain_text()
+    public void Every_row_of_the_notices_table_becomes_a_name_and_a_license_in_plain_text()
     {
         var markdown = AppDocuments.Read(AppDocuments.NoticesResource)!;
         var rows = markdown.Split('\n').Count(l => l.TrimStart().StartsWith('|')) - 2; // less the header and its rule
@@ -52,52 +52,49 @@ public sealed class AboutTests
         var notices = AppDocuments.ParseNotices(markdown);
 
         Assert.Equal(rows, notices.Components.Count);
-        Assert.StartsWith("MusicSpin itself is MIT licensed (see LICENSE)", notices.Intro, StringComparison.Ordinal);
+        Assert.Equal("MusicSpin itself is MIT licensed (see LICENSE). Release builds contain or load the components below.", notices.Intro);
         var ffmpeg = notices.Components[0];
         Assert.StartsWith("FFmpeg (libavcodec", ffmpeg.Name, StringComparison.Ordinal);
         Assert.Equal(new Uri("https://ffmpeg.org"), ffmpeg.Link);
         Assert.Contains("LGPL-2.1-or-later", ffmpeg.License, StringComparison.Ordinal);
-        Assert.StartsWith("Separate shared libraries in ffmpeg/", ffmpeg.Ships, StringComparison.Ordinal);
-        Assert.All(notices.Components, c => Assert.DoesNotContain("](", c.Name + c.License + c.Ships, StringComparison.Ordinal));
-        Assert.All(notices.Components, c => Assert.DoesNotContain("`", c.Name + c.License + c.Ships, StringComparison.Ordinal));
-        Assert.Contains(notices.Components, c => c is { Name: ".NET runtime", Link: null });
-
-        var lgpl = Assert.Single(notices.Sections);
-        Assert.Equal("LGPL notes", lgpl.Title);
-        Assert.Contains(lgpl.Paragraphs, p => p.StartsWith("• FFmpeg is loaded at runtime from MUSICSPIN_FFMPEG_PATH", StringComparison.Ordinal));
-        Assert.Contains(lgpl.Paragraphs, p => p.StartsWith("The LGPL requires", StringComparison.Ordinal) && !p.Contains('\n', StringComparison.Ordinal));
+        Assert.All(notices.Components, c => Assert.DoesNotContain("](", c.Name + c.License, StringComparison.Ordinal));
+        Assert.All(notices.Components, c => Assert.DoesNotContain("`", c.Name + c.License, StringComparison.Ordinal));
+        Assert.Contains(notices.Components, c => c is { Name: ".NET runtime", Link: null, License: "MIT" });
     }
 
     [Fact]
-    public void Notices_without_a_table_short_rows_or_sections_still_read()
+    public void Notices_keep_only_the_first_paragraph_and_the_first_tables_names_and_licenses()
     {
         var empty = AppDocuments.ParseNotices(string.Empty);
-        Assert.Equal((string.Empty, 0, 0), (empty.Intro, empty.Components.Count, empty.Sections.Count));
+        Assert.Equal((string.Empty, 0), (empty.Intro, empty.Components.Count));
         Assert.Throws<ArgumentNullException>(() => AppDocuments.ParseNotices(null!));
 
         var notices = AppDocuments.ParseNotices("""
             # Notices
 
-            Only **this**.
+            Only **this**,
+            on two lines.
+
+            Not this paragraph.
 
             | A | B | C |
             |---|:-:|---|
-            | short | row |
+            | lonely |
             | [Lib](not a url) | MIT | `inside` |
-            | [Other](https://example.org/x) | BSD | a | b |
+            | [Other](https://example.org/x) | BSD |
 
             ## Notes
-            First line
-            continues.
-            - one
-            - two
+            Not this either.
+
+            | X | Y |
+            |---|---|
+            | not | this |
             """);
 
-        Assert.Equal("Only this.", notices.Intro);
-        Assert.Equal(2, notices.Components.Count); // the short row is skipped
-        Assert.Equal(new ThirdPartyComponent("[Lib](not a url)", null, "MIT", "inside"), notices.Components[0]);
-        Assert.Equal(new ThirdPartyComponent("Other", new Uri("https://example.org/x"), "BSD", "a | b"), notices.Components[1]);
-        Assert.Equal(["First line continues.", "• one", "• two"], Assert.Single(notices.Sections).Paragraphs);
+        Assert.Equal("Only this, on two lines.", notices.Intro);
+        Assert.Equal(
+            [new ThirdPartyComponent("[Lib](not a url)", null, "MIT"), new ThirdPartyComponent("Other", new Uri("https://example.org/x"), "BSD")],
+            notices.Components); // a one-cell row is skipped, and nothing after the first table is read
     }
 
     [Fact]
@@ -194,6 +191,9 @@ public sealed class AboutTests
         var components = app.ViewModel.About.Notices!.Components;
         Assert.Equal(components.Count, rows.ItemCount);
         Assert.Contains(Gui.All<TextBlock>(rows), t => t.Text == components[^1].Name);
+        Assert.Contains(Gui.All<TextBlock>(rows), t => t.Text == components[^1].License);
+        Assert.Equal(AppDocuments.NoticesOnline, Gui.Find<HyperlinkButton>(window, "NoticesOnlineLink").NavigateUri);
+        Assert.Equal(new Uri("https://github.com/vgabi94/MusicSpin/blob/main/THIRD-PARTY-NOTICES.md"), AppDocuments.NoticesOnline);
     }
 
     [AvaloniaFact]

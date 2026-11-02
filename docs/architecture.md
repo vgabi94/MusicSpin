@@ -257,8 +257,8 @@ src/MusicSpin.App/
   name, the version the build stamped, the copyright, and links to the repository, the license and the notices), the
   license, and the notices. `LICENSE` and `THIRD-PARTY-NOTICES.md` are embedded in the executable, so a published single
   file carries them; `AppDocuments` reads them (a build without them points at the repository) and turns the notices'
-  Markdown into plain text: the intro, a row a component (its name and home page, license and how it ships) and each
-  `##` section's paragraphs.
+  Markdown into the intro and a line a component (its name and license). How each one ships and the LGPL notes stay in
+  the file, which ships next to the app; the page says so and links to it on GitHub.
 - **OS media controls (#34, #35, #36).** `Services/MediaControls`: `MediaControlsBridge` is the platform-neutral half.
   It follows `PlayerViewModel` (so the CLI's changes show too) and passes the track, its cached cover file
   (`CoverSize.Medium`), the timeline and the volume to an `IMediaControlsAdapter`, only when something shown changed (a

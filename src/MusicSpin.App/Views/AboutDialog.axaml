@@ -1,8 +1,8 @@
 <!--
   Help › About Music Spin, License and Third-party notices (not in the mockup, so in Settings' look): one dialog with
   three pages. About: the app's icon and name, its version, what it is, who made it, and links to its repository, its
-  license and the notices. The two documents scroll under the dialog's title, with ‹ back to About. The window shows it
-  over a dim (MainWindow.axaml).
+  license and the notices. The two documents scroll under the dialog's title, with ‹ back to About; the notices are a
+  line a component (its name and license), then where to read the rest. The window shows it over a dim (MainWindow.axaml).
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -50,34 +50,19 @@
                     <ItemsControl Name="NoticeComponents" Classes="noticeComponents" ItemsSource="{Binding Notices.Components}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="services:ThirdPartyComponent">
-                                <Border Classes="settingRow next tall">
+                                <Border Classes="noticeRow">
                                     <Grid ColumnDefinitions="*,Auto">
-                                        <StackPanel>
-                                            <TextBlock Classes="noticeName" Text="{Binding Name}" />
-                                            <SelectableTextBlock Classes="noticeShips" Text="{Binding Ships}" />
-                                        </StackPanel>
+                                        <TextBlock Classes="noticeName" Text="{Binding Name}" />
                                         <TextBlock Grid.Column="1" Classes="noticeLicense" Text="{Binding License}" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <ItemsControl Name="NoticeSections" ItemsSource="{Binding Notices.Sections}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="services:NoticeSection">
-                                <StackPanel Classes="noticeSection">
-                                    <TextBlock Classes="noticeTitle" Text="{Binding Title}" />
-                                    <ItemsControl ItemsSource="{Binding Paragraphs}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="x:String">
-                                                <SelectableTextBlock Classes="aboutDocument" Text="{Binding}" />
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <TextBlock Classes="noticeMore" Text="{x:Static vm:AboutViewModel.NoticesMore}" />
+                    <HyperlinkButton Name="NoticesOnlineLink" Classes="noticeMore" NavigateUri="{x:Static vm:AboutViewModel.NoticesOnline}">
+                        <TextBlock Text="THIRD-PARTY-NOTICES.md on GitHub" />
+                    </HyperlinkButton>
                 </StackPanel>
             </ScrollViewer>
 

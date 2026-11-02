@@ -3,19 +3,19 @@ using System.Text.RegularExpressions;
 
 namespace MusicSpin.App.Services;
 
-/// <summary>One component of the third-party notices: its name (and home page), its license, and how it ships.</summary>
-public sealed record ThirdPartyComponent(string Name, Uri? Link, string License, string Ships);
+/// <summary>One component of the third-party notices: its name (and home page) and its license.</summary>
+public sealed record ThirdPartyComponent(string Name, Uri? Link, string License);
 
-/// <summary>A section of prose after the components (the LGPL notes): its title and paragraphs, list items marked •.</summary>
-public sealed record NoticeSection(string Title, IReadOnlyList<string> Paragraphs);
-
-/// <summary>THIRD-PARTY-NOTICES.md as the About dialog shows it.</summary>
-public sealed record ThirdPartyNotices(string Intro, IReadOnlyList<ThirdPartyComponent> Components, IReadOnlyList<NoticeSection> Sections);
+/// <summary>
+/// THIRD-PARTY-NOTICES.md as the About dialog shows it: the first paragraph and a line a component. How each one ships
+/// and the LGPL notes stay in the file, which the dialog links to.
+/// </summary>
+public sealed record ThirdPartyNotices(string Intro, IReadOnlyList<ThirdPartyComponent> Components);
 
 /// <summary>
 /// The documents the app is obliged to carry (Help › License and Third-party notices): <c>LICENSE</c> and
 /// <c>THIRD-PARTY-NOTICES.md</c>, embedded in the executable so a published single file still has them. The notices are
-/// Markdown; the dialog shows them as plain text, the table as one entry a component.
+/// Markdown; the dialog shows the notices' first paragraph and a line a component, and links to the whole file.
 /// </summary>
 public static partial class AppDocuments
 {
@@ -24,6 +24,9 @@ public static partial class AppDocuments
 
     /// <summary>Where the documents are published with the source, for a build that lacks them.</summary>
     public static readonly Uri Repository = new("https://github.com/vgabi94/MusicSpin");
+
+    /// <summary>The whole notices file online: how each component ships, and the LGPL notes.</summary>
+    public static readonly Uri NoticesOnline = new(Repository + "/blob/main/" + NoticesResource);
 
     /// <summary>The embedded document <paramref name="resource"/>, or null when this build doesn't have it.</summary>
     public static string? Read(string resource)
@@ -45,92 +48,52 @@ public static partial class AppDocuments
     public static string License() => Read(LicenseResource) ?? Missing(LicenseResource);
 
     /// <summary>The third-party notices, or a note pointing at the repository.</summary>
-    public static ThirdPartyNotices Notices() => Read(NoticesResource) is { } markdown ? ParseNotices(markdown) : new ThirdPartyNotices(Missing(NoticesResource), [], []);
+    public static ThirdPartyNotices Notices() => Read(NoticesResource) is { } markdown ? ParseNotices(markdown) : new ThirdPartyNotices(Missing(NoticesResource), []);
 
     /// <summary>
-    /// The notices' parts: the first paragraph, the table's rows (a row of three cells: the component, its license, how
-    /// it ships; the header and its rule are skipped), and each <c>##</c> section after it.
+    /// The notices' first paragraph and the first table's rows: a row's first cell is the component (its first link its
+    /// home page), its second the license. The header and its rule are skipped, and so is a row of fewer than two cells.
     /// </summary>
     public static ThirdPartyNotices ParseNotices(string markdown)
     {
         ArgumentNullException.ThrowIfNull(markdown);
-        var intro = new List<string>();
+        var intro = new StringBuilder();
+        var introDone = false;
         var components = new List<ThirdPartyComponent>();
-        var sections = new List<NoticeSection>();
-        string? title = null;
-        var paragraphs = new List<string>();
-        var paragraph = new StringBuilder();
-        var header = true;
-
-        void EndParagraph()
-        {
-            if (paragraph.Length > 0)
-            {
-                (title is null ? intro : paragraphs).Add(Plain(paragraph.ToString()));
-                paragraph.Clear();
-            }
-        }
-
-        void EndSection()
-        {
-            EndParagraph();
-            if (title is not null)
-            {
-                sections.Add(new NoticeSection(title, [.. paragraphs]));
-                paragraphs.Clear();
-            }
-        }
-
+        var rows = 0;
         foreach (var raw in markdown.Split('\n'))
         {
-            var line = raw.TrimEnd('\r').Trim();
+            var line = raw.Trim();
             if (line.StartsWith('|'))
             {
-                EndParagraph();
-                var cells = line.Trim('|').Split('|').Select(c => c.Trim()).ToArray();
-                if (header || cells.All(c => c.Length > 0 && c.All(ch => ch is '-' or ':')))
+                if (rows++ < 2)
                 {
-                    header = false; // the header row, then its rule
-                    continue;
+                    continue; // the header row, then its rule
                 }
 
-                if (cells.Length >= 3)
+                var cells = line.Trim('|').Split('|').Select(c => c.Trim()).ToArray();
+                if (cells.Length >= 2)
                 {
                     var link = LinkPattern().Match(cells[0]);
                     var url = link.Success && Uri.TryCreate(link.Groups[2].Value, UriKind.Absolute, out var u) ? u : null;
-                    components.Add(new ThirdPartyComponent(Plain(cells[0]), url, Plain(cells[1]), Plain(string.Join(" | ", cells[2..]))));
+                    components.Add(new ThirdPartyComponent(Plain(cells[0]), url, Plain(cells[1])));
                 }
-
-                continue;
             }
-
-            header = true; // a later table has its own header
-            if (line.StartsWith("## ", StringComparison.Ordinal))
+            else if (rows > 0)
             {
-                EndSection();
-                title = Plain(line[3..]);
+                break; // past the table: how each component ships and the LGPL notes stay in the file
             }
-            else if (line.StartsWith('#'))
+            else if (line.Length == 0 || line.StartsWith('#'))
             {
-                EndParagraph(); // the document's own title
+                introDone |= intro.Length > 0; // a blank line or a heading ends the first paragraph
             }
-            else if (line.Length == 0)
+            else if (!introDone)
             {
-                EndParagraph();
-            }
-            else if (line.StartsWith("- ", StringComparison.Ordinal))
-            {
-                EndParagraph();
-                paragraph.Append("• ").Append(line[2..]);
-            }
-            else
-            {
-                paragraph.Append(paragraph.Length > 0 ? " " : string.Empty).Append(line);
+                intro.Append(intro.Length > 0 ? " " : string.Empty).Append(line);
             }
         }
 
-        EndSection();
-        return new ThirdPartyNotices(string.Join(Environment.NewLine + Environment.NewLine, intro), components, sections);
+        return new ThirdPartyNotices(Plain(intro.ToString()), components);
     }
 
     /// <summary>Markdown's links, code and emphasis as plain text: <c>[FFmpeg](https://…)</c> is "FFmpeg".</summary>

@@ -49,6 +49,12 @@ public sealed partial class AboutViewModel : LayerViewModel
 
     public static Uri Repository => AppDocuments.Repository;
 
+    /// <summary>Under the notices' rows: the rest is in the file, which ships next to the app.</summary>
+    public const string NoticesMore =
+        "How each component ships, and how to replace the LGPL ones, is in THIRD-PARTY-NOTICES.md next to the app.";
+
+    public static Uri NoticesOnline => AppDocuments.NoticesOnline;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAboutPage), nameof(IsLicensePage), nameof(IsNoticesPage), nameof(Title))]
     public partial AboutPage Page { get; private set; }

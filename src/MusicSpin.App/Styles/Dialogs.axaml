@@ -448,30 +448,39 @@
     <Style Selector="ItemsControl.noticeComponents">
         <Setter Property="Margin" Value="{StaticResource NoticeComponentsMargin}" />
     </Style>
-    <Style Selector="Border.settingRow TextBlock.noticeName">
+    <Style Selector="Border.noticeRow">
+        <Setter Property="Padding" Value="{StaticResource NoticeRowPadding}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource SettingRowDivider}" />
+    </Style>
+    <Style Selector="Border.noticeRow > Grid">
+        <Setter Property="ColumnSpacing" Value="{StaticResource SettingRowGap}" />
+    </Style>
+    <Style Selector="Border.noticeRow TextBlock.noticeName">
+        <Setter Property="FontSize" Value="{StaticResource SmallFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
-    <Style Selector="Border.settingRow SelectableTextBlock.noticeShips">
-        <Setter Property="Margin" Value="{StaticResource SettingNoteMargin}" />
-        <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
-        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
-        <Setter Property="TextWrapping" Value="Wrap" />
-    </Style>
-    <Style Selector="Border.settingRow TextBlock.noticeLicense">
+    <Style Selector="Border.noticeRow TextBlock.noticeLicense">
         <Setter Property="MaxWidth" Value="{StaticResource NoticeLicenseWidth}" />
         <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
         <Setter Property="TextAlignment" Value="Right" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
-    <Style Selector="StackPanel.noticeSection">
-        <Setter Property="Spacing" Value="{StaticResource AboutGap}" />
-        <Setter Property="Margin" Value="{StaticResource NoticeSectionMargin}" />
+    <!-- Under the rows: where to read how each component ships and the LGPL notes. -->
+    <Style Selector="TextBlock.noticeMore">
+        <Setter Property="Margin" Value="{StaticResource NoticeMoreMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
-    <Style Selector="TextBlock.noticeTitle">
-        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
-        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
-        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    <Style Selector="HyperlinkButton.noticeMore">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="{StaticResource NoticeLinkMargin}" />
+    </Style>
+    <Style Selector="HyperlinkButton.noticeMore TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingNoteFontSize}" />
     </Style>
 </Styles>
