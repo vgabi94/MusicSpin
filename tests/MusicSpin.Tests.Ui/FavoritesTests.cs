@@ -527,7 +527,8 @@ public sealed class FavoritesTests
 
         // The album's colour comes after its cover (MainWindowViewModel): wait for it too, or the snapshot catches the
         // default accent on one machine and the album's on another.
-        var accent = AccentColors.Accent(Assert.NotNull(await app.Services.Covers.AccentAsync(app.ViewModel.PlayingAlbumId!)));
+        var cover = Assert.NotNull(await app.Services.Covers.AccentAsync(app.ViewModel.PlayingAlbumId!));
+        var accent = new Appearance(Application.Current!).ColorsFor(cover, theme).Accent;
         await Gui.UntilAsync(
             () => app.Window.FindResource("AccentBrush") is ISolidColorBrush brush && brush.Color == Color.FromRgb(accent.R, accent.G, accent.B),
             "the album's accent");

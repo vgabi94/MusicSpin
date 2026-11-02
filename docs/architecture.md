@@ -156,7 +156,11 @@ src/MusicSpin.App/
   off, choosing an album plays it at once, as at Motion None, and everything else keeps its Motion.
 - **Accent colour.** The playing album's colour (the most saturated prominent colour of its cover, mixed 80% with white)
   replaces `AccentBrush`, and `AccentInkBrush` (mixed 55% with black on the light theme) for text. Each album is
-  computed once per session.
+  computed once per session. Nothing in that mix guarantees contrast, so `Appearance.Colors` enforces it (#194): a
+  cover with no real colour (`AccentColors.GreyChroma`) gets the default accent; the accent is lightened, keeping its
+  hue, until black text reads on it (4.5:1) and, on the dark theme, until it reads as text on the theme's `Bg`,
+  `Bg2` and `Bg3` and on the page under `AccentTintBrush`; on the light theme the ink is darkened the same way. The
+  tinted brushes are made from the corrected accent.
 - **View models don't know controls.** Services come in through constructors from `AppComposition`. The window
   reports one thing back: whether a text box has focus, so the Space key binding (play/pause) declines and the text
   box gets the space. Esc closes the topmost open layer registered with `LayerRegistry` (menu, a sidebar playlist
