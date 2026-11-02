@@ -562,6 +562,77 @@ public sealed class EqualizerSettingsTests
         Assert.Equal(4, Saved(app).EqualizerGains![2]);
     }
 
+    // ---- the knobs at the ends ---------------------------------------------------------------------------------
+
+    /// <summary>Where <paramref name="control"/> is drawn in the window, turned as its slider is.</summary>
+    private static Rect Drawn(AppHarness app, Visual control)
+        => new Rect(control.Bounds.Size).TransformToAABB(control.TransformToVisual(app.Window) ?? throw new InvalidOperationException($"{control} is not in the window."));
+
+    /// <summary>
+    /// #175: at ±12 dB half the knob is past the slider's end. Neither it nor the focus ring (4 past each end) is cut
+    /// off or over the gain and band, and pressing that half grabs the knob without moving it past the end.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(EqualizerViewModel.MaxGain)]
+    [InlineData(EqualizerViewModel.MinGain)]
+    [InlineData(0.0)]
+    public async Task Every_knob_and_focus_ring_show_whole_at_either_end_and_leave_its_gain_and_band_clear(double gain)
+    {
+        await using var app = await OpenAsync(new AppSettings
+        {
+            EqualizerEnabled = true,
+            EqualizerGains = [.. Enumerable.Repeat(gain, EqualizerSettings.Bands.Count)],
+            EqualizerPreampDb = gain,
+        });
+        await OpenSettingsAsync(app);
+
+        for (var band = -1; band < EqualizerSettings.Bands.Count; band++)
+        {
+            var slider = Slider(app, band);
+            var column = slider.GetVisualAncestors().OfType<StackPanel>().First(p => p.Classes.Contains("eqSlider"));
+            column.BringIntoView();
+            Gui.Settle();
+            Assert.Equal(gain, slider.Value);
+            var handle = Gui.All<Border>(slider).Single(b => b.Name == "PART_Handle");
+            var knob = Drawn(app, handle);
+            var bar = Drawn(app, slider);
+            var what = $"{(band < 0 ? "the pre-amp" : $"band {band}")} at {gain:+0;-0;0} dB";
+
+            Assert.Equal(1.0, handle.RenderTransform!.Value.M11); // shown, full size
+            Assert.Equal(bar.Center.X, knob.Center.X, 3); // on the bar
+            var end = gain > 0 ? bar.Top : gain < 0 ? bar.Bottom : bar.Center.Y; // the top is +12 dB
+            Assert.Equal(end, knob.Center.Y, 3);
+            slider.Focus(NavigationMethod.Tab);
+            await Gui.UntilAsync(() => slider.IsFocused, $"{what}: focused");
+            var ring = Gui.Find<Border>(slider, "PART_FocusRing");
+            Assert.True(ring.IsVisible, $"{what}: the focus ring shows");
+            foreach (var (part, drawn) in new[] { ("knob", knob), ("focus ring", Drawn(app, ring)) })
+            {
+                for (var v = handle.GetVisualParent(); v is Control c and not Window; v = v.GetVisualParent())
+                {
+                    Assert.True(!c.ClipToBounds || Drawn(app, c).Contains(drawn), $"{what}: {c.GetType().Name} {c.Name} cuts the {part} off");
+                }
+
+                foreach (var label in column.Children.OfType<TextBlock>())
+                {
+                    Assert.False(drawn.Intersects(Drawn(app, label)), $"{what}: the {part} is over {label.Text}");
+                }
+            }
+
+            // The outer edge of the knob: past the slider's end at ±12 dB, its middle at 0 dB.
+            var edge = new Point(knob.Center.X, gain > 0 ? knob.Top + 1 : gain < 0 ? knob.Bottom - 1 : knob.Center.Y);
+            Assert.Equal(gain != 0, !bar.Contains(edge));
+            app.Window.MouseMove(edge);
+            app.Window.MouseDown(edge, MouseButton.Left);
+            Gui.Settle();
+            Assert.NotNull(slider.Scrub); // the press grabbed it
+            app.Window.MouseUp(edge, MouseButton.Left);
+            Gui.Settle();
+            Assert.Equal(gain, slider.Value);
+            Assert.Equal(gain, band < 0 ? Eq(app).Preamp.Gain : Eq(app).Bands[band].Gain);
+        }
+    }
+
     // ---- snapshots ----------------------------------------------------------------------------------------------
 
     [AvaloniaTheory]
