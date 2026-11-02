@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Composition;
 using MusicSpin.App.Services;
 using MusicSpin.App.Services.MediaControls;
+using MusicSpin.App.Services.Taskbar;
 using MusicSpin.App.Theming;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
@@ -360,11 +361,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         SpinClock.Dispose();
         PlayerBar.Dispose();
         MediaControls?.Dispose();
+        Taskbar?.Dispose();
         await Player.DisposeAsync().ConfigureAwait(false);
     }
 
     /// <summary>The OS media controls following the player (#34), or null on an OS without them.</summary>
     public MediaControlsBridge? MediaControls { get; }
+
+    /// <summary>The taskbar thumbnail buttons following the player (#142), once the window has given them; null elsewhere.</summary>
+    public TaskbarThumbnailBridge? Taskbar { get; private set; }
+
+    /// <summary>
+    /// The window's taskbar thumbnail buttons (#142): ⏮, play/pause and ⏭ under its thumbnail on Windows. The window
+    /// gives them once, before it shows; null (another OS, the headless tests' window) leaves the window without them.
+    /// </summary>
+    public void AttachTaskbar(ITaskbarThumbnail? thumbnail)
+    {
+        if (thumbnail is null)
+        {
+            return;
+        }
+
+        Taskbar?.Dispose();
+        Taskbar = new TaskbarThumbnailBridge(AppMenu, PlayerBar, thumbnail, _services.Log);
+    }
 
     /// <summary>The OS media controls, if this OS has them. An adapter that can't start leaves the app as it was, with a notice.</summary>
     private MediaControlsBridge? StartMediaControls(AppServices services)

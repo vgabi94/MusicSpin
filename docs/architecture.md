@@ -101,7 +101,8 @@ src/MusicSpin.App/
 ├── Composition/           AppServices + AppComposition: the one place that builds services and view models
 ├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers,
 │                          notices, the format label, typed values (seek and volume syntax), turntable designs,
-│                          the scene's timeline, RadioStation (radio tags, their filter and description)
+│                          the scene's timeline, RadioStation (radio tags, their filter and description),
+│                          MediaControls/ (the OS media controls), Taskbar/ (the Windows thumbnail buttons)
 ├── ViewModels/            MainWindow (shell), AppMenu, Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
 │                          layers (Settings, Now Playing, the queue drawer and its name form, the menu),
 │                          LibraryItemActions (right-click and drag of albums and tracks), PlaylistActions (the
@@ -286,6 +287,18 @@ src/MusicSpin.App/
     `Position` is computed from the last update and the clock. It connects in the background (`Ready`); without a
     session bus the factory makes none. No track list, no `OpenUri`, no Raise or Quit (all advertised as unsupported).
     Its tests run a private `dbus-daemon` and a real D-Bus client (`MprisAdapterTests`).
+- **Taskbar thumbnail buttons (#142, Windows).** `Services/Taskbar`: ⏮, play/pause and ⏭ under the window's taskbar
+  thumbnail. `TaskbarThumbnailBridge` is the platform-neutral half: the buttons run the app menu's Previous,
+  Play/Pause and Next (the player bar's commands: ⏮ goes back to the start after 3 s or on the first track) and wait
+  when those wait (all three with nothing loaded, ⏭ at the end of the queue unless repeat is all or radio is on);
+  play/pause shows ⏸ while the music plays, and the tooltips are the player bar's. It follows the commands' events, never
+  a timer, and only a change in what the buttons show is sent. `WindowsTaskbarThumbnail` only translates: raw
+  `ITaskbarList3` (`ThumbBarAddButtons`, `ThumbBarUpdateButtons`), the clicks (`WM_COMMAND` / `THBN_CLICKED`) and
+  `TaskbarButtonCreated` (the window showed, or Explorer restarted: the buttons are added again) from a
+  `Win32Properties` window-procedure hook. The pictures are the player bar's icons (`TaskbarIcons`) at the small-icon
+  size for the window's DPI, white on a dark taskbar and near black on a light one, drawn again when either changes. The
+  composition root gives the window its buttons before it shows; elsewhere (another OS, the headless tests' window)
+  there are none. A taskbar call that fails turns them off (logged in `app.log`) and the app goes on.
 - **Queue drawer.** `QueueDrawerViewModel` is a layer that lists the player's *up next* entries, read with `queue`
   whenever the player reports `queueChanged` (also for changes made from the CLI) and when the current entry or the
   counts change. On radio it also lists the station's next six picks. Every action is a player command: `play` with
