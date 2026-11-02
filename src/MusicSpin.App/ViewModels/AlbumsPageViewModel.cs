@@ -387,12 +387,35 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     /// <summary>Settings › Shelf: the sleeves' tilt and depth.</summary>
     public SettingsViewModel Settings { get; }
 
-    /// <summary>Cards, Shelf, Crate (mockup: #viewSeg).</summary>
-    public IReadOnlyList<Choice<AlbumsView>> Views { get; } = [new("Cards", AlbumsView.Cards), new("Shelf", AlbumsView.Shelf), new("Crate", AlbumsView.Crate)];
+    /// <summary>
+    /// Crate, hidden: it isn't offered in the view switch for now (Gabriel, 2026-11-02), but it still works when chosen
+    /// here, and its tests choose it. Put it back in <see cref="Views"/> to offer it again.
+    /// </summary>
+    internal static readonly Choice<AlbumsView> CrateView = new("Crate", AlbumsView.Crate);
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsShelf), nameof(IsCrate))]
-    public partial Choice<AlbumsView> ViewChoice { get; set; }
+    /// <summary>The view switch: Cards and Shelf (mockup: #viewSeg, without Crate; see <see cref="CrateView"/>).</summary>
+    public IReadOnlyList<Choice<AlbumsView>> Views { get; } = [new("Cards", AlbumsView.Cards), new("Shelf", AlbumsView.Shelf)];
+
+    /// <summary>The choice that shows <paramref name="view"/>, Crate included.</summary>
+    internal Choice<AlbumsView> ChoiceOf(AlbumsView view) => view == AlbumsView.Crate ? CrateView : Views.Single(v => v.Value == view);
+
+    /// <summary>
+    /// The view shown. The switch leaves nothing selected for a view it doesn't list (<see cref="CrateView"/>) and writes
+    /// back null for it; that is ignored, so the view stays.
+    /// </summary>
+    public Choice<AlbumsView> ViewChoice
+    {
+        get;
+        set
+        {
+            if (value is not null && SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(IsShelf));
+                OnPropertyChanged(nameof(IsCrate));
+                OnViewChoiceChanged();
+            }
+        }
+    }
 
     public bool IsShelf => ViewChoice.Value == AlbumsView.Shelf;
 
@@ -593,7 +616,7 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     /// <summary>The album from its first track, its record carried onto the turntable (the scene).</summary>
     private Task PlayAsync(AlbumItemViewModel album) => _scene.PlayAlbumAsync(album.Album.Id);
 
-    partial void OnViewChoiceChanged(Choice<AlbumsView> value)
+    private void OnViewChoiceChanged()
     {
         _playing?.DiscAngle = ShownDiscAngle();
         LayOut();

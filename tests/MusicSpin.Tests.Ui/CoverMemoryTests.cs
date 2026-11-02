@@ -193,7 +193,7 @@ public sealed class CoverMemoryTests
 
         foreach (var view in new[] { AlbumsView.Shelf, AlbumsView.Crate, AlbumsView.Cards })
         {
-            app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views.Single(v => v.Value == view);
+            app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.ChoiceOf(view);
             Gui.Settle();
             var shown = page.GetVisualDescendants().Select(v => v.DataContext switch
                 {
@@ -226,7 +226,7 @@ public sealed class CoverMemoryTests
 
         foreach (var view in new[] { AlbumsView.Cards, AlbumsView.Shelf, AlbumsView.Crate })
         {
-            app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views.Single(v => v.Value == view);
+            app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.ChoiceOf(view);
             Gui.FinishAnimations();
             var widest = CoverWidths(page, app.Window).Max();
             Assert.True(widest * scaling <= app.ViewModel.AlbumsPage.CoverPixels,

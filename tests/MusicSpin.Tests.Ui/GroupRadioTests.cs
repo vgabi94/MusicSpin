@@ -271,7 +271,7 @@ public sealed class GroupRadioTests
     public async Task On_a_crates_label_Play_and_Radio_are_icons_together_at_its_right_end()
     {
         await using var app = await OpenAsync(AlbumGrouping.Artist);
-        app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views[2];
+        app.ViewModel.AlbumsPage.ViewChoice = AlbumsPageViewModel.CrateView;
         Gui.Settle();
         var crate = Gui.All<Panel>(app.Window).First(p => p.Classes.Contains("crate") && p.DataContext is CrateViewModel { Name: "Elena Varga" });
         var box = crate.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("crateBox"));
@@ -292,7 +292,7 @@ public sealed class GroupRadioTests
     public async Task A_long_name_on_a_crates_label_is_cut_and_its_count_stays_clear_of_the_icons()
     {
         await using var app = await OpenAsync(AlbumGrouping.Artist, library: AddLongArtist);
-        app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views[2];
+        app.ViewModel.AlbumsPage.ViewChoice = AlbumsPageViewModel.CrateView;
         Gui.Settle();
         var crate = Gui.All<Panel>(app.Window).First(p => p.Classes.Contains("crate") && p.DataContext is CrateViewModel { Name: LongArtist });
         var name = crate.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Classes.Contains("name"));
@@ -524,7 +524,7 @@ public sealed class GroupRadioTests
         await using var app = await OpenAsync(AlbumGrouping.Genre, theme);
         Snapshots.Match(app.Window, Header(app, "Ambient"), $"group-header-{theme.ToString().ToLowerInvariant()}");
 
-        app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views[2];
+        app.ViewModel.AlbumsPage.ViewChoice = AlbumsPageViewModel.CrateView;
         Gui.Settle();
         var crate = Gui.All<Panel>(app.Window).First(p => p.Classes.Contains("crate") && p.DataContext is CrateViewModel { Name: "Ambient" });
         // The crate's whole cell (it is drawn scaled down, so the box's own bounds aren't where it shows).

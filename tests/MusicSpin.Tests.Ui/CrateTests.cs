@@ -26,7 +26,7 @@ public sealed class CrateTests
         });
         await Gui.UntilAsync(() => app.ViewModel.AlbumsPage.Albums.Count == 10, "the albums");
         app.ViewModel.AlbumsPage.Grouping = grouping;
-        app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.Views[2];
+        app.ViewModel.AlbumsPage.ViewChoice = AlbumsPageViewModel.CrateView;
         Gui.Settle();
         return app;
     }

@@ -63,15 +63,48 @@ public sealed class AlbumsPageTests
         Assert.Equal(26, firstRow[1].Left - firstRow[0].Right, 0.5);
     }
 
+    /// <summary>
+    /// Crate is hidden from the switch for now, but still shows when chosen in code: the switch then has nothing selected
+    /// (the null it writes back is ignored) and takes the user back to Cards or Shelf.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Crate_is_not_in_the_view_switch_but_still_shows_when_chosen()
+    {
+        await using var app = await OpenAsync();
+        var page = app.ViewModel.AlbumsPage;
+        var views = Gui.Find<ListBox>(app.Window, "ViewSwitch");
+
+        Assert.DoesNotContain(views.GetRealizedContainers(), c => c.DataContext is Choice<AlbumsView> { Value: AlbumsView.Crate });
+        Assert.DoesNotContain(page.Views, v => v.Value == AlbumsView.Crate);
+
+        page.ViewChoice = AlbumsPageViewModel.CrateView;
+        Gui.Settle();
+        Assert.True(page.IsCrate);
+        Assert.Same(AlbumsPageViewModel.CrateView, page.ViewChoice);
+        Assert.True(Gui.Find<Grid>(app.Window, "CrateArea").IsVisible);
+        Assert.False(Gui.Find<ScrollViewer>(app.Window, "Scroller").IsVisible);
+        Assert.Equal(-1, views.SelectedIndex);
+
+        page.ViewChoice = null!; // what the switch writes back for a view it doesn't list
+        Assert.True(page.IsCrate);
+
+        Gui.Click(app.Window, views.GetRealizedContainers().OfType<ListBoxItem>().Single(c => Equals(c.DataContext, page.Views[1])));
+        Gui.Settle();
+        Assert.True(page.IsShelf);
+        Assert.False(page.IsCrate);
+        Assert.False(Gui.Find<Grid>(app.Window, "CrateArea").IsVisible);
+        Assert.Equal(1, views.SelectedIndex);
+    }
+
     [AvaloniaFact]
     public async Task The_toolbar_has_the_view_switch_and_the_Sort_and_Group_dropdowns()
     {
         await using var app = await OpenAsync();
 
         var views = Gui.Find<ListBox>(app.Window, "ViewSwitch");
-        Assert.Equal(["Cards", "Shelf", "Crate"], app.ViewModel.AlbumsPage.Views.Select(v => v.Label));
+        Assert.Equal(["Cards", "Shelf"], app.ViewModel.AlbumsPage.Views.Select(v => v.Label));
         Assert.Equal(0, views.SelectedIndex);
-        Assert.Equal([true, true, true], views.GetRealizedContainers().Select(c => c.IsEnabled));
+        Assert.Equal([true, true], views.GetRealizedContainers().Select(c => c.IsEnabled));
         Assert.Equal(["Sort: ", "Artist"], Texts(Gui.Find<Button>(app.Window, "SortButton")));
         Assert.Equal(["Group: ", "Genre"], Texts(Gui.Find<Button>(app.Window, "GroupButton")));
         Assert.Equal(["AMBIENT · 2", "CLASSICAL · 3", "ELECTRONIC · 1"],
