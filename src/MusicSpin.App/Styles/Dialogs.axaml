@@ -339,10 +339,16 @@
     <Style Selector="StackPanel.eqSlider > TextBlock.eqGain">
         <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
     </Style>
-    <!-- A bar turned a quarter left: its minimum at the bottom; the pointer, the wheel and the keys work as on the bar. -->
+    <!--
+      A bar turned a quarter left: its minimum at the bottom; the pointer, the wheel and the keys work as on the bar.
+      Unclipped, with the handle's radius free past either end, so the handle shows whole at ±12 dB, clear of the
+      gain over it and the band under it (#175).
+    -->
     <Style Selector="LayoutTransformControl.upright">
         <Setter Property="LayoutTransform" Value="rotate(-90deg)" />
         <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="ClipToBounds" Value="False" />
+        <Setter Property="Margin" Value="{StaticResource EqKnobRoom}" />
     </Style>
     <Style Selector="controls|ScrubBar.eq">
         <Setter Property="Width" Value="{StaticResource EqSliderLength}" />

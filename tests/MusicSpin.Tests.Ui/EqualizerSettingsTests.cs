@@ -562,6 +562,54 @@ public sealed class EqualizerSettingsTests
         Assert.Equal(4, Saved(app).EqualizerGains![2]);
     }
 
+    // ---- the knobs at the ends ---------------------------------------------------------------------------------
+
+    /// <summary>Where <paramref name="control"/> is drawn in the window, turned as its slider is.</summary>
+    private static Rect Drawn(AppHarness app, Visual control)
+        => new Rect(control.Bounds.Size).TransformToAABB(control.TransformToVisual(app.Window) ?? throw new InvalidOperationException($"{control} is not in the window."));
+
+    [AvaloniaTheory]
+    [InlineData(EqualizerViewModel.MaxGain)]
+    [InlineData(EqualizerViewModel.MinGain)]
+    [InlineData(0.0)]
+    public async Task Every_knob_shows_whole_at_either_end_and_leaves_its_gain_and_band_clear(double gain)
+    {
+        await using var app = await OpenAsync(new AppSettings
+        {
+            EqualizerEnabled = true,
+            EqualizerGains = [.. Enumerable.Repeat(gain, EqualizerSettings.Bands.Count)],
+            EqualizerPreampDb = gain,
+        });
+        await OpenSettingsAsync(app);
+
+        for (var band = -1; band < EqualizerSettings.Bands.Count; band++)
+        {
+            var slider = Slider(app, band);
+            var column = slider.GetVisualAncestors().OfType<StackPanel>().First(p => p.Classes.Contains("eqSlider"));
+            column.BringIntoView();
+            Gui.Settle();
+            Assert.Equal(gain, slider.Value);
+            var handle = Gui.All<Border>(slider).Single(b => b.Name == "PART_Handle");
+            var knob = Drawn(app, handle);
+            var bar = Drawn(app, slider);
+            var what = $"{(band < 0 ? "the pre-amp" : $"band {band}")} at {gain:+0;-0;0} dB";
+
+            Assert.Equal(1.0, handle.RenderTransform!.Value.M11); // shown, full size
+            Assert.Equal(bar.Center.X, knob.Center.X, 3); // on the bar
+            var end = gain > 0 ? bar.Top : gain < 0 ? bar.Bottom : bar.Center.Y; // the top is +12 dB
+            Assert.Equal(end, knob.Center.Y, 3);
+            for (var v = handle.GetVisualParent(); v is Control c and not Window; v = v.GetVisualParent())
+            {
+                Assert.True(!c.ClipToBounds || Drawn(app, c).Contains(knob), $"{what}: {c.GetType().Name} {c.Name} cuts the knob off");
+            }
+
+            foreach (var label in column.Children.OfType<TextBlock>())
+            {
+                Assert.False(knob.Intersects(Drawn(app, label)), $"{what}: the knob is over {label.Text}");
+            }
+        }
+    }
+
     // ---- snapshots ----------------------------------------------------------------------------------------------
 
     [AvaloniaTheory]
