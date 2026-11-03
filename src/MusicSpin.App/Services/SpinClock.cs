@@ -1,11 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using MusicSpin.Core.Settings;
 
 namespace MusicSpin.App.Services;
 
 /// <summary>
 /// One clock for every visible disc of the playing album (mockup: <c>tick</c> in app.js). It spins up and down like a
-/// real platter: the speed moves toward the target by <see cref="SpinUpRate"/> (or <see cref="SpinDownRate"/>) of the
-/// difference per second, divided by the Motion multiplier. The spin shows that music is playing, so it runs in every
+/// real platter: the speed moves toward the target (<see cref="Rpm"/> times <see cref="Scale"/>) by
+/// <see cref="SpinUpRate"/> (or <see cref="SpinDownRate"/>) of the difference per second, divided by the Motion
+/// multiplier. The spin shows that music is playing, so it runs in every
 /// Motion mode; None (multiplier 0) only skips the ramp. While the window is hidden (<see cref="IsShown"/>) its timer
 /// stops; shown again, it catches up on the time it missed, so the disc is where it would have been (#125): the time
 /// until each pause or play while hidden is settled then, at the speed it was going.
@@ -42,9 +44,23 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
     [ObservableProperty]
     public partial double Velocity { get; private set; }
 
-    /// <summary>33.333, 45 or 16.667 (Settings › Turntable › Speed).</summary>
+    /// <summary>16.667, 33.333 or 45 (Settings › Turntable › Speed).</summary>
     [ObservableProperty]
-    public partial double Rpm { get; set; } = 33.333;
+    public partial double Rpm { get; set; } = AppSettings.DefaultRecordSpeedRpm;
+
+    /// <summary>The slowest <see cref="Scale"/>: a tenth of the speed.</summary>
+    public const double MinScale = 0.1;
+
+    /// <summary>
+    /// How fast the disc looks, as a share of <see cref="Rpm"/> (Settings › Turntable › Visual spin): 0.1..1, 1 is the true
+    /// speed. A change ramps like a speed change. Values outside are brought into range, and NaN or infinity keeps the
+    /// scale it had, so a caller can never stop the disc or turn it backwards.
+    /// </summary>
+    public double Scale
+    {
+        get;
+        set => SetProperty(ref field, double.IsFinite(value) ? Math.Clamp(value, MinScale, 1) : field);
+    } = 1;
 
     /// <summary>The Motion multiplier (1, 0.5 or 0).</summary>
     [ObservableProperty]
@@ -64,7 +80,7 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
     /// <summary>Moves the clock forward by <paramref name="elapsed"/> (in steps of at most one frame).</summary>
     public void Advance(TimeSpan elapsed)
     {
-        var target = IsSpinning ? Rpm * 6 : 0; // degrees per second
+        var target = IsSpinning ? Rpm * 6 * Scale : 0; // degrees per second
         var (angle, velocity) = (Angle, Velocity);
         var left = Math.Max(0, elapsed.TotalSeconds);
         var frame = FrameInterval.TotalSeconds;

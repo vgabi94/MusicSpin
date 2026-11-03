@@ -24,7 +24,7 @@ public sealed partial class AboutViewModel : LayerViewModel
     public const string AppName = "Music Spin";
     public const string Author = "Gabriel-Eugen Vaduva";
     public const string Summary =
-        "A desktop music player for hi-res audio, with a command line that people and AI agents can script. Free and open source under the MIT License.";
+        "A desktop music player for hi-res audio, with a command line that people and AI agents can script. Free and open source under the GNU GPL, version 3 or later.";
 
     /// <summary>The app's own version (not the entry assembly's, which in tests is the test runner).</summary>
     public AboutViewModel()
@@ -72,7 +72,7 @@ public sealed partial class AboutViewModel : LayerViewModel
         _ => $"About {AppName}",
     };
 
-    /// <summary>The MIT License as the executable carries it; null until its page is first shown.</summary>
+    /// <summary>The copyright notice, the Svg.Custom permission and the GPL as the executable carries them; null until its page is first shown.</summary>
     [ObservableProperty]
     public partial string? LicenseText { get; private set; }
 

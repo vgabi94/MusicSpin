@@ -44,9 +44,11 @@ public sealed class SettingsViewModelTests : IDisposable
     {
         var vm = Create();
 
-        Assert.Equal((AppTheme.Dark, MotionMode.Smooth, 33.333), (vm.Theme, vm.Motion, vm.RecordSpeed));
+        Assert.Equal((AppTheme.Dark, MotionMode.Smooth, 16.667), (vm.Theme, vm.Motion, vm.RecordSpeed));
         Assert.IsType<ClassicDeck>(vm.Design);
         Assert.Equal((58.0, 40.0, "58°", "40"), (vm.ShelfTilt, vm.ShelfDepth, vm.ShelfTiltText, vm.ShelfDepthText));
+        Assert.Equal((100.0, "100%"), (vm.SpinScale, vm.SpinScaleText));
+        Assert.Equal((16.667, 1.0), (_spinClock.Rpm, _spinClock.Scale));
         Assert.Equal(["Dark", "Light"], vm.Themes.Select(c => c.Label));
         Assert.Equal(["Smooth", "Fast", "None"], vm.Motions.Select(c => c.Label));
         Assert.Equal(["33⅓", "45", "16⅔"], vm.Speeds.Select(c => c.Label));
@@ -59,22 +61,52 @@ public sealed class SettingsViewModelTests : IDisposable
     [Fact]
     public void Saved_settings_apply_at_start()
     {
-        var vm = Create(new AppSettings { Theme = "light", Motion = "fast", RecordSpeedRpm = 45, ShelfTilt = 30, ShelfDepth = 0 });
+        var vm = Create(new AppSettings { Theme = "light", Motion = "fast", RecordSpeedRpm = 45, ShelfTilt = 30, ShelfDepth = 0, SpinScale = 40 });
 
         Assert.Equal((AppTheme.Light, MotionMode.Fast, 45.0), (vm.Theme, vm.Motion, vm.RecordSpeed));
         Assert.Equal((AppTheme.Light, MotionMode.Fast), (_appearance.Theme, _appearance.Motion));
-        Assert.Equal((45.0, 0.5), (_spinClock.Rpm, _spinClock.MotionMultiplier));
+        Assert.Equal((45.0, 0.5, 0.4), (_spinClock.Rpm, _spinClock.MotionMultiplier, _spinClock.Scale));
         Assert.Equal((30.0, 0.0), (vm.ShelfTilt, vm.ShelfDepth));
+        Assert.Equal((40.0, "40%"), (vm.SpinScale, vm.SpinScaleText));
     }
 
     [Fact]
     public void Values_out_of_range_in_the_file_are_brought_into_range()
     {
-        var vm = Create(new AppSettings { RecordSpeedRpm = 78, TurntableDesign = "gramophone", ShelfTilt = 95, ShelfDepth = -5 });
+        var vm = Create(new AppSettings { RecordSpeedRpm = 78, TurntableDesign = "gramophone", ShelfTilt = 95, ShelfDepth = -5, SpinScale = 500 });
 
-        Assert.Equal(33.333, vm.RecordSpeed);
+        Assert.Equal((16.667, 16.667), (vm.RecordSpeed, _spinClock.Rpm)); // an unknown speed is the default
         Assert.IsType<ClassicDeck>(vm.Design);
         Assert.Equal((80.0, 0.0), (vm.ShelfTilt, vm.ShelfDepth));
+        Assert.Equal((100.0, 1.0), (vm.SpinScale, _spinClock.Scale));
+    }
+
+    [Theory]
+    [Trait("Category", "Unhappy")]
+    [InlineData(3, 10)]
+    [InlineData(0, 10)]
+    [InlineData(-50, 10)]
+    [InlineData(1000, 100)]
+    [InlineData(55.5, 56)]
+    public void A_visual_spin_out_of_range_in_the_file_is_brought_into_range(double saved, double shown)
+    {
+        var vm = Create(new AppSettings { SpinScale = saved });
+
+        Assert.Equal((shown, shown / 100), (vm.SpinScale, _spinClock.Scale));
+    }
+
+    [Theory]
+    [Trait("Category", "Unhappy")]
+    [InlineData(5, 10)]
+    [InlineData(250, 100)]
+    [InlineData(double.NaN, 70)]
+    public void The_visual_spin_slider_keeps_to_whole_percent_from_10_to_100(double asked, double expected)
+    {
+        var vm = Create(new AppSettings { SpinScale = 70 });
+
+        vm.SetSpinScale(asked);
+
+        Assert.Equal((expected, expected / 100), (vm.SpinScale, _spinClock.Scale));
     }
 
     [Fact]
@@ -88,8 +120,12 @@ public sealed class SettingsViewModelTests : IDisposable
         vm.MotionChoice = vm.Motions[2];
         Assert.Equal((MotionMode.None, 0.0, "none"), (_appearance.Motion, _spinClock.MotionMultiplier, Saved().Motion));
 
-        vm.SpeedChoice = vm.Speeds[2];
-        Assert.Equal((16.667, 16.667), (_spinClock.Rpm, Saved().RecordSpeedRpm));
+        vm.SpeedChoice = vm.Speeds[1];
+        Assert.Equal((45.0, 45.0), (_spinClock.Rpm, Saved().RecordSpeedRpm));
+
+        vm.SetSpinScaleCommand.Execute(42.4);
+        Assert.Equal(("42%", 0.42, 42.0), (vm.SpinScaleText, _spinClock.Scale, Saved().SpinScale));
+        Assert.Equal(45.0, _spinClock.Rpm); // the speed stays
 
         vm.SetShelfTiltCommand.Execute(33.6);
         Assert.Equal(("34°", 34.0), (vm.ShelfTiltText, Saved().ShelfTilt));
@@ -109,11 +145,12 @@ public sealed class SettingsViewModelTests : IDisposable
         first.SetRecordSpeed(45);
         first.SetShelfTilt(70);
         first.SetShelfDepth(0);
+        first.SetSpinScale(25);
 
         var second = Create();
 
         Assert.Equal((AppTheme.Light, MotionMode.Fast, 45.0), (second.Theme, second.Motion, second.RecordSpeed));
-        Assert.Equal((70.0, 0.0), (second.ShelfTilt, second.ShelfDepth));
+        Assert.Equal((70.0, 0.0, 25.0), (second.ShelfTilt, second.ShelfDepth, second.SpinScale));
         Assert.Equal("classic", Saved().TurntableDesign);
     }
 
@@ -127,7 +164,7 @@ public sealed class SettingsViewModelTests : IDisposable
         vm.SpeedChoice = null!;
         vm.Design = null!;
 
-        Assert.Equal((AppTheme.Dark, MotionMode.Smooth, 33.333), (vm.Theme, vm.Motion, vm.RecordSpeed));
+        Assert.Equal((AppTheme.Dark, MotionMode.Smooth, 16.667), (vm.Theme, vm.Motion, vm.RecordSpeed));
         Assert.IsType<ClassicDeck>(vm.Design);
         Assert.False(File.Exists(_data.SettingsFile));
     }
@@ -205,6 +242,53 @@ public sealed class SettingsViewModelTests : IDisposable
 
         Assert.Equal(1, settings.Updates);
         Assert.Equal(60, Saved().ShelfTilt);
+    }
+
+    [Fact]
+    public void A_visual_spin_drag_turns_the_records_at_every_step_and_saves_once_when_it_ends()
+    {
+        var settings = new CountingSettings(new SettingsService(_data));
+        var vm = new SettingsViewModel(settings, _appearance, _spinClock, _notices);
+
+        vm.SpinScaleScrub = 100;
+        for (var percent = 100; percent >= 30; percent -= 5)
+        {
+            vm.SpinScaleScrub = percent;
+            vm.SetSpinScale(percent);
+            Assert.Equal(percent / 100.0, _spinClock.Scale, 6); // the records follow the bar
+        }
+
+        Assert.Equal(0, settings.Updates);
+        vm.SpinScaleScrub = null;
+
+        Assert.Equal((1, 30.0), (settings.Updates, Saved().SpinScale));
+    }
+
+    [Fact]
+    public void Closing_the_dialog_mid_visual_spin_drag_saves_it_and_keeps_the_other_settings()
+    {
+        var vm = Create(new AppSettings { ShelfTilt = 33, RecordSpeedRpm = 45 });
+        vm.Open();
+        vm.SpinScaleScrub = 60;
+        vm.SetSpinScale(60);
+
+        vm.Close();
+
+        Assert.Equal((60.0, 33.0, 45.0), (Saved().SpinScale, Saved().ShelfTilt, Saved().RecordSpeedRpm));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_visual_spin_that_cannot_be_saved_still_applies_and_says_so()
+    {
+        var vm = new SettingsViewModel(new UnwritableSettings(), _appearance, _spinClock, _notices);
+        string? notice = null;
+        _notices.Posted += (_, message) => notice = message;
+
+        vm.SetSpinScale(50);
+
+        Assert.Equal((50.0, 0.5), (vm.SpinScale, _spinClock.Scale));
+        Assert.StartsWith("The setting applies now but wasn't saved", notice, StringComparison.Ordinal);
     }
 
     [Fact]

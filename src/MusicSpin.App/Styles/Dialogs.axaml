@@ -187,6 +187,9 @@
         <Setter Property="FontFeatures" Value="+tnum" />
         <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
     </Style>
+    <Style Selector="StackPanel.range.wide > TextBlock">
+        <Setter Property="Width" Value="{StaticResource SettingWideOutputWidth}" />
+    </Style>
 
     <!-- Settings › Turntable › Design: a card per design. -->
     <Style Selector="StackPanel.designCard">

@@ -17,8 +17,8 @@ public sealed record Choice<T>(string Label, T Value) : Choice(Label);
 
 /// <summary>
 /// The Settings dialog (the player bar's cog). Every setting applies at once and is saved to <c>settings.json</c>; there
-/// is no Save button. The theme and Motion go to <see cref="IAppearance"/>, the speed and Motion to the spin clock; the
-/// design, tilt and depth are read by Now Playing and the shelf.
+/// is no Save button. The theme and Motion go to <see cref="IAppearance"/>, the speed, Motion and the
+/// visual spin to the spin clock; the design, tilt and depth are read by Now Playing and the shelf.
 /// </summary>
 public sealed partial class SettingsViewModel : LayerViewModel
 {
@@ -26,6 +26,8 @@ public sealed partial class SettingsViewModel : LayerViewModel
     public const double MaxTilt = 80;
     public const double MinDepth = 0;
     public const double MaxDepth = 100;
+    public const double MinSpinScale = 10;
+    public const double MaxSpinScale = 100;
 
     /// <summary>The sliders' arrow-key step, and the wheel's.</summary>
     public const double SliderStep = 1;
@@ -40,6 +42,7 @@ public sealed partial class SettingsViewModel : LayerViewModel
     private readonly bool _ready;
     private bool _tiltPending;
     private bool _depthPending;
+    private bool _spinScalePending;
 
     /// <param name="library">Settings › Library (#31); none in tests of the other sections.</param>
     /// <param name="audio">Settings › Audio (#32); none in tests of the other sections.</param>
@@ -63,7 +66,8 @@ public sealed partial class SettingsViewModel : LayerViewModel
         ThemeChoice = Pick(Themes, Appearance.ParseTheme(current.Theme));
         MotionChoice = Pick(Motions, MotionModes.Parse(current.Motion));
         VinylTransition = current.VinylTransition;
-        SpeedChoice = Pick(Speeds, current.RecordSpeedRpm);
+        SpeedChoice = PickSpeed(current.RecordSpeedRpm);
+        SpinScale = Whole(current.SpinScale, MinSpinScale, MaxSpinScale, defaults.SpinScale);
         Design = DeckDesigns.Parse(current.TurntableDesign);
         ShelfTilt = Whole(current.ShelfTilt, MinTilt, MaxTilt, defaults.ShelfTilt);
         ShelfDepth = Whole(current.ShelfDepth, MinDepth, MaxDepth, defaults.ShelfDepth);
@@ -123,7 +127,7 @@ public sealed partial class SettingsViewModel : LayerViewModel
     public IReadOnlyList<Choice<MotionMode>> Motions { get; } =
         [new("Smooth", MotionMode.Smooth), new("Fast", MotionMode.Fast), new("None", MotionMode.None)];
 
-    /// <summary>Records turn at 33⅓ (the default), 45 or 16⅔ rpm.</summary>
+    /// <summary>Records turn at 33⅓, 45 or 16⅔ rpm (the default).</summary>
     public IReadOnlyList<Choice<double>> Speeds { get; } = [new("33⅓", 33.333), new("45", 45), new("16⅔", 16.667)];
 
     public IReadOnlyList<DeckDesign> Designs { get; } = DeckDesigns.All;
@@ -198,6 +202,14 @@ public sealed partial class SettingsViewModel : LayerViewModel
     [NotifyPropertyChangedFor(nameof(ShelfDepthText))]
     public partial double ShelfDepth { get; private set; }
 
+    /// <summary>
+    /// How fast the records look as they turn, in percent of the speed: 10..100 (the true speed). Only the spin changes;
+    /// the speed itself, and a deck's readout of it, stay.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SpinScaleText))]
+    public partial double SpinScale { get; private set; }
+
     public AppTheme Theme => ThemeChoice.Value;
 
     public MotionMode Motion => MotionChoice.Value;
@@ -213,6 +225,8 @@ public sealed partial class SettingsViewModel : LayerViewModel
 
     partial void OnVinylTransitionChanged(bool value) => Save(s => s with { VinylTransition = value });
 
+    public const string SpinScaleNote = "Slows the spin, not the speed";
+
     /// <summary>33.333, 45 or 16.667 rpm.</summary>
     public double RecordSpeed => SpeedChoice.Value;
 
@@ -222,15 +236,18 @@ public sealed partial class SettingsViewModel : LayerViewModel
     /// <summary>"40".</summary>
     public string ShelfDepthText => ShelfDepth.ToString("0", CultureInfo.InvariantCulture);
 
+    /// <summary>"100%".</summary>
+    public string SpinScaleText => string.Create(CultureInfo.InvariantCulture, $"{SpinScale:0}%");
+
     [RelayCommand]
     public void SetTheme(AppTheme theme) => ThemeChoice = Pick(Themes, theme);
 
     [RelayCommand]
     public void SetMotion(MotionMode motion) => MotionChoice = Pick(Motions, motion);
 
-    /// <summary>33.333, 45 or 16.667; other speeds fall back to 33⅓.</summary>
+    /// <summary>33.333, 45 or 16.667; other speeds fall back to 16⅔ (the default).</summary>
     [RelayCommand]
-    public void SetRecordSpeed(double rpm) => SpeedChoice = Pick(Speeds, rpm);
+    public void SetRecordSpeed(double rpm) => SpeedChoice = PickSpeed(rpm);
 
     /// <summary>The tilt slider: whole degrees, 20..80.</summary>
     [RelayCommand]
@@ -239,6 +256,10 @@ public sealed partial class SettingsViewModel : LayerViewModel
     /// <summary>The depth slider: whole numbers, 0..100.</summary>
     [RelayCommand]
     public void SetShelfDepth(double depth) => ShelfDepth = Whole(depth, MinDepth, MaxDepth, ShelfDepth);
+
+    /// <summary>The visual spin slider: whole percent, 10..100.</summary>
+    [RelayCommand]
+    public void SetSpinScale(double percent) => SpinScale = Whole(percent, MinSpinScale, MaxSpinScale, SpinScale);
 
     /// <summary>
     /// The tilt bar's value while it is dragged, null otherwise (the bar sets it). A drag applies every step at once but
@@ -251,24 +272,43 @@ public sealed partial class SettingsViewModel : LayerViewModel
     [ObservableProperty]
     public partial double? DepthScrub { get; set; }
 
+    /// <summary>The visual spin bar's value while it is dragged (see <see cref="TiltScrub"/>).</summary>
+    [ObservableProperty]
+    public partial double? SpinScaleScrub { get; set; }
+
     /// <summary>
-    /// Saves a slider value a drag left unsaved (the dialog or the window closing mid-drag): the shelf's or the
-    /// equalizer's. Nothing else is ever pending.
+    /// Saves a slider value a drag left unsaved (the dialog or the window closing mid-drag): the shelf's, the visual
+    /// spin's or the equalizer's. Nothing else is ever pending.
     /// </summary>
     public void SavePending()
     {
         Audio?.Equalizer.SavePending();
-        if (_tiltPending || _depthPending)
+        if (_tiltPending || _depthPending || _spinScalePending)
         {
-            var (tilt, depth, saveTilt, saveDepth) = (ShelfTilt, ShelfDepth, _tiltPending, _depthPending);
-            _tiltPending = _depthPending = false;
-            Save(s => s with { ShelfTilt = saveTilt ? tilt : s.ShelfTilt, ShelfDepth = saveDepth ? depth : s.ShelfDepth });
+            var (tilt, depth, spin) = (ShelfTilt, ShelfDepth, SpinScale);
+            var (saveTilt, saveDepth, saveSpin) = (_tiltPending, _depthPending, _spinScalePending);
+            _tiltPending = _depthPending = _spinScalePending = false;
+            Save(s => s with
+            {
+                ShelfTilt = saveTilt ? tilt : s.ShelfTilt,
+                ShelfDepth = saveDepth ? depth : s.ShelfDepth,
+                SpinScale = saveSpin ? spin : s.SpinScale,
+            });
         }
     }
 
     partial void OnTiltScrubChanged(double? value) => SaveUnlessDragging();
 
     partial void OnDepthScrubChanged(double? value) => SaveUnlessDragging();
+
+    partial void OnSpinScaleScrubChanged(double? value) => SaveUnlessDragging();
+
+    partial void OnSpinScaleChanged(double value)
+    {
+        _spinClock.Scale = value / 100;
+        _spinScalePending = _ready;
+        SaveUnlessDragging();
+    }
 
     partial void OnShelfTiltChanged(double value)
     {
@@ -285,11 +325,14 @@ public sealed partial class SettingsViewModel : LayerViewModel
     /// <summary>A key, the wheel or a click is one step: saved at once. A drag's steps wait for it to end (latest wins).</summary>
     private void SaveUnlessDragging()
     {
-        if (TiltScrub is null && DepthScrub is null)
+        if (TiltScrub is null && DepthScrub is null && SpinScaleScrub is null)
         {
             SavePending();
         }
     }
+
+    private Choice<double> PickSpeed(double rpm)
+        => Speeds.FirstOrDefault(c => c.Value == rpm) ?? Speeds.First(c => c.Value == AppSettings.DefaultRecordSpeedRpm);
 
     private static Choice<T> Pick<T>(IReadOnlyList<Choice<T>> choices, T value)
         => choices.FirstOrDefault(c => EqualityComparer<T>.Default.Equals(c.Value, value)) ?? choices[0];

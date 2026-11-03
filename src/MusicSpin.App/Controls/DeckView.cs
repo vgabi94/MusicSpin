@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using MusicSpin.Core.Settings;
 
 namespace MusicSpin.App.Controls;
 
@@ -47,7 +48,7 @@ public abstract class DeckView : TemplatedControl
 
     public static readonly StyledProperty<IBrush?> AccentProperty = AvaloniaProperty.Register<DeckView, IBrush?>(nameof(Accent));
 
-    public static readonly StyledProperty<double> SpeedProperty = AvaloniaProperty.Register<DeckView, double>(nameof(Speed), 33.333);
+    public static readonly StyledProperty<double> SpeedProperty = AvaloniaProperty.Register<DeckView, double>(nameof(Speed), AppSettings.DefaultRecordSpeedRpm);
 
     public static readonly StyledProperty<Image?> BackdropProperty = AvaloniaProperty.Register<DeckView, Image?>(nameof(Backdrop));
 

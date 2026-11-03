@@ -7,7 +7,7 @@
   ./eng/publish.ps1 -All -CliOnly
 .NOTES
   Layout of <Out>/<rid>/: music-spin(.exe), MusicSpin(.exe), TagLibSharp.dll (LGPL, kept replaceable),
-  ffmpeg/ (LGPL FFmpeg shared libraries, optional), LICENSE, THIRD-PARTY-NOTICES.md; on Linux also MusicSpin.png (the
+  ffmpeg/ (LGPL FFmpeg shared libraries, optional), LICENSE, LICENSE-EXCEPTION.txt, THIRD-PARTY-NOTICES.md; on Linux also MusicSpin.png (the
   app icon, for a .desktop launcher). Data goes to .usrdata/ on first run.
   macOS .app bundles are produced by publish.sh on macOS (needs codesign).
 #>
@@ -83,7 +83,7 @@ foreach ($r in $Rid) {
     }
     if ($FFmpegDir) { Copy-FFmpeg $FFmpegDir (Join-Path $dest 'ffmpeg') $r }
     elseif ($DownloadFFmpeg) { Get-FFmpeg $r (Join-Path $dest 'ffmpeg') }
-    Copy-Item (Join-Path $root 'LICENSE'), (Join-Path $root 'THIRD-PARTY-NOTICES.md') $dest
+    Copy-Item (Join-Path $root 'LICENSE'), (Join-Path $root 'LICENSE-EXCEPTION.txt'), (Join-Path $root 'THIRD-PARTY-NOTICES.md') $dest
     Get-ChildItem $dest -Filter *.pdb | Remove-Item
     Get-ChildItem $dest | Format-Table Name, Length -AutoSize | Out-String | Write-Host
     if ($Zip) {

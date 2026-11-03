@@ -6,13 +6,14 @@ namespace MusicSpin.Tests.Normalization;
 public sealed class NormalizationSettingsTests
 {
     [Fact]
-    public void Levelling_is_on_by_default_in_auto_mode_at_the_replaygain_reference()
+    public void Levelling_is_off_by_default_and_turns_on_in_auto_mode_at_the_replaygain_reference()
     {
         var defaults = new AppSettings();
-        Assert.Equal("auto", defaults.Normalization);
+        Assert.Equal("off", defaults.Normalization);
         Assert.Equal(-18, defaults.NormalizationTargetLufs);
         Assert.Equal(0, defaults.NormalizationPreampDb);
-        Assert.Equal(NormalizationSettings.Default, NormalizationSettings.From(defaults));
+        Assert.Equal(NormalizationSettings.Disabled, NormalizationSettings.From(defaults));
+        Assert.Equal(NormalizationSettings.Default, NormalizationSettings.From(defaults with { Normalization = "auto" }));
         Assert.True(NormalizationSettings.Default.IsOn);
         Assert.False(NormalizationSettings.Disabled.IsOn);
     }
@@ -37,10 +38,12 @@ public sealed class NormalizationSettingsTests
     [InlineData("")]
     [InlineData("loud")]
     [InlineData("tracks")]
-    public void Unknown_mode_text_is_refused_and_settings_fall_back_to_auto(string? text)
+    public void Unknown_mode_text_is_refused_and_settings_fall_back_to_off(string? text)
     {
-        Assert.False(NormalizationSettings.TryParseMode(text, out _));
-        Assert.Equal(NormalizationMode.Auto, NormalizationSettings.ModeOrDefault(text));
+        Assert.False(NormalizationSettings.TryParseMode(text, out var mode));
+        Assert.Equal(NormalizationMode.Off, mode);
+        Assert.Equal(NormalizationMode.Off, NormalizationSettings.ModeOrDefault(text));
+        Assert.False(NormalizationSettings.From(new AppSettings { Normalization = text! }).IsOn);
     }
 
     [Fact]
@@ -49,7 +52,7 @@ public sealed class NormalizationSettingsTests
         var from = NormalizationSettings.From(new AppSettings { Normalization = "track", NormalizationTargetLufs = -99, NormalizationPreampDb = 40 });
         Assert.Equal(new NormalizationSettings(NormalizationMode.Track, NormalizationSettings.MinTargetLufs, NormalizationSettings.MaxPreampDb), from);
 
-        var nan = NormalizationSettings.From(new AppSettings { NormalizationTargetLufs = double.NaN, NormalizationPreampDb = double.PositiveInfinity });
+        var nan = NormalizationSettings.From(new AppSettings { Normalization = "auto", NormalizationTargetLufs = double.NaN, NormalizationPreampDb = double.PositiveInfinity });
         Assert.Equal(NormalizationSettings.Default, nan);
     }
 

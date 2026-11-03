@@ -173,11 +173,11 @@ public sealed class ShellViewModelTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task An_unknown_record_speed_falls_back_to_33()
+    public async Task An_unknown_record_speed_falls_back_to_16()
     {
         var vm = await CreateAsync(new AppSettings { RecordSpeedRpm = 78 });
 
-        Assert.Equal(33.333, vm.Settings.RecordSpeed);
+        Assert.Equal((16.667, 16.667), (vm.Settings.RecordSpeed, vm.SpinClock.Rpm));
     }
 
     [Fact]
