@@ -110,9 +110,10 @@ Only the `.ico` and the 64 px PNG are Avalonia resources. The master and the mac
 - reads the version from `<Version>` in `Directory.Build.props`. A `v*` tag must match it (`v0.2.0` for `0.2.0`), or the run fails before building;
 - publishes all six RIDs with `--download-ffmpeg`, each on a runner of its OS (the arm64 packages are built on x64 runners; the macOS ones on macOS, so they get code signed);
 - smoke-tests the RIDs that match the runner from a temporary folder: checks that the desktop executable sits next to `music-spin`, runs `doctor`, `library add/scan/stats` on the test fixtures, and checks that `.usrdata/settings.json` and `library.db` appear next to the executable;
-- uploads one `musicspin-<version>-<rid>.tar.gz` per RID as a build artifact (tar keeps executable bits and the `.app` bundle; kept for 14 days).
+- uploads one `musicspin-<version>-<rid>.tar.gz` per RID as a build artifact (tar keeps executable bits and the `.app` bundle; kept for 14 days);
+- on a `v*` tag only, once all six packages succeed: creates a **draft** GitHub release titled `MusicSpin <version>`, with the six archives attached and generated release notes. A version with a `-` suffix (`0.2.0-beta.1`) is marked as a pre-release. Re-running the workflow for the same tag replaces the files on the draft; if that release is already published, the job fails and leaves it alone.
 
-It does **not** create a GitHub release or sign anything. **Planned:** GitHub releases, Windows signing, macOS signing and notarization.
+It never creates tags, never publishes a release and does not sign anything. To release: set `<Version>` in `Directory.Build.props` on `main`, push the matching tag (`git tag v0.2.0 && git push origin v0.2.0`), then review the draft on GitHub and publish it. **Planned:** Windows signing, macOS signing and notarization.
 
 ## Coverage
 

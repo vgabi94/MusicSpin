@@ -1,7 +1,8 @@
 name: Release builds
 
 # Builds portable, self-contained single-file packages per RID and uploads them as workflow artifacts.
-# It never creates a GitHub release or tag; publishing a release stays a manual decision.
+# On a v* tag it also creates a draft GitHub release with the packages attached. It never creates tags and
+# never publishes a release; publishing stays a manual decision.
 on:
   workflow_dispatch:
   push:
@@ -103,3 +104,57 @@ jobs:
           archive: false
           if-no-files-found: error
           retention-days: 14
+
+  # A v* tag ends in a draft GitHub release with the six packages attached. It only runs when every package job
+  # succeeded, and it never publishes: Gabriel reviews the draft and publishes it by hand.
+  draft-release:
+    needs: [version, package]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: musicspin-*.tar.gz
+          path: dist
+          merge-multiple: true
+
+      - name: Check the packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l dist
+          # One per RID in the package matrix above; keep the two in step.
+          expected=6
+          count="$(find dist -maxdepth 1 -name "musicspin-$VERSION-*.tar.gz" | wc -l)"
+          if [[ "$count" -ne "$expected" ]]; then
+            echo "::error::Expected $expected musicspin-$VERSION-*.tar.gz packages, found $count"
+            exit 1
+          fi
+
+      - name: Create or update the draft release
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A re-run of the workflow for the same tag replaces the files of the existing draft.
+          # A release that is already published is left alone.
+          if draft="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [[ "$draft" != true ]]; then
+              echo "::error::Release $TAG is already published; not touching it"
+              exit 1
+            fi
+            gh release upload "$TAG" dist/*.tar.gz --clobber
+            echo "Updated the draft release $TAG"
+          else
+            prerelease=()
+            [[ "$VERSION" == *-* ]] && prerelease=(--prerelease)   # 0.2.0-beta.1 and similar
+            gh release create "$TAG" dist/*.tar.gz --draft --verify-tag --generate-notes \
+              --title "MusicSpin $VERSION" "${prerelease[@]}"
+            echo "Created the draft release $TAG"
+          fi
