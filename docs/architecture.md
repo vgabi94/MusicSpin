@@ -321,8 +321,11 @@ src/MusicSpin.App/
   library opens the drawer, which then closes at once without a drop, or 1.4 s after one once the pointer has left it.
   Over the sidebar, a playlist or Favorites lights up (`SidebarView.DropTargetAt`): a drop adds the tracks to the end of
   the playlist, or favorites them, and the entry flashes. On a playlist page its own rows move: the drop line shows
-  where, and the entry moves to that place in the playlist (`playlist move`). Since these drags never leave the window,
-  no text box or other app can take them.
+  where, and the entry moves to that place in the playlist (`playlist move`). Near the top or bottom of a long list
+  (the playlist page or the queue drawer) the list scrolls while the drag sits in the edge zone (`DragScrollEdge` /
+  `DragScrollMaxSpeed` in Metrics); speed grows toward the outer edge, steps run on the player bar's `TimeProvider`,
+  and the drop line follows the rows. Scrolling stops at the list's ends and when the drag ends or is cancelled.
+  Since these drags never leave the window, no text box or other app can take them.
 - **Playlists.** The sidebar lists them under Favorites; `SidebarViewModel.SetPlaylists` edits its list in place, so an
   entry keeps its control (and a flash under way) across a reload. A playlist page reads every entry (paging through
   Core's `Playlist`); an entry whose file is neither in the library nor on disk is dimmed, says "File not found", and
