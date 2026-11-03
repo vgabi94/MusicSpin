@@ -4,7 +4,11 @@
 
 ## MusicSpin
 
-MusicSpin is **MIT-licensed**: Copyright (c) 2026 Gabriel-Eugen Vaduva. See [`LICENSE`](../LICENSE). Contributions are accepted under the same license.
+MusicSpin is licensed under the **GNU General Public License, version 3 or (at your option) any later version** (`GPL-3.0-or-later`): Copyright (C) 2026 Gabriel-Eugen Vaduva. [`LICENSE`](../LICENSE) is the unmodified GPLv3 text from gnu.org; [`LICENSE-EXCEPTION.txt`](../LICENSE-EXCEPTION.txt) has the copyright notice and one additional permission (below). Contributions are accepted under the same terms.
+
+**The Svg.Custom exception.** The desktop app draws its turntable designs with Svg.Skia, which parses SVG with Svg.Custom, a build of [SVG.NET](https://github.com/svg-net/SVG). That library is under the Microsoft Public License (MS-PL), which is not compatible with the GPL. Under GPLv3 section 7, `LICENSE-EXCEPTION.txt` therefore permits conveying MusicSpin combined with Svg.Custom or SVG.NET (or a modified version of either). The source of a binary that combines them must include the parts of that library used, as well as MusicSpin's. Nothing else in MusicSpin needs an exception. A modified MusicSpin may keep the permission or drop it; without it, the turntable designs would need another SVG renderer.
+
+**Why version 3.** The CLI contains the MCP C# SDK, which is Apache-2.0. Apache-2.0 is compatible with GPLv3 but not with GPLv2.
 
 ## Third-party components
 
@@ -18,12 +22,13 @@ The full table with versions is in [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOT
 | miniaudio (compiled into native msaudio) | public domain / MIT-0 | native library inside the executable |
 | libsamplerate 0.2.2 (compiled into native msaudio) | BSD-2-Clause | native library inside the executable |
 | ModelContextProtocol.Core (MCP C# SDK) | Apache-2.0 | inside `music-spin` |
+| Svg.Custom (Svg.Skia's build of SVG.NET) | MS-PL (covered by the exception above) | inside the desktop app |
 | Microsoft.Extensions.AI.Abstractions, Microsoft.Extensions.Logging.Abstractions | MIT | inside `music-spin` |
 | xUnit v3, Avalonia.Headless | Apache-2.0 / MIT | tests only, not shipped |
 
 ## LGPL: how MusicSpin complies
 
-The LGPL allows an MIT application to use an LGPL library, provided users can **replace the library** with their own (modified) version, and the library's license and source availability are passed on. MusicSpin's design follows from that:
+The LGPL allows a GPL application to use an LGPL library, provided users can **replace the library** with their own (modified) version, and the library's license and source availability are passed on. MusicSpin's design follows from that:
 
 **FFmpeg**
 
@@ -41,11 +46,12 @@ The LGPL allows an MIT application to use an LGPL library, provided users can **
 
 ## Checklist for anyone redistributing MusicSpin
 
-1. Ship `LICENSE` and `THIRD-PARTY-NOTICES.md` (the publish scripts do this).
-2. Ship FFmpeg only as an **LGPL** shared build in `ffmpeg/`, with its license files. Check with `music-spin doctor --json` → `decoder.lgpl: true`.
-3. Make the corresponding FFmpeg source available: link to the exact FFmpeg version or commit of the build (BtbN publishes build scripts and versions), or include a written offer. If you patch FFmpeg, publish your changes.
-4. Keep `TagLibSharp.dll` as a separate file. If you modify TagLib#, publish the modified source.
-5. Don't add terms that forbid users from replacing these libraries or reverse-engineering for that purpose (signing or notarization must not prevent replacing the libraries next to the executable).
-6. Apache-2.0 (MCP C# SDK): keep its copyright and license notice (listed in `THIRD-PARTY-NOTICES.md`).
+1. Ship `LICENSE`, `LICENSE-EXCEPTION.txt` and `THIRD-PARTY-NOTICES.md` (the publish scripts do this).
+2. Offer MusicSpin's complete corresponding source under the GPL, for example a link to the exact tag or commit on GitHub. A binary with Svg.Custom inside must also offer the Svg.Custom source used.
+3. Ship FFmpeg only as an **LGPL** shared build in `ffmpeg/`, with its license files. Check with `music-spin doctor --json` → `decoder.lgpl: true`.
+4. Make the corresponding FFmpeg source available: link to the exact FFmpeg version or commit of the build (BtbN publishes build scripts and versions), or include a written offer. If you patch FFmpeg, publish your changes.
+5. Keep `TagLibSharp.dll` as a separate file. If you modify TagLib#, publish the modified source.
+6. Don't add terms that forbid users from replacing these libraries or reverse-engineering for that purpose (signing or notarization must not prevent replacing the libraries next to the executable).
+7. Apache-2.0 (MCP C# SDK): keep its copyright and license notice (listed in `THIRD-PARTY-NOTICES.md`).
 
 Known gaps (**planned**): `THIRD-PARTY-NOTICES.md` links to the licenses rather than including their full texts, and no TagLib# license file is copied next to `TagLibSharp.dll`. Adding the full LGPL-2.1 text and a pointer to the exact FFmpeg source would make releases self-contained.

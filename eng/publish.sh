@@ -16,7 +16,7 @@
 #   MusicSpin.png            on Linux: the app icon (512 px), for a .desktop launcher
 #   TagLibSharp.dll          LGPL, kept replaceable (outside the bundle)
 #   ffmpeg/                  LGPL FFmpeg shared libraries (optional; system/Homebrew FFmpeg is used otherwise)
-#   LICENSE, THIRD-PARTY-NOTICES.md
+#   LICENSE, LICENSE-EXCEPTION.txt, THIRD-PARTY-NOTICES.md
 #
 # macOS bundles must be built on macOS to be (ad-hoc) code signed; cross-published osx-* builds will not launch on
 # Apple Silicon without `codesign --force --deep -s -`.
@@ -149,7 +149,7 @@ for rid in "${rids[@]}"; do
   [[ "$rid" == linux-* && -f "$dest/MusicSpin" ]] && cp "$icon_dir/app-icon-512.png" "$dest/MusicSpin.png"
   if [[ -n "$ffmpeg_dir" ]]; then copy_ffmpeg "$ffmpeg_dir" "$dest/ffmpeg" "$rid"; fi
   if $download_ffmpeg && [[ -z "$ffmpeg_dir" ]]; then download_ffmpeg_for "$rid" "$dest/ffmpeg"; fi
-  cp "$root/LICENSE" "$root/THIRD-PARTY-NOTICES.md" "$dest/"
+  cp "$root/LICENSE" "$root/LICENSE-EXCEPTION.txt" "$root/THIRD-PARTY-NOTICES.md" "$dest/"
   find "$dest" -maxdepth 1 -name '*.pdb' -delete
   ls -la "$dest"
   if $zip; then

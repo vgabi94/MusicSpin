@@ -1,6 +1,6 @@
 # Third-party notices
 
-MusicSpin itself is MIT licensed (see `LICENSE`). Release builds contain or load the components below.
+MusicSpin itself is licensed under the GNU GPL, version 3 or later (see `LICENSE` and `LICENSE-EXCEPTION.txt`). Release builds contain or load the components below.
 
 | Component | License | How it ships |
 |---|---|---|
@@ -20,7 +20,7 @@ MusicSpin itself is MIT licensed (see `LICENSE`). Release builds contain or load
 | [Cormorant Garamond](https://github.com/CatharsisFonts/Cormorant) font (Regular, v4.002) | SIL Open Font License 1.1 (`src/MusicSpin.App/Assets/Fonts/OFL-CormorantGaramond.txt`) | Inside the desktop app executable (the Walnut & Brass turntable's name plate) |
 | [Barlow Semi Condensed](https://github.com/jpt/barlow) font (Regular, SemiBold) | SIL Open Font License 1.1 (`src/MusicSpin.App/Assets/Fonts/OFL-BarlowSemiCondensed.txt`) | Inside the desktop app executable (the Carbon Signal turntable's name and speed readout) |
 | [Svg.Controls.Avalonia](https://github.com/wieslawsoltes/Svg.Skia) 12.0, Svg.Model, Svg.SceneGraph, ShimSkiaSharp 5.2 | MIT | Inside the desktop app executable (draws the turntable designs) |
-| Svg.Custom 5.2 (Svg.Skia's build of [SVG.NET](https://github.com/svg-net/SVG)) | Microsoft Public License (MS-PL) | Inside the desktop app executable (parses the turntable designs' SVG) |
+| Svg.Custom 5.2 (Svg.Skia's build of [SVG.NET](https://github.com/svg-net/SVG)) | Microsoft Public License (MS-PL) | Inside the desktop app executable (parses the turntable designs' SVG). MS-PL is not GPL-compatible, so `LICENSE-EXCEPTION.txt` grants an additional permission (GPLv3 section 7) to combine MusicSpin with it |
 | [ExCSS](https://github.com/TylerBrinks/ExCSS) 4.3 | MIT | Inside the desktop app executable (Svg.Custom's CSS parser) |
 | .NET runtime | MIT | Inside the executables (self-contained) |
 
