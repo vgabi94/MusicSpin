@@ -3,8 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MusicSpin.App.Controls;
+using MusicSpin.App.Services;
 using MusicSpin.App.ViewModels;
 using MusicSpin.App.Views.Pages;
 
@@ -16,8 +18,9 @@ namespace MusicSpin.App.Views;
 /// something marked with <see cref="QueueSource"/> becomes a drag once the pointer has moved <c>DragThreshold</c>; the
 /// window then holds the pointer (so the press clicks nothing), and a ghost of the item follows it in the overlay layer.
 /// Over the drawer, or over the playlist page's list, the drop line shows where it would go; a sidebar playlist (or
-/// Favorites) lights up. Letting go adds the tracks there (favorites them, on Favorites), or moves the row. These drags
-/// stay inside the window, so nothing else, a text box say, can take them.
+/// Favorites) lights up. Letting go adds the tracks there (favorites them, on Favorites), or moves the row. Near the top
+/// or bottom of a long list the list scrolls (#77). These drags stay inside the window, so nothing else, a text box say,
+/// can take them.
 /// </summary>
 internal sealed class LibraryDrag
 {
@@ -43,6 +46,9 @@ internal sealed class LibraryDrag
     private int _dropAt;
     private Target _target;
     private NavItemViewModel? _playlist;
+    private Point _pointer;
+    private ITimer? _scrollTimer;
+    private long _scrollStamp;
 
     public LibraryDrag(MainWindow window)
     {
@@ -150,10 +156,11 @@ internal sealed class LibraryDrag
 
     /// <summary>
     /// The ghost follows the pointer. Over the drawer or the playlist page's list, the drop line shows where the drop
-    /// would go; a sidebar playlist under it lights up.
+    /// would go; a sidebar playlist under it lights up. Near a long list's edges the list scrolls.
     /// </summary>
-    private void Follow(Point at)
+    private void Follow(Point at, bool syncScroll = true)
     {
+        _pointer = at;
         var grip = Metric("GhostGrip");
         Canvas.SetLeft(_ghost, at.X - grip);
         Canvas.SetTop(_ghost, at.Y - grip);
@@ -193,6 +200,11 @@ internal sealed class LibraryDrag
         {
             _dropAt = list.DropIndexAt(inList);
             list.ShowDropLine(_dropAt);
+        }
+
+        if (syncScroll)
+        {
+            SyncScroll();
         }
     }
 
@@ -256,6 +268,7 @@ internal sealed class LibraryDrag
 
     private void Stop()
     {
+        StopScroll();
         if (_dragged is QueueRowViewModel row)
         {
             row.IsDragged = false;
@@ -275,6 +288,124 @@ internal sealed class LibraryDrag
         _ghost.DataContext = null;
         ghost?.Dispose(); // its copy of the cover, now nothing shows it
     }
+
+    /// <summary>
+    /// Starts or stops the scroll timer from the pointer's place in the list's edge zone. Speed grows from 0 at the
+    /// zone's inner edge to <c>DragScrollMaxSpeed</c> at the outer edge; scrolling stops at the list's ends.
+    /// </summary>
+    private void SyncScroll()
+    {
+        var speed = ScrollSpeed();
+        if (speed == 0 || AtScrollEnd(speed))
+        {
+            StopScroll();
+            return;
+        }
+
+        StartScroll();
+    }
+
+    private void StartScroll()
+    {
+        if (_scrollTimer is not null || ViewModel?.PlayerBar.Time is not { } time)
+        {
+            return;
+        }
+
+        _scrollStamp = time.GetTimestamp();
+        _scrollTimer = time.CreateTimer(_ => Dispatcher.UIThread.Post(OnScrollTick), null, SpinClock.FrameInterval, SpinClock.FrameInterval);
+    }
+
+    private void StopScroll()
+    {
+        _scrollTimer?.Dispose();
+        _scrollTimer = null;
+    }
+
+    private void OnScrollTick()
+    {
+        if (_scrollTimer is null || !IsDragging || ViewModel?.PlayerBar.Time is not { } time)
+        {
+            return;
+        }
+
+        var now = time.GetTimestamp();
+        var elapsed = time.GetElapsedTime(_scrollStamp, now).TotalSeconds;
+        _scrollStamp = now;
+        var speed = ScrollSpeed();
+        if (speed == 0)
+        {
+            StopScroll();
+            Follow(_pointer); // SyncScroll confirms the timer stays off
+            return;
+        }
+
+        if (ScrollBy(speed * elapsed) == 0)
+        {
+            // At the end, or a step too small to move: stop without Follow restarting the timer on a no-op step.
+            StopScroll();
+            Follow(_pointer, syncScroll: false);
+            return;
+        }
+
+        Follow(_pointer); // the drop line follows the rows as they move under the pointer
+    }
+
+    /// <summary>Pixels per second to scroll (positive down), or 0 outside the edge zone / off a list target.</summary>
+    private double ScrollSpeed()
+    {
+        if (Viewport() is not { } view)
+        {
+            return 0;
+        }
+
+        var zone = Metric("DragScrollEdge");
+        var max = Metric("DragScrollMaxSpeed");
+        var y = _pointer.Y;
+        if (y < view.Top || y > view.Bottom || zone <= 0 || max <= 0)
+        {
+            return 0;
+        }
+
+        var fromBottom = view.Bottom - y;
+        if (fromBottom < zone)
+        {
+            return max * (1 - (fromBottom / zone));
+        }
+
+        var fromTop = y - view.Top;
+        if (fromTop < zone)
+        {
+            return -max * (1 - (fromTop / zone));
+        }
+
+        return 0;
+    }
+
+    private Rect? Viewport() => _target switch
+    {
+        Target.Drawer => _window.QueueDrawerView.ViewportIn(_window),
+        Target.List => TrackList?.ViewportIn(_window),
+        _ => null,
+    };
+
+    private double ScrollBy(double dy) => _target switch
+    {
+        Target.Drawer => _window.QueueDrawerView.ScrollBy(dy),
+        Target.List => TrackList?.ScrollBy(dy) ?? 0,
+        _ => 0,
+    };
+
+    private bool AtScrollEnd(double speed) => _target switch
+    {
+        Target.Drawer => speed > 0
+            ? _window.QueueDrawerView.ScrollOffsetY >= _window.QueueDrawerView.MaxScrollOffsetY
+            : _window.QueueDrawerView.ScrollOffsetY <= 0,
+        Target.List when TrackList is { } list => speed > 0
+            ? list.ScrollOffsetY >= list.MaxScrollOffsetY
+            : list.ScrollOffsetY <= 0,
+        _ => true,
+    };
 
     private bool IsOverDrawer(Point at)
     {

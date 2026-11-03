@@ -9,7 +9,8 @@ namespace MusicSpin.App.Views;
 
 /// <summary>
 /// The queue drawer. What is dragged over it asks <see cref="DropIndexAt"/> where it would go and shows the drop line there
-/// (<see cref="ShowDropLine"/>); the first row just added scrolls into view.
+/// (<see cref="ShowDropLine"/>); the first row just added scrolls into view. While a drag sits near the list's edges the
+/// list scrolls (#77).
 /// </summary>
 public partial class QueueDrawerView : UserControl
 {
@@ -50,6 +51,34 @@ public partial class QueueDrawerView : UserControl
             : 0;
         DropLine.RenderTransform = new TranslateTransform(0, y - (DropLine.Bounds.Height / 2));
     }
+
+    /// <summary>The list's view in <paramref name="relativeTo"/>'s coordinates, when it is laid out.</summary>
+    public Rect? ViewportIn(Visual relativeTo)
+        => QueueScroll.TransformToVisual(relativeTo) is { } transform
+            ? new Rect(QueueScroll.Bounds.Size).TransformToAABB(transform)
+            : null;
+
+    /// <summary>
+    /// Scrolls the list by <paramref name="dy"/> pixels (positive down), clamped to its ends. Returns how far it moved.
+    /// </summary>
+    public double ScrollBy(double dy)
+    {
+        var max = Math.Max(0, QueueScroll.Extent.Height - QueueScroll.Viewport.Height);
+        var next = Math.Clamp(QueueScroll.Offset.Y + dy, 0, max);
+        var moved = next - QueueScroll.Offset.Y;
+        if (moved != 0)
+        {
+            QueueScroll.Offset = QueueScroll.Offset.WithY(next);
+        }
+
+        return moved;
+    }
+
+    /// <summary>How far the list is scrolled down.</summary>
+    public double ScrollOffsetY => QueueScroll.Offset.Y;
+
+    /// <summary>The farthest the list can scroll down (0 when everything fits).</summary>
+    public double MaxScrollOffsetY => Math.Max(0, QueueScroll.Extent.Height - QueueScroll.Viewport.Height);
 
     protected override void OnDataContextChanged(EventArgs e)
     {
