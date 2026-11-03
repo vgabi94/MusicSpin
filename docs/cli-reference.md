@@ -205,7 +205,7 @@ Without a mode: show the status. Aliases: `true`/`yes`/`1`, `false`/`no`/`0`. Un
 
 `music-spin normalize [off|track|album|auto] [--target <lufs>] [--preamp <db>]`
 
-Volume levelling (ReplayGain / EBU R128, see [Playback → Volume levelling](playback.md#volume-levelling-replaygain--r128)). On by default (`auto`).
+Volume levelling (ReplayGain / EBU R128, see [Playback → Volume levelling](playback.md#volume-levelling-replaygain--r128)). Off by default; `auto` is what the App's switch turns on.
 
 - `off`: no gain; the samples are not touched.
 - `track`: every track to the target level. `album`: the album's gain (a track without one uses its own). `auto`: album gain for an album played in order, track gain for shuffle and radio.

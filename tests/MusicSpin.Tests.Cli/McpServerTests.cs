@@ -513,7 +513,9 @@ public sealed class McpServerTests : IAsyncDisposable
         await StartAsync();
         await Call("play", new() { ["files"] = new[] { Long[0] } });
 
-        Assert.Equal("auto", (await Call("normalize")).GetProperty("normalization").GetProperty("mode").GetString());
+        Assert.Equal("off", (await Call("normalize")).GetProperty("normalization").GetProperty("mode").GetString()); // the default
+        var on = (await Call("normalize", new() { ["mode"] = "Auto" })).GetProperty("normalization");
+        Assert.Equal("auto", on.GetProperty("mode").GetString());
         var off = (await Call("normalize", new() { ["mode"] = "OFF" })).GetProperty("normalization");
         Assert.Equal("off", off.GetProperty("mode").GetString());
         var tuned = (await Call("normalize", new() { ["mode"] = "album", ["target"] = -16.0, ["preamp"] = 2.0 })).GetProperty("normalization");
@@ -533,7 +535,7 @@ public sealed class McpServerTests : IAsyncDisposable
         var args = new Dictionary<string, object?> { ["mode"] = mode, ["target"] = target, ["preamp"] = preamp };
         Assert.StartsWith("usage:", await CallError("normalize", args), StringComparison.Ordinal);
 
-        Assert.Equal("auto", (await Call("normalize")).GetProperty("normalization").GetProperty("mode").GetString());
+        Assert.Equal("off", (await Call("normalize")).GetProperty("normalization").GetProperty("mode").GetString());
     }
 
     [Fact]

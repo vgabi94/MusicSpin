@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using MusicSpin.Core.Settings;
 
 namespace MusicSpin.App.Controls;
 
@@ -93,12 +94,12 @@ public sealed class KitDeckView : DeckView
         set => SetValue(DropProperty, value);
     }
 
-    /// <summary>The speed as a readout shows it: 33.3, 45 or 16.7.</summary>
+    /// <summary>The speed as a readout shows it: 16.7, 33.3 or 45.</summary>
     public string SpeedText
     {
         get;
         private set => SetAndRaise(SpeedTextProperty, ref field, value);
-    } = Format(33.333);
+    } = Format(AppSettings.DefaultRecordSpeedRpm);
 
     /// <summary>The arm (or the carriage), turned or moved about its pivot.</summary>
     public Control? ArmPart => _arm;

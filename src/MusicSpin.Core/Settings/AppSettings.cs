@@ -50,10 +50,10 @@ public sealed record AppSettings
     public bool Gapless { get; init; } = true;
 
     /// <summary>
-    /// Volume levelling (ReplayGain / R128, #139): "auto" (the default: album gain for an album played in order, track gain
-    /// otherwise) | "track" | "album" | "off". "off" leaves the samples untouched. Updated by 'music-spin normalize'.
+    /// Volume levelling (ReplayGain / R128, #139): "off" (the default: the samples are left untouched) | "auto" (album
+    /// gain for an album played in order, track gain otherwise) | "track" | "album". Updated by 'music-spin normalize'.
     /// </summary>
-    public string Normalization { get; init; } = "auto";
+    public string Normalization { get; init; } = "off";
 
     /// <summary>The loudness (LUFS) levelled tracks are brought to: -30..-8, -18 by default (ReplayGain 2.0's reference).</summary>
     public double NormalizationTargetLufs { get; init; } = global::MusicSpin.Core.Normalization.NormalizationSettings.DefaultTargetLufs;
@@ -85,8 +85,17 @@ public sealed record AppSettings
     /// </summary>
     public bool VolumeInDecibels { get; init; }
 
-    /// <summary>How fast the records in the app turn: 33.333, 45 or 16.667 rpm.</summary>
-    public double RecordSpeedRpm { get; init; } = 33.333;
+    /// <summary>The record speed a new settings file starts with: 16⅔ rpm.</summary>
+    public const double DefaultRecordSpeedRpm = 16.667;
+
+    /// <summary>How fast the records in the app turn: 16.667 (the default), 33.333 or 45 rpm.</summary>
+    public double RecordSpeedRpm { get; init; } = DefaultRecordSpeedRpm;
+
+    /// <summary>
+    /// How fast the records look as they turn, in percent of <see cref="RecordSpeedRpm"/>: 10..100, 100 by default (the
+    /// true speed). Only the animation changes; a deck's readout still shows the speed.
+    /// </summary>
+    public double SpinScale { get; init; } = 100;
 
     /// <summary>The turntable design in Now Playing: "classic" (the default) or another design's id.</summary>
     public string TurntableDesign { get; init; } = "classic";

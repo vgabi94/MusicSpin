@@ -410,6 +410,45 @@ public sealed class SettingsTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task The_visual_spin_slider_slows_the_records_but_not_the_speed_and_saves_where_it_is_let_go()
+    {
+        await using var app = await OpenAsync(settings: new AppSettings { RecordSpeedRpm = 33.333, Volume = 0.7 });
+        OpenSettings(app);
+        ShowPage(app, "Turntable");
+        var bar = Find<ScrubBar>(app, "SpinScaleBar");
+        Assert.Equal(("100%", 1.0), (Find<TextBlock>(app, "SpinScaleText").Text, app.ViewModel.SpinClock.Scale));
+        Assert.Equal("Visual spin", AutomationProperties.GetName(bar));
+
+        bar.Focus();
+        Key(app, Avalonia.Input.Key.Home, PhysicalKey.Home);
+        Assert.Equal(("10%", 0.1), (Find<TextBlock>(app, "SpinScaleText").Text, app.ViewModel.SpinClock.Scale));
+        Key(app, Avalonia.Input.Key.Home, PhysicalKey.Home); // already at the end: stays
+        Key(app, Avalonia.Input.Key.Left, PhysicalKey.ArrowLeft);
+        Assert.Equal("10%", Find<TextBlock>(app, "SpinScaleText").Text);
+        Key(app, Avalonia.Input.Key.PageUp, PhysicalKey.PageUp);
+        Assert.Equal("20%", Find<TextBlock>(app, "SpinScaleText").Text);
+        Assert.Equal(20, new SettingsStore(app.Data).Load().SpinScale); // a key is one step: saved at once
+
+        var bounds = Gui.BoundsIn(app.Window, bar);
+        var from = new Point(bounds.X + 2, bounds.Center.Y);
+        var to = new Point(bounds.X + (bounds.Width / 2), bounds.Center.Y);
+        app.Window.MouseMove(from);
+        app.Window.MouseDown(from, MouseButton.Left);
+        app.Window.MouseMove(to);
+        Gui.Settle();
+        var shown = app.ViewModel.Settings.SpinScale;
+        Assert.InRange(shown, 50, 60); // half way along 10..100
+        Assert.Equal(shown / 100, app.ViewModel.SpinClock.Scale, 6); // applies live
+        Assert.Equal(20, new SettingsStore(app.Data).Load().SpinScale); // nothing written mid-drag
+        app.Window.MouseUp(to, MouseButton.Left);
+        Gui.Settle();
+
+        var saved = new SettingsStore(app.Data).Load();
+        Assert.Equal((shown, 33.333, 0.7), (saved.SpinScale, saved.RecordSpeedRpm, saved.Volume));
+        Assert.Equal(33.333, app.ViewModel.SpinClock.Rpm); // the speed is untouched
+    }
+
     /// <summary>The whole bar, left to right at its vertical middle, in steps of <paramref name="steps"/> moves.</summary>
     private static IReadOnlyList<Point> Across(AppHarness app, string bar, int steps)
     {

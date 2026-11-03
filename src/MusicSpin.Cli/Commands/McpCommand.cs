@@ -244,8 +244,8 @@ internal static class McpCommand
                     return mode is null ? status : WithWarning(status, PlayerSupport.SaveModes(runner, parseResult, status));
                 }));
             yield return Tool("normalize", "Show or change volume levelling (ReplayGain / EBU R128). track: every track to the target level; album: an album's " +
-                "tracks keep their level to each other; auto: album gain for an album played in order, track gain for shuffle and radio; off: samples untouched. " +
-                "Gains come from ReplayGain/R128 tags, else a background analysis cached in the library. Saved as the default for new players.",
+                "tracks keep their level to each other; auto: album gain for an album played in order, track gain for shuffle and radio; " +
+                "off (the default): samples untouched. Gains come from ReplayGain/R128 tags, else a background analysis cached in the library. Saved as the default for new players.",
                 ([Description("off | track | album | auto. Omit to keep the mode.")] string? mode = null,
                  [Description("Target loudness in LUFS, -30 to -8 (default -18).")] double? target = null,
                  [Description("Pre-amp in dB, -12 to 12 (default 0).")] double? preamp = null,
