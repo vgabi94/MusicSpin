@@ -48,12 +48,19 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
     [ObservableProperty]
     public partial double Rpm { get; set; } = AppSettings.DefaultRecordSpeedRpm;
 
+    /// <summary>The slowest <see cref="Scale"/>: a tenth of the speed.</summary>
+    public const double MinScale = 0.1;
+
     /// <summary>
     /// How fast the disc looks, as a share of <see cref="Rpm"/> (Settings › Turntable › Visual spin): 0.1..1, 1 is the true
-    /// speed. A change ramps like a speed change.
+    /// speed. A change ramps like a speed change. Values outside are brought into range, and NaN or infinity keeps the
+    /// scale it had, so a caller can never stop the disc or turn it backwards.
     /// </summary>
-    [ObservableProperty]
-    public partial double Scale { get; set; } = 1;
+    public double Scale
+    {
+        get;
+        set => SetProperty(ref field, double.IsFinite(value) ? Math.Clamp(value, MinScale, 1) : field);
+    } = 1;
 
     /// <summary>The Motion multiplier (1, 0.5 or 0).</summary>
     [ObservableProperty]

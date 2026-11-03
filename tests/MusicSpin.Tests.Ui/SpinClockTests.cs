@@ -77,6 +77,28 @@ public sealed class SpinClockTests : IDisposable
         Assert.Equal(100, _clock.Velocity, 1);
     }
 
+    [Theory]
+    [Trait("Category", "Unhappy")]
+    [InlineData(-1, 0.1)]
+    [InlineData(0, 0.1)]
+    [InlineData(0.05, 0.1)]
+    [InlineData(5, 1)]
+    [InlineData(double.NaN, 0.6)]
+    [InlineData(double.PositiveInfinity, 0.6)]
+    [InlineData(double.NegativeInfinity, 0.6)]
+    public void A_scale_out_of_range_is_brought_into_range_so_the_disc_never_stops_or_turns_backwards(double asked, double kept)
+    {
+        _clock.Scale = 0.6;
+        _clock.Rpm = 33.333;
+        _clock.IsSpinning = true;
+
+        _clock.Scale = asked;
+        _clock.Advance(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(kept, _clock.Scale);
+        Assert.Equal(200 * kept, Turned(TimeSpan.FromSeconds(1)), 1);
+    }
+
     [Fact]
     public void A_scale_change_while_paused_leaves_the_disc_still()
     {

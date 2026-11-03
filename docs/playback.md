@@ -188,7 +188,7 @@ Details:
 
 ## Volume levelling (ReplayGain / R128)
 
-Tracks are played at an even loudness, so a quiet album and a loud one do not need the volume knob in between. It is **off by default**, so the samples reach the output untouched. Turn it on with `music-spin normalize auto` (or another mode), or with the **Volume levelling** switch in Settings › Audio, which turns on `auto`. `music-spin normalize off` turns it off again. An unknown mode in `settings.json` counts as `off`.
+Tracks are played at an even loudness, so a quiet album and a loud one do not need the volume knob in between. It is **off by default**, so the samples reach the output untouched. Turn it on with `music-spin normalize auto` (or another mode), or with the **Volume levelling** switch in Settings › Audio, which turns on `auto`. `music-spin normalize off` turns it off again. An unknown mode in `settings.json` counts as `off`. A `settings.json` that already has a mode (written by an earlier `normalize` or the switch) keeps it; only a file without the key starts with levelling off.
 
 | Mode | The gain of a track |
 |---|---|

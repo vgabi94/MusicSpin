@@ -593,7 +593,7 @@
     <sys:Double x:Key="SettingSliderWidth">170</sys:Double>
     <sys:Double x:Key="SettingSliderGap">10</sys:Double>
     <sys:Double x:Key="SettingOutputWidth">30</sys:Double>
-    <!-- A value with a unit, such as Visual spin's "100%". -->
+    <!-- Settings › Turntable › Visual spin (not in the mockup): a value with a unit, "100%", needs a wider column. -->
     <sys:Double x:Key="SettingWideOutputWidth">40</sys:Double>
     <!--
       Settings › Equalizer (#141; not in the mockup): eleven columns 32 wide, the pre-amp
