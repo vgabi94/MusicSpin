@@ -1,7 +1,7 @@
 # Music Spin
 
 A desktop music player for people who care how their music sounds, and a command line that people and AI agents can
-both script. It's free, open source (MIT) and runs on Windows, macOS and Linux.
+both script. It's free, open source (GPL-3.0-or-later) and runs on Windows, macOS and Linux.
 
 > **Work in progress.** The CLI, the background player and the library work today. The desktop app is being built from the design below, a mockup you can open in a browser ([UI design](docs/design/README.md)). Progress is tracked in the [`area: app` issues](https://github.com/vgabi94/MusicSpin/issues?q=label%3A%22area%3A+app%22).
 
@@ -229,5 +229,5 @@ How it fits together is in [Architecture](docs/architecture.md). Building, testi
 | [Diagnostics](docs/diagnostics.md) | `doctor`, `devices`, logs, common problems |
 | [Architecture](docs/architecture.md) | projects, layering, the audio pipeline, IPC, the desktop app |
 | [Building](docs/building.md) | build, test, publish, CI |
-| [Licensing](docs/licensing.md) | MIT and the LGPL obligations (FFmpeg, TagLib#) |
+| [Licensing](docs/licensing.md) | GPL-3.0-or-later, the Svg.Custom exception and the LGPL obligations (FFmpeg, TagLib#) |
 | [UI design](docs/design/README.md) | the mockup the desktop app is built from |

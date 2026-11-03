@@ -26,12 +26,54 @@ public sealed class AboutTests
     {
         var license = AppDocuments.Read(AppDocuments.LicenseResource);
         Assert.NotNull(license);
-        Assert.StartsWith("MIT License", license, StringComparison.Ordinal);
-        Assert.Contains("Copyright (c) 2026 Gabriel-Eugen Vaduva", license, StringComparison.Ordinal);
-        Assert.Equal(license, AppDocuments.License());
+        Assert.StartsWith("GNU GENERAL PUBLIC LICENSE", license.Trim(), StringComparison.Ordinal);
+        Assert.Contains("Version 3, 29 June 2007", license, StringComparison.Ordinal);
+        Assert.Contains("END OF TERMS AND CONDITIONS", license, StringComparison.Ordinal);
+
+        var exception = AppDocuments.Read(AppDocuments.ExceptionResource);
+        Assert.NotNull(exception);
+        Assert.Contains("Copyright (C) 2026 Gabriel-Eugen Vaduva", exception, StringComparison.Ordinal);
+        Assert.Contains("either version 3 of the License, or (at your option) any later", exception, StringComparison.Ordinal);
+        Assert.Contains("Additional permission under GNU GPL version 3 section 7", exception, StringComparison.Ordinal);
+        Assert.Contains("Svg.Custom", exception, StringComparison.Ordinal);
 
         Assert.NotNull(AppDocuments.Read(AppDocuments.NoticesResource));
         Assert.Null(AppDocuments.Read("NOT-A-DOCUMENT.md"));
+    }
+
+    [Fact]
+    public void The_license_page_shows_the_notice_and_the_exception_before_the_gpl()
+    {
+        var page = AppDocuments.License();
+
+        var notice = page.IndexOf("Copyright (C) 2026 Gabriel-Eugen Vaduva", StringComparison.Ordinal);
+        var exception = page.IndexOf("Additional permission under GNU GPL version 3 section 7", StringComparison.Ordinal);
+        var gpl = page.IndexOf("GNU GENERAL PUBLIC LICENSE", StringComparison.Ordinal);
+        Assert.True(notice >= 0 && notice < exception && exception < gpl, $"notice {notice}, exception {exception}, GPL {gpl}");
+        Assert.EndsWith(AppDocuments.Read(AppDocuments.LicenseResource)!, page, StringComparison.Ordinal); // the GPL whole
+    }
+
+    [Theory]
+    [Trait("Category", "Unhappy")]
+    [InlineData(AppDocuments.ExceptionResource, AppDocuments.LicenseResource)]
+    [InlineData(AppDocuments.LicenseResource, AppDocuments.ExceptionResource)]
+    public void A_license_document_missing_from_the_build_is_named_and_the_other_still_shows(string missing, string present)
+    {
+        var page = AppDocuments.License(name => name == missing ? null : $"text of {name}");
+
+        Assert.Contains($"{missing} is missing from this build", page, StringComparison.Ordinal);
+        Assert.Contains($"text of {present}", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_build_without_either_license_document_points_at_the_repository_for_both()
+    {
+        var page = AppDocuments.License(_ => null);
+
+        Assert.Contains("LICENSE-EXCEPTION.txt is missing from this build", page, StringComparison.Ordinal);
+        Assert.Contains("LICENSE is missing from this build", page, StringComparison.Ordinal);
+        Assert.Throws<ArgumentNullException>(() => AppDocuments.License(null!));
     }
 
     [Fact]
@@ -52,7 +94,9 @@ public sealed class AboutTests
         var notices = AppDocuments.ParseNotices(markdown);
 
         Assert.Equal(rows, notices.Components.Count);
-        Assert.Equal("MusicSpin itself is MIT licensed (see LICENSE). Release builds contain or load the components below.", notices.Intro);
+        Assert.Equal(
+            "MusicSpin itself is licensed under the GNU GPL, version 3 or later (see LICENSE and LICENSE-EXCEPTION.txt). Release builds contain or load the components below.",
+            notices.Intro);
         var ffmpeg = notices.Components[0];
         Assert.StartsWith("FFmpeg (libavcodec", ffmpeg.Name, StringComparison.Ordinal);
         Assert.Equal(new Uri("https://ffmpeg.org"), ffmpeg.Link);
@@ -131,7 +175,8 @@ public sealed class AboutTests
         about.ShowLicenseCommand.Execute(null);
         Assert.True(about.IsOpen);
         Assert.Equal((AboutPage.License, "License"), (about.Page, about.Title));
-        Assert.Contains("Permission is hereby granted", about.LicenseText, StringComparison.Ordinal);
+        Assert.Contains("Additional permission under GNU GPL version 3 section 7", about.LicenseText, StringComparison.Ordinal);
+        Assert.Contains("TERMS AND CONDITIONS", about.LicenseText, StringComparison.Ordinal);
         Assert.Null(about.Notices);
 
         about.BackCommand.Execute(null);

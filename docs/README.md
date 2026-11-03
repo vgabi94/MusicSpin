@@ -1,6 +1,6 @@
 # MusicSpin documentation
 
-MusicSpin is an MIT-licensed, cross-platform hi-res music player. It is made of a desktop app (`MusicSpin`) and a command-line tool (`music-spin`). The CLI is designed so that both people and AI agents can script it. Version 0.1 is **pre-UI**: the desktop app is an empty window. Everything else described here works today and is tested on Linux.
+MusicSpin is a GPL-licensed (GPL-3.0-or-later), cross-platform hi-res music player. It is made of a desktop app (`MusicSpin`) and a command-line tool (`music-spin`). The CLI is designed so that both people and AI agents can script it. Version 0.1 is **pre-UI**: the desktop app is an empty window. Everything else described here works today and is tested on Linux.
 
 These pages describe what the code does **today**. Anything not implemented yet is marked **Planned**.
 
@@ -27,7 +27,7 @@ These pages describe what the code does **today**. Anything not implemented yet 
 |---|---|
 | [Architecture](architecture.md) | Projects, Core/App/Cli layering, the audio pipeline, IPC design, the data folder |
 | [Building](building.md) | Build, test, publish scripts, the trimming decision, CI and release workflows |
-| [Licensing](licensing.md) | MIT, plus the LGPL obligations for FFmpeg and TagLib# |
+| [Licensing](licensing.md) | GPL-3.0-or-later and its Svg.Custom exception, plus the LGPL obligations for FFmpeg and TagLib# |
 | [UI design](design/README.md) | The HTML mockup the desktop app is built from, and how to open it |
 
 ## Platform status
