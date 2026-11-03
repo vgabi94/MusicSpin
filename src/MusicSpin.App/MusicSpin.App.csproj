@@ -43,6 +43,7 @@
       and the notices it is obliged to.
     -->
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="LICENSE" Visible="false" />
+    <EmbeddedResource Include="..\..\LICENSE-EXCEPTION.txt" LogicalName="LICENSE-EXCEPTION.txt" Visible="false" />
     <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="THIRD-PARTY-NOTICES.md" Visible="false" />
   </ItemGroup>
 

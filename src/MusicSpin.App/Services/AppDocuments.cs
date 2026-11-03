@@ -13,13 +13,15 @@ public sealed record ThirdPartyComponent(string Name, Uri? Link, string License)
 public sealed record ThirdPartyNotices(string Intro, IReadOnlyList<ThirdPartyComponent> Components);
 
 /// <summary>
-/// The documents the app is obliged to carry (Help › License and Third-party notices): <c>LICENSE</c> and
+/// The documents the app is obliged to carry (Help › License and Third-party notices): <c>LICENSE</c> (the GNU GPL
+/// version 3), <c>LICENSE-EXCEPTION.txt</c> (the copyright notice and the additional permission for Svg.Custom) and
 /// <c>THIRD-PARTY-NOTICES.md</c>, embedded in the executable so a published single file still has them. The notices are
 /// Markdown; the dialog shows the notices' first paragraph and a line a component, and links to the whole file.
 /// </summary>
 public static partial class AppDocuments
 {
     public const string LicenseResource = "LICENSE";
+    public const string ExceptionResource = "LICENSE-EXCEPTION.txt";
     public const string NoticesResource = "THIRD-PARTY-NOTICES.md";
 
     /// <summary>Where the documents are published with the source, for a build that lacks them.</summary>
@@ -44,8 +46,17 @@ public static partial class AppDocuments
     /// <summary>What the dialog says in place of a document this build lacks.</summary>
     public static string Missing(string resource) => $"{resource} is missing from this build. It is published with the source at {Repository}.";
 
-    /// <summary>The license text, or a note pointing at the repository.</summary>
-    public static string License() => Read(LicenseResource) ?? Missing(LicenseResource);
+    /// <summary>The copyright notice and the additional permission, then the GPL; a note for either this build lacks.</summary>
+    public static string License() => License(Read);
+
+    /// <summary>The License page's text from <paramref name="read"/> (a resource's text, or null when it is missing).</summary>
+    public static string License(Func<string, string?> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        var exception = read(ExceptionResource) ?? Missing(ExceptionResource);
+        var license = read(LicenseResource) ?? Missing(LicenseResource);
+        return exception.TrimEnd() + "\n\n\n" + license;
+    }
 
     /// <summary>The third-party notices, or a note pointing at the repository.</summary>
     public static ThirdPartyNotices Notices() => Read(NoticesResource) is { } markdown ? ParseNotices(markdown) : new ThirdPartyNotices(Missing(NoticesResource), []);

@@ -22,7 +22,7 @@ public sealed record FFmpegStatus(
 
 /// <summary>
 /// Loads FFmpeg as separate shared libraries at runtime (never statically linked into MusicSpin),
-/// keeping MusicSpin MIT while FFmpeg stays under its own (preferably LGPL) license.
+/// so FFmpeg stays a separate, replaceable work under its own (LGPL) license.
 /// <para>Search order (first directory containing the expected libavcodec wins):</para>
 /// <list type="number">
 /// <item><c>MUSICSPIN_FFMPEG_PATH</c> environment variable</item>
