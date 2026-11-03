@@ -544,11 +544,15 @@ public sealed class DeckDesignTests
         Gui.FinishAnimations(Settled);
         var deck = Deck(app);
         var readout = (DeckText)Part(deck, "Readout");
-        Assert.Equal(("33.3", 0.0), (readout.Text, readout.Opacity));
+        Assert.Equal(("16.7", 0.0), (readout.Text, readout.Opacity)); // the default speed
 
         app.ViewModel.Settings.SetRecordSpeed(45);
         Gui.Settle();
         Assert.Equal("45", readout.Text);
+
+        app.ViewModel.Settings.SetSpinScale(20);
+        Gui.Settle();
+        Assert.Equal("45", readout.Text); // the visual spin slows the record, not the speed it reads
 
         app.Scripted!.Status = app.Scripted.Status with { State = PlayerState.Playing };
         await app.Scripted.PushAsync("stateChanged");

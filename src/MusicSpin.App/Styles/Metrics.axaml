@@ -593,6 +593,8 @@
     <sys:Double x:Key="SettingSliderWidth">170</sys:Double>
     <sys:Double x:Key="SettingSliderGap">10</sys:Double>
     <sys:Double x:Key="SettingOutputWidth">30</sys:Double>
+    <!-- A value with a unit, such as Visual spin's "100%". -->
+    <sys:Double x:Key="SettingWideOutputWidth">40</sys:Double>
     <!--
       Settings › Equalizer (#141; not in the mockup): eleven columns 32 wide, the pre-amp
       12 from the bands; each slider 120 long, its gain and band 4 above and below, a 14 px tick at 0 dB. The preset

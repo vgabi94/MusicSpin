@@ -359,8 +359,10 @@ src/MusicSpin.App/
   it, or, while the draft is on air, ends radio (`queue.set` with the current track at its position and the up-next
   entries) and shows the next three picks (the queue drawer's). A new station on air, from here or the CLI, becomes
   the draft.
-- **Spin clock.** One `SpinClock` drives every visible record of the playing album, at Settings › Speed (33⅓, 45 or
-  16⅔ rpm), spinning up and down like a platter. It runs in every Motion mode; None only skips the ramp.
+- **Spin clock.** One `SpinClock` drives every visible record of the playing album, at Settings › Turntable › Speed
+  (16⅔ by default, 33⅓ or 45 rpm) times Visual spin (`spinScale`, 10–100%, 100 by default), spinning up and down like
+  a platter. Visual spin only slows the animation: a deck's readout still shows the speed. It runs in every Motion
+  mode; None only skips the ramp.
 - **Player bar.** `PlayerBarViewModel` holds the transport (⏮ restarts after 3 seconds), the format label and the
   queue count; `PositionViewModel` and `VolumeViewModel` hold the bars and their text boxes. A `TypedField` is the
   logic of a box you type a value into (the elapsed time takes `seek`'s syntax, shared with the CLI as Core's

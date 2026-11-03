@@ -35,6 +35,7 @@ public sealed record NormalizationSettings(NormalizationMode Mode = Normalizatio
     public const double MinPreampDb = -12;
     public const double MaxPreampDb = 12;
 
+    /// <summary>Levelling on, in auto mode at the reference level: what the switch turns on. settings.json starts with it off.</summary>
     public static NormalizationSettings Default { get; } = new();
 
     public static NormalizationSettings Disabled { get; } = new(NormalizationMode.Off);
@@ -76,13 +77,13 @@ public sealed record NormalizationSettings(NormalizationMode Mode = Normalizatio
                 mode = NormalizationMode.Auto;
                 return true;
             default:
-                mode = NormalizationMode.Auto;
+                mode = NormalizationMode.Off;
                 return false;
         }
     }
 
-    /// <summary>The mode as settings.json holds it; an unknown text counts as the default (auto).</summary>
-    public static NormalizationMode ModeOrDefault(string? text) => TryParseMode(text, out var mode) ? mode : NormalizationMode.Auto;
+    /// <summary>The mode as settings.json holds it; an unknown text counts as the default (off).</summary>
+    public static NormalizationMode ModeOrDefault(string? text) => TryParseMode(text, out var mode) ? mode : NormalizationMode.Off;
 
     /// <summary>The levelling settings in <paramref name="settings"/> (settings.json), brought into range.</summary>
     public static NormalizationSettings From(MusicSpin.Core.Settings.AppSettings settings)

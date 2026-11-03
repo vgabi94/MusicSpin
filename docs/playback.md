@@ -188,7 +188,7 @@ Details:
 
 ## Volume levelling (ReplayGain / R128)
 
-Tracks are played at an even loudness, so a quiet album and a loud one do not need the volume knob in between. This is **on by default** (mode `auto`) and is one setting: `music-spin normalize off` (or the **Volume levelling** switch in Settings › Audio) leaves the samples untouched.
+Tracks are played at an even loudness, so a quiet album and a loud one do not need the volume knob in between. It is **off by default**, so the samples reach the output untouched. Turn it on with `music-spin normalize auto` (or another mode), or with the **Volume levelling** switch in Settings › Audio, which turns on `auto`. `music-spin normalize off` turns it off again. An unknown mode in `settings.json` counts as `off`.
 
 | Mode | The gain of a track |
 |---|---|
@@ -219,7 +219,7 @@ Settings (`settings.json`, changed by `music-spin normalize`, the MCP `normalize
 
 **Safe volume.** A gain is never more than **+6 dB** and never less than **-40 dB**, whatever the target, the pre-amp or the tags say (`GainCalculator.MaxBoostDb`). A very quiet recording is therefore brought up by at most 6 dB; a larger boost would be a sudden jump in level that is hard on the ears and on the speakers, and the volume knob is the right tool for the rest. A damaged tag or library value (not a finite number) counts as no value.
 
-**Bit-exactness.** With levelling off, or a gain under 0.005 dB, no sample is touched. Levelling happens before the volume stage and after the spectrum tap. The shared-mode output stays bit-exact otherwise as before; [exclusive/bit-perfect](#hi-res-and-bit-perfect) users who want an untouched stream should set levelling to `off`.
+**Bit-exactness.** With levelling off, or a gain under 0.005 dB, no sample is touched. Levelling happens before the volume stage and after the spectrum tap. The shared-mode output stays bit-exact otherwise as before; [exclusive/bit-perfect](#hi-res-and-bit-perfect) users who want an untouched stream should leave levelling `off` (the default).
 
 `status` (JSON `normalization`: `mode`, `targetLufs`, `preampDb`, `gainDb`, `source` = `track-tag`, `album-tag`, `analysis`, `unknown` or `off`, `limited`) and the text line `Levelling: ...` show what the current track gets.
 

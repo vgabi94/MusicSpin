@@ -38,8 +38,12 @@ public sealed class PlayerNormalizeCliTests : IAsyncDisposable
     {
         await Ok("play", Long[0], "--backend", "null");
         var shown = await Ok("normalize");
-        Assert.Equal("auto", shown.GetProperty("normalization").GetProperty("mode").GetString()); // on by default
+        Assert.Equal("off", shown.GetProperty("normalization").GetProperty("mode").GetString()); // off by default
         Assert.False(File.Exists(SettingsFile)); // showing does not write settings
+
+        var on = await Ok("normalize", "auto");
+        Assert.Equal("auto", on.GetProperty("normalization").GetProperty("mode").GetString());
+        Assert.Equal("auto", Settings().GetProperty("normalization").GetString());
 
         var off = await Ok("normalize", "off");
         Assert.Equal("off", off.GetProperty("normalization").GetProperty("mode").GetString());
@@ -72,6 +76,9 @@ public sealed class PlayerNormalizeCliTests : IAsyncDisposable
     public async Task Status_text_names_the_levelling()
     {
         await Ok("play", Long[0], "--backend", "null");
+        Assert.Contains("Levelling: off", (await _cli.RunAsync("status")).Out, StringComparison.Ordinal); // the default
+
+        await Ok("normalize", "auto");
         var on = await _cli.RunAsync("status");
         Assert.Contains("Levelling: auto · target -18 LUFS", on.Out, StringComparison.Ordinal);
 
@@ -135,7 +142,7 @@ public sealed class PlayerNormalizeCliTests : IAsyncDisposable
 
         var n = (await Ok("play", Long[0], "--backend", "null")).GetProperty("normalization");
 
-        Assert.Equal("auto", n.GetProperty("mode").GetString());
+        Assert.Equal("off", n.GetProperty("mode").GetString()); // an unknown mode is the default
         Assert.InRange(n.GetProperty("targetLufs").GetDouble(), -30, -8);
         Assert.InRange(n.GetProperty("preampDb").GetDouble(), -12, 12);
     }

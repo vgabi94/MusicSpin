@@ -90,6 +90,9 @@ Created with defaults by `doctor` (or by the first command that writes):
 | `gapless` | `true` | play consecutive queue entries with the same sample rate, channels and bit depth without a gap (see [Playback](playback.md#gapless)) |
 | `outputDevice` | `null` | the device a player the App starts plays through (Settings › Audio; `null` is the system default). The CLI uses `--device` |
 | `exclusiveMode` | `false` | a player the App starts opens its device exclusively (Settings › Audio). The CLI uses `--exclusive` |
+| `normalization` | `"off"` | volume levelling of a newly started background player: `off`, `auto`, `track` or `album` (see [Playback](playback.md#volume-levelling-replaygain--r128)). Written by `music-spin normalize` and Settings › Audio › Volume levelling. An unknown value means `off` |
+| `recordSpeedRpm` | `16.667` | how fast the App's records turn: `16.667`, `33.333` or `45` (Settings › Turntable › Speed). Another value means `16.667` |
+| `spinScale` | `100` | how fast the App's records look, in percent of `recordSpeedRpm` (Settings › Turntable › Visual spin): `10`..`100`, clamped. Only the animation; a deck's readout shows the speed |
 | `vinylTransition` | `true` | choosing an album in the App carries its record onto the deck before it plays (Settings › Turntable). `false` plays it at once |
 | `volumeInDecibels` | `false` | the App's player bar shows the volume in dB on a loudness bar, 0 to −60 dB spread evenly (Settings › Audio). Only the display: `volume` stays linear |
 | `watchLibrary` | `false` | the App scans after changes in the library folders while it runs (Settings › Library). The CLI uses `library watch` |

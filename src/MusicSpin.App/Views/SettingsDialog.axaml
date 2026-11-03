@@ -45,7 +45,7 @@
             </ScrollViewer>
         </DataTemplate>
 
-        <!-- Turntable: the record speed, the vinyl transition and the deck's design. -->
+        <!-- Turntable: the record speed, the visual spin, the vinyl transition and the deck's design. -->
         <DataTemplate DataType="vm:TurntablePage">
             <ScrollViewer Classes="settingsPage">
                 <StackPanel>
@@ -58,6 +58,26 @@
                                      ItemsSource="{Binding Settings.Speeds}"
                                      SelectedItem="{Binding Settings.SpeedChoice}"
                                      AutomationProperties.Name="Record speed" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingRow next">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Visual spin" />
+                                <TextBlock Classes="settingNote" Text="{x:Static vm:SettingsViewModel.SpinScaleNote}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Classes="range wide">
+                                <controls:ScrubBar Name="SpinScaleBar"
+                                                   Classes="setting"
+                                                   Minimum="{x:Static vm:SettingsViewModel.MinSpinScale}"
+                                                   Maximum="{x:Static vm:SettingsViewModel.MaxSpinScale}"
+                                                   Value="{Binding Settings.SpinScale, Mode=OneWay}"
+                                                   CommitCommand="{Binding Settings.SetSpinScaleCommand}"
+                                                   Scrub="{Binding Settings.SpinScaleScrub}"
+                                                   ValueText="{Binding Settings.SpinScaleText}"
+                                                   AutomationProperties.Name="Visual spin" />
+                                <TextBlock Name="SpinScaleText" Text="{Binding Settings.SpinScaleText}" />
+                            </StackPanel>
                         </Grid>
                     </Border>
                     <Border Classes="settingRow next">

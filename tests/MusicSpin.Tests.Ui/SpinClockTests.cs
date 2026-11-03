@@ -42,6 +42,52 @@ public sealed class SpinClockTests : IDisposable
     }
 
     [Fact]
+    public void It_starts_at_16_rpm_and_the_true_speed()
+    {
+        Assert.Equal((16.667, 1.0), (_clock.Rpm, _clock.Scale));
+    }
+
+    [Theory]
+    [InlineData(33.333, 0.5, 100)]
+    [InlineData(45, 0.1, 27)]
+    [InlineData(16.667, 0.4, 40)]
+    public void The_scale_slows_how_fast_the_disc_turns_but_not_the_rpm(double rpm, double scale, double degrees)
+    {
+        _clock.Rpm = rpm;
+        _clock.Scale = scale;
+        _clock.IsSpinning = true;
+        _clock.Advance(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(degrees, Turned(TimeSpan.FromSeconds(1)), 1);
+        Assert.Equal(rpm, _clock.Rpm);
+    }
+
+    [Fact]
+    public void A_scale_change_while_spinning_ramps_to_the_new_speed_instead_of_jumping()
+    {
+        _clock.Rpm = 33.333;
+        _clock.IsSpinning = true;
+        _clock.Advance(TimeSpan.FromSeconds(20));
+
+        _clock.Scale = 0.5;
+        _clock.Advance(TimeSpan.FromSeconds(0.25));
+        Assert.InRange(_clock.Velocity, 101, 199); // on its way down from 200°/s
+
+        _clock.Advance(TimeSpan.FromSeconds(20));
+        Assert.Equal(100, _clock.Velocity, 1);
+    }
+
+    [Fact]
+    public void A_scale_change_while_paused_leaves_the_disc_still()
+    {
+        _clock.Scale = 0.3;
+        _clock.Advance(TimeSpan.FromSeconds(1));
+
+        Assert.Equal((0.0, 0.0), (_clock.Angle, _clock.Velocity));
+        Assert.False(_clock.IsRunning);
+    }
+
+    [Fact]
     public void It_spins_up_gently()
     {
         _clock.IsSpinning = true;
@@ -92,7 +138,7 @@ public sealed class SpinClockTests : IDisposable
 
         _clock.Advance(SpinClock.FrameInterval);
         Assert.Equal(_clock.Rpm * 6, _clock.Velocity);
-        Assert.Equal(200, Turned(TimeSpan.FromSeconds(1)), 1);
+        Assert.Equal(_clock.Rpm * 6, Turned(TimeSpan.FromSeconds(1)), 1);
 
         _clock.IsSpinning = false;
         _clock.Advance(SpinClock.FrameInterval);

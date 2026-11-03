@@ -213,8 +213,8 @@ internal static class ControlCommands
             Description = $"Added to every track's gain, in dB ({NormalizationSettings.MinPreampDb} to {NormalizationSettings.MaxPreampDb}; default 0).",
         };
         var command = new Command("normalize",
-            "Show or change volume levelling (ReplayGain / EBU R128). track: every track to the target level; album: an album's tracks keep their level to " +
-            "each other; auto (default): album gain for an album played in order, track gain for shuffle and radio; off: the samples are not touched. " +
+            "Show or change volume levelling (ReplayGain / EBU R128). off (the default): the samples are not touched; track: every track to the target " +
+            "level; album: an album's tracks keep their level to each other; auto: album gain for an album played in order, track gain for shuffle and radio. " +
             "Gains come from ReplayGain / R128 tags, else from an analysis of the track that runs in the background (cached in the library). " +
             "Saved as the default in settings.json.")
         {
