@@ -102,14 +102,22 @@ public sealed partial class AppMenuViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(IsConnected), AllowConcurrentExecutions = true)]
     private Task ToggleMute() => _bar.Volume.ToggleMuteCommand.ExecuteAsync(null);
 
+    /// <summary>
+    /// View › Albums, Tracks, Radio or Favorites. Now Playing covers the page, so the choice closes it and that page
+    /// shows (#216).
+    /// </summary>
     [RelayCommand]
-    private void Show(PageKind page) => _sidebar.Navigate(page switch
+    private void Show(PageKind page)
     {
-        PageKind.Tracks => _sidebar.Tracks,
-        PageKind.Radio => _sidebar.Radio,
-        PageKind.Favorites => _sidebar.Favorites,
-        _ => _sidebar.Albums,
-    });
+        _nowPlaying.Close();
+        _sidebar.Navigate(page switch
+        {
+            PageKind.Tracks => _sidebar.Tracks,
+            PageKind.Radio => _sidebar.Radio,
+            PageKind.Favorites => _sidebar.Favorites,
+            _ => _sidebar.Albums,
+        });
+    }
 
     [RelayCommand(CanExecute = nameof(CanActOnTrack))]
     private void OpenNowPlaying() => _nowPlaying.Open();

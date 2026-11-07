@@ -6,7 +6,9 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
+using MusicSpin.App.Controls;
 using MusicSpin.App.Theming;
+using MusicSpin.App.ViewModels;
 using MusicSpin.App.Views;
 using MusicSpin.Core.Playback;
 using MusicSpin.Tests.Ui.Harness;
@@ -285,6 +287,99 @@ public sealed class AppMenuTests
         Assert.True(vm.QueueDrawer.IsOpen);
     }
 
+    /// <summary>
+    /// #216: from Now Playing, each view in View's first group leaves it and shows that page. Albums is the page already
+    /// underneath, Favorites is chosen again once it is current, and Albums is chosen a second time after that.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task View_leaves_Now_Playing_for_each_library_view()
+    {
+        await using var app = await AppHarness.OpenAsync();
+        var window = app.Window;
+        var vm = app.ViewModel;
+        var views = new (string Header, PageViewModel Page, NavItemViewModel Item)[]
+        {
+            ("_Albums", vm.AlbumsPage, vm.Sidebar.Albums),
+            ("_Tracks", vm.TracksPage, vm.Sidebar.Tracks),
+            ("_Radio", vm.RadioPage, vm.Sidebar.Radio),
+            ("_Favorites", vm.FavoritesPage, vm.Sidebar.Favorites),
+            ("_Favorites", vm.FavoritesPage, vm.Sidebar.Favorites),
+            ("_Albums", vm.AlbumsPage, vm.Sidebar.Albums),
+        };
+
+        foreach (var view in views)
+        {
+            OpenNowPlaying(window);
+            Choose(window, "_View", view.Header);
+            AssertLeftNowPlaying(window, vm, view.Page, view.Item, view.Header);
+            Gui.FinishAnimations();
+            Assert.False(Gui.Find<SlidePanel>(window, "NowPlayingLayer").IsVisible, $"{view.Header} left Now Playing on screen");
+        }
+    }
+
+    /// <summary>
+    /// #216: choosing a view while Now Playing is still sliding in, while it is sliding back out, and while the queue
+    /// drawer is open over it, still leaves it and shows that page. The queue stays. Queue and Search, past the
+    /// separator, leave Now Playing up.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task View_leaves_Now_Playing_mid_slide_and_under_the_queue()
+    {
+        await using var app = await AppHarness.OpenAsync();
+        var window = app.Window;
+        var vm = app.ViewModel;
+        vm.Settings.SetMotion(MotionMode.Smooth); // the partway slide below is 0.55s only at Smooth
+        var layer = Gui.Find<SlidePanel>(window, "NowPlayingLayer");
+
+        // Still sliding in: the slide has not been given its time, so it does not cover the page yet.
+        vm.NowPlaying.Open();
+        Gui.Settle();
+        Assert.True(vm.NowPlaying.IsOpen);
+        Assert.True(layer.Shown < 1, $"Now Playing already covered the page ({layer.Shown})");
+        Assert.False(layer.Covers);
+        Choose(window, "_View", "_Tracks");
+        AssertLeftNowPlaying(window, vm, vm.TracksPage, vm.Sidebar.Tracks, "_Tracks");
+
+        // Fully in, then partway back down: opening again before it leaves, and choosing Albums, leaves it a second time.
+        OpenNowPlaying(window);
+        Choose(window, "_View", "_Radio");
+        AssertLeftNowPlaying(window, vm, vm.RadioPage, vm.Sidebar.Radio, "_Radio");
+        Gui.FinishAnimations(200); // the slide out is 0.55s; this is on the way, not gone
+        Assert.True(layer.IsVisible, "the close has not left the screen yet");
+        Assert.InRange(layer.Shown, 0.01, 0.99);
+        vm.NowPlaying.Open();
+        Gui.Settle();
+        Assert.True(vm.NowPlaying.IsOpen);
+        Choose(window, "_View", "_Albums");
+        AssertLeftNowPlaying(window, vm, vm.AlbumsPage, vm.Sidebar.Albums, "_Albums");
+        Gui.FinishAnimations();
+        Assert.False(layer.IsVisible);
+
+        // The drawer sits over Now Playing. A library view still dismisses Now Playing and leaves the drawer.
+        OpenNowPlaying(window);
+        vm.QueueDrawer.Open();
+        Gui.FinishAnimations();
+        Assert.True(vm.QueueDrawer.IsOpen);
+        Assert.True(layer.Covers);
+        Choose(window, "_View", "_Favorites");
+        AssertLeftNowPlaying(window, vm, vm.FavoritesPage, vm.Sidebar.Favorites, "_Favorites");
+        Assert.True(vm.QueueDrawer.IsOpen, "the queue drawer closed with Now Playing");
+
+        // Now Playing already closed, the drawer still open: the view still changes.
+        Choose(window, "_View", "_Tracks");
+        AssertLeftNowPlaying(window, vm, vm.TracksPage, vm.Sidebar.Tracks, "_Tracks");
+        Assert.True(vm.QueueDrawer.IsOpen);
+
+        // Queue and Search sit past the separator. They are not library views: Now Playing stays up under them.
+        OpenNowPlaying(window);
+        Choose(window, "_View", "_Queue");
+        Assert.True(vm.NowPlaying.IsOpen, "Queue closed Now Playing");
+        Assert.True(vm.QueueDrawer.IsOpen);
+        Choose(window, "_View", "_Search");
+        Assert.True(Gui.Find<TextBox>(window, "SearchBox").IsFocused);
+        Assert.True(vm.NowPlaying.IsOpen, "Search closed Now Playing");
+    }
+
     // ---- keyboard ------------------------------------------------------------------------------------------------
 
     [AvaloniaFact]
@@ -431,6 +526,32 @@ public sealed class AppMenuTests
         => Entries(Entry(window, top, sub)).Single(i => (string?)i.Header == header);
 
     private static IEnumerable<MenuItem> Repeats(Window window) => Entries(Entry(window, "_Playback", "_Repeat"));
+
+    /// <summary>Now Playing fully in, covering the page and the sidebar (the state #216 starts from).</summary>
+    private static void OpenNowPlaying(Window window)
+    {
+        ((MainWindowViewModel)window.DataContext!).NowPlaying.Open();
+        Gui.FinishAnimations(700); // the slide is 0.55s at Motion Smooth
+        var layer = Gui.Find<SlidePanel>(window, "NowPlayingLayer");
+        Assert.True(layer.Covers, "Now Playing never covered the page");
+        Assert.False(Gui.Find<DockPanel>(window, "ContentArea").IsVisible);
+    }
+
+    /// <summary>The chosen view is the page on screen and Now Playing no longer covers it.</summary>
+    private static void AssertLeftNowPlaying(Window window, MainWindowViewModel vm, PageViewModel page, NavItemViewModel item, string header)
+    {
+        Assert.Same(page, vm.CurrentPage);
+        Assert.True(page.IsShown, $"{header} is not the page shown");
+        Assert.Same(item, vm.Sidebar.Active);
+        Assert.True(item.IsActive);
+        Assert.False(vm.NowPlaying.IsOpen, $"{header} left Now Playing open");
+        var layer = Gui.Find<SlidePanel>(window, "NowPlayingLayer");
+        Assert.False(layer.IsOpen);
+        Assert.False(layer.Covers, $"{header} left Now Playing covering the page");
+        Assert.True(Gui.Find<DockPanel>(window, "ContentArea").IsVisible, $"{header} left the page hidden");
+        Assert.Same(page, Gui.Find<ContentControl>(window, "Page").Content);
+        Assert.Same(item, Gui.All<Button>(window).Single(b => b.Classes.Contains("nav") && b.Classes.Contains("active")).DataContext);
+    }
 
     /// <summary>Opens a menu by clicking its title (the list opens in the window's overlay layer).</summary>
     private static void Open(Window window, string top)
