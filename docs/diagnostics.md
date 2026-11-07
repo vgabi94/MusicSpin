@@ -99,6 +99,49 @@ MusicSpin player stopped (quit).
 
 There is no separate log for CLI commands. Errors are in the JSON `error` object (with `--json`) or on stderr.
 
+## Performance markers
+
+Operation markers are compiled in only when MSBuild property `EnablePerfMarkers` is true (symbol `PERF_MARKERS`). They are independent of Debug and Release.
+
+| Build | Markers |
+|---|---|
+| Debug, property unset | on (`EnablePerfMarkers` defaults to true) |
+| Release, property unset | off |
+| `-p:EnablePerfMarkers=true` | on, including an optimized Release build |
+| `-p:EnablePerfMarkers=false` | off, including a Debug build |
+
+`eng/publish.sh` and `eng/publish.ps1` always pass `-p:EnablePerfMarkers=false`. Those are the public packages (and what `.github/workflows/release.yml` runs). A Release build made that way does not contain the marker type, its calls, or its string literals. An optimized build that can record them is a separate command:
+
+```bash
+dotnet build MusicSpin.slnx -c Release -p:EnablePerfMarkers=true
+```
+
+With the symbol defined, nothing is written unless a listener is attached. `MUSICSPIN_TRACE=1` writes `musicspin-trace.jsonl` in the working directory (one JSON object per line). Any other value is the file path. The variable is read on the first instrumented call, or at process start for the app and the CLI. The same file is what the tests assert, so capture does not depend on `dotnet-trace`.
+
+```bash
+MUSICSPIN_TRACE=1 dotnet run --project src/MusicSpin.Cli -c Release -p:EnablePerfMarkers=true -- library scan
+```
+
+```powershell
+$env:MUSICSPIN_TRACE = "1"
+dotnet run --project src/MusicSpin.Cli -c Release -p:EnablePerfMarkers=true -- library scan
+```
+
+Spans are wall time until the operation finishes: a scan phase, a cover file or decode, a page's list rebuild, one spin or spectrum or scene session. They are not time-to-pixels. Layout and render of the window stay on the `MUSICSPIN_FPS` overlay above, which is not part of this switch. `musicspin.gc.total_memory_bytes` is `GC.GetTotalMemory` (managed bytes, no forced collection). `musicspin.gc.allocated_bytes` is `GC.GetTotalAllocatedBytes`. `musicspin.gc.gen0` / `gen1` / `gen2` are collection counts. `musicspin.covers.cached_bytes` is `CoverService`'s own width×height×4 estimate of decoded bitmaps. None of these are native memory, a GPU allocation, or the process working set. `GC.GetGCMemoryInfo().HeapSizeBytes` stays 0 until a collection, so it is not the gauge.
+
+Tags are counts and small integers (`result` 0 none, 1 cache hit, 2 encoded). Paths, titles and search text are not tags. There is no per-file, per-cover-hit or per-frame event. Progress posts and database batches are counters.
+
+On-demand timings (reported, not asserted) use the optimized instrumented build and stay out of CI:
+
+```bash
+dotnet build MusicSpin.slnx -c Release -p:EnablePerfMarkers=true
+MUSICSPIN_PERF=1 dotnet exec tests/MusicSpin.Tests/bin/Release/net10.0/MusicSpin.Tests.dll -trait "Category=Perf" -showLiveOutput
+```
+
+`dotnet test -- --filter-trait "Category=Perf"` runs the same test and skips it unless `MUSICSPIN_PERF=1`. The `dotnet exec` line is the one that prints the timings.
+
+Debug timings are not that build. A public Release binary has no markers to turn on; use `dotnet-counters` against the runtime's GC and allocation providers, and the operating system's tools, for a shipped build.
+
 ## Frame rate (desktop app)
 
 Start the app with `MUSICSPIN_FPS=1` to show Avalonia's overlay in the window: frames per second, and graphs of the

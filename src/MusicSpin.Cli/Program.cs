@@ -1,6 +1,10 @@
 using MusicSpin.Cli;
 using MusicSpin.Core.Remote;
 
+#if PERF_MARKERS
+MusicSpin.Core.Diagnostics.Perf.EnableFromEnvironment();
+#endif
+
 if (args is [PlayerProcessLauncher.WindowsSpawnVerb, .. var spawn])
 {
     // Internal (Windows): the short-lived helper that starts the detached background player. See PlayerProcessLauncher.

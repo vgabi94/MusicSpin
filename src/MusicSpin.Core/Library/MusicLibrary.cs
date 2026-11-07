@@ -1,6 +1,9 @@
 using LiteDB;
 using MusicSpin.Core.Audio;
 using MusicSpin.Core.Hosting;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.Core.Library;
 
@@ -134,8 +137,33 @@ public sealed partial class MusicLibrary : IDisposable
 
     public ScanResult Scan(ScanOptions? options = null, CancellationToken cancellationToken = default) => Guard(() =>
     {
+#if PERF_MARKERS
+        using var scan = Perf.Begin(Perf.Scan);
+        var scanId = Perf.NextScanId();
+        scan.Tag("scan.id", scanId);
+        scan.Tag("full", options?.Full == true ? 1 : 0);
+        scan.Tag("detectMoves", options?.DetectMoves != false ? 1 : 0);
+        scan.Tag("batchSize", options?.BatchSize ?? new ScanOptions().BatchSize);
+#endif
         var result = new LibraryScanner(_db, _reader, _time).Scan(options ?? new ScanOptions(), cancellationToken);
+#if PERF_MARKERS
+        scan.Tag("files", result.FilesFound);
+        scan.Tag("added", result.Added);
+        scan.Tag("updated", result.Updated);
+        scan.Tag("unchanged", result.Unchanged);
+        scan.Tag("removed", result.Removed);
+        scan.Tag("failed", result.Failed);
+        scan.Tag("moved", result.Moved);
+        scan.Tag("cancelled", result.Cancelled ? 1 : 0);
+        scan.Tag("albums", result.Albums);
+        scan.Tag("tracks", result.Tracks);
+        using (Perf.Begin(Perf.ScanPrune))
+        {
+            PruneCovers();
+        }
+#else
         PruneCovers();
+#endif
         return result;
     });
 

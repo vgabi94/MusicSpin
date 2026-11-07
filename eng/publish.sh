@@ -20,6 +20,9 @@
 #
 # macOS bundles must be built on macOS to be (ad-hoc) code signed; cross-published osx-* builds will not launch on
 # Apple Silicon without `codesign --force --deep -s -`.
+#
+# Public packages compile perf markers out (-p:EnablePerfMarkers=false), whatever the Debug/Release default is.
+# An instrumented optimized build is a separate command: dotnet build -c Release -p:EnablePerfMarkers=true.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -43,7 +46,7 @@ while [[ $# -gt 0 ]]; do
     --out) out="$2"; shift ;;
     --zip) zip=true ;;
     -c|--configuration) config="$2"; shift ;;
-    -h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,25p' "${BASH_SOURCE[0]}"; exit 0 ;;
     -*) echo "Unknown option: $1" >&2; exit 2 ;;
     *) rids+=("$1") ;;
   esac
@@ -143,7 +146,7 @@ for rid in "${rids[@]}"; do
       cli) proj="$root/src/MusicSpin.Cli/MusicSpin.Cli.csproj" ;;
       app) proj="$root/src/MusicSpin.App/MusicSpin.App.csproj" ;;
     esac
-    dotnet publish "$proj" -c "$config" -r "$rid" -o "$dest" -nologo -v quiet
+    dotnet publish "$proj" -c "$config" -r "$rid" -o "$dest" -nologo -v quiet -p:EnablePerfMarkers=false
   done
   [[ "$rid" == osx-* && -f "$dest/MusicSpin" ]] && make_app_bundle "$dest"
   [[ "$rid" == linux-* && -f "$dest/MusicSpin" ]] && cp "$icon_dir/app-icon-512.png" "$dest/MusicSpin.png"

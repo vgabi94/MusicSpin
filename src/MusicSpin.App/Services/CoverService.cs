@@ -3,6 +3,10 @@ using MusicSpin.Core;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
 using SkiaSharp;
+#if PERF_MARKERS
+using MusicSpin.App.Diagnostics;
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.Services;
 
@@ -113,6 +117,9 @@ public sealed class CoverService : ICoverService
         _lockTimeout = lockTimeout;
         _ui = ui;
         _cacheBytes = cacheBytes ?? DefaultCacheBytes;
+#if PERF_MARKERS
+        CoverGauges.Watch(this);
+#endif
         if (library is not null)
         {
             library.Changed += (_, _) => _ = CheckAsync(counted: true);
@@ -167,6 +174,9 @@ public sealed class CoverService : ICoverService
         {
             if (_covers.TryGetValue(key, out var kept) && !kept.Task.IsFaulted)
             {
+#if PERF_MARKERS
+                Perf.CountMemoryHits();
+#endif
                 if (kept.Node is { } node)
                 {
                     _recent.Remove(node);
@@ -319,6 +329,11 @@ public sealed class CoverService : ICoverService
 
     private async Task<Bitmap?> LoadCoverAsync((string AlbumId, CoverSize Size, int Width) key, Entry<Bitmap?> entry)
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.CoverLoad);
+        span.Tag("pixels", key.Width);
+        span.Tag("size", (int)key.Size);
+#endif
         try
         {
             var (bitmap, path) = await WhileBusy(() =>
@@ -334,6 +349,9 @@ public sealed class CoverService : ICoverService
             }).ConfigureAwait(false);
             Admit(key, entry, bitmap, path);
             CheckIfChangedSince(entry);
+#if PERF_MARKERS
+            span.Tag("decoded", bitmap is null ? 0 : 1);
+#endif
             return bitmap;
         }
         catch
@@ -345,6 +363,9 @@ public sealed class CoverService : ICoverService
 
     private async Task<Rgb?> LoadAccentAsync(string albumId, Entry<Rgb?> entry)
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.CoverAccent);
+#endif
         try
         {
             var (accent, path) = await WhileBusy(() =>
@@ -365,6 +386,9 @@ public sealed class CoverService : ICoverService
             }
 
             CheckIfChangedSince(entry);
+#if PERF_MARKERS
+            span.Tag("decoded", accent is null ? 0 : 1);
+#endif
             return accent;
         }
         catch
@@ -392,6 +416,10 @@ public sealed class CoverService : ICoverService
     /// </summary>
     private static Bitmap Decode(string path, int width)
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.CoverDecode);
+        span.Tag("pixels", width);
+#endif
         bool wider;
         using (var codec = SKCodec.Create(path))
         {
@@ -400,9 +428,15 @@ public sealed class CoverService : ICoverService
 
         if (!wider)
         {
+#if PERF_MARKERS
+            span.Tag("scaled", 0);
+#endif
             return new Bitmap(path);
         }
 
+#if PERF_MARKERS
+        span.Tag("scaled", 1);
+#endif
         using var stream = File.OpenRead(path);
         return Bitmap.DecodeToWidth(stream, width, BitmapInterpolationMode.HighQuality);
     }
@@ -516,6 +550,9 @@ public sealed class CoverService : ICoverService
 
     private async Task CheckOnceAsync()
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.CoverRecheck);
+#endif
         List<((string AlbumId, CoverSize Size, int Width) Key, Entry<Bitmap?> Entry)> covers;
         List<(string AlbumId, Entry<Rgb?> Entry)> accents;
         lock (_gate)
@@ -526,6 +563,10 @@ public sealed class CoverService : ICoverService
 
         if (covers.Count == 0 && accents.Count == 0)
         {
+#if PERF_MARKERS
+            span.Tag("checked", 0);
+            span.Tag("changed", 0);
+#endif
             return;
         }
 
@@ -544,6 +585,10 @@ public sealed class CoverService : ICoverService
                 Covers: covers.Where(c => !PathsEqual(c.Entry.Path, Now(c.Key.AlbumId, c.Key.Size))).ToList(),
                 Accents: accents.Where(a => !PathsEqual(a.Entry.Path, Now(a.AlbumId, CoverSize.Small))).ToList());
         }).ConfigureAwait(false);
+#if PERF_MARKERS
+        span.Tag("checked", covers.Count + accents.Count);
+        span.Tag("changed", changed.Covers.Count + changed.Accents.Count);
+#endif
 
         var albums = new HashSet<string>(StringComparer.Ordinal);
         var told = new List<ICoverObserver>();

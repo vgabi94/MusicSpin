@@ -18,6 +18,8 @@ dotnet run --project src/MusicSpin.Cli -- doctor
 
 `Directory.Build.props` enables nullable reference types, `AnalysisLevel=latest-recommended` and **`TreatWarningsAsErrors`**, so analyzer warnings break the build.
 
+Perf markers (`EnablePerfMarkers`, see [Diagnostics](diagnostics.md#performance-markers)) default on for Debug and off for Release. Public `eng/publish.sh` / `eng/publish.ps1` pass `-p:EnablePerfMarkers=false` either way. An optimized build that includes them is `dotnet build -c Release -p:EnablePerfMarkers=true`.
+
 During development the default data folder is `.usrdata` inside the build output (e.g. `src/MusicSpin.Cli/bin/Debug/net10.0/.usrdata`). To share one data folder between builds, point them at the same folder with `--data-dir` or `MUSICSPIN_DATA_DIR` (see [Data folder](getting-started.md#data-folder)).
 
 **No migrations before the first release.** The library schema (`library.db`) and the `queue.json` format may change freely between development builds; nothing converts old files. When a build changes them, bump `LibraryDatabase.SchemaVersion` / `QueueSnapshot.CurrentVersion`: an older `library.db` then fails with exit 10 ("created by a different MusicSpin version"), and an older `queue.json` is set aside as `queue.json.bad`. Delete `library.db` from the data folder and run `library add` / `library scan` again to rebuild.

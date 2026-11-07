@@ -2,6 +2,9 @@ using System.Globalization;
 using MusicSpin.Core;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.Services;
 
@@ -289,6 +292,9 @@ public sealed class LibraryService : ILibraryService, IDisposable
         var stamp = Stamp();
         if (Interlocked.Exchange(ref _stamp, stamp) != stamp)
         {
+#if PERF_MARKERS
+            Perf.CountLibraryChanges();
+#endif
             Changed?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -329,6 +335,9 @@ public sealed class LibraryService : ILibraryService, IDisposable
         }, cancellationToken).ConfigureAwait(false);
         if (Interlocked.Exchange(ref _stamp, after) != before)
         {
+#if PERF_MARKERS
+            Perf.CountLibraryChanges();
+#endif
             Changed?.Invoke(this, EventArgs.Empty);
         }
 

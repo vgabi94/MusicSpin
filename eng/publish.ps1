@@ -10,6 +10,7 @@
   ffmpeg/ (LGPL FFmpeg shared libraries, optional), LICENSE, LICENSE-EXCEPTION.txt, THIRD-PARTY-NOTICES.md; on Linux also MusicSpin.png (the
   app icon, for a .desktop launcher). Data goes to .usrdata/ on first run.
   macOS .app bundles are produced by publish.sh on macOS (needs codesign).
+  Public packages pass -p:EnablePerfMarkers=false so perf markers are not compiled in, even if that property's default changes.
 #>
 [CmdletBinding()]
 param(
@@ -75,7 +76,7 @@ foreach ($r in $Rid) {
     Write-Host "== $r -> $dest"
     if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
     foreach ($p in $projects) {
-        dotnet publish $p -c $Configuration -r $r -o $dest -nologo -v quiet
+        dotnet publish $p -c $Configuration -r $r -o $dest -nologo -v quiet -p:EnablePerfMarkers=false
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $p ($r)" }
     }
     if ($r -like 'linux-*' -and (Test-Path (Join-Path $dest 'MusicSpin'))) {
