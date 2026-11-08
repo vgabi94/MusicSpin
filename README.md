@@ -1,10 +1,12 @@
 # Music Spin
 
-<img src="docs/images/banner-hero.svg" alt="Music Spin. A vinyl record on a dark deck, beside the name and the line A desktop player for hi-res music." width="1200">
+[![CI status](https://github.com/vgabi94/MusicSpin/actions/workflows/ci.yml/badge.svg)](https://github.com/vgabi94/MusicSpin/actions/workflows/ci.yml)
+[![GPL-3.0-or-later, with the Svg.Custom permission](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](#license)
+[![Windows, macOS and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555555)](#install)
+
+<img src="docs/images/banner-hero.svg" alt="Music Spin. The application icon, a vinyl record on a graphite deck with a metallic navy eighth note, beside the name and the line A desktop player for hi-res music." width="1200">
 
 Music Spin is a desktop player for a hi-res library, and a command line for the same player. The window, `music-spin`, and an MCP client all talk to one background player. Start an album in a terminal, skip a track in the window, and ask an assistant what is playing. They share the queue.
-
-<img src="docs/images/banner-facts.svg" alt="Windows, macOS and Linux. GPL-3.0-or-later." width="1200">
 
 It runs on Windows, macOS and Linux. The code is free under the GNU GPL, version 3 or later, with one extra permission so the turntables can use Svg.Custom. See [License](#license).
 
@@ -178,5 +180,6 @@ Music Spin is free software under the GNU General Public License, version 3, or 
   Refresh them from those files when the window changes:
   now-playing-playing-dark.png, now-playing-playing-light.png,
   albums-cards-dark.png, radio-on-air-dark.png, settings-turntable-dark.png.
-  Banners are docs/images/banner-hero.svg and banner-facts.svg.
+  The header image is docs/images/banner-hero.svg. Its icon is the inner
+  markup of src/MusicSpin.App/Assets/AppIcon/app-icon.svg, copied verbatim.
 -->
