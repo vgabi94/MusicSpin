@@ -4,6 +4,9 @@ using CommunityToolkit.Mvvm.Input;
 using MusicSpin.App.Services;
 using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.ViewModels;
 
@@ -146,10 +149,17 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
     /// <summary>Reads the tracks again. Of reads that overlap (a heart and a library change at once), the last started wins.</summary>
     public override async Task LoadAsync()
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.PageLoad);
+        span.Tag("page", this is TracksPageViewModel ? Perf.PageTracks : Perf.PageTrackList);
+#endif
         var load = ++_loads;
         var read = await ReadAsync().ConfigureAwait(true);
         if (load != _loads)
         {
+#if PERF_MARKERS
+            span.Tag("rebuilt", 0);
+#endif
             return;
         }
 
@@ -158,6 +168,10 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
         {
             MarkPlaying();
             MarkFavorites();
+#if PERF_MARKERS
+            span.Tag("tracks", _all.Count);
+            span.Tag("rebuilt", 0);
+#endif
             return;
         }
 
@@ -166,6 +180,10 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
         MarkPlaying();
         MarkFavorites();
         Filter();
+#if PERF_MARKERS
+        span.Tag("tracks", _all.Count);
+        span.Tag("rebuilt", 1);
+#endif
     }
 
     /// <summary>A row's heart (every row's stays enabled while one is saved).</summary>
@@ -273,6 +291,10 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
 
     protected override void Filter()
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.PageLayout);
+        span.Tag("page", this is TracksPageViewModel ? Perf.PageTracks : Perf.PageTrackList);
+#endif
         Tracks = [.. Shown()];
         IsLibraryEmpty = IsLibraryPage && _all.Count == 0;
         CountText = Count(Tracks.Count);
@@ -280,6 +302,10 @@ public abstract partial class TrackListPageViewModel : PageViewModel, IDisposabl
         Rows = LayOut(Tracks);
         PlayAllCommand.NotifyCanExecuteChanged();
         QueueAllCommand.NotifyCanExecuteChanged();
+#if PERF_MARKERS
+        span.Tag("shown", Tracks.Count);
+        span.Tag("rows", Rows.Count);
+#endif
     }
 
     protected override void MarkPlaying()

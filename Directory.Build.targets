@@ -1,0 +1,9 @@
+<Project>
+  <!--
+    Applied after the SDK sets DefineConstants, so PERF_MARKERS is not overwritten by Debug/Release.
+    The symbol is the only switch for marker types and call sites. Unset means the code is not compiled.
+  -->
+  <PropertyGroup Condition="'$(EnablePerfMarkers)' == 'true'">
+    <DefineConstants>$(DefineConstants);PERF_MARKERS</DefineConstants>
+  </PropertyGroup>
+</Project>

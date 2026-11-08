@@ -8,6 +8,9 @@ using MusicSpin.App.Services;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.ViewModels;
 
@@ -501,6 +504,10 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
     /// </summary>
     public override async Task LoadAsync()
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.PageLoad);
+        span.Tag("page", Perf.PageAlbums);
+#endif
         var albums = await _library.AlbumsAsync().ConfigureAwait(true);
         var all = AlbumItems.Reuse(albums, _all, a => new AlbumItemViewModel(a, new AlbumArt(a.Id, CoverSize.Medium, _covers) { Pixels = CoverPixels }));
         var same = _loaded && all.SequenceEqual(_all);
@@ -511,6 +518,10 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         {
             Filter();
         }
+#if PERF_MARKERS
+        span.Tag("albums", _all.Count);
+        span.Tag("rebuilt", same ? 0 : 1);
+#endif
     }
 
     [RelayCommand]
@@ -644,6 +655,10 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
 
     protected override void Filter()
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.PageLayout);
+        span.Tag("page", Perf.PageAlbums);
+#endif
         Albums = [.. _all.Where(a => Matches(a.Title, a.Artist, a.Album.Genre, a.Album.Year?.ToString(CultureInfo.InvariantCulture)))
             .OrderBy(a => a.Album, LibraryOrder.Albums(Sort))];
         CountText = Count(Albums.Count);
@@ -651,6 +666,10 @@ public sealed partial class AlbumsPageViewModel : PageViewModel
         EmptyText = _all.Count == 0 ? NoMusic
             : Albums.Count == 0 ? $"Nothing matches “{SearchText.Trim()}”." : null;
         LayOut();
+#if PERF_MARKERS
+        span.Tag("shown", Albums.Count);
+        span.Tag("rows", Rows.Count);
+#endif
     }
 
     private void LayOut()

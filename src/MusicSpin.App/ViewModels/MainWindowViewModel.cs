@@ -10,6 +10,9 @@ using MusicSpin.App.Services.Taskbar;
 using MusicSpin.App.Theming;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.ViewModels;
 
@@ -428,6 +431,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     private async Task ShowAsync(NavItemViewModel item)
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.Navigate);
+        span.Tag("page", (int)item.Kind);
+#endif
         PageViewModel page = item.Kind switch
         {
             PageKind.Tracks => TracksPage,
@@ -508,6 +515,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     private async Task ReloadUntilCurrentAsync()
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.Reload);
+        span.Tag("scan.id", Perf.LastScanId);
+#endif
         _reloading = true;
         try
         {

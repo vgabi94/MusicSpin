@@ -1,5 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using MusicSpin.Core.Settings;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.Services;
 
@@ -24,6 +27,10 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
     private readonly IUiDispatcher _ui;
     private ITimer? _timer;
     private long _last;
+#if PERF_MARKERS
+    private PerfSpan _spinSpan;
+    private bool _spinSpanOpen;
+#endif
 
     /// <summary>The disc moved while the window was hidden: the time since <see cref="_last"/> is owed.</summary>
     private bool _owed;
@@ -159,6 +166,10 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
     private void Start()
     {
         _timer = _time.CreateTimer(_ => _ui.Post(OnTimer), null, FrameInterval, FrameInterval);
+#if PERF_MARKERS
+        _spinSpan = Perf.Begin(Perf.SpinSession);
+        _spinSpanOpen = true;
+#endif
         OnPropertyChanged(nameof(IsRunning));
     }
 
@@ -187,6 +198,13 @@ public sealed partial class SpinClock : ObservableObject, IDisposable
 
         _timer.Dispose();
         _timer = null;
+#if PERF_MARKERS
+        if (_spinSpanOpen)
+        {
+            _spinSpanOpen = false;
+            _spinSpan.Dispose();
+        }
+#endif
         OnPropertyChanged(nameof(IsRunning));
     }
 }

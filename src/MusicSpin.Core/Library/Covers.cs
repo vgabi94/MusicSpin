@@ -2,6 +2,9 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using MusicSpin.Core.Settings;
 using TagLib;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.Core.Library;
 
@@ -110,6 +113,15 @@ internal static partial class CoverCache
             throw new ArgumentException($"Not an album id: '{source.AlbumId}'.", nameof(source));
         }
 
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.CoverFile);
+        var outcome = Perf.ResultNone;
+        void Note()
+        {
+            span.Tag("pixels", pixels);
+            span.Tag("result", outcome);
+        }
+#endif
         var dir = Path.Combine(coversRoot, source.AlbumId);
         var sizeName = resizer is null ? "orig" : pixels.ToString(CultureInfo.InvariantCulture);
         foreach (var track in source.Embedded)
@@ -117,6 +129,10 @@ internal static partial class CoverCache
             var stamp = Stamp("embedded", track.Path, track.SizeBytes, track.ModifiedUtcTicks);
             if ((Existing(dir, stamp, sizeName) ?? ExistingOutside(fallback, source.AlbumId, stamp, sizeName)) is { } cached)
             {
+#if PERF_MARKERS
+                outcome = Perf.ResultHit;
+                Note();
+#endif
                 return cached;
             }
 
@@ -134,6 +150,10 @@ internal static partial class CoverCache
             // The cache can't be written (a read-only data folder): the copy outside it shows instead.
             if ((Write(dir, stamp, sizeName, image) ?? WriteOutside(fallback, source.AlbumId, stamp, sizeName, image)) is { } stored)
             {
+#if PERF_MARKERS
+                outcome = Perf.ResultEncoded;
+                Note();
+#endif
                 return stored;
             }
         }
@@ -157,6 +177,10 @@ internal static partial class CoverCache
             var stamp = Stamp("folder", image, info.Length, info.LastWriteTimeUtc.Ticks);
             if ((Existing(dir, stamp, sizeName) ?? ExistingOutside(fallback, source.AlbumId, stamp, sizeName)) is { } cached)
             {
+#if PERF_MARKERS
+                outcome = Perf.ResultHit;
+                Note();
+#endif
                 return cached;
             }
 
@@ -182,9 +206,16 @@ internal static partial class CoverCache
             }
 
             // The cache can't be written (a read-only data folder): the copy outside it, else the original at full size.
+#if PERF_MARKERS
+            outcome = Perf.ResultEncoded;
+            Note();
+#endif
             return Write(dir, stamp, sizeName, encoded) ?? WriteOutside(fallback, source.AlbumId, stamp, sizeName, encoded) ?? image;
         }
 
+#if PERF_MARKERS
+        Note();
+#endif
         return null;
     }
 
@@ -316,7 +347,20 @@ internal static partial class CoverCache
 
         try
         {
-            return resizer is null ? new CoverImage(source, extension) : resizer.Resize(source, pixels);
+            if (resizer is null)
+            {
+                return new CoverImage(source, extension);
+            }
+
+#if PERF_MARKERS
+            using var span = Perf.Begin(Perf.CoverResize);
+            span.Tag("pixels", pixels);
+#endif
+            var image = resizer.Resize(source, pixels);
+#if PERF_MARKERS
+            span.Tag("result", image is null ? Perf.ResultNone : Perf.ResultEncoded);
+#endif
+            return image;
         }
         catch (Exception)
         {

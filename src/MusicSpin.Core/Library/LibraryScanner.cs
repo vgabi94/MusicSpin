@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.Core.Library;
 
@@ -106,6 +109,10 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
         // 1. Walk.
         var found = new Dictionary<string, (FoundFile File, string FolderId)>(StringComparer.Ordinal);
         var problemDirs = new List<string>();
+#if PERF_MARKERS
+        using (var walk = Perf.Begin(Perf.ScanWalk))
+        {
+#endif
         try
         {
             foreach (var folder in available)
@@ -128,6 +135,12 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
         {
             cancelled = true;
         }
+#if PERF_MARKERS
+            walk.Tag("folders", available.Count);
+            walk.Tag("files", found.Count);
+            walk.Tag("blocked", problemDirs.Count);
+        }
+#endif
 
         // 2. Decide what to read. Files are matched to tracks by path key; track ids are GUIDs that never change.
         var existing = db.Tracks.FindAll().ToDictionary(t => t.PathKey, StringComparer.Ordinal);
@@ -136,6 +149,10 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
         int unchanged = 0, skippedUnreadable = 0;
         var keptIssues = new List<ScanIssueRecord>();
         var folderMoves = new List<TrackRecord>();
+#if PERF_MARKERS
+        using (var classify = Perf.Begin(Perf.ScanClassify))
+        {
+#endif
         foreach (var (key, (file, folderId)) in found)
         {
             if (!options.Full && existing.TryGetValue(key, out var track)
@@ -166,16 +183,30 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
         {
             db.Tracks.Update(folderMoves);
         }
+#if PERF_MARKERS
+            classify.Tag("unchanged", unchanged);
+            classify.Tag("toRead", toRead.Count);
+            classify.Tag("skippedUnreadable", skippedUnreadable);
+        }
+#endif
 
         // 3. Read in parallel, write batches on this thread.
         int added = 0, updated = 0, failed = 0, read = 0;
         var addedTracks = new List<TrackRecord>();
         var removedIds = new HashSet<string>(StringComparer.Ordinal);
         var newIssueRecords = new List<ScanIssueRecord>();
+#if PERF_MARKERS
+        var batches = 0;
+        using (var readSpan = Perf.Begin(Perf.ScanRead))
+        {
+#endif
         if (!cancelled && toRead.Count > 0)
         {
             using var queue = new BlockingCollection<ReadOutcome>(boundedCapacity: 4096);
             var parallelism = options.MaxParallelism ?? Math.Clamp(Environment.ProcessorCount, 2, 16);
+#if PERF_MARKERS
+            readSpan.Tag("parallelism", parallelism);
+#endif
             var producer = Task.Run(() =>
             {
                 try
@@ -239,6 +270,10 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                     if (batch.Count >= options.BatchSize)
                     {
                         db.Tracks.Upsert(batch);
+#if PERF_MARKERS
+                        batches++;
+                        Perf.CountBatches();
+#endif
                         batch.Clear();
                     }
                 }
@@ -275,6 +310,10 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             if (batch.Count > 0)
             {
                 db.Tracks.Upsert(batch);
+#if PERF_MARKERS
+                batches++;
+                Perf.CountBatches();
+#endif
             }
 
             try
@@ -294,6 +333,13 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
                 System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(fatal).Throw();
             }
         }
+#if PERF_MARKERS
+            readSpan.Tag("toRead", toRead.Count);
+            readSpan.Tag("read", read);
+            readSpan.Tag("failed", failed);
+            readSpan.Tag("batches", batches);
+        }
+#endif
 
         // 4. Removals: only for complete walks, only under available roots, never under folders we could not list.
         var availableIds = available.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
@@ -313,9 +359,16 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
 
         // 4b. Moves: a vanished track and a new file with the same fingerprint are the same track. The new file was stored
         // under a fresh id; the vanished track takes over its path and data and keeps its own id and date added.
-        var (moves, ambiguous) = options.DetectMoves && !cancelled ? MatchMoves(vanished, addedTracks) : ([], 0);
+        List<(TrackRecord Old, TrackRecord New)> moves;
+        int ambiguous;
         var playlistEntries = 0;
-        var moveList = new List<TrackMove>(moves.Count);
+        List<TrackMove> moveList;
+#if PERF_MARKERS
+        using (var movesSpan = Perf.Begin(Perf.ScanMoves))
+        {
+#endif
+        (moves, ambiguous) = options.DetectMoves && !cancelled ? MatchMoves(vanished, addedTracks) : ([], 0);
+        moveList = new List<TrackMove>(moves.Count);
         if (moves.Count > 0)
         {
             foreach (var (old, moved) in moves)
@@ -332,6 +385,11 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             playlistEntries = PlaylistMaintenance.Retarget(db, movedTracks, null);
             FavoriteMaintenance.Retarget(db, movedTracks, null);
         }
+#if PERF_MARKERS
+            movesSpan.Tag("moved", moves.Count);
+            movesSpan.Tag("ambiguous", ambiguous);
+        }
+#endif
 
         foreach (var id in removedIds)
         {
@@ -358,10 +416,26 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
         db.Issues.Upsert(folderIssues);
 
         // 6. Rebuild albums/artists and folder stats (also after cancellation, so the library stays consistent).
+        bool indexChanged;
+        int albumCount, artistCount;
+#if PERF_MARKERS
+        using (var index = Perf.Begin(Perf.ScanIndex))
+        {
+#endif
         progress.Report(new ScanProgress("index", found.Count, toRead.Count, read, failed, null), force: true);
         // Nothing changed: the albums/artists index is still valid (saves a full pass on large libraries).
-        var changed = added + updated + removedIds.Count > 0 || cancelled || (existing.Count > 0 && db.Albums.Count() == 0);
-        var (albums, artists) = changed ? LibraryIndexer.Rebuild(db) : (db.Albums.Count(), db.Artists.Count());
+        indexChanged = added + updated + removedIds.Count > 0 || cancelled || (existing.Count > 0 && db.Albums.Count() == 0);
+        (albumCount, artistCount) = indexChanged ? LibraryIndexer.Rebuild(db) : (db.Albums.Count(), db.Artists.Count());
+#if PERF_MARKERS
+            index.Tag("skipped", indexChanged ? 0 : 1);
+            index.Tag("albums", albumCount);
+            index.Tag("artists", artistCount);
+        }
+#endif
+#if PERF_MARKERS
+        using (var checkpoint = Perf.Begin(Perf.ScanCheckpoint))
+        {
+#endif
         var counts = folders.ToDictionary(f => f.Id, f => db.Tracks.Count(t => t.FolderId == f.Id), StringComparer.Ordinal);
         foreach (var folder in folders)
         {
@@ -375,6 +449,9 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
         db.Folders.Update(folders);
         db.Db.Checkpoint();
         progress.Report(new ScanProgress("done", found.Count, toRead.Count, read, failed, null), force: true);
+#if PERF_MARKERS
+            checkpoint.Tag("folders", folders.Count);
+#endif
 
         return new ScanResult
         {
@@ -391,14 +468,17 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             PlaylistEntriesUpdated = playlistEntries,
             Moves = [.. moveList.OrderBy(m => m.To, StringComparer.Ordinal).Take(MaxMovesListed)],
             SkippedUnreadable = skippedUnreadable,
-            Albums = albums,
-            Artists = artists,
+            Albums = albumCount,
+            Artists = artistCount,
             Tracks = counts.Values.Sum(),
             Full = options.Full,
             Cancelled = cancelled,
             Elapsed = stopwatch.Elapsed,
             Issues = issues.ToList(),
         };
+#if PERF_MARKERS
+        }
+#endif
     }
 
     public const int MaxMovesListed = 200;
@@ -463,6 +543,9 @@ internal sealed class LibraryScanner(LibraryDatabase db, ITrackReader reader, Ti
             {
                 _last = now;
                 target.Report(value);
+#if PERF_MARKERS
+                Perf.CountProgress();
+#endif
             }
         }
     }

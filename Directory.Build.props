@@ -20,6 +20,17 @@
     <Version>0.1.0</Version>
   </PropertyGroup>
 
+  <!--
+    Operation markers (ActivitySource + Meter). Independent of Debug/Release.
+    Debug defaults on so a local build can capture. Every other configuration, including ordinary Release, defaults off.
+    Public packages do not rely on that default: eng/publish.sh and eng/publish.ps1 pass -p:EnablePerfMarkers=false.
+    An optimized capture build is: dotnet build -c Release -p:EnablePerfMarkers=true
+  -->
+  <PropertyGroup>
+    <EnablePerfMarkers Condition="'$(EnablePerfMarkers)' == '' AND '$(Configuration)' == 'Debug'">true</EnablePerfMarkers>
+    <EnablePerfMarkers Condition="'$(EnablePerfMarkers)' == ''">false</EnablePerfMarkers>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>

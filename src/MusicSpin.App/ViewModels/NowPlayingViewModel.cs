@@ -8,6 +8,9 @@ using MusicSpin.App.Services;
 using MusicSpin.Core;
 using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.ViewModels;
 
@@ -182,6 +185,10 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
     /// </summary>
     public async Task ShowAlbumAsync(string? albumId)
     {
+#if PERF_MARKERS
+        using var span = Perf.Begin(Perf.NowPlayingShow);
+        span.Tag("library", albumId is null ? 0 : 1);
+#endif
         _albumId = albumId;
         _shown = albumId is not null;
         if (albumId is null)

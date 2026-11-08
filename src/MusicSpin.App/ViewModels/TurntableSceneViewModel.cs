@@ -5,6 +5,9 @@ using MusicSpin.App.Controls;
 using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
 using MusicSpin.Core.Library;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.ViewModels;
 
@@ -45,6 +48,10 @@ public sealed partial class TurntableSceneViewModel : ObservableObject, IDisposa
     private readonly Notices _notices;
     private ITimer? _timer;
     private long _start;
+#if PERF_MARKERS
+    private PerfSpan _sceneSpan;
+    private bool _sceneSpanOpen;
+#endif
     private double _multiplier = 1;
     private string? _albumId;
     private string? _next;
@@ -166,6 +173,10 @@ public sealed partial class TurntableSceneViewModel : ObservableObject, IDisposa
         Places.HideSource(albumId, hidden: true);
         _ = _nowPlaying.ShowAlbumAsync(albumId);
         _timer = _time.CreateTimer(_ => _ui.Post(Tick), null, SpinClock.FrameInterval, SpinClock.FrameInterval);
+#if PERF_MARKERS
+        _sceneSpan = Perf.Begin(Perf.SceneSession);
+        _sceneSpanOpen = true;
+#endif
         await _player.LoadTracksAsync(tracks).ConfigureAwait(true);
     }
 
@@ -173,6 +184,14 @@ public sealed partial class TurntableSceneViewModel : ObservableObject, IDisposa
     {
         _timer?.Dispose();
         _timer = null;
+#if PERF_MARKERS
+        if (_sceneSpanOpen)
+        {
+            _sceneSpanOpen = false;
+            _sceneSpan.Tag("step", (int)Step);
+            _sceneSpan.Dispose();
+        }
+#endif
     }
 
     private async Task PlayAtOnceAsync(string albumId, IReadOnlyList<TrackSummary> tracks)

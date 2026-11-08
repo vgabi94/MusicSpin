@@ -1,6 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using MusicSpin.App.Services;
 using MusicSpin.Core.Playback;
+#if PERF_MARKERS
+using MusicSpin.Core.Diagnostics;
+#endif
 
 namespace MusicSpin.App.ViewModels;
 
@@ -54,6 +57,11 @@ public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
     private readonly int[] _shownPeaks = new int[Bands];
     private ITimer? _timer;
     private long _last;
+#if PERF_MARKERS
+    private PerfSpan _spectrumSpan;
+    private bool _spectrumSpanOpen;
+    private int _framesAtStart;
+#endif
 
     public SpectrumViewModel(TimeProvider time, IUiDispatcher ui)
     {
@@ -101,6 +109,12 @@ public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
             Catch(i);
         }
 
+#if PERF_MARKERS
+        if (_timer is null)
+        {
+            _framesAtStart = Frames;
+        }
+#endif
         Publish();
         Run();
     }
@@ -207,6 +221,10 @@ public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
 
         _last = _time.GetTimestamp();
         _timer = _time.CreateTimer(_ => _ui.Post(Tick), null, FrameInterval, FrameInterval);
+#if PERF_MARKERS
+        _spectrumSpan = Perf.Begin(Perf.SpectrumSession);
+        _spectrumSpanOpen = true;
+#endif
         OnPropertyChanged(nameof(IsRunning));
     }
 
@@ -232,6 +250,14 @@ public sealed partial class SpectrumViewModel : ObservableObject, IDisposable
 
         _timer.Dispose();
         _timer = null;
+#if PERF_MARKERS
+        if (_spectrumSpanOpen)
+        {
+            _spectrumSpanOpen = false;
+            _spectrumSpan.Tag("frames", Frames - _framesAtStart);
+            _spectrumSpan.Dispose();
+        }
+#endif
         OnPropertyChanged(nameof(IsRunning));
     }
 }

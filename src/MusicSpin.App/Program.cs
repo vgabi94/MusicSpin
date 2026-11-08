@@ -10,6 +10,9 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+#if PERF_MARKERS
+        MusicSpin.Core.Diagnostics.Perf.EnableFromEnvironment();
+#endif
         AppHost.Initialize(args);
         if (!AppHost.IsTrayMode)
         {
