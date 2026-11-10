@@ -26,9 +26,15 @@ public sealed partial class AboutViewModel : LayerViewModel
     public const string Summary =
         "A desktop music player for hi-res audio, with a command line that people and AI agents can script. Free and open source under the GNU GPL, version 3 or later.";
 
+    /// <summary>
+    /// About snapshots set this so the image shows a fixed version instead of the build's.
+    /// The app leaves it null.
+    /// </summary>
+    internal static Func<string>? VersionSource { get; set; }
+
     /// <summary>The app's own version (not the entry assembly's, which in tests is the test runner).</summary>
     public AboutViewModel()
-        : this(VersionOf(typeof(AboutViewModel).Assembly))
+        : this(VersionSource?.Invoke() ?? VersionOf(typeof(AboutViewModel).Assembly))
     {
     }
 

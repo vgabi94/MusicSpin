@@ -40,6 +40,10 @@ or `Opus: `. Comments without a tag are Gabriel's.
 - Report the cause to Gabriel: the failing job, the test and the likely reason.
 - Open a fix PR only if nobody has claimed the failure and Gabriel approves.
 
+## Releases
+
+A release bump changes only `<Version>` in `Directory.Build.props`. The tag is `v` plus that value. Do not copy the number into docs, tests, or snapshots.
+
 ## Commits
 
 - Author: `Gabriel Vaduva <vgabriel12@outlook.com>`.

@@ -145,14 +145,19 @@ public sealed class AboutTests
     public void The_version_is_the_apps_without_the_source_revision()
     {
         var app = typeof(AboutViewModel).Assembly;
-        var version = AboutViewModel.VersionOf(app);
+        var informational = app.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        Assert.NotNull(informational);
+        Assert.False(string.IsNullOrWhiteSpace(informational));
+        Assert.Contains('+', informational);
 
-        // The SDK stamps "1.0.0-preview.1+<commit>"; the dialog shows the part before the '+', prerelease label included.
-        var informational = app.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
-        Assert.Contains("+", informational, StringComparison.Ordinal);
-        Assert.Equal(informational[..informational.IndexOf('+')], version);
-        Assert.Equal("1.0.0-preview.1", version);
-        Assert.Equal(version, new AboutViewModel().Version);
+        // The same read the dialog uses: the stamped version, without the source revision after '+'.
+        var reported = AboutViewModel.VersionOf(app);
+        Assert.Equal(informational[..informational.IndexOf('+')], reported);
+        Assert.DoesNotContain("+", reported, StringComparison.Ordinal);
+
+        var about = new AboutViewModel();
+        Assert.Equal(reported, about.Version);
+        Assert.Equal($"Version {reported}", about.VersionText);
         Assert.Equal("Version 1.2.3-beta", new AboutViewModel("1.2.3-beta").VersionText);
         Assert.Throws<ArgumentNullException>(() => AboutViewModel.VersionOf(null!));
     }
@@ -285,16 +290,29 @@ public sealed class AboutTests
         Assert.False(vm.About.IsOpen);
     }
 
+    /// <summary>Not a release. The About image stays put when <c>&lt;Version&gt;</c> changes.</summary>
+    private const string SnapshotVersion = "9.9.9-test";
+
     [AvaloniaTheory]
     [InlineData(AppTheme.Dark)]
     [InlineData(AppTheme.Light)]
     public async Task Snapshot_of_About(AppTheme theme)
     {
-        await using var app = await AppHarness.OpenAsync(new AppOptions { Theme = theme });
-        app.ViewModel.About.ShowAboutCommand.Execute(null);
-        Gui.FinishAnimations();
+        AboutViewModel.VersionSource = () => SnapshotVersion;
+        try
+        {
+            await using var app = await AppHarness.OpenAsync(new AppOptions { Theme = theme });
+            app.ViewModel.About.ShowAboutCommand.Execute(null);
+            Gui.FinishAnimations();
+            Assert.Equal($"Version {SnapshotVersion}", app.ViewModel.About.VersionText);
+            Assert.Equal($"Version {SnapshotVersion}", Gui.Find<TextBlock>(app.Window, "AboutVersion").Text);
 
-        Snapshots.Match(app.Window, Gui.Find<Border>(app.Window, "AboutBox"), $"about-{theme.ToString().ToLowerInvariant()}");
+            Snapshots.Match(app.Window, Gui.Find<Border>(app.Window, "AboutBox"), $"about-{theme.ToString().ToLowerInvariant()}");
+        }
+        finally
+        {
+            AboutViewModel.VersionSource = null;
+        }
     }
 
     [AvaloniaFact]
