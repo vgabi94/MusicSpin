@@ -116,7 +116,7 @@ Older 0.x versions read a name-keyed `mcpServers` map from the project's `.grok/
 
 ### Verified on this machine
 
-A complete stdio session against the published linux-x64 build (`/workspace/MusicSpin/artifacts/publish/linux-x64/music-spin`):
+A complete stdio session against a published linux-x64 build (`/workspace/MusicSpin/artifacts/publish/linux-x64/music-spin`). `<version>` is the build's version and `<commit>` is its source revision:
 
 ```console
 $ printf '%s\n' \
@@ -125,7 +125,7 @@ $ printf '%s\n' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{"text":"says","limit":1}}}' \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pause","arguments":{}}}' \
   | music-spin mcp --backend null
-{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"logging":{},"tools":{"listChanged":true}},"serverInfo":{"name":"music-spin","title":"MusicSpin","version":"0.1.0+73f41b9..."},"instructions":"MusicSpin controls a local hi-res music player. ..."}}
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"logging":{},"tools":{"listChanged":true}},"serverInfo":{"name":"music-spin","title":"MusicSpin","version":"<version>+<commit>"},"instructions":"MusicSpin controls a local hi-res music player. ..."}}
 {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"{\"query\":\"says\",\"artists\":[],\"albums\":[],\"tracks\":{\"total\":1,\"offset\":0,\"limit\":1,\"count\":1,\"items\":[{\"id\":\"0199c4a2-5e7f-7b31-a9d4-2c8e1f6b3a70\",\"path\":\"/home/me/Music/Nils Frahm/Spaces/02 Says.flac\",\"title\":\"Says\",...}]}}"}]}}
 {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"player_not_running: No background player is running for '/home/me/MusicSpin/.usrdata'. Start one with 'music-spin play <file> | --album <title> | --artist <name>'."}],"isError":true}}
 ```

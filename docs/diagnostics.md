@@ -17,30 +17,30 @@
 
 When a check fails, `--json` still includes the full report under `data`, next to `error`.
 
-Real output (published linux-x64 build on Debian 13 in a headless VM; `/home/me/MusicSpin` is the portable folder):
+What a published linux-x64 build prints on Debian 13 in a headless VM (`/home/me/MusicSpin` is the portable folder). `<version>` is the build's version and `<commit>` is its source revision:
 
 ```console
 $ music-spin doctor
-music-spin 0.1.0+73f41b91588edc1f451c4971ce53b14e24dba5e6 on .NET 10.0.12, Debian GNU/Linux 13 (trixie) (linux-x64)
+music-spin <version>+<commit> on .NET 10.0.12, Debian GNU/Linux 13 (trixie) (linux-x64)
   [ok]   FFmpeg n9.0.2-23-g27b46f0fbc-20261008, license: LGPL version 3 or later (/home/me/MusicSpin/ffmpeg)
   [ok]   Audio: miniaudio (PulseAudio), 1 playback device(s)
   [ok]   Data: /home/me/MusicSpin/.usrdata (portable)
 
 $ music-spin doctor --json
-{"ok":true,"command":"doctor","data":{"version":"0.1.0+73f41b91588edc1f451c4971ce53b14e24dba5e6","runtime":".NET 10.0.12","os":"Debian GNU/Linux 13 (trixie) (linux-x64)","decoder":{"name":"ffmpeg","available":true,"version":"n9.0.2-23-g27b46f0fbc-20261008","license":"LGPL version 3 or later","lgpl":true,"path":"/home/me/MusicSpin/ffmpeg"},"audioBackend":"miniaudio (PulseAudio)","playbackDevices":1,"dataDir":{"path":"/home/me/MusicSpin/.usrdata","source":"portable","exists":true,"writable":true,"settingsFile":"/home/me/MusicSpin/.usrdata/settings.json","settingsExists":true,"libraryFile":"/home/me/MusicSpin/.usrdata/library.db","libraryExists":true,"librarySizeBytes":180224},"executableDirectory":"/home/me/MusicSpin"}}
+{"ok":true,"command":"doctor","data":{"version":"<version>+<commit>","runtime":".NET 10.0.12","os":"Debian GNU/Linux 13 (trixie) (linux-x64)","decoder":{"name":"ffmpeg","available":true,"version":"n9.0.2-23-g27b46f0fbc-20261008","license":"LGPL version 3 or later","lgpl":true,"path":"/home/me/MusicSpin/ffmpeg"},"audioBackend":"miniaudio (PulseAudio)","playbackDevices":1,"dataDir":{"path":"/home/me/MusicSpin/.usrdata","source":"portable","exists":true,"writable":true,"settingsFile":"/home/me/MusicSpin/.usrdata/settings.json","settingsExists":true,"libraryFile":"/home/me/MusicSpin/.usrdata/library.db","libraryExists":true,"librarySizeBytes":180224},"executableDirectory":"/home/me/MusicSpin"}}
 ```
 
 FFmpeg not found (exit 6):
 
 ```console
 $ music-spin doctor --backend null
-music-spin 0.1.0+73f41b91588edc1f451c4971ce53b14e24dba5e6 on .NET 10.0.12, Debian GNU/Linux 13 (trixie) (linux-x64)
+music-spin <version>+<commit> on .NET 10.0.12, Debian GNU/Linux 13 (trixie) (linux-x64)
   [fail] FFmpeg: FFmpeg 9.0 shared libraries (libavcodec.so.63, libavformat.so.63, libavutil.so.61, libswresample.so.7) were not found in the system library path. Run eng/get-ffmpeg.sh (or .ps1), install FFmpeg 9.0, or set MUSICSPIN_FFMPEG_PATH.
   [ok]   Audio: null (realtime), 1 playback device(s)
   [ok]   Data: /home/me/MusicSpin/.usrdata (portable)
 
 $ music-spin doctor --backend null --json
-{"ok":false,"command":"doctor","error":{"code":"decoder_unavailable","exitCode":6,"message":"FFmpeg 9.0 shared libraries (...) were not found in the system library path. Run eng/get-ffmpeg.sh (or .ps1), install FFmpeg 9.0, or set MUSICSPIN_FFMPEG_PATH."},"data":{"version":"0.1.0+73f4...","decoder":{"name":"ffmpeg","available":false,"error":"..."},"audioBackend":"null (realtime)","playbackDevices":1,"dataDir":{...},...}}
+{"ok":false,"command":"doctor","error":{"code":"decoder_unavailable","exitCode":6,"message":"FFmpeg 9.0 shared libraries (...) were not found in the system library path. Run eng/get-ffmpeg.sh (or .ps1), install FFmpeg 9.0, or set MUSICSPIN_FFMPEG_PATH."},"data":{"version":"<version>+<commit>","decoder":{"name":"ffmpeg","available":false,"error":"..."},"audioBackend":"null (realtime)","playbackDevices":1,"dataDir":{...},...}}
 ```
 
 Data folder blocked by a file named `.usrdata` (exit 9):

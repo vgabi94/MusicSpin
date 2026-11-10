@@ -115,7 +115,7 @@ Only the `.ico` and the 64 px PNG are Avalonia resources. The master and the mac
 - uploads one `musicspin-<version>-<rid>.tar.gz` per RID as a build artifact (tar keeps executable bits and the `.app` bundle; kept for 14 days);
 - on a `v*` tag only, once all six packages succeed: creates a **draft** GitHub release titled `MusicSpin <version>`, with the six archives attached and generated release notes. A version with a `-` suffix (`0.2.0-beta.1`) is marked as a pre-release. Re-running the workflow for the same tag replaces the files on the draft; if that release is already published, the job fails and leaves it alone.
 
-It never creates tags, never publishes a release and does not sign anything. To release: set `<Version>` in `Directory.Build.props` on `main`, push the matching tag (`git tag v0.2.0 && git push origin v0.2.0`), then review the draft on GitHub and publish it. **Planned:** Windows signing, macOS signing and notarization.
+It never creates tags, never publishes a release and does not sign anything. To release: set `<Version>` in `Directory.Build.props` on `main` — that property is the only edit a bump makes — push the matching tag (`git tag v0.2.0 && git push origin v0.2.0`), then review the draft on GitHub and publish it. The CLI, About, MCP, and the publish scripts (including the generated macOS `Info.plist`) read the version the build stamped. Doc samples say `<version>`, and the About snapshots show a fixed stand-in. **Planned:** Windows signing, macOS signing and notarization.
 
 ## Coverage
 
