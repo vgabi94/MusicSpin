@@ -6,11 +6,11 @@
 
 <img src="docs/images/banner-hero.svg" alt="Music Spin. The application icon, a vinyl record on a graphite deck with a metallic navy eighth note, beside the name and the line A desktop player for hi-res music." width="1200">
 
-Music Spin plays a hi-res library that stays in your folders. The window and the `music-spin` command share one player, and an assistant can use that player too. Start an album in the terminal, skip a track in the window, and both are looking at the same queue.
+Music Spin plays a high-resolution library that stays in your folders. The window and the `music-spin` command use one player. An AI agent can use that player too. Start an album from the terminal, then skip a track in the window. Both use the same queue.
 
 ## Now Playing
 
-Now Playing puts the album on a turntable, and picking one can carry the record onto the platter before it plays. Settings has several decks, a light theme and a dark one, and the accent colour follows the album that is playing. You can slow the animation on its own, so the record looks calmer while the audio is unchanged. The bar has the transport, the volume, a spectrum and the file's format, media keys follow on Windows, macOS and Linux, and a tray icon stays up while the player runs.
+Now Playing puts the album on a turntable. Pick an album and the record can move onto the platter before it plays. Settings has several decks, a light theme and a dark theme. The highlight colour comes from the album that is playing. You can slow the picture of the spinning record without changing the sound. The bar shows play, pause and skip, the volume, bars that move with the music, and the kind of file. Keyboard media keys work, and Windows, macOS and Linux show the track in their own controls. A tray icon stays up while the music is playing.
 
 <table>
   <tr>
@@ -23,25 +23,27 @@ Now Playing puts the album on a turntable, and picking one can carry the record 
 
 ## Albums, tracks and search
 
-Albums are cards or a shelf, sorted by artist, title or year and grouped by artist or genre, and tracks are one list. Search ignores case and accents, and a prefix such as `artist:`, `album:`, `title:`, `genre:` or `year:` keeps that word in one field. Add your folders and Music Spin scans them. Later scans only re-read what changed, you can watch the folders while the app is open, and a renamed or moved file stays the same track, so playlists, favorites and the queue follow it. `library relocate` points the library at a folder that has moved. Compilations group as Various Artists when the tags say so, and the music files themselves are only read.
+Albums are cards or a shelf. You can sort them by artist, title or year, and group them by artist or genre. Tracks are one list. Search ignores capitals and accents. You can limit a word to one field, for example `artist:`, `album:`, `title:`, `genre:` or `year:`. Add your folders and Music Spin reads them. The next scan reads only files that changed. You can turn on a watch so the app scans again while it is open. Rename or move a file and it stays the same track in your playlists, favorites and queue. If a whole folder has moved, `library relocate` points the library at the new place. Compilations are grouped as Various Artists when the tags say so. Music Spin only reads your files.
+
+How scanning, search and moving folders work is in [Music library](docs/library.md).
 
 <img src="docs/images/albums-dark.png" alt="The Albums page in the dark theme. Cards grouped by genre, with the player bar along the bottom." width="720">
 
-How scanning, search and relocate work is in [Music library](docs/library.md).
-
 ## Queue, playlists and favorites
 
-The queue opens from the player bar: drag albums and tracks in, reorder them, and save what is there as a playlist. Playlists and favorites sit in the sidebar, and you can drop music onto either. Right-click an album or a track to play it, play it next, add it to the queue or a playlist, or mark a track as a favorite. The queue is restored, paused, the next time the player starts.
+The queue opens from the player bar. Drag albums and tracks into it. You can change their order. You can save the queue as a playlist. Playlists and favorites are in the sidebar. You can drop music onto them. Right-click an album or a track to play it, to play it next, to add it to the queue, or to add it to a playlist. You can also mark a track as a favorite from that menu. The next time the player starts, the queue comes back paused.
 
 ## Radio
 
-Radio builds a station from genres, artists, years, formats, or the whole collection, then plays matching tracks at random. A track is not picked again from the recent history, and the next one is a different artist and album when the station has that choice. You can save a station and start it again later, and the ordinary transport still works while it plays. [Playback](docs/playback.md#radio) has the filter rules.
+Radio makes a station from genres, artists, years, formats, or the whole library. It then plays the matching tracks in random order. It does not pick a recent track again. When it can, the next track is by a different artist and from a different album. You can save a station and start it again later. Play, pause and skip still work while the station is on. The rules for what a station includes are in [Playback](docs/playback.md#radio).
 
 <img src="docs/images/radio-dark.png" alt="The Radio page in the dark theme. A Jazz station is on air." width="720">
 
 ## Playback
 
-FFmpeg 9.0 decodes the file, lossless or lossy, and DSD is played as PCM. The device opens at the file's own sample rate and, at full volume, Music Spin leaves the samples alone. Exclusive mode asks the system to give this player the device, the bar shows the format that opened, and that is the bit-perfect path when the device accepts the file's format. Tracks that share a rate, channel count and bit depth play with no gap. Volume levelling and the equalizer are off until you turn them on. Levelling then reads ReplayGain and R128 tags, or measures files that have neither, without lifting a peak into clipping. [Playback](docs/playback.md) covers the formats, exclusive mode and levelling.
+FFmpeg 9.0 reads the audio file. It plays uncompressed and compressed files, and it turns DSD files into ordinary audio before playing them. The sound device opens at the rate the file was recorded. At full volume, Music Spin does not change that audio. You can ask the system to let Music Spin use the sound device by itself. The bar shows what the device opened. The audio goes out unchanged when the device accepts the file. Tracks recorded the same way play with no gap. Loudness matching and the tone controls are off until you turn them on. Loudness matching uses the loudness notes in the file, or measures a file that has none. It will not raise a track so far that the loud parts distort.
+
+The details are in [Playback](docs/playback.md).
 
 ## The command line
 
@@ -52,11 +54,11 @@ $ music-spin play --album "Album title"
 $ music-spin status
 ```
 
-`play` returns at once, and the music keeps going after the terminal closes. Later commands such as `next`, `pause` and `volume` talk to that same player, and `--json` prints one object per command, failures included. Closing the window stops a player the app started, while a player you started from the terminal only pauses, and `music-spin resume` continues. Every command is in the [CLI reference](docs/cli-reference.md). `music-spin mcp` lets an assistant search the library and control playback, with setup in [MCP](docs/mcp.md) and the JSON conventions in [AI agents](docs/ai-agents.md).
+`play` returns at once. The music keeps going after you close the terminal. Commands such as `next`, `pause` and `volume` talk to that same player. Add `--json` and each command prints one block of data, including errors. If the app started the player, closing the window stops the music. If you started the player from the terminal, closing the window only pauses it. `music-spin resume` continues from there. Every command is in the [command line reference](docs/cli-reference.md). The `music-spin mcp` command lets an AI agent search the library and control playback. The connection steps are in [how to connect an AI agent](docs/mcp.md). How programs read each command's output is in [AI agents](docs/ai-agents.md).
 
 ## Install
 
-No release is published yet. With the [.NET 10 SDK](https://dotnet.microsoft.com/download), these scripts build a portable folder:
+No release is published yet. With the [.NET 10 SDK](https://dotnet.microsoft.com/download), these scripts build a folder you can copy anywhere.
 
 ```bash
 git clone https://github.com/vgabi94/MusicSpin.git
@@ -68,25 +70,25 @@ cd MusicSpin
 ./eng/publish.ps1 -DownloadFFmpeg
 ```
 
-Copy `artifacts/publish/<rid>/` wherever you like. It holds `MusicSpin` (on macOS, `MusicSpin.app`) and `music-spin`. Windows and Linux get FFmpeg 9.0 from the download step. On macOS, install FFmpeg 9 yourself, and Linux needs `libicu`, which a desktop already has. The first launch asks you to add a music folder, and the albums appear as the scan finds them. `music-spin doctor` checks FFmpeg, the audio output and the data folder. Settings and the library live in `.usrdata` beside the program, beside `MusicSpin.app` on macOS, so copying the folder takes your library with it. [Getting started](docs/getting-started.md) explains that layout and where FFmpeg is loaded from. [Building](docs/building.md) is for a checkout: build, test and the other publish options.
+Copy the folder the script writes under `artifacts/publish`. It holds `MusicSpin` and `music-spin`. On macOS the app is `MusicSpin.app`. The download gets FFmpeg 9.0 for Windows and Linux. On macOS, install FFmpeg 9 yourself. Linux needs `libicu`, a text library that desktop systems already include. The first time you open the app, it asks you to add a music folder. Albums appear as the scan finds them. `music-spin doctor` checks that FFmpeg is present, that sound can play, and where the app stores its files. Settings and the library are kept in a folder named `.usrdata` next to the program, so copying that folder takes your library with it. On macOS, `.usrdata` sits next to `MusicSpin.app`. [Getting started](docs/getting-started.md) explains this layout and where FFmpeg is loaded from. [Building](docs/building.md) explains how to build and test from a checkout.
 
 ## Documentation
 
 | | |
 | --- | --- |
-| [Getting started](docs/getting-started.md) | The portable folder, `.usrdata`, FFmpeg |
-| [Playback](docs/playback.md) | Formats, exclusive mode, the queue, radio, levelling |
+| [Getting started](docs/getting-started.md) | The copied folder, `.usrdata`, FFmpeg |
+| [Playback](docs/playback.md) | File types, the sound device, the queue, radio, loudness |
 | [Music library](docs/library.md) | Scanning, renames, search |
-| [CLI reference](docs/cli-reference.md) | Commands, `--json`, exit codes |
-| [MCP](docs/mcp.md) | Assistant setup |
-| [Diagnostics](docs/diagnostics.md) | `doctor`, devices, logs |
+| [Command line](docs/cli-reference.md) | Commands, data output, exit codes |
+| [Connecting an AI agent](docs/mcp.md) | Setup |
+| [Diagnostics](docs/diagnostics.md) | Checks, sound devices, logs |
 | [Building](docs/building.md) | Build, test, publish |
 
 ## License
 
 GPL-3.0-or-later. [LICENSE](LICENSE). [LICENSE-EXCEPTION.txt](LICENSE-EXCEPTION.txt).
 <!--
-  Screenshots are headless renders of the current app, copied from
+  Screenshots are renders of the current app, copied from
   tests/MusicSpin.Tests.Ui/Snapshots. The header icon is the inner markup of
   src/MusicSpin.App/Assets/AppIcon/app-icon.svg, copied verbatim.
 -->
