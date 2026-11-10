@@ -17,7 +17,7 @@
     <Copyright>Copyright (c) 2026 Gabriel-Eugen Vaduva</Copyright>
     <!-- With the additional permission for Svg.Custom / SVG.NET (MS-PL) in LICENSE-EXCEPTION.txt. -->
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
-    <Version>0.1.0</Version>
+    <Version>1.0.0-preview.1</Version>
   </PropertyGroup>
 
   <!--

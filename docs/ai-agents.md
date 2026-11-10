@@ -70,7 +70,7 @@ $ music-spin stop --json
 {"ok":true,"command":"stop","data":{"state":"stopped","positionSeconds":0,"durationSeconds":240,"volume":0.8,"track":{"path":"/home/me/Music/Nils Frahm/Spaces/03 Hammers.flac",...},"queueIndex":2,"queueLength":3,"item":{...},"output":{"backend":"null (realtime)","exclusive":false},"ended":false}}
 
 $ music-spin player status --json
-{"ok":true,"command":"player status","data":{"running":true,"pid":116671,"version":"0.1.0","protocol":1,"endpoint":"unix:/home/me/MusicSpin/.usrdata/player.sock","dataDir":"/home/me/MusicSpin/.usrdata","logFile":"/home/me/MusicSpin/.usrdata/player.log","startedAt":"2026-10-08T16:02:01.8657694+00:00","uptimeSeconds":4.2,"idleTimeoutSeconds":900,"output":{"backend":"null (realtime)","exclusive":false},"state":"stopped","queueLength":3}}
+{"ok":true,"command":"player status","data":{"running":true,"pid":116671,"version":"1.0.0-preview.1","protocol":1,"endpoint":"unix:/home/me/MusicSpin/.usrdata/player.sock","dataDir":"/home/me/MusicSpin/.usrdata","logFile":"/home/me/MusicSpin/.usrdata/player.log","startedAt":"2026-10-08T16:02:01.8657694+00:00","uptimeSeconds":4.2,"idleTimeoutSeconds":900,"output":{"backend":"null (realtime)","exclusive":false},"state":"stopped","queueLength":3}}
 
 $ music-spin quit --json
 {"ok":true,"command":"quit","data":{"stopped":true,"pid":116671,"dataDir":"/home/me/MusicSpin/.usrdata"}}

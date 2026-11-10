@@ -147,9 +147,11 @@ public sealed class AboutTests
         var app = typeof(AboutViewModel).Assembly;
         var version = AboutViewModel.VersionOf(app);
 
-        // The SDK stamps "0.1.0+<commit>"; the dialog shows the part before the '+'.
-        Assert.Contains("+", app.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion, StringComparison.Ordinal);
-        Assert.Equal(app.GetName().Version!.ToString(3), version);
+        // The SDK stamps "1.0.0-preview.1+<commit>"; the dialog shows the part before the '+', prerelease label included.
+        var informational = app.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        Assert.Contains("+", informational, StringComparison.Ordinal);
+        Assert.Equal(informational[..informational.IndexOf('+')], version);
+        Assert.Equal("1.0.0-preview.1", version);
         Assert.Equal(version, new AboutViewModel().Version);
         Assert.Equal("Version 1.2.3-beta", new AboutViewModel("1.2.3-beta").VersionText);
         Assert.Throws<ArgumentNullException>(() => AboutViewModel.VersionOf(null!));
