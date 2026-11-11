@@ -1,6 +1,7 @@
 # Music Spin
 
 [![CI status](https://github.com/vgabi94/MusicSpin/actions/workflows/ci.yml/badge.svg)](https://github.com/vgabi94/MusicSpin/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/vgabi94/MusicSpin?include_prereleases&sort=semver&label=release)](https://github.com/vgabi94/MusicSpin/releases)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](#license)
 [![Windows, macOS and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555555)](#install)
 
@@ -58,7 +59,9 @@ $ music-spin status
 
 ## Install
 
-No release is published yet. With the [.NET 10 SDK](https://dotnet.microsoft.com/download), these scripts build a folder you can copy anywhere.
+A preview release is on the [Releases page](https://github.com/vgabi94/MusicSpin/releases). Download the `.tar.gz` for your computer and unpack it into a folder. There are six: Windows, macOS and Linux, each for x64 and for arm64.
+
+You can also build that folder. With the [.NET 10 SDK](https://dotnet.microsoft.com/download), these scripts write it under `artifacts/publish`.
 
 ```bash
 git clone https://github.com/vgabi94/MusicSpin.git
@@ -70,7 +73,7 @@ cd MusicSpin
 ./eng/publish.ps1 -DownloadFFmpeg
 ```
 
-Copy the folder the script writes under `artifacts/publish`. It holds `MusicSpin` and `music-spin`. On macOS the app is `MusicSpin.app`. The download gets FFmpeg 9.0 for Windows and Linux. On macOS, install FFmpeg 9 yourself. Linux needs `libicu`, a text library that desktop systems already include. The first time you open the app, it asks you to add a music folder. Albums appear as the scan finds them. `music-spin doctor` checks that FFmpeg is present, that sound can play, and where the app stores its files. Settings and the library are kept in a folder named `.usrdata` next to the program, so copying that folder takes your library with it. On macOS, `.usrdata` sits next to `MusicSpin.app`. [Getting started](docs/getting-started.md) explains this layout and where FFmpeg is loaded from. [Building](docs/building.md) explains how to build and test from a checkout.
+The folder holds `MusicSpin` and `music-spin`. On macOS the app is `MusicSpin.app`. Windows and Linux include FFmpeg 9.0. On macOS, install FFmpeg 9 yourself. Linux needs `libicu`, a text library that desktop systems already include. The first time you open the app, it asks you to add a music folder. Albums appear as the scan finds them. `music-spin doctor` checks that FFmpeg is present, that sound can play, and where the app stores its files. Settings and the library are kept in a folder named `.usrdata` next to the program, so copying that folder takes your library with it. On macOS, `.usrdata` sits next to `MusicSpin.app`. [Getting started](docs/getting-started.md) explains this layout and where FFmpeg is loaded from. [Building](docs/building.md) explains how to build and test from a checkout.
 
 ## Documentation
 

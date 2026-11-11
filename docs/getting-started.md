@@ -2,14 +2,11 @@
 
 ## Download
 
-No public release is available yet. Until there is one, you can get a portable build in one of two ways:
+A preview release is on the [Releases page](https://github.com/vgabi94/MusicSpin/releases). Download `musicspin-<version>-<rid>.tar.gz` and unpack it into a folder. `<rid>` is one of `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64`. Windows and Linux packages include FFmpeg 9.0 in `ffmpeg/`. macOS packages do not: install FFmpeg 9 yourself (see [FFmpeg](#ffmpeg)). On macOS the app is `MusicSpin.app`.
 
-- **Build it yourself:** `./eng/publish.sh` (Linux/macOS) or `./eng/publish.ps1` (Windows). See [Building](building.md).
-- **CI artifacts:** the `Release builds` GitHub workflow (`.github/workflows/release.yml`, started manually or by a `v*` tag) uploads one `musicspin-<version>-<rid>.tar.gz` per platform as a build artifact. It does not create a GitHub release.
+You can also build a portable folder: `./eng/publish.sh` (Linux and macOS) or `./eng/publish.ps1` (Windows). See [Building](building.md).
 
-**Planned:** published GitHub releases, and macOS signing/notarization.
-
-Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`.
+**Planned:** Windows signing, macOS signing and notarization.
 
 ## Portable layout
 
@@ -20,7 +17,7 @@ MusicSpin/
 ├── music-spin(.exe)            CLI, self-contained single file
 ├── MusicSpin(.exe)             desktop app, self-contained single file (macOS: MusicSpin.app)
 ├── TagLibSharp.dll             LGPL tag library, kept outside the single file so it can be replaced
-├── ffmpeg/                     LGPL FFmpeg 9.0 shared libraries (loaded at runtime)
+├── ffmpeg/                     LGPL FFmpeg 9.0 shared libraries, when the package includes them
 ├── LICENSE, THIRD-PARTY-NOTICES.md
 └── .usrdata/                   the data folder, created on first use (see below)
 ```
@@ -104,12 +101,12 @@ MusicSpin decodes audio with FFmpeg's **shared libraries**, loaded at runtime. I
 Search order (the first location that contains the libraries wins; each location is also checked for `lib/` and `bin/` subfolders):
 
 1. `MUSICSPIN_FFMPEG_PATH`
-2. `ffmpeg/` next to the executable (this is what release builds ship)
+2. `ffmpeg/` next to the executable (Windows and Linux release packages include this folder)
 3. the per-user folder: `%LOCALAPPDATA%\MusicSpin\ffmpeg` (Windows), `$XDG_DATA_HOME/MusicSpin/ffmpeg` or `~/.local/share/MusicSpin/ffmpeg` (Linux), `~/Library/Application Support/MusicSpin/ffmpeg` (macOS)
 4. Homebrew on macOS: `/opt/homebrew/opt/ffmpeg/lib`, `/usr/local/opt/ffmpeg/lib`, `/opt/homebrew/lib`, `/usr/local/lib`
 5. the OS library path
 
-Without a release build:
+On macOS, or when a build was made without the FFmpeg download:
 
 | OS | How to get FFmpeg 9.0 |
 |---|---|
@@ -164,4 +161,4 @@ Add `--json` to any command for machine-readable output (see [AI agents](ai-agen
 
 ## The desktop app
 
-`MusicSpin` currently opens an empty Avalonia window. **Planned:** the UI design (library, now playing, theming), and attaching the app to the same background player the CLI uses.
+`MusicSpin` is the window. It shows your albums, Now Playing, radio and settings, and it uses the same player and the same library as `music-spin`. With no music yet, it asks you to add a folder.

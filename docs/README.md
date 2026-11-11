@@ -1,6 +1,6 @@
 # MusicSpin documentation
 
-MusicSpin is a GPL-licensed (GPL-3.0-or-later), cross-platform hi-res music player. It is made of a desktop app (`MusicSpin`) and a command-line tool (`music-spin`). The CLI is designed so that both people and AI agents can script it. Version 0.1 is **pre-UI**: the desktop app is an empty window. Everything else described here works today and is tested on Linux.
+MusicSpin is a GPL-licensed (GPL-3.0-or-later), cross-platform hi-res music player. It is made of a desktop app (`MusicSpin`) and a command-line tool (`music-spin`). The CLI is designed so that both people and AI agents can script it. The desktop app and the command line both work today and are tested on Linux.
 
 These pages describe what the code does **today**. Anything not implemented yet is marked **Planned**.
 
