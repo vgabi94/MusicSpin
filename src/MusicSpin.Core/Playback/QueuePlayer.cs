@@ -605,12 +605,13 @@ public sealed class QueuePlayer : IDisposable
     /// <summary>
     /// Plays entry <paramref name="index"/> of <paramref name="context"/>: the list the user clicked in (an album, a
     /// playlist, the Tracks view). When that list is what the queue is playing (the same tracks in the same order, or in
-    /// any order with shuffle on), the queue stays and playback jumps to the clicked track; the up-next entries (queued
+    /// any order with shuffle on), or one contiguous run of it (one album inside "play everything" by an artist or
+    /// "play all" of a genre, #225), the queue stays and playback jumps to the clicked track; the up-next entries (queued
     /// with "Play next" or "Add to queue") are kept and move along to follow it, so they still play right after it.
     /// Anything else (a different list, or while radio plays) starts the list as a new queue, like <see cref="SetQueue"/>,
     /// which drops everything queued: choosing something else to play is how the queue is replaced.
-    /// <para>Entries are compared by track id (path when an entry has none). Entries the queue gained at its end are not
-    /// part of the list, so such a queue counts as a different one.</para>
+    /// <para>Entries are compared by track id (path when an entry has none). A run matches in the queue's own order
+    /// (the order before shuffle).</para>
     /// </summary>
     /// <exception cref="MusicSpinException">InvalidArgument when <paramref name="index"/> is outside the list; FileNotFound
     /// when nothing from the clicked track on can be opened (the queue is kept and the current track keeps playing).</exception>
@@ -640,57 +641,81 @@ public sealed class QueuePlayer : IDisposable
         }
     }
 
-    /// <summary>The queue's slot for <c>context[index]</c> when the queue's own entries (not up next) are exactly the context's; else null.</summary>
+    /// <summary>
+    /// The queue's slot for <c>context[index]</c> when the queue's own entries (not up next) are the context, or the
+    /// context is one contiguous run of them in the queue's own order; else null.
+    /// </summary>
     private Slot? FindInContext(IReadOnlyList<QueueItem> context, int index)
     {
         var own = _items.Where(s => !s.UpNext).OrderBy(s => s.Order).ToList();
-        if (own.Count != context.Count)
+        if (own.Count == context.Count)
         {
-            return null;
-        }
-
-        if (!_shuffle)
-        {
-            // Played in order, the list has to be in the queue's order too: a list the user sorted differently is a new queue.
-            for (var i = 0; i < own.Count; i++)
+            if (!_shuffle)
             {
-                if (!SameTrack(own[i].Item, context[i]))
+                // Played in order, the list has to be in the queue's order too: a list the user sorted differently is a new queue.
+                for (var i = 0; i < own.Count; i++)
                 {
-                    return null;
+                    if (!SameTrack(own[i].Item, context[i]))
+                    {
+                        return null;
+                    }
                 }
+
+                return own[index];
             }
 
-            return own[index];
-        }
-
-        // Shuffled, the queue is the list in any order: pair every list entry with a slot of the same track. A track that
-        // is in the list twice pairs its n-th entry with the n-th slot of its kind in the original order, so the click
-        // lands on the occurrence the user chose. Entries with an id pair first (they survive a path change); what is
-        // left pairs by path.
-        var slotOf = new Slot?[context.Count];
-        var taken = new bool[own.Count];
-        for (var pass = 0; pass < 2; pass++)
-        {
-            for (var i = 0; i < context.Count; i++)
+            // Shuffled, the queue is the list in any order: pair every list entry with a slot of the same track. A track that
+            // is in the list twice pairs its n-th entry with the n-th slot of its kind in the original order, so the click
+            // lands on the occurrence the user chose. Entries with an id pair first (they survive a path change); what is
+            // left pairs by path.
+            var slotOf = new Slot?[context.Count];
+            var taken = new bool[own.Count];
+            for (var pass = 0; pass < 2; pass++)
             {
-                if (slotOf[i] is not null)
+                for (var i = 0; i < context.Count; i++)
                 {
-                    continue;
-                }
-
-                for (var j = 0; j < own.Count; j++)
-                {
-                    if (!taken[j] && (pass == 1 || BothHaveIds(own[j].Item, context[i])) && SameTrack(own[j].Item, context[i]))
+                    if (slotOf[i] is not null)
                     {
-                        slotOf[i] = own[j];
-                        taken[j] = true;
-                        break;
+                        continue;
+                    }
+
+                    for (var j = 0; j < own.Count; j++)
+                    {
+                        if (!taken[j] && (pass == 1 || BothHaveIds(own[j].Item, context[i])) && SameTrack(own[j].Item, context[i]))
+                        {
+                            slotOf[i] = own[j];
+                            taken[j] = true;
+                            break;
+                        }
                     }
                 }
             }
+
+            return slotOf.All(s => s is not null) ? slotOf[index] : null;
         }
 
-        return slotOf.All(s => s is not null) ? slotOf[index] : null;
+        // A shorter list is still this queue when it is one run of it: the album Now Playing shows while play
+        // everything (an artist, or a genre) is queued. The first matching run wins. A longer list, a gap, or a
+        // different order is a different list.
+        for (var start = 0; start + context.Count <= own.Count; start++)
+        {
+            var run = true;
+            for (var i = 0; i < context.Count; i++)
+            {
+                if (!SameTrack(own[start + i].Item, context[i]))
+                {
+                    run = false;
+                    break;
+                }
+            }
+
+            if (run)
+            {
+                return own[start + index];
+            }
+        }
+
+        return null;
     }
 
     private static bool BothHaveIds(QueueItem a, QueueItem b) => a.TrackId is not null && b.TrackId is not null;
