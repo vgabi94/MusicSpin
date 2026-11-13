@@ -401,7 +401,11 @@ public sealed partial class NowPlayingViewModel : LayerViewModel, IDisposable
         ShowBackdrop(null);
     }
 
-    /// <summary>A click on a track: the album plays from it. When the player is playing this album already the queue stays (up next included); otherwise it ends radio and replaces the queue.</summary>
+    /// <summary>
+    /// A click on a track: the album plays from it. When this album is the queue, or one run of a longer one (play
+    /// everything by the artist, play all of a genre), playback jumps to the track and the rest stays. Otherwise the
+    /// album replaces the queue.
+    /// </summary>
     [RelayCommand]
     private Task PlayTrack(NowPlayingTrackViewModel track)
     {

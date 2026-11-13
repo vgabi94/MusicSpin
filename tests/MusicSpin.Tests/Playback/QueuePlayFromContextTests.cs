@@ -187,30 +187,36 @@ public sealed class QueuePlayFromContextTests : IDisposable
     }
 
     [Fact]
-    [Trait("Category", "Unhappy")]
-    public void A_list_with_a_track_more_or_less_than_the_queue_has_is_another_list()
+    public void A_shorter_run_of_the_queue_jumps_inside_it_and_keeps_what_follows()
     {
         var (queue, p, album) = Create();
         queue.Add(Items([p[3]]), QueuePosition.UpNext);
 
         queue.PlayFromContext(album[..2], 1);
-        Assert.Equal("A [B]", Show(queue));
 
-        queue.SetQueue(album);
-        queue.PlayFromContext([.. album, .. Items([p[3]])], 1);
-        Assert.Equal("A [B] C D", Show(queue));
+        Assert.Equal("A [B] +D C", Show(queue));
     }
 
     [Fact]
     [Trait("Category", "Unhappy")]
-    public void A_queue_that_gained_entries_at_its_end_is_another_list()
+    public void A_longer_list_replaces_the_queue()
+    {
+        var (queue, p, album) = Create();
+
+        queue.PlayFromContext([.. album, .. Items([p[3]])], 1);
+
+        Assert.Equal("A [B] C D", Show(queue));
+    }
+
+    [Fact]
+    public void Tracks_appended_after_an_album_stay_when_a_track_of_the_album_is_clicked()
     {
         var (queue, p, album) = Create();
         queue.Add(Items([p[3]]));
 
         queue.PlayFromContext(album, 1);
 
-        Assert.Equal("A [B] C", Show(queue));
+        Assert.Equal("A [B] C D", Show(queue));
     }
 
     [Fact]
@@ -519,5 +525,215 @@ public sealed class QueuePlayFromContextTests : IDisposable
         queue.PlayFromContext(album, 2);
 
         Assert.Equal(1, raised);
+    }
+
+    // ---- play everything: one album is a run of a longer queue (#225) ----------------------------------------
+
+    /// <summary>
+    /// Two albums, two tracks each: Kind of Blue (A B) then Doo-Bop (C D). With <paramref name="manual"/> the test pulls
+    /// the audio itself, so a track ends when the test has taken its samples.
+    /// </summary>
+    private (QueuePlayer Queue, string[] P, List<QueueItem> Album1, List<QueueItem> All, ManualAudioOutput? Output) Artist(bool manual = false, double seconds = 30)
+    {
+        var (decoders, paths) = PlayerTestKit.Tracks(4, seconds);
+        _decoders = decoders;
+        var manualOutputs = manual ? new ManualOutputProvider() : null;
+        var player = manualOutputs is not null ? new Player(decoders, manualOutputs) : new Player(decoders, Outputs.Realtime());
+        var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
+        _owned.Add(player);
+        _owned.Add(queue);
+        List<QueueItem> Tagged(IEnumerable<string> group, string album) => [.. Items(group).Select(i => i with { Album = album, AlbumArtist = "Miles Davis" })];
+        var album1 = Tagged(paths[..2], "Kind of Blue");
+        var all = album1.Concat(Tagged(paths[2..], "Doo-Bop")).ToList();
+        queue.SetQueue(all);
+        return (queue, paths, album1, all, manualOutputs?.Output);
+    }
+
+    private static TaskCompletionSource AlbumStarted(QueuePlayer queue, string path)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        queue.TrackLoaded += (_, e) =>
+        {
+            if (e.Track.Path == path)
+            {
+                started.TrySetResult();
+            }
+        };
+
+        return started;
+    }
+
+    /// <summary>
+    /// One track of the manual player, in interleaved samples (8 kHz, stereo, as <see cref="PlayerTestKit.Tracks"/> builds them).
+    /// </summary>
+    private static int TrackSamples(double seconds) => (int)(seconds * 8000) * 2;
+
+    /// <summary>
+    /// Pulls <paramref name="samples"/> (the tracks that should finish, plus the first frame of the next) and then waits
+    /// until <paramref name="until"/> — the next album has loaded. The pull is capped, so a late signal cannot play on
+    /// into the track after that.
+    /// </summary>
+    private static async Task PlaySamplesAsync(ManualAudioOutput output, int samples, Task until)
+    {
+        var left = samples;
+        while (left > 0 && !until.IsCompleted)
+        {
+            var got = output.Pump(Math.Min(256, left));
+            if (got.Length == 0)
+            {
+                break;
+            }
+
+            left -= got.Length;
+        }
+
+        await until.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task The_whole_artist_is_queued_and_the_next_album_starts_when_the_first_one_ends()
+    {
+        var (queue, p, _, _, output) = Artist(manual: true, seconds: 0.05);
+        var ontoAlbum2 = AlbumStarted(queue, p[2]);
+        Assert.Equal(["Kind of Blue", "Kind of Blue", "Doo-Bop", "Doo-Bop"], queue.List(0, 10).Items.Select(e => e.Item.Album));
+
+        await PlaySamplesAsync(output!, (TrackSamples(0.05) * 2) + 2, ontoAlbum2.Task);
+
+        var status = queue.Status();
+        Assert.Equal(p[2], status.Track!.Path);
+        Assert.Equal("Doo-Bop", status.Item!.Album);
+        Assert.Equal(2, status.QueueIndex);
+        Assert.Equal(4, status.QueueLength);
+        Assert.Equal(PlayerState.Playing, status.State);
+        Assert.False(status.Ended);
+    }
+
+    [Fact]
+    public async Task Skipping_to_the_last_track_of_the_first_album_keeps_the_later_albums_and_plays_them_when_it_ends()
+    {
+        var (queue, p, album1, _, output) = Artist(manual: true, seconds: 0.05);
+        var ontoAlbum2 = AlbumStarted(queue, p[2]);
+
+        // What Now Playing sends: the album that is showing, from its last track.
+        var status = queue.PlayFromContext(album1, 1);
+
+        Assert.Equal("A [B] C D", Show(queue));
+        Assert.Equal(4, status.QueueLength);
+        Assert.Equal(p[1], status.Track!.Path);
+        await PlaySamplesAsync(output!, TrackSamples(0.05) + 2, ontoAlbum2.Task);
+        status = queue.Status();
+        Assert.Equal(p[2], status.Track!.Path);
+        Assert.Equal("Doo-Bop", status.Item!.Album);
+        Assert.Equal(2, status.QueueIndex);
+        Assert.Equal(PlayerState.Playing, status.State);
+        Assert.False(status.Ended);
+        Assert.Equal(4, status.QueueLength);
+    }
+
+    [Fact]
+    public async Task Skipping_by_index_to_the_last_track_of_the_first_album_plays_the_next_album_when_it_ends()
+    {
+        var (queue, p, _, _, output) = Artist(manual: true, seconds: 0.05);
+        var ontoAlbum2 = AlbumStarted(queue, p[2]);
+
+        queue.Play(1);
+
+        Assert.Equal("A [B] C D", Show(queue));
+        await PlaySamplesAsync(output!, TrackSamples(0.05) + 2, ontoAlbum2.Task);
+        Assert.Equal(p[2], queue.Status().Track!.Path);
+        Assert.Equal("Doo-Bop", queue.Status().Item!.Album);
+        Assert.False(queue.Status().Ended);
+    }
+
+    [Fact]
+    public void Clicking_a_track_of_a_later_album_jumps_there_and_keeps_the_albums_around_it()
+    {
+        var (queue, p, _, all, _) = Artist();
+        var album2 = all.Skip(2).ToList();
+
+        var status = queue.PlayFromContext(album2, 0);
+
+        Assert.Equal("A B [C] D", Show(queue));
+        Assert.Equal(p[2], status.Track!.Path);
+        Assert.Equal(4, status.QueueLength);
+    }
+
+    [Fact]
+    public void A_shuffled_artist_queue_still_jumps_to_the_clicked_track_of_one_album()
+    {
+        var (decoders, paths) = PlayerTestKit.Tracks(4, 30);
+        _decoders = decoders;
+        var player = new Player(decoders, Outputs.Realtime());
+        var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
+        _owned.Add(player);
+        _owned.Add(queue);
+        var album1 = Items(paths[..2]).Select(i => i with { Album = "Kind of Blue" }).ToList();
+        var all = album1.Concat(Items(paths[2..]).Select(i => i with { Album = "Doo-Bop" })).ToList();
+        queue.SetQueue(all, shuffle: true, seed: 7);
+        var before = queue.List(0, 10).Items.Select(e => e.Item.Path).Order(StringComparer.Ordinal).ToList();
+
+        var status = queue.PlayFromContext(album1, 1);
+
+        Assert.Equal(paths[1], status.Track!.Path);
+        Assert.Equal(4, status.QueueLength);
+        Assert.Equal(before, queue.List(0, 10).Items.Select(e => e.Item.Path).Order(StringComparer.Ordinal));
+        Assert.True(queue.Shuffle);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_list_that_skips_a_track_of_the_run_replaces_the_queue()
+    {
+        var (queue, p, _, all, _) = Artist();
+
+        queue.PlayFromContext([all[0], all[2]], 1);
+
+        Assert.Equal("A [C]", Show(queue));
+        Assert.DoesNotContain(queue.List(0, 10).Items, e => e.Item.Path == p[3]);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_broken_track_at_the_end_of_the_first_album_does_not_drop_the_next_album()
+    {
+        var (queue, p, _, _, _) = Artist();
+        var ghost = "/music/gone/last-of-album-1.flac";
+        var album1 = new List<QueueItem>
+        {
+            new(p[0], Album: "Kind of Blue", AlbumArtist: "Miles Davis", TrackId: "id-" + Path.GetFileName(p[0])),
+            new(ghost, Album: "Kind of Blue", AlbumArtist: "Miles Davis", TrackId: "id-ghost"),
+        };
+        var album2 = new List<QueueItem>
+        {
+            new(p[2], Album: "Doo-Bop", AlbumArtist: "Miles Davis", TrackId: "id-" + Path.GetFileName(p[2])),
+            new(p[3], Album: "Doo-Bop", AlbumArtist: "Miles Davis", TrackId: "id-" + Path.GetFileName(p[3])),
+        };
+        queue.SetQueue([.. album1, .. album2]);
+
+        var status = queue.PlayFromContext(album1, 1);
+
+        Assert.Equal(p[2], status.Track!.Path);
+        Assert.Equal(4, status.QueueLength);
+        Assert.Equal(PlayerState.Playing, status.State);
+        Assert.Contains(status.Skipped!, s => s.Path == ghost);
+        Assert.Equal("A ? [C] D", Show(queue));
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void A_click_on_a_run_whose_remainder_cannot_be_opened_keeps_the_queue_and_what_is_playing()
+    {
+        var (queue, p, _, _, _) = Artist();
+        var ghost = "/music/gone/album-2.flac";
+        var album2 = new List<QueueItem> { new(ghost, Album: "Doo-Bop", TrackId: "id-ghost") };
+        queue.SetQueue([.. Items(p[..2]).Select(i => i with { Album = "Kind of Blue" }), .. album2]);
+
+        Assert.Equal(MusicSpinErrorCode.FileNotFound, Code(() => queue.PlayFromContext(album2, 0)));
+
+        var status = queue.Status();
+        Assert.Equal(PlayerState.Playing, status.State);
+        Assert.Equal(p[0], status.Track!.Path);
+        Assert.Equal(3, status.QueueLength);
+        Assert.Equal("[A] B ?", Show(queue));
     }
 }
