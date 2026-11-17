@@ -154,6 +154,32 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task A_second_radio_read_still_follows_the_queue_and_the_marker()
+    {
+        var radio = new RadioFilter { Genres = ["Jazz"] };
+        var picks = Enumerable.Range(1, 9).Select(i => "pick" + i).ToArray();
+        _player.SetQueue(["now", "q1", .. picks], 0, 1, radio);
+        _player.Start();
+        await _vm.StartAsync();
+        await _ui.UntilAsync(() => _drawer.Picks.Count == QueueDrawerViewModel.RadioPicks, "the picks");
+
+        var next = Enumerable.Range(2, 9).Select(i => "later" + i).ToArray();
+        await ChangeAsync(["q1", .. next], upNext: 0, radio, current: 1);
+        Assert.Equal(["q1", .. next], TitlesOf(_drawer.Rows));
+        Assert.Equal(next[1..7], TitlesOf(_drawer.Picks));
+        Assert.Equal(1, _drawer.CurrentIndex);
+
+        var rows = _drawer.Rows;
+        var reads = _player.Count("queue");
+        _player.SetQueue(["q1", .. next], current: 2, upNext: 0, radio);
+        await _player.PushAsync("stateChanged");
+        await _ui.UntilAsync(() => _drawer.CurrentIndex == 2 && ReadsSettled(), "the marker");
+        Assert.Same(rows, _drawer.Rows);
+        Assert.Equal(reads, _player.Count("queue"));
+        Assert.Equal(QueuePositionText.Format(2, rows.Count), _drawer.Summary);
+    }
+
+    [Fact]
     public async Task Rows_that_were_not_there_before_are_fresh_and_the_first_is_announced()
     {
         await StartAsync(upNext: 2);

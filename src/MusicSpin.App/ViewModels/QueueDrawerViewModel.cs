@@ -518,7 +518,12 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
         var entries = listing.Items;
         var at = listing.CurrentIndex ?? -1;
-        var known = Rows.Concat(Picks).ToDictionary(r => (r.Index, r.Item.Path));
+        // A radio pick is also a row of the whole queue, so the same entry can be in both lists.
+        var known = new Dictionary<(int Index, string Path), QueueRowViewModel>();
+        foreach (var row in Rows.Concat(Picks))
+        {
+            known.TryAdd((row.Index, row.Item.Path), row);
+        }
         var made = new List<QueueRowViewModel>();
         QueueRowViewModel RowFor(QueueEntry e)
         {
