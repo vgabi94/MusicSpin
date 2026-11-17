@@ -603,6 +603,35 @@ public sealed class QueuePlayer : IDisposable
     }
 
     /// <summary>
+    /// Plays entry <paramref name="index"/> and leaves every entry where it is. The current-position marker moves;
+    /// nothing is removed or reordered, so an entry this jumps over is still there and <see cref="Previous"/> returns to
+    /// it. An up-next run keeps its marks and plays before the rest again once the marker is in front of it.
+    /// <see cref="Play"/> is the command that drops up-next entries it skips.
+    /// </summary>
+    /// <exception cref="MusicSpinException">InvalidState when the queue is empty; InvalidArgument when <paramref name="index"/>
+    /// is outside it; FileNotFound when nothing from that entry on can be opened (the marker stays where it was).</exception>
+    public PlayerStatus Goto(int index)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            RequireEntries();
+            if (index < 0 || index >= _items.Count)
+            {
+                throw Invalid($"index {index} is outside the queue (0-{_items.Count - 1}).");
+            }
+
+            // Already on that entry: a click on the row that's playing leaves it playing.
+            if (index == _index && CurrentLoaded() && !_ended)
+            {
+                return StatusCore();
+            }
+
+            return MoveAndPlay(index, +1, wrap: WrapAll);
+        }
+    }
+
+    /// <summary>
     /// Plays entry <paramref name="index"/> of <paramref name="context"/>: the list the user clicked in (an album, a
     /// playlist, the Tracks view). When that list is what the queue is playing (the same tracks in the same order, or in
     /// any order with shuffle on), or one contiguous run of it (one album inside "play everything" by an artist or

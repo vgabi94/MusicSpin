@@ -30,6 +30,12 @@ public partial class QueueDrawerView : UserControl
             return count;
         }
 
+        if (_viewModel is { } view && QueueWindow.Windows(count))
+        {
+            var y = QueueScroll.Offset.Y + (point.Y - list.Top);
+            return Math.Clamp((int)(y / RowHeight()), 0, count);
+        }
+
         for (var i = 0; i < count; i++)
         {
             if (Row(i) is { } row && BoundsIn(row) is { } bounds && point.Y < bounds.Center.Y)
@@ -84,11 +90,29 @@ public partial class QueueDrawerView : UserControl
     {
         base.OnDataContextChanged(e);
         _viewModel?.RowsAdded -= OnRowsAdded;
+        _viewModel?.MarkerMoved -= OnMarkerMoved;
         _viewModel?.SaveForm.PropertyChanged -= OnSaveFormChanged;
         _viewModel = DataContext as QueueDrawerViewModel;
         _viewModel?.RowsAdded += OnRowsAdded;
+        _viewModel?.MarkerMoved += OnMarkerMoved;
         _viewModel?.SaveForm.PropertyChanged += OnSaveFormChanged;
+        ReportScroll();
     }
+
+    private void OnQueueScrolled(object? sender, ScrollChangedEventArgs e) => ReportScroll();
+
+    private void ReportScroll()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        _viewModel.NoteScroll(QueueScroll.Offset.Y, QueueScroll.Viewport.Height, RowHeight());
+    }
+
+    private double RowHeight()
+        => QueueRows.ContainerFromIndex(0) is Control { Bounds.Height: > 0 and var height } ? height : QueueWindow.FallbackRowHeight;
 
     /// <summary>The name field takes the focus with its name selected, so typing replaces it (mockup: #qSave).</summary>
     private void OnSaveFormChanged(object? sender, PropertyChangedEventArgs e)
@@ -107,13 +131,72 @@ public partial class QueueDrawerView : UserControl
     private void OnRowsAdded(object? sender, QueueRowViewModel row)
         => Dispatcher.UIThread.Post(() =>
         {
-            if (_viewModel?.Rows.ToList().IndexOf(row) is >= 0 and var index && Row(index) is { } container)
+            if (_viewModel is not { } view)
             {
-                container.BringIntoView();
+                return;
+            }
+
+            for (var i = 0; i < view.Rows.Count; i++)
+            {
+                if (ReferenceEquals(view.Rows[i], row))
+                {
+                    BringIndexIntoView(i);
+                    return;
+                }
             }
         }, DispatcherPriority.Loaded);
 
-    private Control? Row(int index) => QueueRows.ContainerFromIndex(index);
+    private void OnMarkerMoved(object? sender, EventArgs e)
+        => Dispatcher.UIThread.Post(() =>
+        {
+            // The first layout already shows the top. Scrolling there again would rebuild the row and drop its flash.
+            if (_viewModel?.CurrentIndex is not int index || index < 0 || (index == 0 && QueueScroll.Offset.Y == 0))
+            {
+                return;
+            }
+
+            BringIndexIntoView(index);
+        }, DispatcherPriority.Loaded);
+
+    private void BringIndexIntoView(int index)
+    {
+        if (Row(index) is { } row)
+        {
+            row.BringIntoView();
+            return;
+        }
+
+        var y = Math.Clamp(index * RowHeight(), 0, MaxScrollOffsetY);
+        if (QueueScroll.Offset.Y != y)
+        {
+            QueueScroll.Offset = QueueScroll.Offset.WithY(y);
+        }
+    }
+
+    /// <summary>The container for queue index <paramref name="index"/>, when that row is built.</summary>
+    private Control? Row(int index)
+    {
+        if (_viewModel is not { } view)
+        {
+            return null;
+        }
+
+        if (!QueueWindow.Windows(view.Rows.Count))
+        {
+            return QueueRows.ContainerFromIndex(index);
+        }
+
+        var shown = view.ShownRows;
+        for (var i = 0; i < shown.Count; i++)
+        {
+            if (shown[i].Index == index)
+            {
+                return QueueRows.ContainerFromIndex(i);
+            }
+        }
+
+        return null;
+    }
 
     private Rect? BoundsIn(Control control)
         => control.TransformToVisual(this) is { } transform ? new Rect(control.Bounds.Size).TransformToAABB(transform) : null;

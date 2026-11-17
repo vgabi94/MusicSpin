@@ -58,7 +58,7 @@ public sealed class DragAutoScrollTests
         app.Scripted!.SetQueue([SampleLibrary.Item(6, 1), .. rows, SampleLibrary.Item(6, 2)], 0, count);
         await app.Scripted.PushAsync("queueChanged");
         await app.Scripted.PushAsync("stateChanged");
-        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.Rows.Count == count, "the rows");
+        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.Rows.Count == count + 2, "the rows");
     }
 
     private static TracksPage PageView(AppHarness app) => Gui.All<TracksPage>(app.Window).Single();
@@ -307,7 +307,7 @@ public sealed class DragAutoScrollTests
         await using var app = await OpenQueueAsync();
         var drawer = app.Window.QueueDrawerView;
         var line = DropLine(app, drawer);
-        Mouse.StartDrag(app.Window, QueueRow(app, 0));
+        Mouse.StartDrag(app.Window, QueueRow(app, 1));
         var view = drawer.ViewportIn(app.Window) ?? throw new InvalidOperationException("no viewport");
 
         await HoldNearEdgeAsync(app, BottomEdge(view), () => drawer.ScrollOffsetY > 80, "scrolled");
@@ -319,9 +319,9 @@ public sealed class DragAutoScrollTests
         Mouse.Release(app.Window, above);
 
         var move = await SentAsync(app, "queue.move");
-        Assert.Equal(1, move.GetProperty("from").GetInt32()); // queue index 1 is the first up-next row (index 0 in the drawer)
-        Assert.Equal(8, move.GetProperty("to").GetInt32()); // drawer row 7's queue index
-        Assert.Equal(SampleLibrary.Item(7, 1).Title, app.Scripted!.Queue[8].Item.Title);
+        Assert.Equal(1, move.GetProperty("from").GetInt32());
+        Assert.Equal(7, move.GetProperty("to").GetInt32());
+        Assert.Equal(SampleLibrary.Item(7, 1).Title, app.Scripted!.Queue[7].Item.Title);
     }
 
     [AvaloniaFact]

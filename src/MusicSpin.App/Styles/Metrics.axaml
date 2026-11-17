@@ -777,6 +777,8 @@
     <sys:Double x:Key="QueueRemoveIconSize">9</sys:Double>
     <Thickness x:Key="QueueRemoveMargin">0,0,8,0</Thickness>
     <sys:Double x:Key="QueueDraggedOpacity">0.35</sys:Double>
+    <sys:Double x:Key="QueuePassedOpacity">0.45</sys:Double>
+    <sys:Double x:Key="QueuePassedHoverOpacity">0.72</sys:Double>
     <sys:Double x:Key="QueuePickOpacity">0.6</sys:Double>
     <sys:Double x:Key="QueueDropLineHeight">2</sys:Double>
     <CornerRadius x:Key="QueueDropLineRadius">1</CornerRadius>

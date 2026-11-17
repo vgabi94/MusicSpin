@@ -78,9 +78,28 @@
     <Style Selector="Panel.queueRow">
         <Setter Property="TextElement.FontSize" Value="{StaticResource QueueRowFontSize}" />
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
     <Style Selector="Panel.queueRow.dragged">
         <Setter Property="Opacity" Value="{StaticResource QueueDraggedOpacity}" />
+    </Style>
+    <!-- Played or skipped: above the marker, still a click. -->
+    <Style Selector="Panel.queueRow.passed">
+        <Setter Property="Opacity" Value="{StaticResource QueuePassedOpacity}" />
+    </Style>
+    <Style Selector="Panel.queueRow.passed:pointerover">
+        <Setter Property="Opacity" Value="{StaticResource QueuePassedHoverOpacity}" />
+    </Style>
+    <Style Selector="Panel.queueRow.current Button.queueEntry">
+        <Setter Property="Background" Value="{DynamicResource AccentWashBrush}" />
+    </Style>
+    <Style Selector="Panel.queueRow.current Button.queueEntry TextBlock.title">
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Panel.queueRow.current:pointerover Button.queueEntry">
+        <Setter Property="Background" Value="{DynamicResource RowHoverBrush}" />
     </Style>
     <Style Selector="Panel.queueRow > Border.flash">
         <Setter Property="CornerRadius" Value="{StaticResource QueueRowRadius}" />

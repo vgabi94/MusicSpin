@@ -120,7 +120,7 @@ public sealed class ScrollBarTests
         app.Scripted!.SetQueue([.. Enumerable.Range(0, Count).Select(i => $"Track {i}")], 0, Count - 1);
         await app.Scripted.PushAsync("queueChanged");
         app.ViewModel.QueueDrawer.Open();
-        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.Rows.Count == Count - 1, "the queue");
+        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.Rows.Count == Count, "the queue");
         Gui.FinishAnimations();
         AssertAllAppTheme(app, Gui.All<QueueDrawerView>(window).Single(), "the queue drawer");
         app.ViewModel.QueueDrawer.Close();

@@ -19,6 +19,18 @@
             <Panel Classes="queueRow"
                    Classes.dragged="{Binding IsDragged}"
                    controls:QueueSource.Item="{Binding}">
+                <Classes.passed>
+                    <MultiBinding Converter="{x:Static theming:QueueMarker.Before}">
+                        <Binding Path="Index" />
+                        <Binding Path="$parent[UserControl].((vm:QueueDrawerViewModel)DataContext).CurrentIndex" />
+                    </MultiBinding>
+                </Classes.passed>
+                <Classes.current>
+                    <MultiBinding Converter="{x:Static theming:QueueMarker.Current}">
+                        <Binding Path="Index" />
+                        <Binding Path="$parent[UserControl].((vm:QueueDrawerViewModel)DataContext).CurrentIndex" />
+                    </MultiBinding>
+                </Classes.current>
                 <Border Classes="flash" theming:Animate.Play="FlashAnimation" theming:Animate.When="{Binding IsFresh}" />
                 <Button Classes="queueEntry"
                         Command="{Binding $parent[UserControl].((vm:QueueDrawerViewModel)DataContext).SkipToCommand}"
@@ -94,12 +106,57 @@
             </Panel>
         </Border>
 
-        <ScrollViewer Name="QueueScroll" Classes="queueScroll">
+        <StackPanel Name="RadioSection" Classes="queueRadio" DockPanel.Dock="Bottom" IsVisible="{Binding IsRadio}">
+            <Border Classes="queueRadioHeader">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <controls:Icon Data="{StaticResource Radio}" />
+                    <TextBlock Name="RadioDescription" Grid.Column="1" Text="{Binding RadioDescription}" />
+                    <Button Name="EndRadio" Grid.Column="2" Classes="queueClear" Content="End radio" Command="{Binding EndRadioCommand}" />
+                </Grid>
+            </Border>
+            <ItemsControl Name="RadioPicks" ItemsSource="{Binding Picks}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:QueueRowViewModel">
+                        <Panel Classes="queueRow pick">
+                            <Button Classes="queueEntry"
+                                    Command="{Binding $parent[UserControl].((vm:QueueDrawerViewModel)DataContext).PlayPickCommand}"
+                                    CommandParameter="{Binding}"
+                                    AutomationProperties.Name="{Binding Title}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="{StaticResource RowThumbColumn}" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="{StaticResource QueueRemoveColumn}" />
+                                    </Grid.ColumnDefinitions>
+                                    <controls:CoverView Classes="flat" Source="{Binding Art.Cover}" Title="{Binding Album}" Artist="{Binding Artist}" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Classes="title" Text="{Binding Title}" />
+                                        <TextBlock Classes="artist" Text="{Binding Artist}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Classes="duration" Text="{Binding Duration}" />
+                                </Grid>
+                            </Button>
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <ScrollViewer Name="QueueScroll" Classes="queueScroll" ScrollChanged="OnQueueScrolled">
             <StackPanel>
+                <Border Name="QueueTopSpacer" Height="{Binding TopSpacer}" IsHitTestVisible="False" />
                 <Panel>
-                    <ItemsControl Name="QueueRows" ItemsSource="{Binding Rows}" />
+                    <ItemsControl Name="QueueRows" ItemsSource="{Binding ShownRows}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
                     <Border Name="DropLine" Classes="dropLine" />
                 </Panel>
+                <Border Name="QueueBottomSpacer" Height="{Binding BottomSpacer}" IsHitTestVisible="False" />
                 <Panel Name="QueueEmpty" Classes="queueEmpty">
                     <Rectangle />
                     <!-- The plus is the Plus icon: the app's font has no "＋". -->
@@ -113,42 +170,6 @@
                         <Run Text=" on any track." />
                     </TextBlock>
                 </Panel>
-                <StackPanel Name="RadioSection" Classes="queueRadio" IsVisible="{Binding IsRadio}">
-                    <Border Classes="queueRadioHeader">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                            <controls:Icon Data="{StaticResource Radio}" />
-                            <TextBlock Name="RadioDescription" Grid.Column="1" Text="{Binding RadioDescription}" />
-                            <Button Name="EndRadio" Grid.Column="2" Classes="queueClear" Content="End radio" Command="{Binding EndRadioCommand}" />
-                        </Grid>
-                    </Border>
-                    <ItemsControl Name="RadioPicks" ItemsSource="{Binding Picks}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="vm:QueueRowViewModel">
-                                <Panel Classes="queueRow pick">
-                                    <Button Classes="queueEntry"
-                                            Command="{Binding $parent[UserControl].((vm:QueueDrawerViewModel)DataContext).PlayPickCommand}"
-                                            CommandParameter="{Binding}"
-                                            AutomationProperties.Name="{Binding Title}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="{StaticResource RowThumbColumn}" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="{StaticResource QueueRemoveColumn}" />
-                                            </Grid.ColumnDefinitions>
-                                            <controls:CoverView Classes="flat" Source="{Binding Art.Cover}" Title="{Binding Album}" Artist="{Binding Artist}" />
-                                            <StackPanel Grid.Column="1">
-                                                <TextBlock Classes="title" Text="{Binding Title}" />
-                                                <TextBlock Classes="artist" Text="{Binding Artist}" />
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="2" Classes="duration" Text="{Binding Duration}" />
-                                        </Grid>
-                                    </Button>
-                                </Panel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

@@ -333,6 +333,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Plays queue entry <paramref name="index"/> (0-based, in play order); the up-next entries it skips are dropped.</summary>
     public Task PlayIndexAsync(int index) => SendAsync("play", new { index });
 
+    /// <summary>Plays queue entry <paramref name="index"/> and leaves the list as it is (<c>queue.goto</c>).</summary>
+    public Task GotoQueueAsync(int index) => SendAsync("queue.goto", new { index });
+
     /// <summary>
     /// Ends radio with the player's <c>radio.end</c>: in one step the station's picks go, the current track plays on (no
     /// gap, its position untouched) and the up-next entries follow. A no-op in the player when no station is on air.

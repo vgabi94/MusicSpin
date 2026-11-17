@@ -10,13 +10,20 @@ using MusicSpin.Core.Remote;
 
 namespace MusicSpin.App.ViewModels;
 
-/// <summary>One row of the queue drawer: an up-next entry, or one of the radio station's next picks (dimmed).</summary>
+/// <summary>One row of the queue drawer: any queue entry, or one of the radio station's next picks (dimmed).</summary>
 public sealed partial class QueueRowViewModel(QueueItem item, int index) : ObservableObject
 {
+    private AlbumArt? _art;
+    private int _artAsked;
+    private Func<QueueRowViewModel, Task>? _loadArt;
+
     public QueueItem Item { get; } = item;
 
     /// <summary>The entry's place in the player's queue (0-based, in play order).</summary>
     public int Index { get; } = index;
+
+    /// <summary>Asks for the album cover the first time something shows the row.</summary>
+    internal void WatchArt(Func<QueueRowViewModel, Task> load) => _loadArt = load;
 
     public string Title => Item.Title ?? Path.GetFileNameWithoutExtension(Item.Path);
 
@@ -27,9 +34,28 @@ public sealed partial class QueueRowViewModel(QueueItem item, int index) : Obser
 
     public string Duration => Item.DurationSeconds is { } seconds ? Formats.Time(seconds) : string.Empty;
 
-    /// <summary>The cover of the entry's album (once the library said which album; none for a plain file).</summary>
-    [ObservableProperty]
-    public partial AlbumArt? Art { get; set; }
+    /// <summary>The cover, looked up the first time this is read. Rows that aren't shown never ask the library.</summary>
+    public AlbumArt? Art
+    {
+        get
+        {
+            if (_loadArt is not null && Interlocked.Exchange(ref _artAsked, 1) == 0)
+            {
+                _ = _loadArt(this);
+            }
+
+            return _art;
+        }
+    }
+
+    internal void SetArt(AlbumArt? art)
+    {
+        if (!ReferenceEquals(_art, art))
+        {
+            _art = art;
+            OnPropertyChanged(nameof(Art));
+        }
+    }
 
     /// <summary>Just added: the row flashes in the accent (mockup: .qi.fresh).</summary>
     [ObservableProperty]
@@ -74,15 +100,15 @@ public sealed partial class PlaylistNameViewModel : LayerViewModel
 }
 
 /// <summary>
-/// The queue drawer (mockup: "Queue drawer"): Up next, the tracks added to play after the current one, before the rest
-/// of the album or playlist, or before the radio station's next picks (the player's up-next entries). Every action is
-/// one of the player's queue commands, and what the CLI changes shows up here (the player reports queue changes).
+/// The queue drawer: the whole queue, with the playing entry marked and the entries above it greyed. Up next (Play next
+/// / Add to queue) still plays before the rest. On radio the station's next picks are listed under the queue. Every
+/// action is one of the player's queue commands, and what the CLI changes shows up here.
 /// </summary>
 /// <remarks>
-/// Rows are read from the player whenever it says the queue changed, and when the current entry, the counts or the
-/// mode change. Rows that were not there before are fresh: they flash, and the view scrolls to the first of them.
-/// Dragging an album or a track opens the drawer by itself; then it closes again at once if nothing was dropped, or
-/// <see cref="CloseAfterDrop"/> after a drop, once the pointer has left it.
+/// The list is read when the player says the queue changed, in pages. A track change only moves
+/// <see cref="CurrentIndex"/>, so the rows are not rebuilt. A queue longer than <see cref="QueueWindow.MaxMaterialized"/>
+/// shows a window (<see cref="ShownRows"/>) around the scroll position. Rows that were not there before flash, and the
+/// view scrolls to the first of them.
 /// </remarks>
 public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 {
@@ -98,8 +124,11 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     /// <summary>The notice when tracks dropped between rows can't be put there: the queue changed under the drop.</summary>
     public const string AddedLast = "The queue changed during the drop, so the tracks went to the end of Up next.";
 
-    /// <summary>The notice when the row dragged has left the queue (it played, or the CLI removed it).</summary>
-    public const string RowGone = "That track isn't up next any more.";
+    /// <summary>The notice when the row dragged has left the queue.</summary>
+    public const string RowGone = "That track isn't in the queue any more.";
+
+    /// <summary>How many entries one <c>queue</c> read asks for (the player's page cap).</summary>
+    public const int PageSize = 10_000;
 
     private readonly PlayerViewModel _player;
     private readonly RadioViewModel _radio;
@@ -111,8 +140,10 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     private readonly Dictionary<string, string?> _albumOfTrack = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AlbumArt> _art = new(StringComparer.Ordinal);
     private readonly OwedReads _owed;
-    private (int? Index, int Length, int UpNext, string Mode, string? Path)? _readFor;
-    private QueueItem? _current;
+    private (int Length, string Mode)? _structure;
+    private double _scrollY;
+    private double _viewport;
+    private double _rowHeight = QueueWindow.FallbackRowHeight;
     private int _reads;
     private bool _hasRead;
     private bool _openedForDrag;
@@ -152,11 +183,28 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     public override int Order => LayerOrder.QueueDrawer;
 
-    /// <summary>The up-next entries, in the order they play.</summary>
+    /// <summary>Every queue entry, in play order. Entries above <see cref="CurrentIndex"/> are played or skipped.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(Summary))]
     [NotifyCanExecuteChangedFor(nameof(PlayTopCommand), nameof(StartSaveCommand), nameof(ClearCommand))]
     public partial IReadOnlyList<QueueRowViewModel> Rows { get; private set; } = [];
+
+    /// <summary>The rows the list builds: every row, or a window of a very long queue.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<QueueRowViewModel> ShownRows { get; private set; } = [];
+
+    /// <summary>Space above <see cref="ShownRows"/> when the queue is windowed.</summary>
+    [ObservableProperty]
+    public partial double TopSpacer { get; private set; }
+
+    /// <summary>Space below <see cref="ShownRows"/> when the queue is windowed.</summary>
+    [ObservableProperty]
+    public partial double BottomSpacer { get; private set; }
+
+    /// <summary>The playing entry's index, or -1 when nothing is queued. Moving it does not rebuild the list.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Summary))]
+    public partial int CurrentIndex { get; private set; } = -1;
 
     /// <summary>While a radio station is on air: its next picks after the rows (mockup: #qRadioItems).</summary>
     [ObservableProperty]
@@ -164,9 +212,11 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     public bool IsEmpty => Rows.Count == 0;
 
-    /// <summary>"3 tracks · 12 min"; null when empty (mockup: #qSum).</summary>
-    public string? Summary => Rows.Count == 0 ? null : string.Create(CultureInfo.CurrentCulture,
-        $"{Rows.Count:N0} {(Rows.Count == 1 ? "track" : "tracks")} · {Math.Round(Rows.Sum(r => r.Item.DurationSeconds ?? 0) / 60):N0} min");
+    /// <summary>The playing entry's place, "4 of 11"; null when the queue is empty.</summary>
+    public string? Summary => QueuePositionText.Format(CurrentIndex >= 0 ? CurrentIndex : null, Rows.Count);
+
+    /// <summary>The marker moved. The view scrolls that row into sight.</summary>
+    public event EventHandler? MarkerMoved;
 
     public bool IsRadio => _player.IsRadio;
 
@@ -207,23 +257,26 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     [RelayCommand]
     private Task Remove(QueueRowViewModel row) => _notices.GuardAsync(() => _player.RemoveFromQueueAsync(row.Index));
 
-    /// <summary>A click on a row skips to it: the rows above it are dropped (they were never played).</summary>
+    /// <summary>A click plays that entry. The list stays: the marker moves, and nothing is removed or reordered.</summary>
     [RelayCommand]
-    private Task SkipTo(QueueRowViewModel row) => _notices.GuardAsync(() => _player.PlayIndexAsync(row.Index));
+    private Task SkipTo(QueueRowViewModel row) => _notices.GuardAsync(() => _player.GotoQueueAsync(row.Index));
 
-    /// <summary>A click on a radio pick skips ahead to it.</summary>
+    /// <summary>A click on a radio pick plays it the same way.</summary>
     [RelayCommand]
-    private Task PlayPick(QueueRowViewModel row) => _notices.GuardAsync(() => _player.PlayIndexAsync(row.Index));
+    private Task PlayPick(QueueRowViewModel row) => _notices.GuardAsync(() => _player.GotoQueueAsync(row.Index));
 
     private bool HasRows() => Rows.Count > 0;
 
-    /// <summary>Clear: the up-next entries go; the album (or the station) plays on.</summary>
+    /// <summary>
+    /// Clear empties the whole queue and stops playback. The drawer shows the whole list, so Clear clears that list.
+    /// Removing only the up-next run remains the player's <c>queue clear</c> with <c>upNext</c> (the CLI's <c>--up-next</c>).
+    /// </summary>
     [RelayCommand(CanExecute = nameof(HasRows))]
-    private Task Clear() => _notices.GuardAsync(() => _player.ClearQueueAsync(upNextOnly: true));
+    private Task Clear() => _notices.GuardAsync(() => _player.ClearQueueAsync(upNextOnly: false));
 
-    /// <summary>▶ Play: the top row plays now, the rest follow.</summary>
+    /// <summary>▶ Play starts the queue from its first entry. The list stays and the marker moves there.</summary>
     [RelayCommand(CanExecute = nameof(HasRows))]
-    private Task PlayTop() => _notices.GuardAsync(() => _player.PlayIndexAsync(Rows[0].Index));
+    private Task PlayTop() => _notices.GuardAsync(() => _player.GotoQueueAsync(Rows[0].Index));
 
     /// <summary>End radio: the current track plays on, then the rows; the station's picks go.</summary>
     [RelayCommand]
@@ -249,47 +302,79 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     });
 
     /// <summary>
-    /// Drops library tracks at <paramref name="at"/> (0: first). The player adds up next at either end of the rows, so in
-    /// between they are added last and moved up into place. The moves come from the queue read again after the add: a
-    /// track may have ended, or the CLI changed the queue, since the rows were read.
+    /// Drops library tracks at <paramref name="at"/> (0: before the first row; the count: after the last). An empty queue
+    /// starts with Play next. Right after the playing entry is Play next; at the end of the up-next run is Add to queue.
+    /// Anywhere else they are added to that run and moved to the row. Past the last row they are appended.
     /// </summary>
     public Task InsertAsync(IReadOnlyList<TrackSummary> tracks, int at)
     {
         ArgumentNullException.ThrowIfNull(tracks);
         return _notices.GuardAsync(async () =>
         {
-            var rows = Rows;
             if (tracks.Count == 0)
             {
                 return;
             }
 
-            if (at <= 0 || rows.Count == 0)
+            var rows = Rows;
+            // Nothing queued, or nothing playing: the drop starts the queue (Play next). On an empty queue that appends.
+            if (rows.Count == 0 || _player.QueueIndex is not { } current)
             {
                 await _player.AddToQueueAsync(tracks, QueuePosition.Next).ConfigureAwait(true);
                 return;
             }
 
-            if (!await _player.AddToQueueAsync(tracks, QueuePosition.UpNext).ConfigureAwait(true) || at >= rows.Count)
+            var upNextEnd = current + 1 + _player.UpNext;
+            var target = at >= rows.Count ? _player.QueueLength : rows[at].Index;
+            if (target == current + 1)
+            {
+                await _player.AddToQueueAsync(tracks, QueuePosition.Next).ConfigureAwait(true);
+                return;
+            }
+
+            if (target == upNextEnd)
+            {
+                await _player.AddToQueueAsync(tracks, QueuePosition.UpNext).ConfigureAwait(true);
+                return;
+            }
+
+            if (at >= rows.Count)
+            {
+                await _player.AddToQueueAsync(tracks, QueuePosition.End).ConfigureAwait(true);
+                return;
+            }
+
+            var anchor = rows[at];
+            if (!await _player.AddToQueueAsync(tracks, QueuePosition.UpNext).ConfigureAwait(true))
             {
                 return;
             }
 
-            var upNext = await UpNextAsync(rows.Count + tracks.Count).ConfigureAwait(true);
-            var added = upNext.Count >= tracks.Count ? upNext.Skip(upNext.Count - tracks.Count).ToList() : [];
-            var target = Nearest(upNext.Take(upNext.Count - added.Count), rows[at], e => e.Item.Path, e => e.Index);
-            if (target is null || !added.Select(e => e.Item.Path).SequenceEqual(tracks.Select(t => t.Path), StringComparer.Ordinal))
+            var guess = anchor.Index >= upNextEnd ? anchor.Index + tracks.Count : anchor.Index;
+            for (var i = 0; i < tracks.Count; i++)
             {
-                _notices.Post(AddedLast);
-                return;
-            }
-
-            for (var i = 0; i < added.Count; i++)
-            {
-                if (!await _player.MoveInQueueAsync(added[i].Index, target.Index + i).ConfigureAwait(true))
+                var pending = tracks.Skip(i).ToList();
+                var run = await UpNextAsync(Math.Max(_player.UpNext, pending.Count) + 2).ConfigureAwait(true);
+                var tail = run.Count >= pending.Count ? run.Skip(run.Count - pending.Count).ToList() : [];
+                var place = await FindNearAsync(anchor, guess, pending.Count + 16).ConfigureAwait(true);
+                if (place is null || !tail.Select(e => e.Item.Path).SequenceEqual(pending.Select(t => t.Path), StringComparer.Ordinal))
                 {
-                    return; // the rest stay at the end of the rows
+                    if (i == 0)
+                    {
+                        _notices.Post(AddedLast);
+                    }
+
+                    return;
                 }
+
+                var added = tail[0];
+                var to = place.Index > added.Index ? place.Index - 1 : place.Index;
+                if (to != added.Index && !await _player.MoveInQueueAsync(added.Index, to).ConfigureAwait(true))
+                {
+                    return;
+                }
+
+                guess = place.Index > added.Index ? place.Index : place.Index + 1;
             }
         });
     }
@@ -382,9 +467,6 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     // ---- reading the queue ----------------------------------------------------------------------------------------
 
-    private (int? Index, int Length, int UpNext, string Mode, string? Path) Key()
-        => (_player.QueueIndex, _player.QueueLength, _player.UpNext, _player.QueueMode, _player.Path);
-
     /// <summary>Reads started (tests wait on these, not on time).</summary>
     internal int ReadsStarted => _reads;
 
@@ -393,7 +475,25 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
     /// <summary>Reads finished: applied, superseded by a later one, or failed.</summary>
     internal int ReadsFinished { get; private set; }
 
-    /// <summary>Reads the current entry, the up-next entries and (on radio) the picks after them; the latest read wins.</summary>
+    /// <summary>The queue's shape changed, so the rows have to be read. A new index alone does not.</summary>
+    private bool StructureChanged()
+        => _structure is not { } read || read.Length != _player.QueueLength || read.Mode != _player.QueueMode;
+
+    /// <summary>
+    /// Where the list is scrolled, so a long queue keeps a window there. A row height of 0 keeps the last measured one.
+    /// </summary>
+    public void NoteScroll(double offsetY, double viewportHeight, double rowHeight)
+    {
+        if (rowHeight > 0)
+        {
+            _rowHeight = rowHeight;
+        }
+
+        _scrollY = offsetY;
+        _viewport = viewportHeight;
+        PublishShown();
+    }
+
     private async Task ReadAsync()
     {
         var read = ++_reads;
@@ -409,31 +509,15 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     private async Task ReadOnceAsync(int read)
     {
-        var key = Key();
-        QueueListing? listing = null;
-        if (key.Index is { } current)
+        var indexAtStart = _player.QueueIndex;
+        var listing = await ReadAllAsync().ConfigureAwait(true);
+        if (listing is null || read != _reads || _disposed)
         {
-            listing = await ReadPastUpNextAsync(current, key.UpNext).ConfigureAwait(true);
-            if (listing is null)
-            {
-                return;
-            }
+            return;
         }
 
-        if (read != _reads || _disposed)
-        {
-            return; // a later read wins; and a read still under way when the drawer went shows nothing
-        }
-
-        _readFor = key;
-        var entries = listing?.Items ?? [];
-        _current = entries.FirstOrDefault(e => e.Current)?.Item;
-        // The listing's own current entry: the track may have moved on during the read, ahead of the status that says so.
-        var at = listing?.CurrentIndex ?? key.Index;
-        var after = entries.Where(e => at is { } i && e.Index > i).ToList();
-
-        // An entry still where it was keeps its row (a flash under way, its cover); a read that changes nothing leaves
-        // the lists as they are, so the view keeps its rows too.
+        var entries = listing.Items;
+        var at = listing.CurrentIndex ?? -1;
         var known = Rows.Concat(Picks).ToDictionary(r => (r.Index, r.Item.Path));
         var made = new List<QueueRowViewModel>();
         QueueRowViewModel RowFor(QueueEntry e)
@@ -444,16 +528,18 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
             }
 
             row = new QueueRowViewModel(e.Item, e.Index);
+            row.WatchArt(FindArtAsync);
             made.Add(row);
             return row;
         }
 
-        var rows = after.TakeWhile(e => e.UpNext).Select(RowFor).ToList();
-        var picks = _player.IsRadio ? after.SkipWhile(e => e.UpNext).Take(RadioPicks).Select(RowFor).ToList() : [];
+        var rows = entries.Select(RowFor).ToList();
+        var picks = _player.IsRadio
+            ? entries.Where(e => e.Index > at && !e.UpNext).Take(RadioPicks).Select(RowFor).ToList()
+            : [];
         var changed = !rows.SequenceEqual(Rows);
         if (changed)
         {
-            // Only the rows this change brought are fresh (a row shown again would flash again).
             foreach (var row in rows.Except(made))
             {
                 row.IsFresh = false;
@@ -462,11 +548,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
         var fresh = _hasRead && changed ? MarkFresh(Rows, rows) : null;
         _hasRead = true;
-        foreach (var row in made)
-        {
-            _ = FindArtAsync(row);
-        }
-
+        _structure = (listing.Total, _player.QueueMode);
         if (changed)
         {
             Rows = rows;
@@ -476,6 +558,10 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         {
             Picks = picks;
         }
+
+        PublishShown();
+        var marker = _player.QueueIndex != indexAtStart && _player.QueueLength == listing.Total ? _player.QueueIndex ?? at : at;
+        MoveMarker(marker);
         if (rows.Count == 0)
         {
             SaveForm.Close();
@@ -487,32 +573,84 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         }
     }
 
-    /// <summary>
-    /// The queue from <paramref name="current"/> until past the up-next entries (and on radio, the picks after them), or
-    /// to its end. The status's count only sets the first page: a queueChanged can arrive before the status that counts
-    /// the new entries, and a page cut short there would make the rows it missed look new on the next read.
-    /// </summary>
-    private async Task<QueueListing?> ReadPastUpNextAsync(int current, int upNext)
+    private void MoveMarker(int index)
     {
-        var after = _player.IsRadio ? RadioPicks : 1;
-        var limit = 1 + upNext + after;
-        while (true)
+        if (index == CurrentIndex)
         {
-            var listing = await _player.QueueAsync(current, limit).ConfigureAwait(true);
-            if (listing is null)
+            return;
+        }
+
+        CurrentIndex = index;
+        MarkerMoved?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void PublishShown()
+    {
+        var slice = QueueWindow.Of(Rows.Count, _scrollY, _viewport, _rowHeight);
+        IReadOnlyList<QueueRowViewModel> shown = slice.Count == Rows.Count ? Rows : Rows.Skip(slice.Start).Take(slice.Count).ToArray();
+        if (TopSpacer != slice.Top)
+        {
+            TopSpacer = slice.Top;
+        }
+
+        if (BottomSpacer != slice.Bottom)
+        {
+            BottomSpacer = slice.Bottom;
+        }
+
+        if (ShownRows.Count == shown.Count)
+        {
+            var same = true;
+            for (var i = 0; i < shown.Count; i++)
+            {
+                if (!ReferenceEquals(ShownRows[i], shown[i]))
+                {
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same)
+            {
+                return;
+            }
+        }
+
+        ShownRows = shown;
+    }
+
+    /// <summary>The whole queue, <see cref="PageSize"/> entries at a time. A page whose total changed under the read is dropped.</summary>
+    private async Task<QueueListing?> ReadAllAsync()
+    {
+        var first = await _player.QueueAsync(0, PageSize).ConfigureAwait(true);
+        if (first is null || first.Items.Count >= first.Total || first.Items.Count < PageSize)
+        {
+            return first;
+        }
+
+        var items = new List<QueueEntry>(first.Total);
+        items.AddRange(first.Items);
+        var current = first.CurrentIndex;
+        var offset = first.Items.Count;
+        while (offset < first.Total)
+        {
+            var page = await _player.QueueAsync(offset, PageSize).ConfigureAwait(true);
+            if (page is null || page.Total != first.Total)
             {
                 return null;
             }
 
-            var past = listing.Items.Where(e => e.Index > (listing.CurrentIndex ?? current)).ToList();
-            // Fewer than asked for: the end of the queue (or as much as the player gives at once).
-            if (listing.Items.Count < limit || past.Count >= past.TakeWhile(e => e.UpNext).Count() + after)
+            if (page.Items.Count == 0)
             {
-                return listing;
+                break;
             }
 
-            limit *= 2;
+            items.AddRange(page.Items);
+            current = page.CurrentIndex ?? current;
+            offset += page.Items.Count;
         }
+
+        return new QueueListing(first.Total, 0, items.Count, current, items);
     }
 
     /// <summary>Marks the rows that weren't there before (by path, each old row matching one new); returns the first.</summary>
@@ -571,7 +709,7 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
         if (albumId is not null)
         {
-            row.Art = _art.TryGetValue(albumId, out var art) ? art : _art[albumId] = new AlbumArt(albumId, CoverSize.Small, _covers);
+            row.SetArt(_art.TryGetValue(albumId, out var art) ? art : _art[albumId] = new AlbumArt(albumId, CoverSize.Small, _covers));
         }
     }
 
@@ -594,6 +732,14 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
         => entries.Where(e => string.Equals(path(e), row.Item.Path, StringComparison.Ordinal))
             .MinBy(e => Math.Abs(index(e) - row.Index));
 
+    /// <summary>The entry that is <paramref name="row"/>, nearest <paramref name="guess"/>.</summary>
+    private async Task<QueueEntry?> FindNearAsync(QueueRowViewModel row, int guess, int span)
+    {
+        var start = Math.Max(0, guess - 2);
+        var listing = await _player.QueueAsync(start, Math.Clamp(span, 1, PageSize)).ConfigureAwait(true);
+        return listing is null ? null : Nearest(listing.Items, row, e => e.Item.Path, e => e.Index);
+    }
+
     /// <summary>The up-next entries as the player has them now (none when it can't say).</summary>
     private async Task<IReadOnlyList<QueueEntry>> UpNextAsync(int expected)
     {
@@ -609,12 +755,16 @@ public sealed partial class QueueDrawerViewModel : LayerViewModel, IDisposable
 
     private void OnQueueChanged(object? sender, EventArgs e) => _ = ReadAsync();
 
-    /// <summary>The status says the queue moved on (a track ended, say) without a queueChanged event: read it again.</summary>
+    /// <summary>A track change moves the marker. The queue is read again only when its length or radio mode changed.</summary>
     private void OnStatusApplied(object? sender, EventArgs e)
     {
-        if (_readFor != Key())
+        if (!_hasRead || StructureChanged())
         {
             _ = ReadAsync();
+        }
+        else
+        {
+            MoveMarker(_player.QueueIndex ?? -1);
         }
     }
 
