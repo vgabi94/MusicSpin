@@ -325,23 +325,26 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _player.Start();
         await _vm.StartAsync();
         await _ui.UntilAsync(() => _drawer.Rows.Count == count && ReadsSettled(), "the long queue");
-        Assert.True(_player.Count("queue") >= 2);
-        _drawer.NoteScroll(0, 600, QueueWindow.FallbackRowHeight);
-        Assert.True(_drawer.ShownRows.Count < count);
-        Assert.True(_drawer.ShownRows.Count > 0);
-        Assert.Equal(0, _drawer.ShownRows[0].Index);
+        var pages = _player.Count("queue");
+        Assert.True(pages >= 2);
 
         var rows = _drawer.Rows;
-        var shown = _drawer.ShownRows;
-        var reads = _player.Count("queue");
         var started = _drawer.ReadsStarted;
         _player.SetQueue(titles, current: 2);
         await _player.PushAsync("stateChanged");
         await _ui.UntilAsync(() => _drawer.CurrentIndex == 2 && ReadsSettled(), "the marker");
         Assert.Same(rows, _drawer.Rows);
-        Assert.Same(shown, _drawer.ShownRows);
         Assert.Equal(started, _drawer.ReadsStarted);
-        Assert.Equal(reads, _player.Count("queue"));
+        Assert.Equal(pages, _player.Count("queue"));
+
+        // A station-style append is read from the end, not as another pass over the whole queue.
+        var longer = titles.Append("tail").ToArray();
+        _player.SetQueue(longer, current: 2);
+        await _player.PushAsync("queueChanged");
+        await _ui.UntilAsync(() => _drawer.Rows.Count == count + 1 && ReadsSettled(), "the tail");
+        Assert.Equal("tail", _drawer.Rows[^1].Title);
+        var tail = _player.Sent("queue")[^1];
+        Assert.Equal(count, tail.GetProperty("offset").GetInt32());
     }
 
     private static bool Marked(QueueMarker marker, int index, int current)
@@ -489,7 +492,11 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await _drawer.PlayTopCommand.ExecuteAsync(null);
         Assert.Equal(0, (await SentAsync("queue.goto", 2)).GetProperty("index").GetInt32());
 
-        await _drawer.ClearCommand.ExecuteAsync(null);
+        _drawer.ClearCommand.Execute(null);
+        Assert.True(_drawer.IsConfirmingClear);
+        Assert.Equal(0, _player.Count("queue.clear"));
+        await _drawer.ConfirmClearCommand.ExecuteAsync(null);
+        Assert.False(_drawer.IsConfirmingClear);
         var clear = await SentAsync("queue.clear");
         Assert.False(clear.TryGetProperty("upNext", out var upNext) && upNext.GetBoolean());
     }

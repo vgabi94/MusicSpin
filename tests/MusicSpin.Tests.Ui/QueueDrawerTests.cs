@@ -92,7 +92,7 @@ public sealed class QueueDrawerTests
 
     private static IEnumerable<QueueRowViewModel> Shown(AppHarness app)
     {
-        foreach (var name in new[] { "QueueRows", "RadioPicks" })
+        foreach (var name in new[] { "QueueRows" })
         {
             var list = Find<ItemsControl>(app, name);
             for (var i = 0; i < list.ItemCount; i++)
@@ -276,6 +276,9 @@ public sealed class QueueDrawerTests
         Assert.Equal(0, (await SentAsync(app, "queue.goto")).GetProperty("index").GetInt32());
 
         Gui.Click(app.Window, Find<Button>(app, "ClearQueue"));
+        Assert.True(Find<Grid>(app, "ClearConfirm").IsVisible);
+        Assert.Equal(0, app.Scripted!.Count("queue.clear"));
+        Gui.Click(app.Window, Find<Button>(app, "ConfirmClear"));
         var clear = await SentAsync(app, "queue.clear");
         Assert.False(clear.TryGetProperty("upNext", out var upNext) && upNext.GetBoolean());
     }
@@ -303,7 +306,7 @@ public sealed class QueueDrawerTests
         IReadOnlyList<QueueItem> many = [.. Enumerable.Range(1, 10).SelectMany(a => Enumerable.Range(1, 3).Select(t => SampleLibrary.Item(a, t)))];
         await QueueAsync(app, [.. many.Take(20)]);
         await OpenDrawerAsync(app);
-        var scroll = Find<ScrollViewer>(app, "QueueScroll");
+        var scroll = Gui.All<ScrollViewer>(Find<ListBox>(app, "QueueRows")).First();
         Assert.Equal(0, scroll.Offset.Y);
 
         await QueueAsync(app, many);
@@ -325,8 +328,7 @@ public sealed class QueueDrawerTests
 
         Assert.True(Find<StackPanel>(app, "RadioSection").IsVisible);
         Assert.Equal("Jazz", Find<TextBlock>(app, "RadioDescription").Text);
-        var picks = Find<ItemsControl>(app, "RadioPicks");
-        var pick = (Control)picks.ContainerFromIndex(1)!;
+        var pick = RowAt(app, 3);
         Assert.True(In<Panel>(pick, "queueRow").Opacity < 1);
         Gui.Click(app.Window, In<Button>(pick, "queueEntry"));
         Assert.Equal(3, (await SentAsync(app, "queue.goto")).GetProperty("index").GetInt32());

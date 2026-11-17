@@ -125,7 +125,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
         switch (cmd)
         {
             case "hello":
-                return (hello?.Invoke() ?? new { protocol = Version, decoder = decoders.Name }, ProtocolAction.None);
+                return (hello?.Invoke() ?? new { protocol = Version, decoder = decoders.Name, commands = Commands }, ProtocolAction.None);
             case "status":
                 return (Player.Status(), ProtocolAction.None);
             case "load":

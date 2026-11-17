@@ -305,18 +305,21 @@ src/MusicSpin.App/
   size for the window's DPI, white on a dark taskbar and near black on a light one, drawn again when either changes. The
   composition root gives the window its buttons before it shows; elsewhere (another OS, the headless tests' window)
   there are none. A taskbar call that fails turns them off (logged in `app.log`) and the app goes on.
-- **Queue drawer.** `QueueDrawerViewModel` lists the whole queue (#228), read with `queue` in pages of 10,000 when the
-  player reports `queueChanged` and when the length or radio mode changes. A track change only moves the current index:
+- **Queue drawer.** `QueueDrawerViewModel` lists the whole queue (#228). A track change only moves the current index:
   entries above the marker are greyed, the playing one is marked, and the header and the player bar say where it is
-  ("4 of 11"). A queue longer than 400 entries shows a window around the scroll position, so 100,000 entries do not
-  build 100,000 controls. On radio it also lists the station's next six picks. A click sends `queue.goto` (the marker
-  moves; nothing is removed or reordered). A row of the list that is playing in Now Playing and on the Tracks page
-  sends `queue.play`, which keeps the up-next run and moves it to follow (#140). `queue.remove` removes one entry.
-  `queue.clear` empties the whole queue and stops playback (`queue.clear` with `upNext` remains the CLI's clear of the
-  up-next run only). `radio.end` ends radio while keeping the current track and the up-next rows (#37). A drop right
-  after the playing entry is Play next, a drop at the end of the up-next run is Add to queue, and a drop anywhere else
-  adds up next and moves the tracks into place. Save as playlist writes the whole queue. Rows that were not there at
-  the last read flash, and the first of them scrolls into view.
+  ("4 of 11"; the badge shows only the position once the queue passes 999). The rows are an `ItemsControl` with a
+  `VirtualizingStackPanel`, so 100,000 entries do not build 100,000 controls. Remove, reorder and a drop are applied to
+  the rows already shown. A station's new picks are read from the end of the list. Anything else is read in pages of
+  10,000, and a newer read drops one that is still walking those pages. On radio the station's header stays docked and
+  its picks are the dimmed rows in the list (each pick is in that list only). A click sends `queue.goto` (the marker
+  moves; nothing is removed or reordered). A player started before that command existed gets `play` instead. A row of
+  the list that is playing in Now Playing and on the Tracks page sends `queue.play`, which keeps the up-next run and
+  moves it to follow (#140). `queue.remove` removes one entry. Clear asks first, then `queue.clear` empties the whole
+  queue and stops playback (`queue.clear` with `upNext` remains the CLI's clear of the up-next run only). `radio.end`
+  ends radio while keeping the current track and the up-next rows (#37). A drop right after the playing entry is Play
+  next, a drop at the end of the up-next run is Add to queue, and a drop anywhere else adds up next and moves the
+  tracks into place. Save as playlist writes the whole queue. Rows that were not there at the last read flash, and the
+  first of them scrolls into view. The list follows the playing song when it opens and until the person scrolls it.
 - **Dragging.** Albums, tracks and queue rows are dragged with pointer capture, not `DoDragDropAsync` (which can't show
   a custom drag image on every platform). `LibraryDrag` starts a drag once the pointer has moved 4 px from a press on
   a `QueueSource` item. The window then holds the pointer, so the press clicks nothing, and a `DragGhostView` in the

@@ -441,7 +441,7 @@ public sealed class MenusAndDragTests
         Assert.True(app.ViewModel.Menu.IsOpen);
 
         // as when the CLI adds rows and the drawer brings them into view
-        var drawer = Gui.Find<ScrollViewer>(app.Window, "QueueScroll");
+        var drawer = Gui.All<ScrollViewer>(Gui.Find<ListBox>(app.Window, "QueueRows")).First();
         Assert.True(drawer.Extent.Height > drawer.Viewport.Height, "the rows scroll");
         drawer.Offset = new Vector(0, 60);
         Gui.Settle();

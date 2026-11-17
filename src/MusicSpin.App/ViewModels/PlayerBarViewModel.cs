@@ -128,6 +128,15 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
     /// <summary>The badge's text, the playing entry's place ("4 of 11"); null hides it.</summary>
     public string? QueueCountText => QueuePositionText.Format(Player.QueueIndex, Player.QueueLength);
 
+    /// <summary>
+    /// What the small badge draws. The full "4 of 11" while the queue is short; past 999 entries only the position, so
+    /// "1,234 of 100,000" does not spill across the bar. The tooltip stays the full text.
+    /// </summary>
+    public string? QueueBadgeText
+        => Player.QueueLength >= 1000 && Player.QueueIndex is int index
+            ? (index + 1).ToString("N0", CultureInfo.CurrentCulture)
+            : QueueCountText;
+
     /// <summary>Counts badge pulses: something was added to the queue while the drawer was closed.</summary>
     [ObservableProperty]
     public partial int QueuePulses { get; private set; }
@@ -226,5 +235,6 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
         (_queueLength, _queuePath) = (length, current);
         OnPropertyChanged(nameof(QueueCount));
         OnPropertyChanged(nameof(QueueCountText));
+        OnPropertyChanged(nameof(QueueBadgeText));
     }
 }

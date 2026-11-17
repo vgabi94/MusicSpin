@@ -609,7 +609,8 @@ public sealed class QueuePlayer : IDisposable
     /// <see cref="Play"/> is the command that drops up-next entries it skips.
     /// </summary>
     /// <exception cref="MusicSpinException">InvalidState when the queue is empty; InvalidArgument when <paramref name="index"/>
-    /// is outside it; FileNotFound when nothing from that entry on can be opened (the marker stays where it was).</exception>
+    /// is outside it; FileNotFound when nothing in the queue can be opened. The marker stays where it was, and the track
+    /// that was playing keeps playing: a click on a row that cannot be opened does not stop it.</exception>
     public PlayerStatus Goto(int index)
     {
         lock (_gate)
@@ -627,7 +628,7 @@ public sealed class QueuePlayer : IDisposable
                 return StatusCore();
             }
 
-            return MoveAndPlay(index, +1, wrap: WrapAll);
+            return MoveAndPlay(index, +1, wrap: WrapAll, keepPlayingOnFailure: true);
         }
     }
 

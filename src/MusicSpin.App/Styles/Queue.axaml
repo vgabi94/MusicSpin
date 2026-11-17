@@ -22,7 +22,7 @@
         <Setter Property="BoxShadow" Value="-30 0 50 -30 #CC000000" />
     </Style>
 
-    <!-- The header: "Up next", the summary, Clear (hidden while empty) and ✕. -->
+    <!-- The header: "Queue", the position, Clear (hidden while empty; it asks first) and ✕. -->
     <Style Selector="Grid.queueHeader">
         <Setter Property="Margin" Value="{StaticResource QueueHeaderPadding}" />
         <Setter Property="ColumnSpacing" Value="{StaticResource QueueHeaderGap}" />
@@ -58,6 +58,19 @@
     <Style Selector="views|QueueDrawerView.empty Button#ClearQueue">
         <Setter Property="IsVisible" Value="False" />
     </Style>
+    <Style Selector="Grid.clearConfirm">
+        <Setter Property="ColumnSpacing" Value="{StaticResource QueueHeaderGap}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.clearQuestion">
+        <Setter Property="FontSize" Value="{StaticResource QueueSummaryFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Button.queueClear.danger">
+        <Setter Property="Foreground" Value="{StaticResource InvalidBrush}" />
+    </Style>
     <Style Selector="Button.queueClose">
         <Setter Property="Width" Value="{StaticResource QueueCloseSize}" />
         <Setter Property="Height" Value="{StaticResource QueueCloseSize}" />
@@ -69,7 +82,25 @@
         <Setter Property="Height" Value="{StaticResource QueueCloseIconSize}" />
     </Style>
 
-    <Style Selector="ScrollViewer.queueScroll">
+    <Style Selector="ListBox.queueList">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.queueList ListBoxItem">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="ListBox.queueList ListBoxItem:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.queueList ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.queueList /template/ ScrollViewer">
         <Setter Property="Padding" Value="{StaticResource QueueListPadding}" />
         <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
     </Style>

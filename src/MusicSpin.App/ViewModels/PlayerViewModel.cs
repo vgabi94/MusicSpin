@@ -323,7 +323,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
             : SendAsync("queue.add", new { items = tracks.Select(ToItem).ToArray(), position = position.ToString().ToLowerInvariant() }, holdable: true);
     }
 
-    public Task RemoveFromQueueAsync(int index) => SendAsync("queue.remove", new { index });
+    public Task<bool> RemoveFromQueueAsync(int index) => SendAsync("queue.remove", new { index }, holdable: true);
 
     /// <summary>Moves entry <paramref name="from"/> to <paramref name="to"/> (its index afterwards). False when it failed.</summary>
     public Task<bool> MoveInQueueAsync(int from, int to) => SendAsync("queue.move", new { from, to }, holdable: true);
@@ -333,8 +333,39 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Plays queue entry <paramref name="index"/> (0-based, in play order); the up-next entries it skips are dropped.</summary>
     public Task PlayIndexAsync(int index) => SendAsync("play", new { index });
 
-    /// <summary>Plays queue entry <paramref name="index"/> and leaves the list as it is (<c>queue.goto</c>).</summary>
-    public Task GotoQueueAsync(int index) => SendAsync("queue.goto", new { index });
+    private bool _noGoto;
+
+    /// <summary>
+    /// Plays queue entry <paramref name="index"/> and leaves the list as it is (<c>queue.goto</c>). A player that was
+    /// started before that command existed answers "unknown command"; the click then uses <c>play</c>, which drops the
+    /// up-next entries it skips.
+    /// </summary>
+    public async Task GotoQueueAsync(int index)
+    {
+        if (_noGoto)
+        {
+            await PlayIndexAsync(index).ConfigureAwait(false);
+            return;
+        }
+
+        _lastCommandError = null;
+        if (await SendAsync("queue.goto", new { index }, holdable: true, report: false).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        if (_lastCommandError?.Contains("Unknown cmd", StringComparison.Ordinal) == true)
+        {
+            _noGoto = true;
+            await PlayIndexAsync(index).ConfigureAwait(false);
+            return;
+        }
+
+        if (_lastCommandError is { } message)
+        {
+            Raise(message);
+        }
+    }
 
     /// <summary>
     /// Ends radio with the player's <c>radio.end</c>: in one step the station's picks go, the current track plays on (no
@@ -561,8 +592,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     public Task SendAsync(string cmd, object? args = null) => SendAsync(cmd, args, holdable: cmd is not ("volume" or "mute"));
 
+    /// <summary>The last command's error, when <c>report</c> was false and it failed.</summary>
+    private string? _lastCommandError;
+
     /// <param name="gated">Waits for a restart under way (the restart's own resume doesn't).</param>
-    private async Task<bool> SendAsync(string cmd, object? args, bool holdable, bool gated = true)
+    /// <param name="report">False keeps a failure off the notice banner (the caller decides what to say).</param>
+    private async Task<bool> SendAsync(string cmd, object? args, bool holdable, bool gated = true, bool report = true)
     {
         if (_closing)
         {
@@ -614,7 +649,12 @@ public sealed partial class PlayerViewModel : ObservableObject, IAsyncDisposable
         }
         catch (MusicSpinException ex)
         {
-            Raise(ex.Message);
+            _lastCommandError = ex.Message;
+            if (report)
+            {
+                Raise(ex.Message);
+            }
+
             if (ex.Code is MusicSpinErrorCode.PlayerNotRunning or MusicSpinErrorCode.PlayerUnavailable)
             {
                 // The restart's own resume (ungated) is part of the restart: its loss is the restart's to report.

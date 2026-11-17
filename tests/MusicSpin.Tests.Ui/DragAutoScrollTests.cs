@@ -367,7 +367,7 @@ public sealed class DragAutoScrollTests
         Assert.Equal(atEnd, drawer.ScrollOffsetY);
 
         Mouse.Release(app.Window, MiddleOf(view));
-        drawer.ScrollBy(-atEnd / 2);
+        drawer.ScrollBy(-atEnd);
         Gui.Settle();
         Mouse.StartDrag(app.Window, QueueRow(app, 0));
         view = drawer.ViewportIn(app.Window) ?? throw new InvalidOperationException("no viewport");

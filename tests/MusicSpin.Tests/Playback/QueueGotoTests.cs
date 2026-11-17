@@ -130,4 +130,23 @@ public sealed class QueueGotoTests : IDisposable
         Assert.Equal("/gone/missing.flac", listing.Items[1].Item.Path);
         Assert.Contains(queue.Status().Skipped!, s => s.Path == "/gone/missing.flac");
     }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public void Goto_when_nothing_can_be_opened_leaves_the_current_track_playing()
+    {
+        var (decoders, paths) = PlayerTestKit.Tracks(3, 30);
+        var player = new Player(decoders, Outputs.Realtime());
+        var queue = new QueuePlayer(player, new OutputInfo("null", null, false));
+        _owned.Add(player);
+        _owned.Add(queue);
+        queue.SetQueue(Items(paths));
+        decoders.Files.Clear();
+
+        Assert.Equal(MusicSpinErrorCode.FileNotFound, Code(() => queue.Goto(1)));
+        var status = queue.Status();
+        Assert.Equal(PlayerState.Playing, status.State);
+        Assert.Equal(0, status.QueueIndex);
+        Assert.Equal(3, queue.Count);
+    }
 }
