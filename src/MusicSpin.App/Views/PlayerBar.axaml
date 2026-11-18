@@ -237,10 +237,11 @@
                         </Button>
                         <Border Name="QueueCount"
                                 Classes="count"
-                                IsVisible="{Binding PlayerBar.QueueCountText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                IsVisible="{Binding PlayerBar.QueueBadgeText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                ToolTip.Tip="{Binding PlayerBar.QueueCountText}"
                                 theming:Animate.Play="PulseAnimation"
                                 theming:Animate.Trigger="{Binding PlayerBar.QueuePulses}">
-                            <TextBlock Text="{Binding PlayerBar.QueueCountText}" />
+                            <TextBlock Text="{Binding PlayerBar.QueueBadgeText}" />
                         </Border>
                     </Panel>
                     <Button Name="SettingsButton"

@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Time.Testing;
+using System.Globalization;
 using MusicSpin.App.Services;
+using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
 using MusicSpin.Core.Hosting;
 using MusicSpin.Core.Library;
@@ -48,11 +50,12 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
 
     private async Task StartAsync(int upNext, RadioFilter? radio = null, int current = 0)
     {
-        _player.SetQueue(Titles([.. Enumerable.Range(1, upNext).Select(i => "q" + i)]), current, upNext, radio);
+        var titles = Titles([.. Enumerable.Range(1, upNext).Select(i => "q" + i)]);
+        _player.SetQueue(titles, current, upNext, radio);
         _player.FollowsCommands = true; // queue.add and queue.move edit its queue, as a real player's
         _player.Start();
         await _vm.StartAsync();
-        await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1 && _drawer.Rows.Count == upNext && _player.Count("queue") > 0
+        await _ui.UntilAsync(() => _vm.IsConnected && _player.Subscribers == 1 && _drawer.Rows.Count == titles.Length && _player.Count("queue") > 0
                                    && ReadsSettled(), "the first read");
     }
 
@@ -60,10 +63,9 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     private async Task ChangeAsync(string[] titles, int upNext, RadioFilter? radio = null, int current = 0)
     {
         _player.SetQueue(titles, current, upNext, radio);
-        string[] expected = [.. titles.Skip(current + 1).Take(upNext)];
         var started = _drawer.ReadsStarted;
         await _player.PushAsync("queueChanged");
-        await _ui.UntilAsync(() => _drawer.ReadsStarted > started && ReadsSettled() && TitlesOf(_drawer.Rows).SequenceEqual(expected), "the queue read again");
+        await _ui.UntilAsync(() => _drawer.ReadsStarted > started && ReadsSettled() && TitlesOf(_drawer.Rows).SequenceEqual(titles), "the queue read again");
     }
 
     /// <summary>No read of the drawer's is under way.</summary>
@@ -85,40 +87,54 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
 
     private static string[] TitlesOf(IEnumerable<QueueRowViewModel> rows) => [.. rows.Select(r => r.Title)];
 
+    private QueueRowViewModel Row(string title) => _drawer.Rows.Single(r => r.Title == title);
+
     // ---- the rows ---------------------------------------------------------------------------------------------
 
     [Fact]
-    public async Task The_rows_are_the_entries_up_next_not_the_rest_of_the_album()
+    public async Task The_rows_are_the_whole_queue_and_the_summary_is_the_marker()
     {
+        var titles = Titles("q1", "q2", "q3");
         await StartAsync(upNext: 3);
-        Assert.Equal(["q1", "q2", "q3"], TitlesOf(_drawer.Rows));
-        Assert.Equal([1, 2, 3], _drawer.Rows.Select(r => r.Index));
+        Assert.Equal(titles, TitlesOf(_drawer.Rows));
+        Assert.Equal(Enumerable.Range(0, titles.Length), _drawer.Rows.Select(r => r.Index));
+        Assert.Equal(0, _drawer.CurrentIndex);
         Assert.Empty(_drawer.Picks);
         Assert.False(_drawer.IsEmpty);
-        Assert.Equal("3 tracks · 15 min", _drawer.Summary);
+        Assert.Equal(QueuePositionText.Format(0, titles.Length), _drawer.Summary);
         Assert.All(_drawer.Rows, r => Assert.False(r.IsFresh));
-
-        // the current entry, the three up next, and one more to see where they end
         var request = _player.Sent("queue")[^1];
-        Assert.Equal((0, 5), (request.GetProperty("offset").GetInt32(), request.GetProperty("limit").GetInt32()));
+        Assert.Equal((0, QueueDrawerViewModel.PageSize), (request.GetProperty("offset").GetInt32(), request.GetProperty("limit").GetInt32()));
     }
 
     [Fact]
-    public async Task With_nothing_up_next_the_drawer_is_empty_and_its_buttons_are_off()
+    public async Task With_nothing_up_next_the_album_stays_listed()
     {
         await StartAsync(upNext: 0);
-        Assert.True(_drawer.IsEmpty);
+        Assert.Equal(Titles(), TitlesOf(_drawer.Rows));
+        Assert.Equal(QueuePositionText.Format(0, Album.Length), _drawer.Summary);
+        Assert.False(_drawer.IsEmpty);
+        Assert.True(_drawer.ClearCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task An_empty_queue_has_no_rows_and_its_buttons_are_off()
+    {
+        _player.SetQueue(Array.Empty<string>());
+        _player.Start();
+        await _vm.StartAsync();
+        await _ui.UntilAsync(() => _vm.IsConnected && ReadsSettled() && _drawer.IsEmpty, "the empty queue");
         Assert.Null(_drawer.Summary);
+        Assert.Equal(-1, _drawer.CurrentIndex);
         Assert.False(_drawer.PlayTopCommand.CanExecute(null));
-        Assert.False(_drawer.StartSaveCommand.CanExecute(null));
         Assert.False(_drawer.ClearCommand.CanExecute(null));
     }
 
     [Fact]
-    public async Task A_single_row_reads_one_track()
+    public async Task The_position_reads_one_of_the_album_plus_the_one_queued()
     {
         await StartAsync(upNext: 1);
-        Assert.Equal("1 track · 5 min", _drawer.Summary);
+        Assert.Equal(QueuePositionText.Format(0, Album.Length + 1), _drawer.Summary);
     }
 
     [Fact]
@@ -132,9 +148,35 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
 
         Assert.True(_drawer.IsRadio);
         Assert.Equal("Jazz · 1960s", _drawer.RadioDescription);
-        Assert.Equal(["q1"], TitlesOf(_drawer.Rows));
+        Assert.Equal(["now", "q1", .. picks], TitlesOf(_drawer.Rows));
         Assert.Equal(picks[..6], TitlesOf(_drawer.Picks));
-        Assert.Equal(1 + 1 + QueueDrawerViewModel.RadioPicks, _player.Sent("queue")[^1].GetProperty("limit").GetInt32());
+        Assert.Equal(QueueDrawerViewModel.PageSize, _player.Sent("queue")[^1].GetProperty("limit").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_second_radio_read_still_follows_the_queue_and_the_marker()
+    {
+        var radio = new RadioFilter { Genres = ["Jazz"] };
+        var picks = Enumerable.Range(1, 9).Select(i => "pick" + i).ToArray();
+        _player.SetQueue(["now", "q1", .. picks], 0, 1, radio);
+        _player.Start();
+        await _vm.StartAsync();
+        await _ui.UntilAsync(() => _drawer.Picks.Count == QueueDrawerViewModel.RadioPicks, "the picks");
+
+        var next = Enumerable.Range(2, 9).Select(i => "later" + i).ToArray();
+        await ChangeAsync(["q1", .. next], upNext: 0, radio, current: 1);
+        Assert.Equal(["q1", .. next], TitlesOf(_drawer.Rows));
+        Assert.Equal(next[1..7], TitlesOf(_drawer.Picks));
+        Assert.Equal(1, _drawer.CurrentIndex);
+
+        var rows = _drawer.Rows;
+        var reads = _player.Count("queue");
+        _player.SetQueue(["q1", .. next], current: 2, upNext: 0, radio);
+        await _player.PushAsync("stateChanged");
+        await _ui.UntilAsync(() => _drawer.CurrentIndex == 2 && ReadsSettled(), "the marker");
+        Assert.Same(rows, _drawer.Rows);
+        Assert.Equal(reads, _player.Count("queue"));
+        Assert.Equal(QueuePositionText.Format(2, rows.Count), _drawer.Summary);
     }
 
     [Fact]
@@ -146,8 +188,9 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
 
         // a CLI add in the middle, and the same track twice: only the new copy is fresh
         await ChangeAsync(Titles("q1", "new", "q2", "q1"), upNext: 4);
-        Assert.Equal([false, true, false, true], _drawer.Rows.Select(r => r.IsFresh));
-        Assert.Same(_drawer.Rows[1], announced);
+        Assert.Equal([false, false, true, false, true], _drawer.Rows.Take(5).Select(r => r.IsFresh));
+        Assert.All(_drawer.Rows.Skip(5), r => Assert.False(r.IsFresh));
+        Assert.Same(_drawer.Rows[2], announced);
 
         // removing one marks nothing and announces nothing
         announced = null;
@@ -166,9 +209,10 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
 
         var reads = _player.Count("queue");
         await _player.PushAsync("queueChanged");
-        await _ui.UntilAsync(() => _player.Count("queue") > reads && _drawer.Rows.Count == 4, "the rows read again");
-        Assert.Equal(["q1", "new", "q2", "q1"], TitlesOf(_drawer.Rows));
-        Assert.Equal([false, true, false, true], _drawer.Rows.Select(r => r.IsFresh));
+        var expected = Titles("q1", "new", "q2", "q1");
+        await _ui.UntilAsync(() => _player.Count("queue") > reads && _drawer.Rows.Count == expected.Length, "the rows read again");
+        Assert.Equal(expected, TitlesOf(_drawer.Rows));
+        Assert.Equal([false, false, true, false, true], _drawer.Rows.Take(5).Select(r => r.IsFresh));
     }
 
     [Fact]
@@ -177,16 +221,18 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await StartAsync(upNext: 2);
         await ChangeAsync(Titles("q1", "new", "q2"), upNext: 3);
         var rows = _drawer.Rows;
-        Assert.True(rows[1].IsFresh);
+        Assert.True(rows[2].IsFresh);
 
         await PushQueueChangedAsync();
         Assert.Same(rows, _drawer.Rows);
-        Assert.True(rows[1].IsFresh);
+        Assert.True(rows[2].IsFresh);
 
         // a real change: the rows that stay are no longer fresh, the new one is
         await ChangeAsync(Titles("q1", "new", "q2", "newer"), upNext: 4);
-        Assert.Same(rows[1], _drawer.Rows[1]);
-        Assert.Equal([false, false, false, true], _drawer.Rows.Select(r => r.IsFresh));
+        Assert.Same(rows[2], _drawer.Rows[2]);
+        Assert.False(_drawer.Rows[2].IsFresh);
+        Assert.Equal("newer", _drawer.Rows[4].Title);
+        Assert.True(_drawer.Rows[4].IsFresh);
     }
 
     [Fact]
@@ -209,29 +255,100 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _player.SetQueue(Titles("q1", "q2", "q3"), current: 1, upNext: 2);
         var moved = _player.Status;
         _player.Status = status;
+        var rows = _drawer.Rows;
         await PushQueueChangedAsync();
-        Assert.Equal(["q2", "q3"], TitlesOf(_drawer.Rows));
+        Assert.Same(rows, _drawer.Rows);
+        Assert.Equal(1, _drawer.CurrentIndex);
+        Assert.Equal(0, _vm.QueueIndex);
 
-        // then the status arrives and the drawer reads again: the same rows, nothing fresh, nothing announced
         _player.Status = moved;
         var started = _drawer.ReadsStarted;
+        var queueReads = _player.Count("queue");
         await _player.PushAsync("stateChanged");
-        await _ui.UntilAsync(() => _vm.QueueIndex == 1 && _drawer.ReadsStarted > started && ReadsSettled(), "the read after the status");
-        Assert.Equal(["q2", "q3"], TitlesOf(_drawer.Rows));
+        await _ui.UntilAsync(() => _vm.QueueIndex == 1 && ReadsSettled(), "the status");
+        Assert.Equal(started, _drawer.ReadsStarted);
+        Assert.Equal(queueReads, _player.Count("queue"));
+        Assert.Same(rows, _drawer.Rows);
         Assert.All(_drawer.Rows, r => Assert.False(r.IsFresh));
-        Assert.Equal([2], counts);
+        Assert.Empty(counts);
         Assert.Equal(0, added);
     }
 
     [Fact]
-    public async Task The_track_moving_on_reads_the_rows_again_without_an_event()
+    public async Task The_track_moving_on_moves_the_marker_and_does_not_read_the_queue_again()
     {
         await StartAsync(upNext: 3);
+        var rows = _drawer.Rows;
+        var queueReads = _player.Count("queue");
+        var started = _drawer.ReadsStarted;
         _player.SetQueue(Titles("q1", "q2", "q3"), current: 1, upNext: 2);
         await _player.PushAsync("stateChanged");
-        await _ui.UntilAsync(() => _drawer.Rows.Count == 2, "the rows after the track moved on");
-        Assert.Equal(["q2", "q3"], TitlesOf(_drawer.Rows));
+        await _ui.UntilAsync(() => _drawer.CurrentIndex == 1 && ReadsSettled(), "the marker");
+        Assert.Same(rows, _drawer.Rows);
+        Assert.Equal(started, _drawer.ReadsStarted);
+        Assert.Equal(queueReads, _player.Count("queue"));
+        Assert.Equal(QueuePositionText.Format(1, rows.Count), _drawer.Summary);
     }
+
+    [Fact]
+    public async Task Going_back_un_greys_from_the_new_marker_on_and_keeps_the_rows()
+    {
+        await StartAsync(upNext: 3);
+        var rows = _drawer.Rows;
+        var reads = _player.Count("queue");
+        _player.SetQueue(Titles("q1", "q2", "q3"), current: 4);
+        await _player.PushAsync("stateChanged");
+        await _ui.UntilAsync(() => _drawer.CurrentIndex == 4 && ReadsSettled(), "the marker forward");
+        Assert.Same(rows, _drawer.Rows);
+        Assert.Equal(reads, _player.Count("queue"));
+        Assert.True(Marked(QueueMarker.Before, 3, 4));
+        Assert.False(Marked(QueueMarker.Before, 4, 4));
+        Assert.True(Marked(QueueMarker.Current, 4, 4));
+
+        _player.SetQueue(Titles("q1", "q2", "q3"), current: 1);
+        await _player.PushAsync("stateChanged");
+        await _ui.UntilAsync(() => _drawer.CurrentIndex == 1 && ReadsSettled(), "the marker back");
+        Assert.Same(rows, _drawer.Rows);
+        Assert.Equal(reads, _player.Count("queue"));
+        Assert.True(Marked(QueueMarker.Before, 0, 1));
+        Assert.False(Marked(QueueMarker.Before, 1, 1));
+        Assert.False(Marked(QueueMarker.Before, 4, 1));
+        Assert.Equal(QueuePositionText.Format(1, rows.Count), _drawer.Summary);
+    }
+
+    [Fact]
+    public async Task A_long_queue_shows_a_window_and_a_track_change_does_not_read_again()
+    {
+        var count = QueueDrawerViewModel.PageSize + 1;
+        var titles = Enumerable.Range(0, count).Select(i => "t" + i.ToString(CultureInfo.InvariantCulture)).ToArray();
+        _player.SetQueue(titles, current: 3);
+        _player.Start();
+        await _vm.StartAsync();
+        await _ui.UntilAsync(() => _drawer.Rows.Count == count && ReadsSettled(), "the long queue");
+        var pages = _player.Count("queue");
+        Assert.True(pages >= 2);
+
+        var rows = _drawer.Rows;
+        var started = _drawer.ReadsStarted;
+        _player.SetQueue(titles, current: 2);
+        await _player.PushAsync("stateChanged");
+        await _ui.UntilAsync(() => _drawer.CurrentIndex == 2 && ReadsSettled(), "the marker");
+        Assert.Same(rows, _drawer.Rows);
+        Assert.Equal(started, _drawer.ReadsStarted);
+        Assert.Equal(pages, _player.Count("queue"));
+
+        // A station-style append is read from the end, not as another pass over the whole queue.
+        var longer = titles.Append("tail").ToArray();
+        _player.SetQueue(longer, current: 2);
+        await _player.PushAsync("queueChanged");
+        await _ui.UntilAsync(() => _drawer.Rows.Count == count + 1 && ReadsSettled(), "the tail");
+        Assert.Equal("tail", _drawer.Rows[^1].Title);
+        var tail = _player.Sent("queue")[^1];
+        Assert.Equal(count, tail.GetProperty("offset").GetInt32());
+    }
+
+    private static bool Marked(QueueMarker marker, int index, int current)
+        => marker.Convert([index, current], typeof(bool), null, CultureInfo.InvariantCulture) is true;
 
     [Fact]
     public async Task Reads_finish_on_the_ui_thread_even_when_two_are_under_way_at_once()
@@ -256,7 +373,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
 
         _player.SetQueue(Titles("q1", "q2", "q3"), upNext: 3);
         await PushQueueChangedAsync();
-        Assert.Equal(["q1", "q2", "q3"], TitlesOf(_drawer.Rows));
+        Assert.Equal(Titles("q1", "q2", "q3"), TitlesOf(_drawer.Rows));
         Assert.Empty(off);
     }
 
@@ -268,7 +385,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _player.SetQueue(Titles("q1", "q2", "q3"), upNext: 3);
         await PushQueueChangedAsync();
 
-        Assert.Equal(["q1", "q2"], TitlesOf(_drawer.Rows));
+        Assert.Equal(Titles("q1", "q2"), TitlesOf(_drawer.Rows));
         Assert.Empty(_posted);
     }
 
@@ -277,9 +394,11 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     {
         _library.Tracks.Add(StubLibrary.Track(1) with { Id = "q1" });
         await StartAsync(upNext: 2);
-        await _ui.UntilAsync(() => _drawer.Rows[0].Art is not null, "the cover of q1");
-        Assert.Null(_drawer.Rows[1].Art);
-        _ = _drawer.Rows[0].Art!.Cover;
+        var q1 = Row("q1");
+        var q2 = Row("q2");
+        await _ui.UntilAsync(() => q1.Art is not null, "the cover of q1");
+        Assert.Null(q2.Art);
+        _ = q1.Art!.Cover;
         await _ui.UntilAsync(() => _covers.Requests.ContainsKey("album0000"), "the cover requested");
     }
 
@@ -289,22 +408,27 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _library.Tracks.Add(StubLibrary.Track(1) with { Id = "q1" });
         _library.AlbumIdFailure = StubLibrary.Busy(); // a scan from the CLI holds the library
         await StartAsync(upNext: 2);
+        var q1 = Row("q1");
+        var q2 = Row("q2");
+        _ = q1.Art;
+        _ = q2.Art;
         await _ui.UntilAsync(() => _library.AlbumIdReads == 2, "both rows' albums asked for");
         _ui.Run();
-        Assert.All(_drawer.Rows, r => Assert.Null(r.Art));
+        Assert.Null(q1.Art);
+        Assert.Null(q2.Art);
         Assert.Empty(_posted);
 
         // still held at the next check: asked again, still the placeholders, still nothing said
         _time.Advance(LibraryService.PollInterval);
         await _ui.UntilAsync(() => _library.AlbumIdReads == 4, "the rows asked again");
         _ui.Run();
-        Assert.Null(_drawer.Rows[0].Art);
+        Assert.Null(q1.Art);
 
         // the scan lets go: the next check finds q1's album (q2 isn't in the library)
         _library.AlbumIdFailure = null;
         _time.Advance(LibraryService.PollInterval);
-        await _ui.UntilAsync(() => _drawer.Rows[0].Art is not null, "q1's cover after the scan");
-        Assert.Null(_drawer.Rows[1].Art);
+        await _ui.UntilAsync(() => q1.Art is not null, "q1's cover after the scan");
+        Assert.Null(q2.Art);
         Assert.Empty(_posted);
 
         // caught up: nothing more is owed
@@ -319,6 +443,8 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     {
         _library.AlbumIdFailure = StubLibrary.Busy();
         await StartAsync(upNext: 2);
+        _ = Row("q1").Art;
+        _ = Row("q2").Art;
         await _ui.UntilAsync(() => _library.AlbumIdReads == 2, "both rows' albums asked for");
 
         await ChangeAsync(Titles(), upNext: 0); // both played, or cleared from the CLI
@@ -335,13 +461,15 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _library.Tracks.Add(StubLibrary.Track(1) with { Id = "q1" });
         _library.AlbumIdFailure = new IOException("The disk went away.");
         await StartAsync(upNext: 1);
+        var q1 = Row("q1");
+        _ = q1.Art;
         await _ui.UntilAsync(() => _library.AlbumIdReads == 1, "the album asked for");
 
         _library.AlbumIdFailure = null;
         _time.Advance(LibraryService.PollInterval * 3);
         _ui.Run();
         Assert.Equal(1, _library.AlbumIdReads);
-        Assert.Null(_drawer.Rows[0].Art);
+        Assert.Null(q1.Art);
         Assert.Empty(_posted);
     }
 
@@ -352,17 +480,25 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     {
         await StartAsync(upNext: 3);
 
+        var before = _player.Queue.Select(e => e.Item.Path).ToArray();
         await _drawer.RemoveCommand.ExecuteAsync(_drawer.Rows[1]);
-        Assert.Equal(2, (await SentAsync("queue.remove")).GetProperty("index").GetInt32());
+        Assert.Equal(1, (await SentAsync("queue.remove")).GetProperty("index").GetInt32());
 
         await _drawer.SkipToCommand.ExecuteAsync(_drawer.Rows[2]);
-        Assert.Equal(3, (await SentAsync("play")).GetProperty("index").GetInt32());
+        Assert.Equal(2, (await SentAsync("queue.goto")).GetProperty("index").GetInt32());
+        Assert.Equal(0, _player.Count("play"));
+        Assert.Equal(before, _player.Queue.Select(e => e.Item.Path));
 
         await _drawer.PlayTopCommand.ExecuteAsync(null);
-        Assert.Equal(1, (await SentAsync("play", 2)).GetProperty("index").GetInt32());
+        Assert.Equal(0, (await SentAsync("queue.goto", 2)).GetProperty("index").GetInt32());
 
-        await _drawer.ClearCommand.ExecuteAsync(null);
-        Assert.True((await SentAsync("queue.clear")).GetProperty("upNext").GetBoolean());
+        _drawer.ClearCommand.Execute(null);
+        Assert.True(_drawer.IsConfirmingClear);
+        Assert.Equal(0, _player.Count("queue.clear"));
+        await _drawer.ConfirmClearCommand.ExecuteAsync(null);
+        Assert.False(_drawer.IsConfirmingClear);
+        var clear = await SentAsync("queue.clear");
+        Assert.False(clear.TryGetProperty("upNext", out var upNext) && upNext.GetBoolean());
     }
 
     [Fact]
@@ -381,7 +517,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         _player.SetQueue(["now", "q1", "q2", "pick1", "pick2"], 0, 2, radio: new RadioFilter());
         _player.Start();
         await _vm.StartAsync();
-        await _ui.UntilAsync(() => _drawer.Rows.Count == 2 && _drawer.Picks.Count == 2, "the radio queue");
+        await _ui.UntilAsync(() => _drawer.Rows.Count == 5 && _drawer.Picks.Count == 2, "the radio queue");
 
         await _drawer.EndRadioCommand.ExecuteAsync(null);
         await SentAsync("radio.end");
@@ -395,10 +531,10 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await StartAsync(upNext: 2);
         IReadOnlyList<TrackSummary> tracks = [StubLibrary.Track(1), StubLibrary.Track(2)];
 
-        await _drawer.InsertAsync(tracks, 0);
+        await _drawer.InsertAsync(tracks, 1);
         Assert.Equal("next", (await SentAsync("queue.add")).GetProperty("position").GetString());
 
-        await _drawer.InsertAsync(tracks, 2);
+        await _drawer.InsertAsync(tracks, 3);
         Assert.Equal("upnext", (await SentAsync("queue.add", 2)).GetProperty("position").GetString());
         Assert.Equal(0, _player.Count("queue.move"));
     }
@@ -407,7 +543,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     public async Task Dropping_tracks_between_rows_adds_them_up_next_and_moves_each_into_place()
     {
         await StartAsync(upNext: 3);
-        await _drawer.InsertAsync([StubLibrary.Track(1), StubLibrary.Track(2)], 1);
+        await _drawer.InsertAsync([StubLibrary.Track(1), StubLibrary.Track(2)], 2); // above q2, inside the up-next run
 
         Assert.Equal("upnext", (await SentAsync("queue.add")).GetProperty("position").GetString());
         var moves = new[] { await SentAsync("queue.move"), await SentAsync("queue.move", 2) };
@@ -415,9 +551,13 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Dropping_on_an_empty_drawer_plays_next()
+    public async Task Dropping_on_an_empty_queue_appends()
     {
-        await StartAsync(upNext: 0);
+        _player.SetQueue(Array.Empty<string>());
+        _player.FollowsCommands = true;
+        _player.Start();
+        await _vm.StartAsync();
+        await _ui.UntilAsync(() => _vm.IsConnected && ReadsSettled() && _drawer.IsEmpty, "the empty queue");
         await _drawer.InsertAsync([StubLibrary.Track(1)], 3);
         Assert.Equal("next", (await SentAsync("queue.add")).GetProperty("position").GetString());
     }
@@ -446,7 +586,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await StartAsync(upNext: 3);
         _player.SetQueue(Titles("cli", "q1", "q2", "q3"), 0, 4); // the CLI played "cli" next; the drawer hasn't read it yet
 
-        await _drawer.InsertAsync([StubLibrary.Track(1), StubLibrary.Track(2)], 1); // above q2
+        await _drawer.InsertAsync([StubLibrary.Track(1), StubLibrary.Track(2)], 2); // above q2, which the drawer last read one place up
         var moves = new[] { await SentAsync("queue.move"), await SentAsync("queue.move", 2) };
         Assert.Equal([(5, 3), (6, 4)], moves.Select(m => (m.GetProperty("from").GetInt32(), m.GetProperty("to").GetInt32())));
         Assert.Equal(["cli", "q1", "Track 1", "Track 2", "q2", "q3"], _player.Queue.Where(e => e.UpNext).Select(e => e.Item.Title));
@@ -458,7 +598,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await StartAsync(upNext: 3);
         _player.SetQueue(Titles("q1", "q3"), 0, 2); // q2 removed from the CLI
 
-        await _drawer.InsertAsync([StubLibrary.Track(1)], 1); // above q2
+        await _drawer.InsertAsync([StubLibrary.Track(1)], 2); // above q2, which the CLI already removed
         await _ui.UntilAsync(() => _posted.Count > 0, "the notice");
         Assert.Equal([QueueDrawerViewModel.AddedLast], _posted);
         Assert.Equal(1, _player.Count("queue.add"));
@@ -469,10 +609,10 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     public async Task A_row_dragged_while_the_rows_were_read_again_still_moves()
     {
         await StartAsync(upNext: 3);
-        var dragged = _drawer.Rows[0];
+        var dragged = Row("q1");
         await ChangeAsync(Titles("cli", "q1", "q2", "q3"), 4); // new row objects, q1 one place down
 
-        await _drawer.MoveAsync(dragged, 4); // to the end
+        await _drawer.MoveAsync(dragged, 5); // to the end of the up-next run
         var move = await SentAsync("queue.move");
         Assert.Equal((2, 4), (move.GetProperty("from").GetInt32(), move.GetProperty("to").GetInt32()));
     }
@@ -481,7 +621,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     public async Task A_row_that_left_the_queue_during_the_drag_moves_nothing_with_a_notice()
     {
         await StartAsync(upNext: 3);
-        var dragged = _drawer.Rows[0];
+        var dragged = Row("q1");
         await ChangeAsync(Titles("q2", "q3"), 2); // q1 removed from the CLI
 
         await _drawer.MoveAsync(dragged, 2);
@@ -503,13 +643,13 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await _player.PushAsync("queueChanged");
         await _ui.UntilAsync(() => raised, "queueChanged");
         Assert.Equal(started, _drawer.ReadsStarted);
-        Assert.Equal(2, _drawer.Rows.Count);
+        Assert.Equal(Album.Length + 2, _drawer.Rows.Count);
     }
 
     [Theory]
-    [InlineData(0, 2, 1, 2)] // down one: above the third row
-    [InlineData(0, 3, 1, 3)] // to the end
-    [InlineData(2, 0, 3, 1)] // to the top
+    [InlineData(0, 2, 0, 1)]
+    [InlineData(0, 3, 0, 2)]
+    [InlineData(2, 0, 2, 0)]
     public async Task Moving_a_row_moves_its_entry_to_where_it_was_dropped(int row, int at, int from, int to)
     {
         await StartAsync(upNext: 3);
@@ -534,9 +674,10 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
     [Fact]
     public async Task Save_as_playlist_suggests_a_free_name_and_saves_the_rows_in_order()
     {
-        foreach (var i in new[] { 1, 2, 3 })
+        var titles = Titles("q1", "q2", "q3");
+        for (var i = 0; i < titles.Length; i++)
         {
-            _library.Tracks.Add(StubLibrary.Track(i) with { Id = "q" + i, Path = "/music/q" + i + ".flac" });
+            _library.Tracks.Add(StubLibrary.Track(i + 1) with { Id = titles[i], Path = "/music/" + titles[i] + ".flac" });
         }
 
         _library.Playlists.Add(new PlaylistSummaryItem("p1", "New playlist", 3));
@@ -553,13 +694,17 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
         await _drawer.SaveCommand.ExecuteAsync(null);
         Assert.False(_drawer.IsSaving);
         Assert.Equal("Late night", saved?.Name);
-        Assert.Equal(["/music/q1.flac", "/music/q2.flac", "/music/q3.flac"], _library.PlaylistEntries[saved!.Id].Select(t => t.Path));
+        Assert.Equal(titles.Select(t => "/music/" + t + ".flac"), _library.PlaylistEntries[saved!.Id].Select(t => t.Path));
     }
 
     [Fact]
     public async Task A_blank_name_saves_as_New_playlist()
     {
-        _library.Tracks.Add(StubLibrary.Track(1) with { Path = "/music/q1.flac" });
+        foreach (var title in Titles("q1"))
+        {
+            _library.Tracks.Add(StubLibrary.Track(_library.Tracks.Count + 1) with { Id = title, Path = "/music/" + title + ".flac" });
+        }
+
         await StartAsync(upNext: 1);
         await _drawer.StartSaveCommand.ExecuteAsync(null);
         _drawer.SaveForm.Name = "   ";
@@ -597,7 +742,7 @@ public sealed class QueueDrawerViewModelTests : IAsyncDisposable
 
         _drawer.Open();
         await _drawer.StartSaveCommand.ExecuteAsync(null);
-        await ChangeAsync(Titles(), upNext: 0);
+        await ChangeAsync([], upNext: 0);
         Assert.False(_drawer.IsSaving);
     }
 

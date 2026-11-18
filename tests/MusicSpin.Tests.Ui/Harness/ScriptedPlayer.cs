@@ -108,6 +108,21 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
     /// <summary>The same with <paramref name="items"/> (library tracks, say).</summary>
     public void SetQueue(IReadOnlyList<QueueItem> items, int current = 0, int upNext = 0, RadioFilter? radio = null)
     {
+        if (items.Count == 0)
+        {
+            Queue = [];
+            Status = Status with
+            {
+                State = PlayerState.Stopped,
+                QueueIndex = null,
+                QueueLength = 0,
+                Item = null,
+                UpNext = 0,
+                Radio = radio is null ? null : new RadioInfo(radio, radio.Describe(), 100),
+            };
+            return;
+        }
+
         Queue = [.. items.Select((item, i) => new QueueEntry(i, i == current, item, i > current && i <= current + upNext))];
         var status = Status.State == PlayerState.Stopped ? Playing(items[current].Title ?? "?") : Status;
         Status = status with
@@ -447,6 +462,23 @@ internal sealed class ScriptedPlayer(DataDirectory data) : IPlayerConnector, IAs
         {
             // As the player does: the station goes on air (described as the CLI describes it).
             Status = Status with { Radio = new RadioInfo(station, station.Describe(), 100) };
+        }
+        else if (cmd == "queue.goto" && request.TryGetProperty("index", out var go) && go.GetInt32() is var jumped
+                 && jumped >= 0 && jumped < Queue.Count)
+        {
+            Queue = [.. Queue.Select(e => e with { Current = e.Index == jumped })];
+            var run = 0;
+            for (var i = jumped + 1; i < Queue.Count && Queue[i].UpNext; i++)
+            {
+                run++;
+            }
+
+            Status = Status with { QueueIndex = jumped, QueueLength = Queue.Count, Item = Queue[jumped].Item, UpNext = run };
+        }
+        else if (cmd == "queue.clear" && !(request.TryGetProperty("upNext", out var upNextOnly) && upNextOnly.ValueKind == JsonValueKind.True))
+        {
+            Queue = [];
+            Status = Status with { State = PlayerState.Stopped, QueueIndex = null, QueueLength = 0, Item = null, UpNext = 0, Radio = null };
         }
         else if (cmd == "queue.move" && request.TryGetProperty("from", out var from) && request.TryGetProperty("to", out var to)
                  && from.GetInt32() is var f && to.GetInt32() is var t && f >= 0 && t >= 0 && f < Queue.Count && t < Queue.Count)

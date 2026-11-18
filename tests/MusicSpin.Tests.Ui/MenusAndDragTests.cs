@@ -441,7 +441,7 @@ public sealed class MenusAndDragTests
         Assert.True(app.ViewModel.Menu.IsOpen);
 
         // as when the CLI adds rows and the drawer brings them into view
-        var drawer = Gui.Find<ScrollViewer>(app.Window, "QueueScroll");
+        var drawer = Gui.All<ScrollViewer>(Gui.Find<ListBox>(app.Window, "QueueRows")).First();
         Assert.True(drawer.Extent.Height > drawer.Viewport.Height, "the rows scroll");
         drawer.Offset = new Vector(0, 60);
         Gui.Settle();
@@ -651,7 +651,7 @@ public sealed class MenusAndDragTests
         app.Scripted!.SetQueue([SampleLibrary.Item(6, 1), .. rows, SampleLibrary.Item(6, 2)], 0, count);
         await app.Scripted.PushAsync("queueChanged");
         await app.Scripted.PushAsync("stateChanged");
-        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.Rows.Count == count, "the rows");
+        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.Rows.Count == count + 2, "the rows");
     }
 
     private static Control QueueRow(AppHarness app, int index)
@@ -667,14 +667,14 @@ public sealed class MenusAndDragTests
         var line = Gui.Find<Border>(app.Window, "DropLine");
         Assert.False(line.IsVisible);
 
-        StartDrag(app.Window, QueueRow(app, 0));
-        var dragged = Gui.All<Panel>(QueueRow(app, 0)).First(p => p.Classes.Contains("queueRow"));
+        StartDrag(app.Window, QueueRow(app, 1));
+        var dragged = Gui.All<Panel>(QueueRow(app, 1)).First(p => p.Classes.Contains("queueRow"));
         Assert.Contains("dragged", dragged.Classes);
         Assert.True(dragged.Opacity < 1);
         Assert.Equal("The Hollow", Gui.Find<TextBlock>(Ghost(app), "GhostTitle").Text);
 
         // below the middle of the last row: the line under it
-        var last = Gui.BoundsIn(app.Window, QueueRow(app, 2));
+        var last = Gui.BoundsIn(app.Window, QueueRow(app, 3));
         MoveTo(app.Window, new Point(last.Center.X, last.Bottom - 2));
         Assert.True(line.IsVisible);
         Assert.Equal(last.Bottom, Gui.BoundsIn(app.Window, line).Center.Y, 1);
@@ -702,7 +702,7 @@ public sealed class MenusAndDragTests
         Gui.FinishAnimations(Slid);
 
         StartDrag(app.Window, row);
-        var second = Gui.BoundsIn(app.Window, QueueRow(app, 1));
+        var second = Gui.BoundsIn(app.Window, QueueRow(app, 2));
         var at = new Point(second.Center.X, second.Top + 2);
         MoveTo(app.Window, at);
         Release(app.Window, at);

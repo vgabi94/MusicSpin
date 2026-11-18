@@ -40,11 +40,14 @@ public sealed class QueueDrawerTests
     private static async Task QueueAsync(AppHarness app, IReadOnlyList<QueueItem> upNext, RadioFilter? radio = null, IReadOnlyList<QueueItem>? after = null)
     {
         IReadOnlyList<QueueItem> rest = after ?? [SampleLibrary.Item(6, 2), SampleLibrary.Item(6, 3)];
+        var drawer = app.ViewModel.QueueDrawer;
+        // The rows that arrive after this are additions, so they flash. Waiting here keeps that off the first connect's read.
+        await Gui.UntilAsync(() => drawer.ReadsFinished > 0 && drawer.ReadsFinished == drawer.ReadsStarted, "the first read");
         app.Scripted!.SetQueue([SampleLibrary.Item(6, 1), .. upNext, .. rest], 0, upNext.Count, radio);
         await app.Scripted.PushAsync("queueChanged");
         await app.Scripted.PushAsync("stateChanged");
-        var drawer = app.ViewModel.QueueDrawer;
-        await Gui.UntilAsync(() => drawer.Rows.Count == upNext.Count && drawer.IsRadio == (radio is not null)
+        var length = 1 + upNext.Count + rest.Count;
+        await Gui.UntilAsync(() => drawer.Rows.Count == length && drawer.IsRadio == (radio is not null)
                                    && drawer.Picks.Count == (radio is null ? 0 : Math.Min(rest.Count, QueueDrawerViewModel.RadioPicks)), "the queue read");
     }
 
@@ -65,7 +68,16 @@ public sealed class QueueDrawerTests
         var drawer = app.ViewModel.QueueDrawer;
         drawer.Open();
         Gui.Settle();
-        await Gui.UntilAsync(() => drawer.Rows.Concat(drawer.Picks).All(r => IsPlaceholderAlbum(r) || r.Art?.Cover is not null), "the covers");
+        await Gui.UntilAsync(() =>
+        {
+            if (drawer.IsEmpty)
+            {
+                return true;
+            }
+
+            var shown = Shown(app).ToList();
+            return shown.Count > 0 && shown.All(r => IsPlaceholderAlbum(r) || r.Art?.Cover is not null);
+        }, "the covers");
         Gui.FinishAnimations(Flashed);
     }
 
@@ -77,6 +89,21 @@ public sealed class QueueDrawerTests
 
     private static Control RowAt(AppHarness app, int index)
         => (Control)Find<ItemsControl>(app, "QueueRows").ContainerFromIndex(index)!;
+
+    private static IEnumerable<QueueRowViewModel> Shown(AppHarness app)
+    {
+        foreach (var name in new[] { "QueueRows" })
+        {
+            var list = Find<ItemsControl>(app, name);
+            for (var i = 0; i < list.ItemCount; i++)
+            {
+                if (list.ContainerFromIndex(i)?.DataContext is QueueRowViewModel row)
+                {
+                    yield return row;
+                }
+            }
+        }
+    }
 
     private static T In<T>(Control row, string classes)
         where T : Control
@@ -165,20 +192,51 @@ public sealed class QueueDrawerTests
         await QueueAsync(app, Tracks((7, 1), (8, 2)));
         await OpenDrawerAsync(app);
 
-        Assert.Equal("2 tracks · 7 min", Find<TextBlock>(app, "QueueSummary").Text);
+        Assert.Equal("1 of 5", Find<TextBlock>(app, "QueueSummary").Text);
         var first = RowAt(app, 0);
-        Assert.Equal(["The Hollow", "Ana Cruz Quintet", "3:19"], new[] { "title", "artist", "duration" }.Select(c => In<TextBlock>(first, c).Text));
+        Assert.Contains("current", In<Panel>(first, "queueRow").Classes);
+        Assert.Equal(["The Thread", "Kodo Arai", "3:12"], new[] { "title", "artist", "duration" }.Select(c => In<TextBlock>(first, c).Text));
         Assert.True(Find<Button>(app, "ClearQueue").IsVisible);
         Assert.False(Find<Panel>(app, "QueueEmpty").IsVisible);
         Assert.True(Find<Border>(app, "QueueFooter").IsVisible);
-        Assert.Equal("2", Find<Border>(app, "QueueCount").FindDescendantOfType<TextBlock>()?.Text);
+        Assert.Equal("1 of 5", Find<Border>(app, "QueueCount").FindDescendantOfType<TextBlock>()?.Text);
+    }
+
+    [AvaloniaFact]
+    public async Task Songs_above_the_marker_are_greyed_and_going_back_clears_that()
+    {
+        await using var app = await OpenAsync();
+        await QueueAsync(app, Tracks((7, 1), (7, 2), (7, 3)));
+        await OpenDrawerAsync(app);
+        var items = app.Scripted!.Queue.Select(e => e.Item).ToArray();
+
+        app.Scripted.SetQueue(items, current: 2, upNext: 1);
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.CurrentIndex == 2
+                                   && In<Panel>(RowAt(app, 0), "queueRow").Classes.Contains("passed"), "greyed above the marker");
+        Assert.Contains("passed", In<Panel>(RowAt(app, 1), "queueRow").Classes);
+        Assert.Contains("current", In<Panel>(RowAt(app, 2), "queueRow").Classes);
+        Assert.DoesNotContain("passed", In<Panel>(RowAt(app, 2), "queueRow").Classes);
+        Assert.DoesNotContain("passed", In<Panel>(RowAt(app, 3), "queueRow").Classes);
+        Assert.DoesNotContain("current", In<Panel>(RowAt(app, 3), "queueRow").Classes);
+
+        app.Scripted.SetQueue(items, current: 1, upNext: 2);
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.CurrentIndex == 1
+                                   && In<Panel>(RowAt(app, 1), "queueRow").Classes.Contains("current")
+                                   && !In<Panel>(RowAt(app, 2), "queueRow").Classes.Contains("passed"), "the marker back");
+        Assert.Contains("passed", In<Panel>(RowAt(app, 0), "queueRow").Classes);
+        Assert.DoesNotContain("passed", In<Panel>(RowAt(app, 1), "queueRow").Classes);
     }
 
     [AvaloniaFact]
     public async Task Empty_it_shows_the_drop_box_and_no_Clear_or_footer()
     {
         await using var app = await OpenAsync();
-        await QueueAsync(app, []);
+        app.Scripted!.SetQueue(Array.Empty<QueueItem>());
+        await app.Scripted.PushAsync("queueChanged");
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.IsEmpty, "the empty queue");
         await OpenDrawerAsync(app);
         Assert.True(Find<Panel>(app, "QueueEmpty").IsVisible);
         Assert.False(Find<Button>(app, "ClearQueue").IsVisible);
@@ -194,16 +252,17 @@ public sealed class QueueDrawerTests
         await QueueAsync(app, Tracks((7, 1), (7, 2), (7, 3)));
         await OpenDrawerAsync(app);
 
-        var remove = In<Button>(RowAt(app, 1), "queueRemove");
+        var remove = In<Button>(RowAt(app, 2), "queueRemove");
         Assert.Equal(0, remove.Opacity);
-        Gui.Hover(app.Window, RowAt(app, 1));
+        Gui.Hover(app.Window, RowAt(app, 2));
         Assert.Equal(1, remove.Opacity);
         Gui.Click(app.Window, remove);
         Assert.Equal(2, (await SentAsync(app, "queue.remove")).GetProperty("index").GetInt32());
         Assert.Equal(0, app.Scripted!.Count("play"));
 
         Gui.Click(app.Window, In<Button>(RowAt(app, 2), "queueEntry"));
-        Assert.Equal(3, (await SentAsync(app, "play")).GetProperty("index").GetInt32());
+        Assert.Equal(2, (await SentAsync(app, "queue.goto")).GetProperty("index").GetInt32());
+        Assert.Equal(0, app.Scripted!.Count("play"));
     }
 
     [AvaloniaFact]
@@ -214,10 +273,14 @@ public sealed class QueueDrawerTests
         await OpenDrawerAsync(app);
 
         Gui.Click(app.Window, Find<Button>(app, "PlayQueue"));
-        Assert.Equal(1, (await SentAsync(app, "play")).GetProperty("index").GetInt32());
+        Assert.Equal(0, (await SentAsync(app, "queue.goto")).GetProperty("index").GetInt32());
 
         Gui.Click(app.Window, Find<Button>(app, "ClearQueue"));
-        Assert.True((await SentAsync(app, "queue.clear")).GetProperty("upNext").GetBoolean());
+        Assert.True(Find<Grid>(app, "ClearConfirm").IsVisible);
+        Assert.Equal(0, app.Scripted!.Count("queue.clear"));
+        Gui.Click(app.Window, Find<Button>(app, "ConfirmClear"));
+        var clear = await SentAsync(app, "queue.clear");
+        Assert.False(clear.TryGetProperty("upNext", out var upNext) && upNext.GetBoolean());
     }
 
     [AvaloniaFact]
@@ -231,9 +294,9 @@ public sealed class QueueDrawerTests
 
         await QueueAsync(app, Tracks((7, 1), (8, 1), (8, 2)));
         Gui.Settle();
-        Assert.Equal([0, 1, 1], Enumerable.Range(0, 3).Select(i => Animate.GetPlayed(In<Border>(RowAt(app, i), "flash"))));
+        Assert.Equal([0, 0, 1, 1], Enumerable.Range(0, 4).Select(i => Animate.GetPlayed(In<Border>(RowAt(app, i), "flash"))));
         Gui.FinishAnimations(Flashed);
-        Assert.Equal(0, In<Border>(RowAt(app, 1), "flash").Opacity);
+        Assert.Equal(0, In<Border>(RowAt(app, 2), "flash").Opacity);
     }
 
     [AvaloniaFact]
@@ -243,7 +306,7 @@ public sealed class QueueDrawerTests
         IReadOnlyList<QueueItem> many = [.. Enumerable.Range(1, 10).SelectMany(a => Enumerable.Range(1, 3).Select(t => SampleLibrary.Item(a, t)))];
         await QueueAsync(app, [.. many.Take(20)]);
         await OpenDrawerAsync(app);
-        var scroll = Find<ScrollViewer>(app, "QueueScroll");
+        var scroll = Gui.All<ScrollViewer>(Find<ListBox>(app, "QueueRows")).First();
         Assert.Equal(0, scroll.Offset.Y);
 
         await QueueAsync(app, many);
@@ -265,11 +328,10 @@ public sealed class QueueDrawerTests
 
         Assert.True(Find<StackPanel>(app, "RadioSection").IsVisible);
         Assert.Equal("Jazz", Find<TextBlock>(app, "RadioDescription").Text);
-        var picks = Find<ItemsControl>(app, "RadioPicks");
-        var pick = (Control)picks.ContainerFromIndex(1)!;
+        var pick = RowAt(app, 3);
         Assert.True(In<Panel>(pick, "queueRow").Opacity < 1);
         Gui.Click(app.Window, In<Button>(pick, "queueEntry"));
-        Assert.Equal(3, (await SentAsync(app, "play")).GetProperty("index").GetInt32());
+        Assert.Equal(3, (await SentAsync(app, "queue.goto")).GetProperty("index").GetInt32());
 
         Gui.Click(app.Window, Find<Button>(app, "EndRadio"));
         await SentAsync(app, "radio.end");
@@ -378,7 +440,10 @@ public sealed class QueueDrawerTests
     public async Task Snapshot_of_the_empty_drawer(AppTheme theme)
     {
         await using var app = await OpenAsync(theme);
-        await QueueAsync(app, []);
+        app.Scripted!.SetQueue(Array.Empty<QueueItem>());
+        await app.Scripted.PushAsync("queueChanged");
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.QueueDrawer.IsEmpty, "the empty queue");
         await OpenDrawerAsync(app);
         Snapshots.Match(app.Window, $"queue-empty-{theme.ToString().ToLowerInvariant()}");
     }

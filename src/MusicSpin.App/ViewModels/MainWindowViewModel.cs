@@ -65,6 +65,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         MediaControls = StartMediaControls(services);
         Layers.Register(NowPlaying);
         Layers.Register(QueueDrawer);
+        Layers.Register(QueueDrawer.ClearPrompt);
         Layers.Register(QueueDrawer.SaveForm);
         Layers.Register(Menu);
         Layers.Register(Sidebar.Rename);

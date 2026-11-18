@@ -24,7 +24,7 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
     private readonly LayerViewModel _nowPlaying;
     private readonly LayerViewModel _queue;
     private bool _restarts = true;
-    private int? _queueCount;
+    private int? _queueLength;
     private string? _queuePath;
     private TrackFormat? _format;
 
@@ -122,11 +122,20 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
 
     // ---- the right-hand buttons ------------------------------------------------------------------------------
 
-    /// <summary>The entries waiting up next (what the queue drawer lists): added with Play next or Add to queue.</summary>
-    public int QueueCount => Player.UpNext;
+    /// <summary>How many entries the queue holds.</summary>
+    public int QueueCount => Player.QueueLength;
 
-    /// <summary>The count badge's text; null hides it.</summary>
-    public string? QueueCountText => QueueCount > 0 ? QueueCount.ToString(CultureInfo.InvariantCulture) : null;
+    /// <summary>The badge's text, the playing entry's place ("4 of 11"); null hides it.</summary>
+    public string? QueueCountText => QueuePositionText.Format(Player.QueueIndex, Player.QueueLength);
+
+    /// <summary>
+    /// What the small badge draws. The full "4 of 11" while the queue is short; past 999 entries only the position, so
+    /// "1,234 of 100,000" does not spill across the bar. The tooltip stays the full text.
+    /// </summary>
+    public string? QueueBadgeText
+        => Player.QueueLength >= 1000 && Player.QueueIndex is int index
+            ? (index + 1).ToString("N0", CultureInfo.CurrentCulture)
+            : QueueCountText;
 
     /// <summary>Counts badge pulses: something was added to the queue while the drawer was closed.</summary>
     [ObservableProperty]
@@ -211,20 +220,21 @@ public sealed partial class PlayerBarViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The count badge pulses when entries were added while the drawer is closed: the count grew and the same entry is
-    /// still playing (playing something new replaces the queue instead).
+    /// The badge pulses when entries were added while the drawer is closed: the queue grew and the same entry is still
+    /// playing. The text follows the marker ("4 of 11").
     /// </summary>
     private void UpdateQueueCount()
     {
-        var count = QueueCount;
+        var length = QueueCount;
         var current = Player.Path;
-        if (_queueCount is { } before && count > before && current == _queuePath && !_queue.IsOpen)
+        if (_queueLength is { } before && length > before && current == _queuePath && !_queue.IsOpen)
         {
             QueuePulses++;
         }
 
-        (_queueCount, _queuePath) = (count, current);
+        (_queueLength, _queuePath) = (length, current);
         OnPropertyChanged(nameof(QueueCount));
         OnPropertyChanged(nameof(QueueCountText));
+        OnPropertyChanged(nameof(QueueBadgeText));
     }
 }

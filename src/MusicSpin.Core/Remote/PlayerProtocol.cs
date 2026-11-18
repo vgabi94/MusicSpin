@@ -51,12 +51,14 @@ public static class ProtocolMessages
 /// <para>Commands: hello, status, load(path), play(index?), pause, resume, toggle, stop, next, prev,
 /// seek(seconds | delta), volume(value | delta; unmutes), mute(mode? = on|off|toggle), info(path), queue(offset?, limit?),
 /// queue.set(items, start?, play?, startSeconds?, shuffle?, seed?), queue.play(items, start), queue.add(items, position? = end|next|upnext),
-/// queue.remove(index), queue.move(from, to), queue.clear(upNext?),
+/// queue.remove(index), queue.move(from, to), queue.goto(index), queue.clear(upNext?),
 /// repeat(mode? = off|one|all), shuffle(mode? = on|off|toggle, seed?),
 /// normalize(mode?, target?, preamp?), eq(enabled?, preset?, gains?, band?, gain?, preamp?, save?, delete?), radio(filter?, play?), radio.end, subscribe(spectrum?), quit.
 /// <c>queue.play</c> plays entry <c>start</c> of the list <c>items</c> (an album, a playlist: what a user clicked in): when that
 /// list is what the queue is playing, the queue is kept and playback jumps to the entry (up-next entries follow it), otherwise it
 /// replaces the queue like <c>queue.set</c> (see <see cref="QueuePlayer.PlayFromContext"/>).
+/// <c>queue.goto</c> plays one entry of the queue that is already loaded and leaves the list as it is (see <see cref="QueuePlayer.Goto"/>);
+/// <c>play</c> with an index still drops up-next entries it skips.
 /// <c>items</c> are paths or <see cref="QueueItem"/> objects. repeat/shuffle/mute without a mode just return the status.</para>
 /// </summary>
 public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory decoders, Func<object>? hello = null)
@@ -66,7 +68,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
     public static IReadOnlyList<string> Commands { get; } =
     [
         "hello", "status", "load", "play", "pause", "resume", "toggle", "stop", "next", "prev", "seek", "volume", "mute", "info",
-        "queue", "queue.set", "queue.play", "queue.add", "queue.remove", "queue.move", "queue.clear", "repeat", "shuffle", "radio", "radio.end", "subscribe", "quit",
+        "queue", "queue.set", "queue.play", "queue.add", "queue.remove", "queue.move", "queue.goto", "queue.clear", "repeat", "shuffle", "radio", "radio.end", "subscribe", "quit",
         "normalize",
         "eq",
     ];
@@ -123,7 +125,7 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
         switch (cmd)
         {
             case "hello":
-                return (hello?.Invoke() ?? new { protocol = Version, decoder = decoders.Name }, ProtocolAction.None);
+                return (hello?.Invoke() ?? new { protocol = Version, decoder = decoders.Name, commands = Commands }, ProtocolAction.None);
             case "status":
                 return (Player.Status(), ProtocolAction.None);
             case "load":
@@ -176,6 +178,8 @@ public sealed class PlayerProtocol(QueuePlayer player, IAudioDecoderFactory deco
                 return (Player.Remove(RequiredInt(root, "index")), ProtocolAction.None);
             case "queue.move":
                 return (Player.Move(RequiredInt(root, "from"), RequiredInt(root, "to")), ProtocolAction.None);
+            case "queue.goto":
+                return (Player.Goto(RequiredInt(root, "index")), ProtocolAction.None);
             case "queue.clear":
                 return (OptionalBool(root, "upNext") == true ? Player.ClearUpNext() : Player.Clear(), ProtocolAction.None);
             case "repeat":

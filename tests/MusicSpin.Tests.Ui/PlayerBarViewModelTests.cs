@@ -177,32 +177,28 @@ public sealed class PlayerBarViewModelTests : IAsyncDisposable
     [Fact]
     public async Task Adding_to_the_queue_pulses_the_count_while_the_drawer_is_closed()
     {
-        // the count is what waits up next (the drawer's rows), not the rest of the album
         await StartAsync(Playing(index: 0, length: 12, upNext: 2));
-        Assert.Equal(("2", 0), (_bar.QueueCountText, _bar.QueuePulses));
+        Assert.Equal(("1 of 12", 0), (_bar.QueueCountText, _bar.QueuePulses));
 
         await ChangeAsync(Playing(index: 0, length: 14, upNext: 4));
-        Assert.Equal(("4", 1), (_bar.QueueCountText, _bar.QueuePulses));
+        Assert.Equal(("1 of 14", 1), (_bar.QueueCountText, _bar.QueuePulses));
 
-        // the track moving on to the first up-next entry lowers the count: no pulse
         await ChangeAsync(Playing(index: 1, length: 14, title: "Next one", upNext: 3));
-        Assert.Equal(("3", 1), (_bar.QueueCountText, _bar.QueuePulses));
+        Assert.Equal(("2 of 14", 1), (_bar.QueueCountText, _bar.QueuePulses));
 
-        // playing something else that has entries up next: no pulse
         await ChangeAsync(Playing(index: 0, length: 20, title: "Another album", upNext: 5));
-        Assert.Equal(("5", 1), (_bar.QueueCountText, _bar.QueuePulses));
+        Assert.Equal(("1 of 20", 1), (_bar.QueueCountText, _bar.QueuePulses));
 
         _bar.ToggleQueueCommand.Execute(null);
         Assert.True(_queue.IsOpen);
         await ChangeAsync(Playing(index: 0, length: 21, title: "Another album", upNext: 6));
-        Assert.Equal(("6", 1), (_bar.QueueCountText, _bar.QueuePulses));
+        Assert.Equal(("1 of 21", 1), (_bar.QueueCountText, _bar.QueuePulses));
     }
 
     [Fact]
-    public async Task The_queue_count_is_hidden_when_nothing_waits()
+    public async Task The_queue_count_is_hidden_when_the_queue_is_empty()
     {
-        // the rest of the album is not counted: only what was added up next
-        await StartAsync(Playing(index: 0, length: 12));
+        await StartAsync(ScriptedPlayer.Idle);
         Assert.Null(_bar.QueueCountText);
     }
 

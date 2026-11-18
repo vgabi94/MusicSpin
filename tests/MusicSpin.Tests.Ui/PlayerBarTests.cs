@@ -493,18 +493,18 @@ public sealed class PlayerBarTests
     {
         await using var app = await OpenAsync();
         var badge = Find<Border>(app, "QueueCount");
-        Assert.Equal("7", ((TextBlock)badge.Child!).Text);
+        Assert.Equal("1 of 8", ((TextBlock)badge.Child!).Text);
         Assert.Equal(0, Animate.GetPlayed(badge));
 
         await SetAsync(app, Status() with { QueueLength = 10, UpNext = 9 });
-        Assert.Equal("9", ((TextBlock)badge.Child!).Text);
+        Assert.Equal("1 of 10", ((TextBlock)badge.Child!).Text);
         Assert.Equal(1, Animate.GetPlayed(badge));
 
         Gui.Click(app.Window, Find<Button>(app, "QueueButton"));
         Assert.True(app.ViewModel.QueueDrawer.IsOpen);
         Assert.Contains("on", Find<Button>(app, "QueueButton").Classes);
         await SetAsync(app, Status() with { QueueLength = 12, UpNext = 11 });
-        Assert.Equal("11", ((TextBlock)badge.Child!).Text);
+        Assert.Equal("1 of 12", ((TextBlock)badge.Child!).Text);
         Assert.Equal(1, Animate.GetPlayed(badge));
     }
 

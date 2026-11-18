@@ -96,7 +96,7 @@ public sealed class PlaylistTests
         await app.Scripted.PushAsync("queueChanged");
         await app.Scripted.PushAsync("stateChanged");
         var drawer = app.ViewModel.QueueDrawer;
-        await Gui.UntilAsync(() => drawer.Rows.Count == 2, "the rows");
+        await Gui.UntilAsync(() => drawer.Rows.Count == items.Count, "the rows");
 
         await drawer.StartSaveCommand.ExecuteAsync(null);
         await drawer.SaveCommand.ExecuteAsync(null);
@@ -112,7 +112,7 @@ public sealed class PlaylistTests
         // the save changed library.db: the reload it brings keeps the entry, and doesn't replay the flash
         app.Advance(TimeSpan.FromSeconds(1));
         app.Advance(LibraryService.PollInterval);
-        await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists[0].Playlist?.EntryCount == 2, "the reload");
+        await Gui.UntilAsync(() => app.ViewModel.Sidebar.Playlists[0].Playlist?.EntryCount == items.Count, "the reload");
         Gui.Settle();
         Assert.Same(flash, Flash(app, "New playlist"));
         Assert.Equal(0, flash.Opacity, 0.01);
