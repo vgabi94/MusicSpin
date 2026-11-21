@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Animation;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -192,6 +193,122 @@ public sealed class ShellTests
         Assert.Equal("a b", search.Text);
         Assert.Equal("a b", app.ViewModel.SearchText);
         Assert.Equal(PlayerState.Paused, player.State);
+    }
+
+    [AvaloniaFact]
+    public async Task The_search_clear_button_shows_for_text_clears_results_and_keeps_focus()
+    {
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Library = SampleLibrary.Create(), Covers = SampleLibrary.Covers() });
+        var window = app.Window;
+        var vm = app.ViewModel;
+        var searchBar = Gui.Find<Border>(window, "SearchBar");
+        var search = Gui.Find<TextBox>(window, "SearchBox");
+        var clear = Gui.Find<Button>(window, "ClearSearch");
+
+        Assert.False(clear.IsVisible);
+        Assert.Equal("Clear search", AutomationProperties.GetName(clear));
+        Assert.Equal("Clear search", ToolTip.GetTip(clear));
+        var emptyBounds = Gui.BoundsIn(window, searchBar);
+        var totalAlbums = vm.AlbumsPage.Albums.Count;
+        Assert.True(totalAlbums > 1);
+
+        search.Focus();
+        foreach (var c in "blue")
+        {
+            Gui.Press(window, Key.None, PhysicalKey.None, c.ToString());
+        }
+
+        Assert.True(clear.IsVisible);
+        Assert.True(clear.IsEffectivelyEnabled);
+        Assert.Equal(emptyBounds, Gui.BoundsIn(window, searchBar));
+        Assert.True(Gui.BoundsIn(window, searchBar).Contains(Gui.BoundsIn(window, clear)));
+        Assert.Equal(["Blue Hour"], vm.AlbumsPage.Albums.Select(a => a.Title));
+
+        Gui.Click(window, clear);
+
+        Assert.Equal(string.Empty, search.Text);
+        Assert.Equal(string.Empty, vm.SearchText);
+        Assert.False(clear.IsVisible);
+        Assert.Equal(totalAlbums, vm.AlbumsPage.Albums.Count);
+        Assert.True(search.IsFocused);
+        Assert.True(vm.IsTextInputFocused);
+
+        // Typing immediately after clearing enters a new search without clicking back into the box.
+        foreach (var c in "glass")
+        {
+            Gui.Press(window, Key.None, PhysicalKey.None, c.ToString());
+        }
+
+        Assert.Equal("glass", search.Text);
+        Assert.Equal("glass", vm.SearchText);
+        Assert.Equal(["Glass Garden"], vm.AlbumsPage.Albums.Select(a => a.Title));
+        Assert.True(clear.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public async Task Clearing_search_when_unfocused_or_by_keyboard_focuses_the_search_box()
+    {
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Library = SampleLibrary.Create(), Covers = SampleLibrary.Covers() });
+        var window = app.Window;
+        var vm = app.ViewModel;
+        var search = Gui.Find<TextBox>(window, "SearchBox");
+        var clear = Gui.Find<Button>(window, "ClearSearch");
+
+        // Click clear while focus is elsewhere: still clears and moves focus into the search box.
+        vm.SearchText = "partitas";
+        Gui.Settle();
+        window.FocusManager!.Focus(null);
+        Gui.Settle();
+        Assert.False(search.IsFocused);
+        Assert.True(clear.IsVisible);
+
+        Gui.Click(window, clear);
+
+        Assert.Equal(string.Empty, vm.SearchText);
+        Assert.False(clear.IsVisible);
+        Assert.True(search.IsFocused);
+        Assert.True(vm.IsTextInputFocused);
+
+        // Keyboard accessibility: Tab from the search box to the clear button, then press Enter.
+        Gui.Press(window, Key.Space, PhysicalKey.Space, " ");
+        Assert.True(clear.IsVisible);
+        Gui.Press(window, Key.Tab, PhysicalKey.Tab);
+        Assert.True(clear.IsFocused);
+        Gui.Press(window, Key.Enter, PhysicalKey.Enter);
+
+        Assert.Equal(string.Empty, vm.SearchText);
+        Assert.False(clear.IsVisible);
+        Assert.True(search.IsFocused);
+        Assert.True(vm.IsTextInputFocused);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Clearing_an_unmatched_search_restores_results_and_hides_empty_state()
+    {
+        await using var app = await AppHarness.OpenAsync(new AppOptions { Library = SampleLibrary.Create(), Covers = SampleLibrary.Covers() });
+        var window = app.Window;
+        var vm = app.ViewModel;
+        var search = Gui.Find<TextBox>(window, "SearchBox");
+        var clear = Gui.Find<Button>(window, "ClearSearch");
+
+        search.Focus();
+        foreach (var c in "no-such-album")
+        {
+            Gui.Press(window, Key.None, PhysicalKey.None, c.ToString());
+        }
+
+        Assert.Empty(vm.AlbumsPage.Albums);
+        Assert.True(Gui.Find<TextBlock>(window, "EmptyText").IsEffectivelyVisible);
+        Assert.True(clear.IsVisible);
+
+        Gui.Click(window, clear);
+
+        Assert.Equal(SampleLibrary.Albums.Length, vm.AlbumsPage.Albums.Count);
+        Assert.Null(vm.AlbumsPage.EmptyText);
+        Assert.False(Gui.Find<TextBlock>(window, "EmptyText").IsEffectivelyVisible);
+        Assert.False(clear.IsVisible);
+        Assert.True(search.IsFocused);
     }
 
     [AvaloniaFact]

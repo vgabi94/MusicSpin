@@ -187,7 +187,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
 
     /// <summary>The title bar's search box; it filters the current page.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSearchText))]
+    [NotifyCanExecuteChangedFor(nameof(ClearSearchCommand))]
     public partial string SearchText { get; set; } = string.Empty;
+
+    /// <summary>Whether the search box holds text (the clear button shows only then, #220).</summary>
+    public bool HasSearchText => !string.IsNullOrEmpty(SearchText);
 
     /// <summary>A startup warning or a notice, shown in a banner until dismissed.</summary>
     [ObservableProperty]
@@ -323,6 +328,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
     [RelayCommand]
     private void DismissBanner() => Banner = null;
 
+    /// <summary>Empties the title bar's search box so the current page returns to its unfiltered state (#220).</summary>
+    [RelayCommand(CanExecute = nameof(HasSearchText))]
+    private void ClearSearch() => SearchText = string.Empty;
+
     /// <summary>
     /// Right-click on <paramref name="item"/>: a sidebar playlist's menu, or a library item's. False when it has none.
     /// </summary>
@@ -412,7 +421,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAsyncDispos
         return adapter is null ? null : new MediaControlsBridge(Player, adapter, setup.CoverFile, services.Ui, services.Time);
     }
 
-    partial void OnSearchTextChanged(string value) => CurrentPage.SearchText = value;
+    partial void OnSearchTextChanged(string value) => CurrentPage.SearchText = value ?? string.Empty;
 
     partial void OnIsTextInputFocusedChanged(bool value) => NotifyShortcutsChanged();
 

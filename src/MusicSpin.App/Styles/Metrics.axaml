@@ -50,7 +50,12 @@
     <CornerRadius x:Key="SearchRadius">8</CornerRadius>
     <sys:Double x:Key="SearchFontSize">13</sys:Double>
     <sys:Double x:Key="SearchIconSize">14</sys:Double>
-    <sys:Double x:Key="SearchGap">8</sys:Double>
+    <Thickness x:Key="SearchIconMargin">0,0,8,0</Thickness>
+    <!-- The clear button overhangs the text line so the search bar keeps its height when text appears (#220). -->
+    <sys:Double x:Key="SearchClearSize">20</sys:Double>
+    <CornerRadius x:Key="SearchClearRadius">10</CornerRadius>
+    <sys:Double x:Key="SearchClearIconSize">10</sys:Double>
+    <Thickness x:Key="SearchClearMargin">4,-3,-4,-3</Thickness>
     <!-- Room left for the system window buttons: on the right on Windows and Linux; on macOS they are on the left
          (MacTitleBarPadding). -->
     <sys:Double x:Key="CaptionButtonsWidth">138</sys:Double>

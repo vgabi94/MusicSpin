@@ -34,8 +34,8 @@
                            AutomationProperties.Name="Menu"
                            chrome:WindowDecorationProperties.ElementRole="User" />
             <Panel Name="DragArea" Grid.Column="2" />
-            <Border Grid.Column="3" Classes="search" chrome:WindowDecorationProperties.ElementRole="User">
-                <Grid ColumnDefinitions="Auto,*">
+            <Border Name="SearchBar" Grid.Column="3" Classes="search" chrome:WindowDecorationProperties.ElementRole="User">
+                <Grid ColumnDefinitions="Auto,*,Auto">
                     <controls:Icon Data="{StaticResource MagnifyingGlassLight}" />
                     <TextBox Name="SearchBox"
                              Grid.Column="1"
@@ -43,6 +43,15 @@
                              PlaceholderText="Search"
                              AutomationProperties.Name="Search"
                              Text="{Binding SearchText}" />
+                    <Button Name="ClearSearch"
+                            Grid.Column="2"
+                            Classes="searchClear"
+                            Command="{Binding ClearSearchCommand}"
+                            IsVisible="{Binding HasSearchText}"
+                            ToolTip.Tip="Clear search"
+                            AutomationProperties.Name="Clear search">
+                        <controls:Icon Data="{StaticResource Close}" />
+                    </Button>
                 </Grid>
             </Border>
             <Panel Grid.Column="4" Classes="captionButtons" />
