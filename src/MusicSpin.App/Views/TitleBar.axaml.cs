@@ -4,5 +4,9 @@ namespace MusicSpin.App.Views;
 
 public partial class TitleBar : UserControl
 {
-    public TitleBar() => InitializeComponent();
+    public TitleBar()
+    {
+        InitializeComponent();
+        ClearSearch.Click += (_, _) => SearchBox.Focus();
+    }
 }

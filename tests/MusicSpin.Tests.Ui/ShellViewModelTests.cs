@@ -121,6 +121,52 @@ public sealed class ShellViewModelTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Clear_search_empties_the_search_and_restores_the_unfiltered_page()
+    {
+        var vm = await CreateAsync();
+        Assert.False(vm.HasSearchText);
+        Assert.False(vm.ClearSearchCommand.CanExecute(null));
+
+        vm.SearchText = "blue";
+        Assert.True(vm.HasSearchText);
+        Assert.True(vm.ClearSearchCommand.CanExecute(null));
+        Assert.Equal(["Blue Train"], vm.AlbumsPage.Albums.Select(a => a.Title));
+
+        vm.ClearSearchCommand.Execute(null);
+        Assert.Equal(string.Empty, vm.SearchText);
+        Assert.False(vm.HasSearchText);
+        Assert.False(vm.ClearSearchCommand.CanExecute(null));
+        Assert.Equal(2, vm.AlbumsPage.Albums.Count);
+        Assert.Equal("2", vm.AlbumsPage.CountText);
+        Assert.Null(vm.AlbumsPage.EmptyText);
+    }
+
+    [Fact]
+    [Trait("Category", "Unhappy")]
+    public async Task Clear_search_handles_whitespace_empty_matches_and_already_empty_state()
+    {
+        var vm = await CreateAsync();
+        Assert.False(vm.ClearSearchCommand.CanExecute(null));
+
+        // Whitespace-only text still counts as text to clear.
+        vm.SearchText = "   ";
+        Assert.True(vm.HasSearchText);
+        Assert.True(vm.ClearSearchCommand.CanExecute(null));
+        vm.ClearSearchCommand.Execute(null);
+        Assert.Equal(string.Empty, vm.SearchText);
+        Assert.False(vm.HasSearchText);
+        Assert.False(vm.ClearSearchCommand.CanExecute(null));
+
+        // Clearing an unmatched query removes the empty-state message and restores all items.
+        vm.SearchText = "does not exist";
+        Assert.Empty(vm.AlbumsPage.Albums);
+        Assert.Equal("Nothing matches “does not exist”.", vm.AlbumsPage.EmptyText);
+        vm.ClearSearchCommand.Execute(null);
+        Assert.Equal(2, vm.AlbumsPage.Albums.Count);
+        Assert.Null(vm.AlbumsPage.EmptyText);
+    }
+
+    [Fact]
     public async Task Esc_closes_layers_topmost_first_and_nothing_when_none_is_open()
     {
         var vm = await CreateAsync();

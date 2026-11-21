@@ -89,7 +89,8 @@ public partial class MainWindow : Window, IScenePlaces
             _viewModel.Menu.Close();
         }
 
-        if (FocusManager?.GetFocusedElement() is TextBox box && e.Source is Visual source && !box.IsVisualAncestorOf(source) && source != box)
+        if (FocusManager?.GetFocusedElement() is TextBox box && e.Source is Visual source && !box.IsVisualAncestorOf(source) && source != box
+            && !(box == TitleBarView.SearchBox && (TitleBarView.SearchBar.IsVisualAncestorOf(source) || source == TitleBarView.SearchBar)))
         {
             FocusManager.Focus(null);
         }
