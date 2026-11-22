@@ -30,11 +30,12 @@
     <!-- The turntable designs' drawings and fonts (#25–#30). -->
     <AvaloniaResource Include="Assets\**" />
     <!--
-      The app icon (#187): only the window's icon and the tray's are loaded at run time. The master and the macOS and
-      Linux files are inputs to the publish scripts, so they stay out of the executable.
+      The app icon (#187): only the window's icon, the tray/About icon (64 px) and the splash screen's HiDPI icon
+      (128 px, #226) are loaded at run time. The master and the macOS and Linux files are inputs to the publish
+      scripts, so they stay out of the executable.
     -->
     <AvaloniaResource Remove="Assets\AppIcon\**" />
-    <AvaloniaResource Include="Assets\AppIcon\app-icon.ico;Assets\AppIcon\app-icon-64.png" />
+    <AvaloniaResource Include="Assets\AppIcon\app-icon.ico;Assets\AppIcon\app-icon-64.png;Assets\AppIcon\app-icon-128.png" />
   </ItemGroup>
 
   <ItemGroup>

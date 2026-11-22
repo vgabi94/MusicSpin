@@ -15,11 +15,11 @@ public interface ISettingsService
     void Update(Func<AppSettings, AppSettings> change);
 }
 
-public sealed class SettingsService(DataDirectory directory) : ISettingsService
+public sealed class SettingsService(DataDirectory directory, AppSettings? initial = null) : ISettingsService
 {
     private readonly SettingsStore _store = new(directory);
 
-    public AppSettings Current { get; private set; } = new SettingsStore(directory).Load();
+    public AppSettings Current { get; private set; } = initial ?? new SettingsStore(directory).Load();
 
     public void Update(Func<AppSettings, AppSettings> change)
     {

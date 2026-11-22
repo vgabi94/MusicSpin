@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using MusicSpin.App.Composition;
-using MusicSpin.App.ViewModels;
 
 namespace MusicSpin.App;
 
@@ -27,10 +26,7 @@ public partial class App : Application
         }
         else if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var services = AppComposition.CreateServices(this, AppHost.DataDirectory, AppHost.StartupWarning, AppHost.Log);
-            var window = AppComposition.CreateMainWindow(services);
-            desktop.MainWindow = window;
-            _ = ((MainWindowViewModel)window.DataContext!).InitializeAsync();
+            _ = AppStartup.StartDesktopAsync(this, desktop, AppHost.DataDirectory, AppHost.Settings, AppHost.StartupWarning, AppHost.Log);
         }
 
         base.OnFrameworkInitializationCompleted();

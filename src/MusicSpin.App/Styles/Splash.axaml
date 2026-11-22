@@ -1,0 +1,55 @@
+<!--
+  The startup splash screen (#226): a compact centered borderless card on Bg2 with the app icon, name and a thin
+  accent loading bar. Opaque surface with WindowDecorations=None so it renders consistently across Windows, macOS
+  and Linux.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:MusicSpin.App.Controls">
+    <Style Selector="Window.splash">
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="Width" Value="{StaticResource SplashWidth}" />
+        <Setter Property="Height" Value="{StaticResource SplashHeight}" />
+        <Setter Property="CanResize" Value="False" />
+        <Setter Property="WindowDecorations" Value="None" />
+        <Setter Property="WindowStartupLocation" Value="CenterScreen" />
+        <Setter Property="ShowInTaskbar" Value="False" />
+        <Setter Property="Topmost" Value="False" />
+    </Style>
+    <Style Selector="Border.splashSurface">
+        <Setter Property="Background" Value="{DynamicResource Bg2Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Hairline}" />
+        <Setter Property="Padding" Value="{StaticResource SplashPadding}" />
+    </Style>
+    <Style Selector="StackPanel.splashBody">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.splashBody > :is(Control)">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Image.splashIcon">
+        <Setter Property="Source" Value="avares://MusicSpin/Assets/AppIcon/app-icon-128.png" />
+        <Setter Property="Width" Value="{StaticResource SplashIconSize}" />
+        <Setter Property="Height" Value="{StaticResource SplashIconSize}" />
+    </Style>
+    <Style Selector="TextBlock.splashName">
+        <Setter Property="Margin" Value="{StaticResource SplashNameMargin}" />
+        <Setter Property="FontSize" Value="{StaticResource PageTitleFontSize}" />
+        <Setter Property="FontWeight" Value="{StaticResource StrongFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+    </Style>
+    <Style Selector="controls|LoadingBar.splashLoader">
+        <Setter Property="Margin" Value="{StaticResource SplashLoaderMargin}" />
+        <Setter Property="Width" Value="{StaticResource SplashLoaderWidth}" />
+        <Setter Property="Height" Value="{StaticResource SplashLoaderHeight}" />
+        <Setter Property="CornerRadius" Value="{StaticResource SplashLoaderRadius}" />
+        <Setter Property="SegmentShare" Value="{StaticResource SplashLoaderSegment}" />
+        <Setter Property="TrackBrush" Value="{DynamicResource Bg3Brush}" />
+        <Setter Property="FillBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+</Styles>

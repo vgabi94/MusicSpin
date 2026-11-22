@@ -1,0 +1,24 @@
+<!--
+  The startup splash screen (#226): shown immediately while the app constructs the shell, opens the library and
+  connects to the player. Sizes and looks are in Styles/Splash.axaml; this file is structure and bindings only.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MusicSpin.App.ViewModels"
+        xmlns:controls="using:MusicSpin.App.Controls"
+        x:Class="MusicSpin.App.Views.SplashWindow"
+        x:DataType="vm:SplashViewModel"
+        Classes="splash"
+        Icon="avares://MusicSpin/Assets/AppIcon/app-icon.ico"
+        Title="{x:Static vm:SplashViewModel.AppName}">
+    <Border Name="SplashSurface" Classes="splashSurface">
+        <StackPanel Classes="splashBody">
+            <Image Name="SplashIcon" Classes="splashIcon" />
+            <TextBlock Name="SplashName" Classes="splashName" Text="{x:Static vm:SplashViewModel.AppName}" />
+            <controls:LoadingBar Name="SplashLoader"
+                                 Classes="splashLoader"
+                                 IsLoading="{Binding IsLoading}"
+                                 AutomationProperties.Name="Loading" />
+        </StackPanel>
+    </Border>
+</Window>
