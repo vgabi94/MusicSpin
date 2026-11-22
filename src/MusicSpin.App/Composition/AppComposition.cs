@@ -9,6 +9,7 @@ using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
 using MusicSpin.App.Views;
 using MusicSpin.Core.Hosting;
+using MusicSpin.Core.Settings;
 
 namespace MusicSpin.App.Composition;
 
@@ -16,7 +17,13 @@ namespace MusicSpin.App.Composition;
 public static class AppComposition
 {
     /// <summary>The real services for <paramref name="directory"/>: the background player, the library on disk, the system clock.</summary>
-    public static AppServices CreateServices(Application application, DataDirectory directory, string? startupWarning, AppLog? log = null)
+    public static AppServices CreateServices(
+        Application application,
+        DataDirectory directory,
+        string? startupWarning,
+        AppLog? log = null,
+        AppSettings? initialSettings = null,
+        IAppearance? appearance = null)
     {
         ArgumentNullException.ThrowIfNull(application);
         var time = TimeProvider.System;
@@ -24,11 +31,11 @@ public static class AppComposition
         var library = new LibraryService(directory, time);
         var resizer = new SkiaCoverResizer();
         return new AppServices(
-            new SettingsService(directory),
+            new SettingsService(directory, initialSettings),
             library,
             new CoverService(directory, resizer, time, library: library, ui: ui),
             new BackgroundPlayerConnector(directory),
-            new Appearance(application),
+            appearance ?? new Appearance(application),
             time,
             ui,
             startupWarning,

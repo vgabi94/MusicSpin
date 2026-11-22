@@ -93,9 +93,9 @@ It draws each size straight from the SVG with Svg.Skia, the renderer the app alr
 |---|---|
 | `app-icon.ico` (16–256 px) | `MusicSpin.exe` (`ApplicationIcon` in the App csproj) and the main window's `Icon` |
 | `app-icon.icns` (16–1024 px, with the @2x sizes) | `MusicSpin.app`: `publish.sh` copies it to `Contents/Resources/MusicSpin.icns` (`CFBundleIconFile`) |
-| `app-icon-<n>.png` (16, 24, 32, 48, 64, 128, 256, 512) | the tray icon (64 px) and Linux: the publish scripts ship the 512 px one as `MusicSpin.png` |
+| `app-icon-<n>.png` (16, 24, 32, 48, 64, 128, 256, 512) | the tray icon and About dialog (64 px), the splash screen (128 px), and Linux: the publish scripts ship the 512 px one as `MusicSpin.png` |
 
-Only the `.ico` and the 64 px PNG are Avalonia resources. The master and the macOS and Linux files stay out of the executable.
+Only the `.ico`, the 64 px PNG and the 128 px PNG are Avalonia resources. The master and the macOS and Linux files stay out of the executable.
 
 ## CI and release workflows
 

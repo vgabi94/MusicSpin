@@ -98,26 +98,26 @@ so what any of them does shows up in the others.
 src/MusicSpin.App/
 ├── App.axaml              merges Styles/ (resources first, then one styles file per area)
 ├── AppHost.cs             data folder, settings and startup warning (shared rules with the CLI)
-├── Composition/           AppServices + AppComposition: the one place that builds services and view models
+├── Composition/           AppServices + AppComposition + AppStartup (splash-to-main-window handoff): the one place that builds services and view models
 ├── Services/              player connector, library, covers + accent colours, settings, spin clock, Esc layers,
 │                          notices, the format label, typed values (seek and volume syntax), turntable designs,
 │                          the scene's timeline, RadioStation (radio tags, their filter and description),
 │                          MediaControls/ (the OS media controls), Taskbar/ (the Windows thumbnail buttons)
-├── ViewModels/            MainWindow (shell), AppMenu, Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
+├── ViewModels/            MainWindow (shell), Splash, AppMenu, Sidebar, Player, PlayerBar (Position, Volume, Spectrum), TypedField,
 │                          layers (Settings, Now Playing, the queue drawer and its name form, the menu),
 │                          LibraryItemActions (right-click and drag of albums and tracks), PlaylistActions (the
 │                          sidebar's playlists, Add to playlist ›), Favorites (the hearts), pages (Albums, Tracks,
 │                          playlists, Favorites, Radio), Crate (a crate and its records), LibraryOrder (sort and
 │                          grouping), GroupActions (a group's Play and Radio), Radio (the station on air) and the
 │                          turntable scene
-├── Views/                 MainWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, NowPlayingView, SceneView,
+├── Views/                 MainWindow, SplashWindow, TitleBar, SidebarView, PlayerBar, SettingsDialog, NowPlayingView, SceneView,
 │                          QueueDrawerView, DragGhostView, GroupActionsView, LibraryDrag (drags into the queue, onto
 │                          the sidebar, and within a playlist), MenuPlacement,
 │                          Pages/ — structure and bindings only
 ├── Icons/                 IconsResource.axaml: path geometries, in any coordinate space (Icon fits them)
 ├── Controls/              Icon, CoverView (sleeve or placeholder), VinylView (record with a still reflection),
 │                          ScrubBar (the position, volume and Settings sliders), SpectrumView, Marquee (a long text
-│                          scrolling to its end and back), TypedBox,
+│                          scrolling to its end and back), TypedBox, LoadingBar (the splash screen's loading bar),
 │                          TrimFirstPanel (a text that trims before the badge after it), ShelfSleeve and CrateRecord
 │                          (the shelf's and the crates' 3D, drawn with Projection: CSS-style 4×4 transforms), DeckView
 │                          (a turntable design's deck; ClassicDeckView, PlatterView; KitDeckView for the studies'
@@ -133,10 +133,16 @@ src/MusicSpin.App/
                            button, ScrubBar, scroll bars, TypedBox, segmented control, cards), Window,
                            Base, TitleBar, Sidebar, Content (toolbar, group headers, the menu), Lists (track rows),
                            Cards, Shelf, Crate, PlayerBar, NowPlaying (and the Classic deck), Queue (the drawer and
-                           the drag ghost), Dialogs (and Settings), Artwork, Radio (group buttons, on air, the Radio
+                           the drag ghost), Dialogs (and Settings), Splash, Artwork, Radio (group buttons, on air, the Radio
                            page), Decks (the turntable designs from the deck studies)
 ```
 
+- **Startup splash screen (#226).** On a desktop launch (not `--tray`), `AppStartup` applies the saved theme and
+  Motion setting from `AppHost.Settings`, shows `SplashWindow` (icon, `"Music Spin"`, and `LoadingBar` on an opaque
+  borderless card) and waits for its first paint before building services, `MainWindow` and running
+  `MainWindowViewModel.InitializeAsync`. Once initialization completes — or after a bounded readiness timeout so a
+  busy library or stalled player never traps the splash — `MainWindow` opens, becomes the desktop main window and
+  `SplashWindow` closes. Closing the splash early cancels startup, cleans up any started player and exits.
 - **Styles hold every value.** Colours are tokens in `ThemeDictionaries` (Dark, Light), used with `DynamicResource` so
   a theme switch applies to what is on screen. Sizes, spacing, radii and font sizes are in `Metrics.axaml`; durations
   in `Motion.axaml`. Views outside `Styles/` contain no literal colours, sizes, opacity or durations; a UI test

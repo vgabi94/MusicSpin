@@ -118,8 +118,10 @@ public sealed class AppIconTests
     public void The_window_and_the_tray_load_the_icon_and_the_rest_stays_out_of_the_executable()
     {
         Assert.NotNull(new MainWindow().Icon);
+        Assert.NotNull(new SplashWindow().Icon);
         Assert.True(AssetLoader.Exists(new Uri(Resources + "app-icon.ico")));
         Assert.True(AssetLoader.Exists(new Uri(Resources + "app-icon-64.png")));
+        Assert.True(AssetLoader.Exists(new Uri(Resources + "app-icon-128.png")));
 
         // Inputs to the publish scripts, not resources; and the old tray image is gone.
         Assert.False(AssetLoader.Exists(new Uri(Resources + "app-icon.svg")));

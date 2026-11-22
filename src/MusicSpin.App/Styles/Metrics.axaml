@@ -829,4 +829,18 @@
     -->
     <sys:Double x:Key="DragScrollEdge">48</sys:Double>
     <sys:Double x:Key="DragScrollMaxSpeed">960</sys:Double>
+
+    <!--
+      The startup splash screen (#226): compact centered card with the app icon, name and a thin accent loading bar.
+    -->
+    <sys:Double x:Key="SplashWidth">320</sys:Double>
+    <sys:Double x:Key="SplashHeight">210</sys:Double>
+    <Thickness x:Key="SplashPadding">32,28</Thickness>
+    <sys:Double x:Key="SplashIconSize">64</sys:Double>
+    <Thickness x:Key="SplashNameMargin">0,14,0,0</Thickness>
+    <Thickness x:Key="SplashLoaderMargin">0,22,0,0</Thickness>
+    <sys:Double x:Key="SplashLoaderWidth">168</sys:Double>
+    <sys:Double x:Key="SplashLoaderHeight">3</sys:Double>
+    <sys:Double x:Key="SplashLoaderRadius">1.5</sys:Double>
+    <sys:Double x:Key="SplashLoaderSegment">0.35</sys:Double>
 </ResourceDictionary>
