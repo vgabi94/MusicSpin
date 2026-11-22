@@ -42,6 +42,10 @@ public sealed class RadioIcon : Control
     /// <summary>How low the waves fade in a pulse (from a style).</summary>
     public static readonly StyledProperty<double> DimOpacityProperty = AvaloniaProperty.Register<RadioIcon, double>(nameof(DimOpacity), 0.25);
 
+    /// <summary>Pauses the on-air wave pulse (inherited: set while hidden or inside a moving cached panel).</summary>
+    public static readonly AttachedProperty<bool> IsPulseHeldProperty =
+        AvaloniaProperty.RegisterAttached<RadioIcon, Visual, bool>("IsPulseHeld", inherits: true);
+
     /// <summary>The pulse's resources in Styles/Motion.axaml: one pulse, the outer waves' delay, the easing.</summary>
     public const string PulseDuration = "OnAirPulseDuration";
 
@@ -56,6 +60,7 @@ public sealed class RadioIcon : Control
         AffectsRender<RadioIcon>(DotProperty, NearWavesProperty, FarWavesProperty, ForegroundProperty, StrokeThicknessProperty, ViewBoxProperty,
             NearOpacityProperty, FarOpacityProperty);
         IsOnAirProperty.Changed.AddClassHandler<RadioIcon>((icon, _) => icon.UpdatePulse());
+        IsPulseHeldProperty.Changed.AddClassHandler<RadioIcon>((icon, _) => icon.UpdatePulse());
     }
 
     public Geometry? Dot
@@ -123,6 +128,18 @@ public sealed class RadioIcon : Control
     /// <summary>The waves are pulsing now (tests read it).</summary>
     public bool IsPulsing => _pulse is not null;
 
+    public static bool GetIsPulseHeld(Visual visual)
+    {
+        ArgumentNullException.ThrowIfNull(visual);
+        return visual.GetValue(IsPulseHeldProperty);
+    }
+
+    public static void SetIsPulseHeld(Visual visual, bool value)
+    {
+        ArgumentNullException.ThrowIfNull(visual);
+        visual.SetValue(IsPulseHeldProperty, value);
+    }
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
@@ -180,7 +197,7 @@ public sealed class RadioIcon : Control
 
     private void UpdatePulse()
     {
-        if (!IsOnAir || TopLevel.GetTopLevel(this) is null || MotionScale.Current.Multiplier <= 0)
+        if (!IsOnAir || GetIsPulseHeld(this) || TopLevel.GetTopLevel(this) is null || MotionScale.Current.Multiplier <= 0)
         {
             StopPulse();
             return;

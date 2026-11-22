@@ -73,6 +73,10 @@
     <Style Selector="Button.card.playing Panel.cardArt > controls|CoverView">
         <Setter Property="RenderTransform" Value="translate(-16px, 0px)" />
     </Style>
+    <!-- While a card's copy flies onto the turntable (Opacity 0), snap its playing pose instead of animating behind the fading cache. -->
+    <Style Selector="Panel.cardArt.inFlight > controls|VinylView, Panel.cardArt.inFlight > controls|CoverView">
+        <Setter Property="theming:Animate.Transitions" Value="{x:Null}" />
+    </Style>
 
     <!-- The round Play button (mockup: .playfab): shown on hover and on the loaded album's card. -->
     <Style Selector="Button.playFab">

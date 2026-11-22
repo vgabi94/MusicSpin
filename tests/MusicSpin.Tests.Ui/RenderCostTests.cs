@@ -168,6 +168,57 @@ public sealed class RenderCostTests
         Assert.Equal(offset, scroller.Offset);
     }
 
+    [AvaloniaFact]
+    public async Task The_page_and_sidebar_are_hidden_as_soon_as_the_turntable_scene_fade_finishes_even_while_the_scene_runs()
+    {
+        await using var app = await OpenAsync();
+        app.ViewModel.AlbumsPage.Grouping = App.ViewModels.AlbumGrouping.None;
+        Gui.FinishAnimations(1500);
+        var layer = Gui.Find<SlidePanel>(app.Window, "NowPlayingLayer");
+        var sidebar = Gui.Find<Control>(app.Window, "SidebarView");
+
+        var source = Gui.All<Control>(app.Window).First(c => SceneSource.GetAlbumId(c) == SampleLibrary.AlbumId(Album));
+        Gui.Click(app.Window, source.GetVisualAncestors().OfType<Button>().First());
+        await Gui.UntilAsync(() => app.ViewModel.Scene.IsRunning, "the scene started");
+        Gui.Settle();
+
+        // Mid-fade: still translucent, so the page and sidebar show behind Now Playing.
+        app.Advance(TimeSpan.FromMilliseconds(App.Services.SceneTimeline.OpenAt + 400));
+        Assert.True(layer.IsFading);
+        Assert.False(layer.Covers);
+        Assert.True(Page(app).IsEffectivelyVisible);
+
+        // Fade finished (Opacity = 1), even though the scene still has ~3.8s left: Covers turns true and hides them.
+        app.Advance(TimeSpan.FromMilliseconds(600));
+        Assert.True(app.ViewModel.Scene.IsRunning);
+        Assert.True(layer.IsFading);
+        Assert.Equal(1, layer.Shown);
+        Assert.True(layer.Covers);
+        Assert.False(Page(app).IsEffectivelyVisible);
+        Assert.False(sidebar.IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public void A_record_with_zero_label_scale_draws_its_grooves_without_failing()
+    {
+        var record = new VinylView { Width = 160, Height = 160, LabelScale = 0, Label = TestImages.Bitmap(TestImages.Cover(64)) };
+        var window = new Window { Width = 240, Height = 240, Content = record };
+        window.Show();
+        try
+        {
+            Gui.Settle();
+            using var frame = window.CaptureRenderedFrame();
+            Assert.NotNull(frame);
+            Assert.Equal(1, record.GrooveImages);
+            Assert.Equal(0, record.LabelImages);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // ---- #124: the blurred background --------------------------------------------------------------------------
 
     private static BlurredCover Blurrer(AppHarness app) => Assert.IsType<BlurredCover>(app.Window.FindResource("BlurredBackdrop"));

@@ -6,6 +6,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:MusicSpin.App.Controls"
+        xmlns:views="using:MusicSpin.App.Views"
         xmlns:theming="using:MusicSpin.App.Theming">
     <Styles.Resources>
         <theming:BlurredCover x:Key="BlurredBackdrop" Pixels="{StaticResource NowPlayingBackgroundPixels}" Blur="{StaticResource NowPlayingBackgroundBlur}" />
@@ -192,16 +193,34 @@
         <Setter Property="CacheMode" Value="{Binding $parent[controls:DeckHost].SoftCache}" />
     </Style>
 
-    <!-- The overlay: on the page background, sliding up into place (mockup: .nowplaying). -->
+    <!-- The overlay: sliding up into place (mockup: .nowplaying). BgBrush lives on NowPlayingView so its MotionCache is opaque. -->
     <Style Selector="controls|SlidePanel.nowPlaying">
-        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
         <Setter Property="ClipToBounds" Value="True" />
         <Setter Property="theming:Animate.Transitions" Value="Shown NowPlayingSlideDuration EaseOut" />
         <Setter Property="MotionCache" Value="{StaticResource MotionCache}" />
     </Style>
-    <!-- The sidebar and the page while Now Playing or the queue drawer moves over them: drawn from an image (SlidePanel). -->
+    <Style Selector="views|NowPlayingView">
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+    </Style>
+    <!-- The sidebar and the page while Now Playing moves over them: drawn from an opaque image (ClearType needs an opaque surface). -->
     <Style Selector=":is(Control).underMotion">
         <Setter Property="CacheMode" Value="{StaticResource MotionCache}" />
+        <Setter Property="controls:VinylView.IsSpinHeld" Value="True" />
+        <Setter Property="controls:RadioIcon.IsPulseHeld" Value="True" />
+    </Style>
+    <Style Selector="views|SidebarView.underMotion">
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+    </Style>
+    <Style Selector=":is(Panel).underMotion">
+        <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+    </Style>
+    <!-- While closing Now Playing, hold the turntable's spin so its cached image isn't redrawn every frame. -->
+    <Style Selector="controls|SlidePanel.nowPlaying[IsMoving=True][IsOpen=False]">
+        <Setter Property="controls:VinylView.IsSpinHeld" Value="True" />
+    </Style>
+    <!-- Pause radio wave pulses while hidden or inside a moving Now Playing cache. -->
+    <Style Selector="controls|SlidePanel.nowPlaying[IsMoving=True], controls|SlidePanel.nowPlaying[IsVisible=False], views|SidebarView[IsVisible=False]">
+        <Setter Property="controls:RadioIcon.IsPulseHeld" Value="True" />
     </Style>
     <!-- Behind the turntable scene it fades in, in place (mockup: .nowplaying.scene). -->
     <Style Selector="controls|SlidePanel.nowPlaying[IsFading=True]">
