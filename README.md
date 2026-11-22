@@ -1,67 +1,108 @@
 # Music Spin
 
 [![CI status](https://github.com/vgabi94/MusicSpin/actions/workflows/ci.yml/badge.svg)](https://github.com/vgabi94/MusicSpin/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/vgabi94/MusicSpin?include_prereleases&sort=semver&label=release)](https://github.com/vgabi94/MusicSpin/releases)
+[![Release](https://img.shields.io/github/v/release/vgabi94/MusicSpin?label=release)](https://github.com/vgabi94/MusicSpin/releases)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](#license)
-[![Windows, macOS and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555555)](#install)
+[![Windows, macOS and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555555)](#download-and-install)
 
-<img src="docs/images/banner-hero.svg" alt="Music Spin. The application icon, a vinyl record on a graphite deck with a metallic navy eighth note, beside the name and the line A desktop player for hi-res music." width="1200">
+<img src="docs/images/banner-hero.svg" alt="Music Spin — A desktop player for hi-res music" width="1200">
 
-Music Spin plays a high-resolution library that stays in your folders. The window and the `music-spin` command use one player. An AI agent can use that player too. Start an album from the terminal, then skip a track in the window. Both use the same queue.
+**Music Spin** is a free, open-source, portable desktop and command-line music player for local hi-res audio libraries on Windows, macOS, and Linux.
 
-## Now Playing
+It plays your files straight from your existing folders without ever modifying them, pairs a turntable-inspired desktop UI with a full CLI (`music-spin`) and built-in [MCP](https://modelcontextprotocol.io) server for AI agents, and runs everything through one shared background player and queue.
 
-Now Playing puts the album on a turntable. Pick an album and the record can move onto the platter before it plays. Settings has several decks, a light theme and a dark theme. The highlight colour comes from the album that is playing. You can slow the picture of the spinning record without changing the sound. The bar shows play, pause and skip, the volume, bars that move with the music, and the kind of file. Keyboard media keys work, and Windows, macOS and Linux show the track in their own controls. A tray icon stays up while the music is playing.
+[Features](#features) · [Download and Install](#download-and-install) · [Build from Source](#build-from-source) · [Command Line and AI Agents](#command-line-and-ai-agents) · [Documentation](#documentation) · [License](#license)
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/now-playing-dark.png" alt="Now Playing in the dark theme. The album is on the turntable, with the track list and the player bar."></td>
-    <td width="50%"><img src="docs/images/now-playing-light.png" alt="Now Playing in the light theme, the same album on a light deck."></td>
+    <td width="50%"><img src="docs/images/now-playing-dark.png" alt="Now Playing view in the dark theme, showing an album on the turntable, its track list, and the player bar."></td>
+    <td width="50%"><img src="docs/images/now-playing-light.png" alt="Now Playing view in the light theme, showing the same album on a light turntable deck."></td>
   </tr>
 </table>
 
-<img src="docs/images/turntable-dark.png" alt="Turntable settings, with a choice of deck designs." width="720">
+---
 
-## Albums, tracks and search
+## Features
 
-Albums are cards or a shelf. You can sort them by artist, title or year, and group them by artist or genre. Tracks are one list. Search ignores capitals and accents. You can limit a word to one field, for example `artist:`, `album:`, `title:`, `genre:` or `year:`. Add your folders and Music Spin reads them. The next scan reads only files that changed. You can turn on a watch so the app scans again while it is open. Rename or move a file and it stays the same track in your playlists, favorites and queue. If a whole folder has moved, `library relocate` points the library at the new place. Compilations are grouped as Various Artists when the tags say so. Music Spin only reads your files.
+### Audio & Playback
 
-How scanning, search and moving folders work is in [Music library](docs/library.md).
+- **Hi-res & broad format support (FFmpeg 9.0):** Plays lossless formats (`FLAC`, `ALAC`, `WAV`/`W64`/`RF64`, `AIFF`, `DSD` `.dsf`/`.dff` decoded to PCM, `WavPack`, `APE`, `TTA`, `MLP`/`TrueHD`) and lossy formats (`MP3`, `AAC`, `Ogg Vorbis`, `Opus`, `WMA`, `Musepack`).
+- **Bit-perfect & exclusive output:** Opens your audio device at the track's native sample rate and bit depth (`16-bit`, `24-bit`, or `32-bit float`) in exclusive mode (`WASAPI` on Windows, `CoreAudio` on macOS, `ALSA` on Linux). In shared mode, tracks are resampled once with `libsamplerate`'s highest-quality sinc converter when rates differ.
+- **Gapless playback:** Consecutive tracks with matching format transition without gaps, including lossy formats with encoder padding removed.
+- **Volume levelling (ReplayGain / EBU R128):** Off by default to keep audio untouched. Supports `auto` (album gain for albums in order, track gain for shuffle/radio), `track`, and `album` modes, reads existing tags or measures untagged tracks in the background, and prevents clipping (capped at +6 dB boost).
+- **10-band graphic equalizer:** Off by default. ISO octave bands (31.25 Hz–16 kHz), 11 built-in presets plus up to 64 custom presets, smooth cross-fades, automatic clipping headroom, and bit-exact bypass when off or flat.
 
-<img src="docs/images/albums-dark.png" alt="The Albums page in the dark theme. Cards grouped by genre, with the player bar along the bottom." width="720">
+### Desktop App & Turntable Experience
 
-## Queue, playlists and favorites
+- **Turntable Now Playing view:** Choose from 7 deck designs (*Classic*, *Walnut & Brass*, *Brushed Aluminium*, *Carbon Signal*, *Piano Black & Chrome*, *Linear Tracking*, *Smoked Acrylic*), animated vinyl-to-platter transitions, selectable speeds (`16⅔`, `33⅓`, `45` RPM), and adjustable visual spin scaling without changing playback speed.
+- **Light & dark themes with dynamic accents:** Automatically derives contrast-checked accent colors from the playing album's cover art.
+- **Player bar & live visualizer:** Scrub bar, volume slider (percentage or decibel scale), active output/format badges, and a real-time 16-band spectrum analyzer.
+- **Native OS integration:** Media keys and system Now Playing controls on Windows (SMTC and taskbar thumbnail buttons), macOS (Now Playing), and Linux (MPRIS), plus a system tray icon while playing.
 
-The queue opens from the player bar. Drag albums and tracks into it. You can change their order. You can save the queue as a playlist. Playlists and favorites are in the sidebar. You can drop music onto them. Right-click an album or a track to play it, to play it next, to add it to the queue, or to add it to a playlist. You can also mark a track as a favorite from that menu. The next time the player starts, the queue comes back paused.
+<p align="center">
+  <img src="docs/images/turntable-dark.png" alt="Turntable settings showing speed, visual spin, vinyl transition, and the seven selectable deck designs." width="600">
+</p>
 
-## Radio
+### Library, Playlists & Radio
 
-Radio makes a station from genres, artists, years, formats, or the whole library. It then plays the matching tracks in random order. It does not pick a recent track again. When it can, the next track is by a different artist and from a different album. You can save a station and start it again later. Play, pause and skip still work while the station is on. The rules for what a station includes are in [Playback](docs/playback.md#radio).
+- **Read-only local library:** Indexes your folders into a local database without ever moving files or editing tags. Supports fast incremental rescans, optional live folder watching, fingerprint-based rename/move tracking, and instant `library relocate` when a drive or root folder moves.
+- **Flexible browsing & search:** Browse albums as **Cards** or a **3D Shelf** (adjustable tilt and depth) or view all **Tracks**, sorting by artist, title, or year and grouping by artist, album, or genre. Search is case- and diacritic-insensitive and supports quoted phrases and field filters (`artist:`, `album:`, `title:`, `genre:`, `year:`, `is:favorite`).
+- **Queue, playlists & favorites:** Slide-out queue drawer with drag-and-drop reordering, *Play next* / *Add to queue*, automatic queue persistence across restarts (restored paused), saved playlists with `M3U`/`M3U8`/`PLS` import and export, and a **Favorites** view.
+- **Endless Radio:** Build random stations from any combination of included or excluded genres, artists, albums, decades/years, formats, hi-res tracks, favorites, or search terms — with repeat avoidance, artist/album spacing, optional *favorites first* weighting, and recent/saved stations.
 
-<img src="docs/images/radio-dark.png" alt="The Radio page in the dark theme. A Jazz station is on air." width="720">
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/albums-dark.png" alt="Albums page in the dark theme, showing album cards grouped by genre with HI-RES badges and the player bar."></td>
+    <td width="50%"><img src="docs/images/radio-dark.png" alt="Radio page in the dark theme, building a Jazz station with upcoming picks shown on the right."></td>
+  </tr>
+</table>
 
-## Playback
+### Shared Player, CLI & AI Agents
 
-FFmpeg 9.0 reads the audio file. It plays uncompressed and compressed files, and it turns DSD files into ordinary audio before playing them. The sound device opens at the rate the file was recorded. At full volume, Music Spin does not change that audio. You can ask the system to let Music Spin use the sound device by itself. The bar shows what the device opened. The audio goes out unchanged when the device accepts the file. Tracks recorded the same way play with no gap. Loudness matching and the tone controls are off until you turn them on. Loudness matching uses the loudness notes in the file, or measures a file that has none. It will not raise a track so far that the loud parts distort.
+- **One player across every interface:** The desktop app (`MusicSpin`), the CLI (`music-spin`), and the MCP server (`music-spin mcp`) all control the same detached background player, library, and queue. Start an album from a terminal or AI agent, then skip or adjust the equalizer in the window.
+- **Automation-friendly:** Add `--json` to any CLI command for single-line JSON output with stable error codes, or embed the player directly with `music-spin serve`.
 
-The details are in [Playback](docs/playback.md).
+### Portable & Private
 
-## The command line
+- **Portable by default:** All app data (settings, library database, cover cache, queue, logs) lives in `.usrdata/` next to the executables. Nothing is written to the Windows Registry, `%APPDATA%`, `~/.config`, or `~/Library`. Override the location anytime with `--data-dir` or `MUSICSPIN_DATA_DIR`.
+- **Offline & local-only:** No accounts, no telemetry, and no network listeners. IPC uses a local user-only Unix domain socket (Linux/macOS) or named pipe (Windows).
 
-```console
-$ music-spin library add ~/Music
-$ music-spin library scan
-$ music-spin play --album "Album title"
-$ music-spin status
-```
+---
 
-`play` returns at once. The music keeps going after you close the terminal. Commands such as `next`, `pause` and `volume` talk to that same player. Add `--json` and each command prints one block of data, including errors. If the app started the player, closing the window stops the music. If you started the player from the terminal, closing the window only pauses it. `music-spin resume` continues from there. Every command is in the [command line reference](docs/cli-reference.md). The `music-spin mcp` command lets an AI agent search the library and control playback. The connection steps are in [how to connect an AI agent](docs/mcp.md). How programs read each command's output is in [AI agents](docs/ai-agents.md).
+## Download and Install
 
-## Install
+Prebuilt portable `.tar.gz` archives are available on the **[GitHub Releases](https://github.com/vgabi94/MusicSpin/releases)** page:
 
-A preview release is on the [Releases page](https://github.com/vgabi94/MusicSpin/releases). Download the `.tar.gz` for your computer and unpack it into a folder. There are six: Windows, macOS and Linux, each for x64 and for arm64.
+| Platform | Architectures | Included & Runtime Requirements |
+| --- | --- | --- |
+| **Windows** | `win-x64`, `win-arm64` | Self-contained (`MusicSpin.exe`, `music-spin.exe`) with **FFmpeg 9.0** bundled |
+| **Linux** | `linux-x64`, `linux-arm64` | Self-contained (`MusicSpin`, `music-spin`, `MusicSpin.png`) with **FFmpeg 9.0** bundled; requires system `libicu` (standard on desktop distros) |
+| **macOS** | `osx-x64`, `osx-arm64` | Self-contained (`MusicSpin.app`, `music-spin`); install FFmpeg 9 separately via `brew install ffmpeg` |
 
-You can also build that folder. With the [.NET 10 SDK](https://dotnet.microsoft.com/download), these scripts write it under `artifacts/publish`.
+### Quick setup
+
+1. Download the `.tar.gz` archive for your OS and architecture and unpack it into any writable folder (for example `~/Apps/MusicSpin` or `C:\Tools\MusicSpin`).
+2. **macOS only:** Install FFmpeg 9 (`brew install ffmpeg`). Because releases are not yet signed or notarized, move `MusicSpin.app` out of `Downloads` or run `xattr -dr com.apple.quarantine MusicSpin.app` if macOS blocks launching or writing `.usrdata/`.
+3. Launch `MusicSpin` (or `MusicSpin.app`) and select a music folder, or check your environment in a terminal with `music-spin doctor`.
+
+> **Portable layout:** Copy or move the unpacked folder to bring your library, playlists, and settings (`.usrdata/`) along with it. On macOS, `.usrdata/` sits next to `MusicSpin.app`. `TagLibSharp.dll` and `ffmpeg/` remain separate files beside the executables so you can swap in your own compatible LGPL builds. See [Getting started](docs/getting-started.md) for details.
+
+---
+
+## Build from Source
+
+### Prerequisites
+
+- **[.NET 10 SDK](https://dotnet.microsoft.com/download)** (`global.json` pins `10.0.100` with `rollForward: latestFeature`).
+- **A C compiler** (MSBuild automatically compiles the native `msaudio` audio layer during build and publish):
+  - **Windows:** Visual Studio or [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/) with the **Desktop development with C++** workload.
+  - **Linux:** `cc` / GCC (no ALSA or PulseAudio dev headers needed; for cross-building `linux-arm64`, install `gcc-aarch64-linux-gnu`).
+  - **macOS:** Xcode Command Line Tools (`xcode-select --install`).
+- **FFmpeg 9.0 shared libraries** (downloaded automatically by the publish scripts on Windows/Linux, or installed via the helper scripts below; on macOS use `brew install ffmpeg`).
+
+### Build a portable release folder (recommended)
+
+**Linux / macOS:**
 
 ```bash
 git clone https://github.com/vgabi94/MusicSpin.git
@@ -69,27 +110,125 @@ cd MusicSpin
 ./eng/publish.sh --download-ffmpeg
 ```
 
+**Windows (PowerShell):**
+
 ```powershell
+git clone https://github.com/vgabi94/MusicSpin.git
+cd MusicSpin
 ./eng/publish.ps1 -DownloadFFmpeg
 ```
 
-The folder holds `MusicSpin` and `music-spin`. On macOS the app is `MusicSpin.app`. Windows and Linux include FFmpeg 9.0. On macOS, install FFmpeg 9 yourself. Linux needs `libicu`, a text library that desktop systems already include. The first time you open the app, it asks you to add a music folder. Albums appear as the scan finds them. `music-spin doctor` checks that FFmpeg is present, that sound can play, and where the app stores its files. Settings and the library are kept in a folder named `.usrdata` next to the program, so copying that folder takes your library with it. On macOS, `.usrdata` sits next to `MusicSpin.app`. [Getting started](docs/getting-started.md) explains this layout and where FFmpeg is loaded from. [Building](docs/building.md) explains how to build and test from a checkout.
+This creates a ready-to-run portable folder in `artifacts/publish/<rid>/` containing `MusicSpin` (`MusicSpin.app` on macOS), `music-spin`, `TagLibSharp.dll`, `ffmpeg/` (on Windows and Linux), and the license files. On macOS, run `brew install ffmpeg` so FFmpeg 9 is available at runtime.
+
+### Build, run, and test during development
+
+1. **Install FFmpeg 9.0 shared libraries once:**
+
+   ```bash
+   # Linux / macOS
+   ./eng/get-ffmpeg.sh
+   ```
+
+   ```powershell
+   # Windows (PowerShell)
+   ./eng/get-ffmpeg.ps1
+   ```
+
+2. **Build and run the test suite:**
+
+   ```bash
+   dotnet build MusicSpin.slnx
+   dotnet test --solution MusicSpin.slnx
+   ```
+
+3. **Run the CLI or desktop app from the checkout:**
+
+   ```bash
+   # CLI
+   dotnet run --project src/MusicSpin.Cli -- doctor
+
+   # Desktop app (Linux / macOS — point MUSICSPIN_CLI at the built CLI executable)
+   MUSICSPIN_CLI="$PWD/src/MusicSpin.Cli/bin/Debug/net10.0/music-spin" \
+     dotnet run --project src/MusicSpin.App
+   ```
+
+   ```powershell
+   # Desktop app (Windows PowerShell)
+   $env:MUSICSPIN_CLI = "$PWD\src\MusicSpin.Cli\bin\Debug\net10.0\music-spin.exe"
+   dotnet run --project src/MusicSpin.App
+   ```
+
+See [Building, testing and publishing](docs/building.md) for cross-compilation options, test filters, code coverage, and performance markers.
+
+---
+
+## Command Line and AI Agents
+
+### Terminal usage
+
+```bash
+music-spin doctor
+music-spin library add ~/Music
+music-spin library scan
+music-spin play --album "Kind of Blue"
+music-spin status
+music-spin next
+music-spin radio --genre jazz --years 1955-1969
+music-spin quit
+```
+
+- `play` and `radio` start the detached background player and return immediately; playback continues even after you close the terminal (`music-spin quit` stops it).
+- Add `--json` to any command for compact, single-line JSON output (including structured errors).
+- Closing the desktop window stops a player that the app started, or pauses a player started from the CLI (`music-spin resume` continues from where it left off).
+
+### Connect an AI agent (MCP)
+
+`music-spin mcp` exposes the library, playlists, favorites, radio, equalizer, volume levelling, and playback controls over standard stdio MCP — compatible with **Claude Desktop**, **Claude Code**, **Cursor**, **Grok CLI**, and other MCP clients.
+
+For example, with Claude Code:
+
+```bash
+claude mcp add musicspin -- /path/to/music-spin mcp
+```
+
+Full client configurations and the tool reference are in [MCP server](docs/mcp.md). For scripting with shell JSON or the `serve` JSON-lines protocol, see [AI agents](docs/ai-agents.md).
+
+---
 
 ## Documentation
 
-| | |
+| Document | Contents |
 | --- | --- |
-| [Getting started](docs/getting-started.md) | The copied folder, `.usrdata`, FFmpeg |
-| [Playback](docs/playback.md) | File types, the sound device, the queue, radio, loudness |
-| [Music library](docs/library.md) | Scanning, renames, search |
-| [Command line](docs/cli-reference.md) | Commands, data output, exit codes |
-| [Connecting an AI agent](docs/mcp.md) | Setup |
-| [Diagnostics](docs/diagnostics.md) | Checks, sound devices, logs |
-| [Building](docs/building.md) | Build, test, publish |
+| [Getting started](docs/getting-started.md) | Portable folder layout, `.usrdata`, `settings.json`, FFmpeg discovery |
+| [Playback](docs/playback.md) | Formats, bit-perfect & exclusive output, DSD, gapless, volume levelling, equalizer, radio |
+| [Music library](docs/library.md) | Scanning, change & move detection, `library relocate`, search syntax, cover art, playlists, favorites |
+| [CLI reference](docs/cli-reference.md) | Every `music-spin` command, option, JSON envelope, and exit code |
+| [MCP server](docs/mcp.md) | Client configuration (Claude Desktop, Claude Code, Cursor, Grok CLI) and MCP tools |
+| [AI agents](docs/ai-agents.md) | JSON conventions, background-player workflow, `serve` JSON-lines protocol |
+| [Diagnostics](docs/diagnostics.md) | `doctor`, `devices`, logs, performance overlays, common problems & fixes |
+| [Building](docs/building.md) | Build, test, publish scripts, code coverage, CI and release workflows |
+| [Architecture](docs/architecture.md) | Solution structure, audio pipeline, IPC design, desktop app internals |
+| [Licensing](docs/licensing.md) | GPL-3.0-or-later, Svg.Custom exception, LGPL compliance for FFmpeg and TagLib# |
+
+---
+
+## Troubleshooting and Contributing
+
+- **Check your setup:** Run `music-spin doctor` to verify FFmpeg 9.0, audio devices, and `.usrdata` permissions, and `music-spin devices` to inspect available outputs.
+- **Logs:** Background player logs are written to `.usrdata/player.log`, and desktop app errors/crashes to `.usrdata/app.log`.
+- **Common fixes:** See [Diagnostics → Common problems](docs/diagnostics.md#common-problems).
+- **Bugs & contributions:** Open an issue or pull request on [GitHub](https://github.com/vgabi94/MusicSpin/issues). Contributions are accepted under the project's license below.
+
+---
 
 ## License
 
-GPL-3.0-or-later. [LICENSE](LICENSE). [LICENSE-EXCEPTION.txt](LICENSE-EXCEPTION.txt).
+Music Spin is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`), with an additional permission under GPLv3 section 7 allowing combination with `Svg.Custom` / `SVG.NET` (MS-PL). FFmpeg and `TagLibSharp.dll` are kept separate outside the single-file binaries for LGPL replaceability.
+
+- [LICENSE](LICENSE) — GNU GPL v3 text
+- [LICENSE-EXCEPTION.txt](LICENSE-EXCEPTION.txt) — Copyright notice and GPLv3 section 7 additional permission
+- [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — Bundled and dynamically loaded third-party components
+- [docs/licensing.md](docs/licensing.md) — Licensing and redistribution checklist
 <!--
   Screenshots are renders of the current app, copied from
   tests/MusicSpin.Tests.Ui/Snapshots. The header icon is the inner markup of
