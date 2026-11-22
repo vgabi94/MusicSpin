@@ -450,13 +450,13 @@ src/MusicSpin.App/
   holds the deck's state, which follows play/pause from anywhere: playing lowers the arm and turns the platter, a pause
   lifts the arm where it is, nothing loaded parks it. `SlidePanel` sets its `Shown` (0 down, 1 in place) as a local
   value and its transition animates it, so a closing panel slides back from wherever it is. Once it is all the way in
-  (`Covers`), the sidebar and the page under it are hidden, so they aren't drawn; they show again as it starts to go,
-  and while the turntable scene fades it in. While it, or the queue drawer, slides or fades (`IsMoving`), what it
-  holds and the sidebar and page under it (`.underMotion`) draw through a `BitmapCache`: each is drawn once into an
-  image and each step copies the images, redrawing only what changes in them (a spinning record). The cache is on
-  what the panel holds, not on the panel: under the panel's own opacity (the fade), a cache on it came out fainter
-  than drawn live. Its background is the small cover blurred once per album (`Theming/BlurredCover`, a 64-pixel
-  image) and stretched: no blur runs per frame.
+  (`Covers`, sliding or faded to full opacity), the sidebar and the page under it are hidden, so they aren't drawn;
+  they show again as it starts to go, and while the turntable scene fades it in. While Now Playing slides or fades
+  (`IsMoving`), it and the sidebar and page under it (`.underMotion`) draw through an opaque `BitmapCache` with
+  ClearType: each is drawn once into an image and each step copies those images on whole device pixels, holding pulsing
+  radio icons and closing/covered record spins so the cached surfaces stay clean. The queue drawer caches only itself
+  so region dirty-rect clipping keeps the rest of the window untouched. Its background is the small cover blurred once
+  per album (`Theming/BlurredCover`, a 64-pixel image) and stretched: no blur runs per frame.
 - **Shadows under a spinning record.** A blurred shadow (a `BoxShadow` or an effect) is blurred again every frame
   it is drawn, and anything under a spinning record is drawn every frame. So each soft shadow there is on its own
   element, drawn after the hard edge or ring it shared a border with (as Avalonia drew the pair): the decks' plinth

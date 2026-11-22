@@ -50,10 +50,10 @@
     <!-- The queue drawer sliding in from the right and back out (mockup: .queue, translate .45s, cubic-bezier(.2,.8,.2,1)). -->
     <sys:TimeSpan x:Key="QueueSlideDuration">0:0:0.45</sys:TimeSpan>
     <!--
-      While Now Playing or the queue drawer slides or fades, it and what is under it are each drawn once into an image at
-      the window's scale, and each step copies those images (pixel-aligned, so they stay sharp).
+      While Now Playing or the queue drawer slides or fades, it (and the sidebar and page under Now Playing) draws once
+      into an opaque image at the window's scale, pixel-aligned with ClearType so text stays identical to live.
     -->
-    <BitmapCache x:Key="MotionCache" SnapsToDevicePixels="True" />
+    <BitmapCache x:Key="MotionCache" SnapsToDevicePixels="True" EnableClearType="True" />
     <!--
       An album card's art at rest (controls:CardArt), drawn once into an image at the window's scale, pixel-aligned so it
       stays sharp, a placeholder's text smoothed as it is drawn live. A deck's soft shadows have their own, the size the

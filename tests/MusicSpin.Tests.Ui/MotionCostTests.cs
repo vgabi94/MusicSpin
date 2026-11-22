@@ -1,3 +1,4 @@
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -5,13 +6,16 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using MusicSpin.App.Controls;
 using MusicSpin.App.Services;
 using MusicSpin.App.Theming;
 using MusicSpin.App.ViewModels;
+using MusicSpin.Core.Library;
 using MusicSpin.Core.Playback;
+using MusicSpin.Core.Remote;
 using MusicSpin.Core.Settings;
 using MusicSpin.Tests.Ui.Harness;
 using SkiaSharp;
@@ -89,6 +93,32 @@ public sealed class MotionCostTests
     private static Control[] Under(AppHarness app) => [Gui.Find<Control>(app.Window, "SidebarView"), Gui.Find<Control>(app.Window, "ContentArea")];
 
     private static bool FromImage(Visual visual) => visual.CacheMode is BitmapCache;
+
+    /// <summary>Inspects the compositor server's real <c>BitmapCache</c> surface for <paramref name="visual"/>.</summary>
+    private static (bool HasCache, object? Layer, int Version) CompositorCache(Visual visual)
+    {
+        var composition = ElementComposition.GetElementVisual(visual);
+        if (composition is null)
+        {
+            return default;
+        }
+
+        object? server = null;
+        for (var type = composition.GetType(); type is not null && server is null; type = type.BaseType)
+        {
+            server = type.GetProperty("Server", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.DeclaredOnly)?.GetValue(composition);
+        }
+
+        var cache = server?.GetType().GetProperty("Cache", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)?.GetValue(server);
+        if (cache is null)
+        {
+            return default;
+        }
+
+        var layer = cache.GetType().GetField("_layer", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(cache);
+        var version = layer?.GetType().GetProperty("Version")?.GetValue(layer) is int v ? v : -1;
+        return (true, layer, version);
+    }
 
     /// <summary>Drawn from images, the same, near enough, as drawn live.</summary>
     private static void AssertSame(SKBitmap fromImages, SKBitmap live, string name, int channelTolerance = 8, double pixelTolerance = 0.0005)
@@ -195,7 +225,7 @@ public sealed class MotionCostTests
     }
 
     [AvaloniaFact]
-    public async Task While_the_queue_drawer_slides_it_the_page_and_an_open_Now_Playing_under_it_draw_from_images()
+    public async Task While_the_queue_drawer_slides_only_the_drawer_draws_from_an_image_leaving_the_page_and_Now_Playing_live()
     {
         await using var app = await OpenAsync();
         await PlayAsync(app);
@@ -204,9 +234,10 @@ public sealed class MotionCostTests
         app.ViewModel.QueueDrawer.Open();
         app.Advance(TimeSpan.FromMilliseconds(100));
         Assert.True(queue.IsMoving);
-        Assert.All(Under(app).Append(Content(queue)), c => Assert.True(FromImage(c), c.Name));
+        Assert.True(FromImage(Content(queue)));
+        Assert.All(Under(app), c => Assert.False(FromImage(c), c.Name));
         Gui.FinishAnimations(Settled);
-        Assert.All(Under(app).Append(Content(queue)), c => Assert.False(FromImage(c), c.Name));
+        Assert.False(FromImage(Content(queue)));
         app.ViewModel.QueueDrawer.Close();
         Gui.FinishAnimations(Settled);
 
@@ -214,8 +245,9 @@ public sealed class MotionCostTests
         Gui.FinishAnimations(Settled);
         app.ViewModel.QueueDrawer.Open(); // over Now Playing
         app.Advance(TimeSpan.FromMilliseconds(100));
-        Assert.True(nowPlaying.IsUnder);
-        Assert.True(FromImage(Content(nowPlaying)));
+        Assert.True(queue.IsMoving);
+        Assert.True(FromImage(Content(queue)));
+        Assert.False(FromImage(Content(nowPlaying)));
         Assert.False(nowPlaying.IsMoving);
         Gui.FinishAnimations(Settled);
         Assert.False(FromImage(Content(nowPlaying)));
@@ -232,13 +264,20 @@ public sealed class MotionCostTests
     {
         using var fromImages = await HalfwayAsync(live: false);
         using var live = await HalfwayAsync(live: true);
-        AssertSame(fromImages, live, $"motion-{motion}");
+        // Live group-opacity fade uses Skia SaveLayer (which disables subpixel ClearType on the 4 lines of album text),
+        // while the opaque MotionCache keeps ClearType; allow that small text-edge share on fade.
+        AssertSame(fromImages, live, $"motion-{motion}", pixelTolerance: motion == "fade" ? 0.004 : 0.0005);
 
         async Task<SKBitmap> HalfwayAsync(bool live)
         {
             await using var app = await OpenAsync(live: live);
             if (motion == "fade")
             {
+                if (live)
+                {
+                    RenderOptions.SetRequiresFullOpacityHandling(Gui.Find<Grid>(app.Window, "ShellGrid"), true);
+                }
+
                 var source = Gui.All<Control>(app.Window).First(c => SceneSource.GetAlbumId(c) == SampleLibrary.AlbumId(Album));
                 Gui.Click(app.Window, source.GetVisualAncestors().OfType<Button>().First());
                 await Gui.UntilAsync(() => app.ViewModel.Scene.IsRunning, "the scene started");
@@ -633,5 +672,166 @@ public sealed class MotionCostTests
         flight.SetCurrentValue(SceneFlight.LandingProperty, landing);
         app.Advance(TimeSpan.FromMilliseconds(100));
         Assert.NotEqual(pack, flight.Pack.RenderTransform!.Value);
+    }
+
+    // ---- #232: real compositor cache sync, frame-0 moving, zero thrash while closing ---------------------------
+
+    [AvaloniaFact]
+    public async Task A_moving_panel_activates_and_releases_its_compositor_cache_without_leaving_one_stuck_behind()
+    {
+        await using var app = await OpenAsync();
+        await PlayAsync(app);
+        var layer = Layer(app, "NowPlayingLayer");
+        var targets = Under(app).Append(Content(layer)).ToArray();
+
+        Assert.All(targets, c => Assert.False(CompositorCache(c).HasCache, $"{c.Name} before open"));
+
+        app.ViewModel.NowPlaying.Open();
+        app.Advance(UiTime.Frame);
+        app.Advance(UiTime.Frame);
+        Assert.True(layer.IsMoving);
+        Assert.All(targets, c => Assert.True(CompositorCache(c).HasCache, $"{c.Name} while opening"));
+
+        Gui.FinishAnimations(Settled);
+        Assert.False(layer.IsMoving);
+        Assert.All(targets, c => Assert.False(CompositorCache(c).HasCache, $"{c.Name} after open"));
+
+        app.ViewModel.NowPlaying.Close();
+        app.Advance(UiTime.Frame);
+        app.Advance(UiTime.Frame);
+        Assert.True(layer.IsMoving);
+        Assert.All(targets, c => Assert.True(CompositorCache(c).HasCache, $"{c.Name} while closing"));
+
+        Gui.FinishAnimations(Settled);
+        Assert.False(layer.IsVisible);
+        Assert.All(targets, c => Assert.False(CompositorCache(c).HasCache, $"{c.Name} after close"));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Closing_Now_Playing_marks_it_moving_on_frame_zero_while_Motion_None_never_caches()
+    {
+        await using var app = await OpenAsync();
+        await PlayAsync(app);
+        var layer = Layer(app, "NowPlayingLayer");
+        var targets = Under(app).Append(Content(layer)).ToArray();
+
+        app.ViewModel.NowPlaying.Open();
+        Gui.FinishAnimations(Settled);
+        Assert.True(layer.Covers);
+
+        // Frame 0 of Close (before advancing time): Covers clears and IsMoving activates together, so Sidebar and Content
+        // unhide already cached instead of rendering live on frame 0 and caching again on frame 1.
+        app.ViewModel.NowPlaying.Close();
+        Gui.Settle();
+        Assert.False(layer.Covers);
+        Assert.True(layer.IsMoving);
+        Assert.All(targets, c => Assert.True(FromImage(c) && CompositorCache(c).HasCache, $"{c.Name} on close frame 0"));
+        Gui.FinishAnimations(Settled);
+
+        // At Motion None, moves are instant: IsMoving never turns on and no compositor caches are created.
+        app.ViewModel.Settings.SetMotion(MotionMode.None);
+        Gui.Settle();
+        app.ViewModel.NowPlaying.Open();
+        Gui.Settle();
+        Assert.False(layer.IsMoving);
+        Assert.True(layer.Covers);
+        Assert.All(targets, c => Assert.False(FromImage(c) || CompositorCache(c).HasCache, $"{c.Name} open at Motion None"));
+
+        app.ViewModel.NowPlaying.Close();
+        Gui.Settle();
+        Assert.False(layer.IsMoving);
+        Assert.False(layer.IsVisible);
+        Assert.All(targets, c => Assert.False(FromImage(c) || CompositorCache(c).HasCache, $"{c.Name} close at Motion None"));
+    }
+
+    [AvaloniaFact]
+    public async Task Closing_Now_Playing_holds_spinning_records_and_pulsing_radio_so_caches_never_redraw_and_resumes_them_after()
+    {
+        await using var app = await OpenAsync("walnut");
+        app.ViewModel.AlbumsPage.ViewChoice = app.ViewModel.AlbumsPage.ChoiceOf(AlbumsView.Shelf);
+        var a = SampleLibrary.Albums[Album - 1];
+        app.Scripted!.Status = ScriptedPlayer.Playing(a.Tracks[0], trackId: SampleLibrary.TrackId(Album, 1), state: PlayerState.Playing)
+            with { Radio = new RadioInfo(new RadioFilter { Genres = ["Jazz"] }, "Jazz", 10) };
+        await app.Scripted.PushAsync("stateChanged");
+        await Gui.UntilAsync(() => app.ViewModel.PlayingAlbumId == SampleLibrary.AlbumId(Album)
+                                   && app.ViewModel.Radio.IsOnAir
+                                   && app.ViewModel.NowPlaying.Tracks.Count == a.Tracks.Length, "playing on radio");
+        app.ViewModel.NowPlaying.Open();
+        Gui.FinishAnimations(Settled);
+
+        var layer = Layer(app, "NowPlayingLayer");
+        var targets = Under(app).Append(Content(layer)).ToArray();
+        var sidebarRadio = Gui.Find<Control>(app.Window, "SidebarView").GetVisualDescendants().OfType<RadioIcon>().Single(r => r.IsVisible);
+        var nowPlayingRadio = Gui.Find<Control>(app.Window, "NowPlayingView").GetVisualDescendants().OfType<RadioIcon>().Single();
+        var miniVinyl = Gui.Find<VinylView>(app.Window, "MiniVinyl");
+
+        // Covered sidebar radio icon pauses while Now Playing covers it; visible Now Playing radio icon pulses.
+        Assert.False(sidebarRadio.IsPulsing);
+        Assert.True(nowPlayingRadio.IsPulsing);
+
+        app.ViewModel.NowPlaying.Close();
+        Gui.Settle();
+        var baseline = targets.Select(c => (c.Name, Cache: CompositorCache(c))).ToArray();
+        Assert.All(baseline, b => Assert.NotNull(b.Cache.Layer));
+        var startMiniAngle = miniVinyl.RenderedAngle;
+
+        for (var frame = 0; frame < 20; frame++)
+        {
+            app.Advance(UiTime.Frame);
+            Assert.True(layer.IsMoving);
+            for (var i = 0; i < targets.Length; i++)
+            {
+                var current = CompositorCache(targets[i]);
+                Assert.Same(baseline[i].Cache.Layer, current.Layer);
+                Assert.Equal(baseline[i].Cache.Version, current.Version);
+            }
+        }
+
+        // Player bar's mini-vinyl stays outside the cached panels and keeps spinning smoothly throughout the close.
+        Assert.NotEqual(startMiniAngle, miniVinyl.RenderedAngle);
+        Assert.Equal(app.ViewModel.SpinClock.Angle, miniVinyl.RenderedAngle);
+
+        Gui.FinishAnimations(Settled);
+        Assert.All(targets, c => Assert.False(CompositorCache(c).HasCache, $"{c.Name} released"));
+        Assert.True(sidebarRadio.IsPulsing);
+        Assert.False(nowPlayingRadio.IsPulsing);
+        var shelfVinyl = Gui.All<ShelfSleeve>(app.Window).Single(s => s.IsPlaying).GetVisualDescendants().OfType<VinylView>().Single();
+        Assert.Equal(app.ViewModel.SpinClock.Angle, shelfVinyl.RenderedAngle);
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "Unhappy")]
+    public async Task Reversing_a_closing_slide_back_open_resumes_the_turntable_spin_immediately_and_clears_caches_at_rest()
+    {
+        await using var app = await OpenAsync("walnut");
+        await PlayAsync(app);
+        var layer = Layer(app, "NowPlayingLayer");
+        var targets = Under(app).Append(Content(layer)).ToArray();
+
+        app.ViewModel.NowPlaying.Open();
+        Gui.FinishAnimations(Settled);
+        var deckRecord = Assert.IsType<VinylView>(Gui.Find<DeckHost>(app.Window, "Deck").Deck!.Record);
+
+        // Start closing: the turntable record holds still while sliding off.
+        app.ViewModel.NowPlaying.Close();
+        Frames(app, 4);
+        Assert.True(layer.IsMoving);
+        Assert.True(VinylView.GetIsSpinHeld(deckRecord));
+        var heldAngle = deckRecord.RenderedAngle;
+        Frames(app, 4);
+        Assert.Equal(heldAngle, deckRecord.RenderedAngle);
+
+        // Reverse back open mid-flight: spin hold clears immediately so the record spins smoothly as it slides back in.
+        app.ViewModel.NowPlaying.Open();
+        Frames(app, 4);
+        Assert.True(layer.IsMoving);
+        Assert.False(VinylView.GetIsSpinHeld(deckRecord));
+        Assert.NotEqual(heldAngle, deckRecord.RenderedAngle);
+        Assert.Equal(app.ViewModel.SpinClock.Angle, deckRecord.RenderedAngle);
+
+        Gui.FinishAnimations(Settled);
+        Assert.False(layer.IsMoving);
+        Assert.All(targets, c => Assert.False(CompositorCache(c).HasCache, $"{c.Name} cleared after reversal"));
     }
 }

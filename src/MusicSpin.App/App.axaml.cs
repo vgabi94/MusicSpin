@@ -9,6 +9,13 @@ namespace MusicSpin.App;
 
 public partial class App : Application
 {
+    static App()
+    {
+        // Avalonia 12 omits CacheModeProperty from Visual's AffectsRender, so setting or clearing CacheMode alone
+        // never syncs CompositionVisual.CacheMode onto (or back off) the compositor server.
+        Visual.CacheModeProperty.Changed.AddClassHandler<Visual>(static (visual, _) => visual.InvalidateVisual());
+    }
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()

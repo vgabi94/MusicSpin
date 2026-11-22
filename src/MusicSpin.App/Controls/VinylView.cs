@@ -45,6 +45,10 @@ public sealed class VinylView : Control
     /// <summary>Set: the record's images are drawn at this scale of its size (times the window's), not as it shows now.</summary>
     public static readonly StyledProperty<double> ImageScaleProperty = AvaloniaProperty.Register<VinylView, double>(nameof(ImageScale));
 
+    /// <summary>Holds the disc at its current angle without turning it (inherited: set on a cached panel while it moves).</summary>
+    public static readonly AttachedProperty<bool> IsSpinHeldProperty =
+        AvaloniaProperty.RegisterAttached<VinylView, Visual, bool>("IsSpinHeld", inherits: true);
+
     private readonly Grooves _grooves;
     private readonly Disc _disc;
     private readonly Sheen _sheen;
@@ -52,7 +56,9 @@ public sealed class VinylView : Control
     static VinylView()
     {
         AffectsRender<VinylView>(SheenColorProperty);
+        AffectsArrange<VinylView>(LabelScaleProperty);
         AngleProperty.Changed.AddClassHandler<VinylView>((v, _) => v._disc.Turn(v.Angle));
+        IsSpinHeldProperty.Changed.AddClassHandler<VinylView>((v, _) => v._disc.SetHeld(GetIsSpinHeld(v)));
         // Each part's image is drawn again only when something it draws changes.
         ImageScaleProperty.Changed.AddClassHandler<VinylView>((v, _) =>
         {
@@ -175,6 +181,18 @@ public sealed class VinylView : Control
         set => SetValue(ImageScaleProperty, value);
     }
 
+    public static bool GetIsSpinHeld(Visual visual)
+    {
+        ArgumentNullException.ThrowIfNull(visual);
+        return visual.GetValue(IsSpinHeldProperty);
+    }
+
+    public static void SetIsSpinHeld(Visual visual, bool value)
+    {
+        ArgumentNullException.ThrowIfNull(visual);
+        visual.SetValue(IsSpinHeldProperty, value);
+    }
+
     /// <summary>The still part's image, in pixels across (tests check it's sharp where it shows).</summary>
     internal int GrooveImagePixels => _grooves.Pixels;
 
@@ -195,7 +213,9 @@ public sealed class VinylView : Control
         var side = Math.Min(finalSize.Width, finalSize.Height);
         var rect = new Rect((finalSize.Width - side) / 2, (finalSize.Height - side) / 2, side, side);
         _grooves.Arrange(rect);
-        _disc.Arrange(rect);
+        // Tight to the centre label (+2 units per side for the 1 px rim stroke) so spinning doesn't dirty the whole platter or arm.
+        var discSide = LabelScale > 0 ? Math.Min(side, (side * LabelScale) + 4) : 0;
+        _disc.Arrange(new Rect((finalSize.Width - discSide) / 2, (finalSize.Height - discSide) / 2, discSide, discSide));
         _sheen.Arrange(rect);
         return finalSize;
     }
@@ -355,9 +375,17 @@ public sealed class VinylView : Control
     /// What turns: the label (the cover) and the hole. It turns on its composition visual (rotation about its centre), so
     /// turning never records its drawing again: only the compositor moves it.
     /// </summary>
-    private sealed class Disc(VinylView owner) : CachedPart(owner)
+    private sealed class Disc : CachedPart
     {
         private double _angle;
+        private bool _held;
+        private bool _applied;
+
+        public Disc(VinylView owner) : base(owner)
+        {
+            // Keep exact sub-unit centring inside VinylView so KitDeckView's scaling doesn't shift the label by half a pixel.
+            UseLayoutRounding = false;
+        }
 
         /// <summary>The angle the composition visual turns the label by, in degrees.</summary>
         public double RenderedAngle { get; private set; }
@@ -366,12 +394,31 @@ public sealed class VinylView : Control
         public void Turn(double degrees)
         {
             _angle = degrees;
-            Apply();
+            if (!_held)
+            {
+                Apply();
+            }
+        }
+
+        /// <summary>Freezes rotation while held (a cached panel moving), and catches up as soon as it is released.</summary>
+        public void SetHeld(bool held)
+        {
+            if (_held == held)
+            {
+                return;
+            }
+
+            _held = held;
+            if (!held)
+            {
+                Apply();
+            }
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            _held = GetIsSpinHeld(Owner);
             Apply();
         }
 
@@ -387,14 +434,19 @@ public sealed class VinylView : Control
 
         public override void Render(DrawingContext context)
         {
-            Apply(); // its composition visual exists by its first drawing (not yet when it was attached)
+            if (!_applied || !_held)
+            {
+                Apply(); // its composition visual exists by its first drawing (not yet when it was attached)
+            }
+
             base.Render(context);
         }
 
         protected override void Draw(DrawingContext context, double r)
         {
             var center = new Point(r, r);
-            var labelR = r * Owner.LabelScale;
+            var recordR = Math.Min(Owner.Bounds.Width, Owner.Bounds.Height) / 2;
+            var labelR = recordR * Owner.LabelScale;
             var label = new Rect(r - labelR, r - labelR, labelR * 2, labelR * 2);
             using (context.PushGeometryClip(new EllipseGeometry(label)))
             {
@@ -413,7 +465,7 @@ public sealed class VinylView : Control
                 context.DrawEllipse(null, new Pen(rim, 1), center, labelR, labelR);
             }
 
-            var holeR = r * Owner.HoleScale;
+            var holeR = recordR * Owner.HoleScale;
             context.DrawEllipse(Owner.HoleBrush, Owner.HoleRimBrush is { } holeRim ? new Pen(holeRim, 1) : null, center, holeR, holeR);
         }
 
@@ -421,9 +473,20 @@ public sealed class VinylView : Control
         {
             if (ElementComposition.GetElementVisual(this) is { } visual)
             {
-                visual.CenterPoint = new Vector3D(Bounds.Width / 2, Bounds.Height / 2, 0);
-                visual.RotationAngle = (float)(_angle * Math.PI / 180);
+                var center = new Vector3D(Bounds.Width / 2, Bounds.Height / 2, 0);
+                var radians = (float)(_angle * Math.PI / 180);
+                if (visual.CenterPoint != center)
+                {
+                    visual.CenterPoint = center;
+                }
+
+                if (visual.RotationAngle != radians)
+                {
+                    visual.RotationAngle = radians;
+                }
+
                 RenderedAngle = _angle;
+                _applied = true;
             }
         }
 
